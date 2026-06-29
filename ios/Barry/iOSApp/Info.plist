@@ -27,7 +27,7 @@
     <!-- Backend endpoint. Dev default is localhost; for device testing use your
          Mac's LAN IP, and for release use https://barry.wide-stack.com -->
     <key>BarryBackendURL</key>
-    <string>http://127.0.0.1:8077</string>
+    <string>http://192.168.1.107:8077</string>
     <!-- Dev only: allow plaintext HTTP to a local backend on your LAN.
          Remove this block once your backend is served over HTTPS. -->
     <key>NSAppTransportSecurity</key>
@@ -35,6 +35,14 @@
         <key>NSAllowsLocalNetworking</key>
         <true/>
     </dict>
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>fetch</string>
+    </array>
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>me.wvr.barry.refresh</string>
+    </array>
     <key>UILaunchScreen</key>
     <dict/>
 </dict>

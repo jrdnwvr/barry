@@ -25,6 +25,8 @@ enum InterpreterConstants {
     static let smoothK: Int = 3
     static let slopeWindowHours: Double = 3.0
     static let shortWindowHours: Double = 3.0
+    static let shortWindowMinHours: Double = 2.0
+    static let shortWindowMinPoints: Int = 4
     static let kneeLookbackHours: Double = 3.0
     static let kneeRatio: Double = 3.0
     static let kneeMinRate: Double = 0.7
@@ -350,8 +352,15 @@ func interpretSeries(
     let (_, slopePerHr, r2) = lsq(xs, ys)
     let rate3h = slopePerHr * 3.0
     let steadiness = r2
-    let windowHours = win[win.count - 1].t.timeIntervalSince(win[0].t) / 3600.0
-    if windowHours < InterpreterConstants.shortWindowHours - 1e-6 {
+    // Flag "short_window" only when recent history is genuinely thin — not merely
+    // because the newest sample lags real-time `now` (METARs run 20-40 min behind
+    // and the 30-min resample grid shaves the span). Coverage is measured from the
+    // oldest available sample in the chosen segment to `now`.
+    let coverageHours = chosen.isEmpty
+        ? 0.0
+        : effectiveNow.timeIntervalSince(chosen[0].t) / 3600.0
+    if coverageHours < InterpreterConstants.shortWindowMinHours
+        || win.count < InterpreterConstants.shortWindowMinPoints {
         caveats.append("short_window")
     }
 

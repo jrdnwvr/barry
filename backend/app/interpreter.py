@@ -29,7 +29,9 @@ RESAMPLE_MIN = 30                  # even-cadence interpolation step
 GAP_MIN = 120                       # spacing > this is a gap — never interpolate across
 SMOOTH_K = 3                        # centered moving-average window (odd)
 SLOPE_WINDOW_HOURS = 3.0            # trailing window for rate3h / steadiness
-SHORT_WINDOW_HOURS = 3.0            # below this → "short_window" caveat
+SHORT_WINDOW_HOURS = 3.0            # nominal trailing span the slope window targets
+SHORT_WINDOW_MIN_HOURS = 2.0       # genuine recent coverage below this → "short_window"
+SHORT_WINDOW_MIN_POINTS = 4        # ...or fewer than this many points in the slope window
 KNEE_LOOKBACK_HOURS = 3.0           # only call knees within this much past
 KNEE_RATIO = 3.0                    # |slope_after| / |slope_before| above this
 KNEE_MIN_RATE = 0.7                 # post-knee slope must be at least this (hPa/h)
@@ -358,8 +360,12 @@ def interpret(
     rate3h = slope_per_hr * 3.0
     steadiness = r2
 
-    window_hours = (win[-1].t - win[0].t).total_seconds() / 3600.0
-    if window_hours < SHORT_WINDOW_HOURS - 1e-6:
+    # Flag "short_window" only when recent history is genuinely thin — not merely
+    # because the newest sample lags real-time `now` (METARs run 20-40 min behind
+    # and the 30-min resample grid shaves the span). Coverage is measured from the
+    # oldest available sample in the chosen segment to `now`.
+    coverage_hours = (now - chosen[0].t).total_seconds() / 3600.0
+    if coverage_hours < SHORT_WINDOW_MIN_HOURS or len(win) < SHORT_WINDOW_MIN_POINTS:
         caveats.append("short_window")
 
     # --- feature scan over the de-tided + smoothed segment ---

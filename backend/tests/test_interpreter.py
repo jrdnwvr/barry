@@ -150,6 +150,30 @@ def test_short_window_low_confidence():
     assert r.confidence <= 0.6
 
 
+# 9b. Normal hourly-reporting station — last sample ~30 min old, points every
+# 30 min over 3h. The window span is only ~2.5h (newest sample lags `now` and the
+# resample grid shaves it), but genuine coverage is 3h, so NO short_window.
+def test_hourly_station_no_short_window():
+    def p(hr):
+        return 1014.0 - 0.5 * (hr - (-3.0))  # gentle steady fall
+
+    samples = _series(_with_tide(p), t0_hr=-3.0, t1_hr=-0.5, step_min=30)
+    r = interpret(samples, now=NOW)
+    assert "short_window" not in r.caveats, f"caveats={r.caveats}"
+    assert r.confidence > 0.6, f"confidence={r.confidence}"
+
+
+# 9c. Genuinely thin history — under 2h of recent data still trips short_window
+# even though points are dense.
+def test_under_two_hours_still_short_window():
+    def p(hr):
+        return 1014.0 - 1.0 * (hr - (-1.75))
+
+    samples = _series(_with_tide(p), t0_hr=-1.75, t1_hr=0.0, step_min=15)
+    r = interpret(samples, now=NOW)
+    assert "short_window" in r.caveats, f"caveats={r.caveats}"
+
+
 # 10. Gappy data — 3h hole mid-series — no phantom feature spanning the gap.
 def test_gappy_data_no_phantom_feature():
     samples = []

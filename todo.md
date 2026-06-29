@@ -40,3 +40,9 @@ Building in the working tree (not committing per-change). Build after each phase
 - Base sensor reading is station pressure (kPa×10 → hPa); SLP-equivalent = +offset.
 - Persisted store: calibration model only (sparse, ~hourly). The 60-min micro-trend
   sample buffer stays session-scoped.
+
+## Device setup
+- App Group `group.me.wvr.barry` restored on all 3 targets (paid account).
+  Dropped the stray AltStore group that was only in the watch entitlements.
+- Backend URL set to http://192.168.1.107:8077 (this Mac's LAN IP).
+- Still TODO: set DEVELOPMENT_TEAM in project.yml so signing survives `xcodegen generate`.

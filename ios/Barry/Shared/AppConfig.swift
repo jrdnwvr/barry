@@ -22,7 +22,7 @@ enum AppConfig {
     /// App Group id shared by the iOS app, watch app, and complication so the
     /// complication can render the last-known tendency without its own fetch.
     /// Create this group in Signing & Capabilities for all three targets.
-    static let appGroupID = "group.com.wide-stack.barry"
+    static let appGroupID = "group.me.wvr.barry"
 
     /// Shared UserDefaults for cross-process settings (unit preference, etc.).
     /// Falls back to `.standard` if the App Group isn't provisioned.
@@ -46,7 +46,7 @@ enum LocationMode: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .device:  return "My location"
-        case .place:   return "Saved place"
+        case .place:   return "Saved"
         case .airport: return "Airport"
         }
     }

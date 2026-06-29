@@ -23,6 +23,7 @@ struct ContentView: View {
     private var phoneBarometerEnabled: Bool = false
     @AppStorage("chartWindow", store: AppConfig.sharedDefaults)
     private var chartWindowRaw: String = ChartWindow.hours6.rawValue
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showSettings = false
 
     private var unit: PressureUnit { PressureUnit(rawValue: unitRaw) ?? .hPa }
@@ -47,6 +48,13 @@ struct ContentView: View {
             }
             .refreshable { await reload() }
             .task { await initialLoad() }
+            // Refresh + recalibrate each time the app returns to the foreground.
+            // Skip the first activation at launch (.task already does the initial load).
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active, store.combined != nil {
+                    Task { await reload() }
+                }
+            }
         }
     }
 
@@ -91,6 +99,17 @@ struct ContentView: View {
                     }
 
                     ForecastCaveatView()
+                }
+
+                // Sensor vs Station: phone's continuous calibrated trace against the
+                // discrete hourly METAR observations (uses the persisted local history).
+                if phoneBarometerEnabled {
+                    SensorComparisonView(
+                        combined: combined,
+                        now: store.now,
+                        unit: unit,
+                        history: barometer.phoneHistoryTrace
+                    )
                 }
 
                 // Secondary: wind + rain, collapsed to a one-line summary by default.

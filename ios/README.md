@@ -40,7 +40,7 @@ xcodebuild -project Barry.xcodeproj -scheme Barry \
    set that as `BarryBackendURL`, and drop the `NSAllowsLocalNetworking` ATS exception.
 2. **Signing:** set `DEVELOPMENT_TEAM` in `project.yml` (or pick your team per
    target in Xcode → Signing & Capabilities), then re-run `xcodegen generate`.
-3. **App Group:** all three targets declare `group.com.wide-stack.barry` (see the
+3. **App Group:** all three targets declare `group.me.wvr.barry` (see the
    `.entitlements` files). Change it to your own group id in those three files +
    `Shared/AppConfig.swift`, and enable the App Group capability for each target in
    your developer account. This is how the complication reads the last-known

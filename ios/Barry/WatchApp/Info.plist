@@ -23,12 +23,12 @@
     <key>WKApplication</key>
     <true/>
     <key>WKCompanionAppBundleIdentifier</key>
-    <string>com.wide-stack.barry</string>
+    <string>me.wvr.barry</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Barry uses your location to find the nearest weather-reporting station.</string>
     <!-- Backend endpoint. Dev default is localhost; for release use https://barry.wide-stack.com -->
     <key>BarryBackendURL</key>
-    <string>http://127.0.0.1:8077</string>
+    <string>http://192.168.1.107:8077</string>
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsLocalNetworking</key>

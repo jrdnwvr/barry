@@ -8,8 +8,8 @@ at-a-glance watch complication.
 
 - **Platforms:** iOS 17+ (SwiftUI + Swift Charts), watchOS 10+ (SwiftUI +
   WidgetKit complication), backend in Python (FastAPI).
-- **Bundle IDs:** `com.wide-stack.barry`, `.watchkitapp`, `.watchkitapp.complication`.
-  App Group: `group.com.wide-stack.barry`.
+- **Bundle IDs:** `me.wvr.barry`, `.watchkitapp`, `.watchkitapp.complication`.
+  App Group: `group.me.wvr.barry`.
 - **Backend prod host (when deployed):** `https://barry.wide-stack.com`. Local dev
   default: `http://127.0.0.1:8077`.
 

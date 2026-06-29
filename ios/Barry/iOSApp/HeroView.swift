@@ -1,15 +1,15 @@
 //  HeroView.swift
 //  Barry — iOS
 //
-//  The glance (replaces the old verdict header). One block answers "what's the
-//  pressure doing here, right now, and is weather coming?":
-//    • station + freshness (a live dot when the phone sensor is trusted, else the
-//      METAR age)
-//    • the current pressure — the live calibrated sensor value when trusted,
-//      otherwise the METAR value
-//    • the 3-hour trend chip + the live micro-trend since the last METAR
-//    • the plain-language verdict (with an honesty note only when confidence is low)
-//  Everything else (chart, wind/rain, sources) lives below.
+//  The glance. One block answers "what's the pressure doing here, right now, and is
+//  weather coming?" — and makes the SOURCE of the number unmistakable:
+//    • station + freshness (live dot when the sensor is trusted, else METAR age)
+//    • the current pressure — the live calibrated sensor value (extra precision +
+//      a LOCAL tag) when trusted, otherwise the coarser METAR value
+//    • tap the value to compare phone vs station
+//    • the live micro-trend (flagged when it's sharper than the station's 3h trend)
+//    • calibration freshness + a manual Recalibrate control
+//    • the plain-language verdict (honesty note only when confidence is low)
 
 import SwiftUI
 
@@ -19,6 +19,8 @@ struct HeroView: View {
     @ObservedObject var barometer: BarometerManager
     let now: Date
     var barometerEnabled: Bool
+
+    @State private var showComparison = false
 
     private var tendency: TendencyOut? { combined.tendency }
 
@@ -31,7 +33,13 @@ struct HeroView: View {
         return barometer.latestLocalSLP
     }
 
+    private var isLive: Bool { liveSLP != nil }
     private var displayValue: Double? { liveSLP ?? combined.currentPressure }
+
+    private var minsSinceCalibration: Int? {
+        barometer.calibratedAt.map { max(0, Int(now.timeIntervalSince($0) / 60)) }
+    }
+    private var calibrationStale: Bool { (minsSinceCalibration ?? 0) > 75 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -40,25 +48,16 @@ struct HeroView: View {
 
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 if let v = displayValue {
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(unit.format(v))
-                            .font(.system(size: 44, weight: .semibold, design: .rounded))
-                            .monospacedDigit()
-                        Text(unit.label)
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-                    }
+                    valueLabel(v)
                 }
                 Spacer()
                 if let t = tendency { TendencyBadge(tendency: t, unit: unit) }
             }
 
-            // Live micro-trend — the between-METAR signal — shown only when the
-            // sensor value is the trusted one.
-            if liveSLP != nil, let trend = barometer.microTrend {
-                Label(microLabel(trend), systemImage: "sensor.tag.radiowaves.forward")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            if isLive {
+                provenanceRow
+                if let trend = barometer.microTrend { microLead(trend) }
+                calibrationLine
             }
 
             Text(combined.verdict)
@@ -66,22 +65,136 @@ struct HeroView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             if let note = honestyNote {
-                Text(note)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Text(note).font(.caption).foregroundStyle(.secondary)
             }
         }
+    }
+
+    // MARK: - Value (tap to compare)
+
+    @ViewBuilder
+    private func valueLabel(_ v: Double) -> some View {
+        let content = HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(valueString(v, live: isLive))
+                .font(.system(size: 44, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(isLive && calibrationStale ? .secondary : .primary)
+            Text(unit.label)
+                .font(.headline)
+                .foregroundStyle(.secondary)
+        }
+        if isLive {
+            Button { withAnimation(.snappy(duration: 0.2)) { showComparison.toggle() } } label: {
+                content
+            }
+            .buttonStyle(.plain)
+        } else {
+            content
+        }
+    }
+
+    /// Live readings get extra precision (the sensor is far finer than a METAR);
+    /// the precision itself signals the source at a glance.
+    private func valueString(_ hPa: Double, live: Bool) -> String {
+        let dp: Int
+        switch unit {
+        case .inHg: dp = live ? 3 : 2
+        case .hPa:  dp = live ? 1 : 0
+        }
+        return String(format: "%.\(dp)f", unit.convert(hPa))
+    }
+
+    // MARK: - Provenance / comparison
+
+    private var provenanceRow: some View {
+        HStack(spacing: 8) {
+            Text("LOCAL")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.orange)
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(Color.orange.opacity(0.15), in: Capsule())
+
+            if showComparison, let cmp = comparisonText {
+                Text(cmp).font(.caption).foregroundStyle(.secondary).monospacedDigit()
+            } else {
+                Text("tap to compare").font(.caption2).foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    /// "station 29.92 · phone −0.04" — how far the phone has moved off the station.
+    private var comparisonText: String? {
+        guard let local = liveSLP, let station = combined.currentPressure else { return nil }
+        let diff = unit.convertDelta(local - station)
+        let dp = unit == .inHg ? 3 : 1
+        let mag = String(format: "%.\(dp)f", abs(diff))
+        let sign = diff > 0.0005 ? "+" : (diff < -0.0005 ? "−" : "±")
+        return "station \(valueString(station, live: false)) · phone \(sign)\(mag)"
+    }
+
+    // MARK: - Micro-trend lead
+
+    @ViewBuilder
+    private func microLead(_ t: MicroTrend) -> some View {
+        Label(microLabel(t), systemImage: "sensor.tag.radiowaves.forward")
+            .font(.caption)
+            .foregroundStyle(isSharperThanStation(t) ? Color.orange : Color.secondary)
     }
 
     private func microLabel(_ t: MicroTrend) -> String {
         let arrow = t.deltaHPa > 0.1 ? "↑" : (t.deltaHPa < -0.1 ? "↓" : "→")
         let mag = String(format: unit == .hPa ? "%.1f" : "%.2f", abs(unit.convertDelta(t.deltaHPa)))
-        return "sensor \(arrow) \(mag) \(unit.label) in last \(t.windowMinutes) min"
+        var s = "sensor \(arrow) \(mag) \(unit.label) in last \(t.windowMinutes) min"
+        if isSharperThanStation(t) {
+            s += t.deltaHPa < 0 ? " — falling faster than the station shows"
+                                : " — rising faster than the station shows"
+        }
+        return s
     }
 
-    /// Surface non-obvious interpreter caveats (low confidence, sparse data) so the
-    /// user knows when to trust the verdict less. `forecast_derived` is already baked
-    /// into the verdict sentence's hedged wording.
+    /// The local trend (extrapolated to 3h) is meaningfully steeper than the METAR
+    /// 3h tendency — i.e. the phone is catching a change before the next report.
+    private func isSharperThanStation(_ t: MicroTrend) -> Bool {
+        guard let metar3h = tendency?.delta3h else { return false }
+        let hours = max(Double(t.windowMinutes) / 60.0, 1.0 / 12.0)
+        let local3h = t.deltaHPa / hours * 3.0
+        return abs(local3h) > abs(metar3h) + 0.7 && (local3h * metar3h >= 0 || abs(metar3h) < 0.3)
+    }
+
+    // MARK: - Calibration line
+
+    @ViewBuilder
+    private var calibrationLine: some View {
+        if barometer.lastResetWasAltitude {
+            Label("elevation changed — recalibrating at next report",
+                  systemImage: "arrow.up.arrow.down")
+                .font(.caption2)
+                .foregroundStyle(.orange)
+        } else if let mins = minsSinceCalibration {
+            HStack(spacing: 8) {
+                Text(calibrationStale
+                     ? "calibration stale (\(mins)m) vs \(combined.pressure.station)"
+                     : "calibrated \(mins)m ago vs \(combined.pressure.station)")
+                    .font(.caption2)
+                    .foregroundStyle(calibrationStale ? Color.orange : Color.secondary)
+
+                Button("Recalibrate") { barometer.recalibrate() }
+                    .font(.caption2.weight(.medium))
+                    .buttonStyle(.borderless)
+
+                if let drift = barometer.driftPerHour, abs(drift) >= 0.3 {
+                    Text("· drift \(String(format: "%.1f", abs(drift))) hPa/h")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+    }
+
+    // MARK: - Honesty note
+
+    /// Surface non-obvious interpreter caveats (low confidence, sparse data).
+    /// `forecast_derived` is already baked into the verdict sentence's hedged wording.
     private var honestyNote: String? {
         guard let r = combined.reading else { return nil }
         var bits: [String] = []

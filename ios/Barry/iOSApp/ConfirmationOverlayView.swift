@@ -14,6 +14,10 @@ struct ConfirmationOverlayView: View {
 
     @State private var expanded = false
 
+    @AppStorage("windUnit", store: AppConfig.sharedDefaults)
+    private var windUnitRaw: String = WindUnit.kmh.rawValue
+    private var windUnit: WindUnit { WindUnit(rawValue: windUnitRaw) ?? .kmh }
+
     private var hours: [ForecastHour] {
         (combined.forecast?.hourly ?? [])
             .filter { $0.t >= now }
@@ -33,9 +37,7 @@ struct ConfirmationOverlayView: View {
         hours.filter { $0.t <= now.addingTimeInterval(6 * 3600) }
     }
     private var precipMaxPct: Int { next6h.compactMap { $0.precip_prob }.max() ?? 0 }
-    private var windNow: Int {
-        Int(((next6h.first ?? hours.first)?.windspeed ?? 0).rounded())
-    }
+    private var windNowKmh: Double { (next6h.first ?? hours.first)?.windspeed ?? 0 }
 
     var body: some View {
         if hours.isEmpty {
@@ -65,7 +67,7 @@ struct ConfirmationOverlayView: View {
     private var summaryRow: some View {
         HStack(spacing: 16) {
             Label("\(precipMaxPct)%", systemImage: "cloud.rain")
-            Label("\(windNow) km/h", systemImage: "wind")
+            Label("\(windUnit.format(windNowKmh)) \(windUnit.label)", systemImage: "wind")
             Text("next 6h").foregroundStyle(.secondary)
             Spacer()
             Image(systemName: expanded ? "chevron.up" : "chevron.down")
@@ -129,7 +131,7 @@ struct ConfirmationOverlayView: View {
 
     private var windChart: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Label("Wind (km/h)", systemImage: "wind")
+            Label("Wind (\(windUnit.label))", systemImage: "wind")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
 
@@ -139,14 +141,14 @@ struct ConfirmationOverlayView: View {
                         AreaMark(
                             x: .value("Time", h.t),
                             yStart: .value("Base", 0),
-                            yEnd: .value("Wind km/h", w)
+                            yEnd: .value("Wind", windUnit.convert(w))
                         )
                         .foregroundStyle(.teal.opacity(0.12))
                         .interpolationMethod(.catmullRom)
 
                         LineMark(
                             x: .value("Time", h.t),
-                            y: .value("Wind km/h", w)
+                            y: .value("Wind", windUnit.convert(w))
                         )
                         .foregroundStyle(.teal)
                         .lineStyle(StrokeStyle(lineWidth: 1.5))
@@ -157,11 +159,13 @@ struct ConfirmationOverlayView: View {
                 // Direction arrows at sparse intervals — winddir is "from" degrees
                 // (0 = N, 90 = E) so rotating arrow.up by winddir degrees points
                 // the arrow back toward the wind's source (standard vane convention).
+                // The >4 km/h gate stays on the raw value so the threshold is stable
+                // regardless of display unit.
                 ForEach(sparseWindHours) { h in
                     if let w = h.windspeed, let dir = h.winddir, w > 4 {
                         PointMark(
                             x: .value("Time", h.t),
-                            y: .value("Wind km/h", w)
+                            y: .value("Wind", windUnit.convert(w))
                         )
                         .foregroundStyle(.clear)
                         .annotation(position: .overlay) {

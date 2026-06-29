@@ -120,6 +120,17 @@ struct PressureChartView: View {
             // ~60 min, shown only when calibrated + stationary. Clearly distinct
             // from the METAR blue line; annotated at its end with "local".
             if !visiblePhone.isEmpty {
+                // Divergence band: shade between the last METAR baseline and the live
+                // trace so you can see the phone pulling away from the station.
+                if let baseline = (visibleObserved.last ?? observed.last)?.value {
+                    ForEach(visiblePhone) { p in
+                        AreaMark(x: .value("Time", p.t),
+                                 yStart: .value("Baseline", baseline),
+                                 yEnd: .value("Local", p.value))
+                            .foregroundStyle(.orange.opacity(0.12))
+                            .interpolationMethod(.catmullRom)
+                    }
+                }
                 ForEach(visiblePhone) { p in
                     LineMark(x: .value("Time", p.t), y: .value("Pressure", p.value),
                              series: .value("Series", "phone"))

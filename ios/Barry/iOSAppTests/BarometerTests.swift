@@ -166,4 +166,50 @@ struct BarometerTests {
         #expect(!isAltitudeJump(from: existing, to: normalRecal),
                 "A 1-hPa recalibration drift should not trigger an altitude jump")
     }
+
+    // MARK: - CalibrationModel (multi-point, robust offset + drift)
+
+    @Test func modelAveragesOffsets() {
+        var m = CalibrationModel()
+        let t = Date(timeIntervalSince1970: 1_000_000)
+        m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 990, at: t))                    // +24
+        m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 989,
+                                    at: t.addingTimeInterval(3600)))                                  // +25
+        #expect(m.offset == 24.5, "Robust offset is the mean of retained points")
+        #expect(m.slpEquivalent(for: 990) == 1014.5)
+    }
+
+    @Test func modelAltitudeJumpResetsHistory() {
+        var m = CalibrationModel()
+        let t = Date(timeIntervalSince1970: 1_000_000)
+        m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 990, at: t))                    // +24
+        let didReset = m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 975,
+                                                   at: t.addingTimeInterval(1800)))                   // +39
+        #expect(didReset, "A 15-hPa offset jump should reset the model")
+        #expect(m.points.count == 1)
+        #expect(m.offset == 39.0)
+    }
+
+    @Test func modelDetectsDrift() {
+        var m = CalibrationModel()
+        let t = Date(timeIntervalSince1970: 1_000_000)
+        // Offset climbing ~1 hPa/hr — slow sensor drift, not an altitude jump.
+        m.add(CalibrationState.make(metarSLP: 1010, phonePressureHPa: 990, at: t))                    // +20
+        m.add(CalibrationState.make(metarSLP: 1011, phonePressureHPa: 990,
+                                    at: t.addingTimeInterval(3600)))                                  // +21
+        m.add(CalibrationState.make(metarSLP: 1012, phonePressureHPa: 990,
+                                    at: t.addingTimeInterval(7200)))                                  // +22
+        #expect((m.driftPerHour ?? 0) > 0.9 && (m.driftPerHour ?? 0) < 1.1,
+                "Drift slope should be ~1 hPa/hr")
+    }
+
+    @Test func modelPrunesOldPoints() {
+        var m = CalibrationModel()
+        let t = Date(timeIntervalSince1970: 1_000_000)
+        m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 990, at: t))
+        // 7h later — the first point is older than the 6h window and is pruned.
+        m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 990,
+                                    at: t.addingTimeInterval(7 * 3600)))
+        #expect(m.points.count == 1, "Points older than 6h are dropped")
+    }
 }

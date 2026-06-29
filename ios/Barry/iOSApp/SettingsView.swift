@@ -16,6 +16,8 @@ struct SettingsView: View {
 
     @AppStorage("pressureUnit", store: AppConfig.sharedDefaults)
     private var unitRaw: String = PressureUnit.hPa.rawValue
+    @AppStorage("windUnit", store: AppConfig.sharedDefaults)
+    private var windUnitRaw: String = WindUnit.kmh.rawValue
     @AppStorage("locationMode", store: AppConfig.sharedDefaults)
     private var locationModeRaw: String = LocationMode.device.rawValue
     @AppStorage("homeStation", store: AppConfig.sharedDefaults)
@@ -53,6 +55,13 @@ struct SettingsView: View {
                 Section("Units") {
                     Picker("Pressure", selection: $unitRaw) {
                         ForEach(PressureUnit.allCases) { u in
+                            Text(u.label).tag(u.rawValue)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Picker("Wind", selection: $windUnitRaw) {
+                        ForEach(WindUnit.allCases) { u in
                             Text(u.label).tag(u.rawValue)
                         }
                     }

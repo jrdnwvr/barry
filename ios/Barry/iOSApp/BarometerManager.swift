@@ -34,8 +34,9 @@ struct MicroTrend: Equatable {
 // MARK: - CalibrationState
 
 /// The SLP offset derived from aligning one phone reading with a fresh METAR SLP.
-/// offset = metar_slp − phone_station_pressure_hPa.
-struct CalibrationState: Equatable {
+/// offset = metar_slp − phone_station_pressure_hPa. This is one calibration *point*;
+/// CalibrationModel keeps a short history of them for a robust offset + drift.
+struct CalibrationState: Equatable, Codable {
     let offset: Double
     let calibratedAt: Date
 
@@ -53,6 +54,70 @@ struct CalibrationState: Equatable {
 
 func isAltitudeJump(from existing: CalibrationState, to incoming: CalibrationState) -> Bool {
     abs(incoming.offset - existing.offset) > CalibrationState.maxOffsetJump
+}
+
+// MARK: - CalibrationModel (multi-point, persistable)
+
+/// Keeps the last few calibration points (~6h) and derives a robust offset by
+/// averaging them — so one noisy METAR can't yank the live reading — plus a drift
+/// estimate (how fast the offset is wandering, i.e. sensor drift). Pure + Codable
+/// so it persists across launches and is unit-testable.
+struct CalibrationModel: Equatable, Codable {
+    static let maxPoints = 8
+    static let maxAgeSeconds: Double = 6 * 3600
+    static let maxOffsetJump = CalibrationState.maxOffsetJump
+
+    var points: [CalibrationState] = []
+
+    /// Robust offset = mean of retained per-point offsets. nil when empty.
+    var offset: Double? {
+        guard !points.isEmpty else { return nil }
+        return points.map(\.offset).reduce(0, +) / Double(points.count)
+    }
+
+    var calibratedAt: Date? { points.last?.calibratedAt }
+
+    /// Offset slope in hPa/hour (least-squares over the retained points). nil until
+    /// there are ≥3 points spanning real time — that's "sensor drift".
+    var driftPerHour: Double? {
+        guard points.count >= 3 else { return nil }
+        let t0 = points[0].calibratedAt
+        let xs = points.map { $0.calibratedAt.timeIntervalSince(t0) / 3600.0 }
+        let ys = points.map(\.offset)
+        let n = Double(xs.count)
+        let mx = xs.reduce(0, +) / n
+        let my = ys.reduce(0, +) / n
+        let sxx = xs.reduce(0) { $0 + ($1 - mx) * ($1 - mx) }
+        guard sxx > 1e-6 else { return nil }
+        let sxy = zip(xs, ys).reduce(0) { $0 + ($1.0 - mx) * ($1.1 - my) }
+        return sxy / sxx
+    }
+
+    func slpEquivalent(for stationPressureHPa: Double) -> Double? {
+        offset.map { stationPressureHPa + $0 }
+    }
+
+    /// Add a calibration point. Returns true if the point deviated so far from the
+    /// current robust offset that we treat it as an altitude change and reset the
+    /// history to just this point.
+    @discardableResult
+    mutating func add(_ point: CalibrationState) -> Bool {
+        prune(now: point.calibratedAt)
+        if let off = offset, abs(point.offset - off) > Self.maxOffsetJump {
+            points = [point]
+            return true
+        }
+        points.append(point)
+        if points.count > Self.maxPoints {
+            points.removeFirst(points.count - Self.maxPoints)
+        }
+        return false
+    }
+
+    mutating func prune(now: Date) {
+        let cutoff = now.addingTimeInterval(-Self.maxAgeSeconds)
+        points.removeAll { $0.calibratedAt < cutoff }
+    }
 }
 
 // MARK: - MotionGate (pure state machine)
@@ -143,11 +208,21 @@ struct SampleBuffer: Equatable {
 @MainActor
 final class BarometerManager: ObservableObject {
     @Published private(set) var motionState: MotionGate.State = .moving
-    @Published private(set) var calibration: CalibrationState?
     @Published private(set) var microTrend: MicroTrend?
     @Published private(set) var latestLocalSLP: Double?
     /// True only on physical iPhones with a real barometer; false on simulator.
     @Published private(set) var isAvailable: Bool = false
+
+    // Derived calibration outputs (published for the UI).
+    @Published private(set) var offsetHPa: Double?     // robust station→SLP offset
+    @Published private(set) var calibratedAt: Date?    // time of the latest point
+    @Published private(set) var driftPerHour: Double?  // offset slope (hPa/h)
+    /// True when the most recent calibration discarded history as an altitude change.
+    @Published private(set) var lastResetWasAltitude: Bool = false
+
+    private var model = CalibrationModel()
+    private var lastMetarSLP: Double?
+    private static let storeKey = "barometer.calibration.v1"
 
     private var gate = MotionGate()
     private var buffer = SampleBuffer()
@@ -159,10 +234,12 @@ final class BarometerManager: ObservableObject {
         return q
     }()
 
-    var isCalibrated: Bool { calibration != nil }
+    var isCalibrated: Bool { offsetHPa != nil }
 
     /// Calibrated + trusted SLP trace for the last ~60 min (drives the chart overlay).
     var phoneTrace: [(Date, Double)] { buffer.phoneTrace() }
+
+    init() { loadModel() }
 
     // MARK: Lifecycle
 
@@ -189,22 +266,58 @@ final class BarometerManager: ObservableObject {
     }
 
     /// Call whenever PressureStore receives a fresh METAR with a valid SLP.
-    /// Calibrates only when stationary; detects altitude jumps and resets buffer.
+    /// Adds a calibration point (when stationary), folding it into the robust offset;
+    /// a large deviation is treated as an altitude change and resets the history.
     func attemptCalibration(metarSLP: Double) {
-        guard gate.isStationary,
-              let latest = buffer.samples.last
-        else { return }
-        let incoming = CalibrationState.make(metarSLP: metarSLP, phonePressureHPa: latest.stationPressureHPa)
-        if let existing = calibration, isAltitudeJump(from: existing, to: incoming) {
-            // User moved to a different altitude between METAR cycles; discard stale trace.
+        lastMetarSLP = metarSLP
+        guard gate.isStationary, let latest = buffer.samples.last else { return }
+        let point = CalibrationState.make(metarSLP: metarSLP, phonePressureHPa: latest.stationPressureHPa)
+        let didReset = model.add(point)
+        lastResetWasAltitude = didReset
+        if didReset {
+            // Altitude changed between METAR cycles; discard the stale local trace too.
             buffer = SampleBuffer()
         }
-        calibration = incoming
-        backfillCalibration(incoming)
+        syncOutputs()
+        backfillCalibration()
+        saveModel()
         refreshDerivedState()
     }
 
+    /// Manual hard reset: forget the offset history and recalibrate from scratch
+    /// against the most recent METAR (if known and we're stationary).
+    func recalibrate() {
+        model = CalibrationModel()
+        lastResetWasAltitude = false
+        buffer = SampleBuffer()
+        syncOutputs()
+        saveModel()
+        refreshDerivedState()
+        if let slp = lastMetarSLP { attemptCalibration(metarSLP: slp) }
+    }
+
     // MARK: - Private
+
+    private func loadModel() {
+        guard let data = AppConfig.sharedDefaults.data(forKey: Self.storeKey),
+              var stored = try? JSONDecoder().decode(CalibrationModel.self, from: data)
+        else { return }
+        stored.prune(now: Date())
+        model = stored
+        syncOutputs()
+    }
+
+    private func saveModel() {
+        if let data = try? JSONEncoder().encode(model) {
+            AppConfig.sharedDefaults.set(data, forKey: Self.storeKey)
+        }
+    }
+
+    private func syncOutputs() {
+        offsetHPa = model.offset
+        calibratedAt = model.calibratedAt
+        driftPerHour = model.driftPerHour
+    }
 
     private func startAltimeter() {
         let alt = CMAltimeter()
@@ -240,7 +353,7 @@ final class BarometerManager: ObservableObject {
 
     private func handlePressure(_ pressureHPa: Double) {
         let trusted = gate.isStationary
-        let slpEquiv = trusted ? calibration?.slpEquivalent(for: pressureHPa) : nil
+        let slpEquiv = trusted ? model.slpEquivalent(for: pressureHPa) : nil
         buffer.add(BarometerSample(
             date: Date(),
             stationPressureHPa: pressureHPa,
@@ -250,17 +363,17 @@ final class BarometerManager: ObservableObject {
         refreshDerivedState()
     }
 
-    private func backfillCalibration(_ cal: CalibrationState) {
+    private func backfillCalibration() {
         for i in buffer.samples.indices where buffer.samples[i].trusted {
-            buffer.samples[i].slpEquivalent = cal.slpEquivalent(for: buffer.samples[i].stationPressureHPa)
+            buffer.samples[i].slpEquivalent = model.slpEquivalent(for: buffer.samples[i].stationPressureHPa)
         }
     }
 
     private func refreshDerivedState() {
         if gate.isStationary,
-           let cal = calibration,
+           model.offset != nil,
            let latest = buffer.samples.last(where: { $0.trusted }) {
-            latestLocalSLP = cal.slpEquivalent(for: latest.stationPressureHPa)
+            latestLocalSLP = model.slpEquivalent(for: latest.stationPressureHPa)
         } else {
             latestLocalSLP = nil
         }

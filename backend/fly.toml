@@ -1,0 +1,30 @@
+# Fly.io config for the Barry backend.
+# Deploy:  cd backend && fly launch --copy-config --no-deploy  (first time)
+#          fly deploy
+# Custom domain + auto TLS:  fly certs add barry.wide-stack.com
+app = "barry-backend"
+primary_region = "iad"   # pick the region closest to you / your users
+
+[build]
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Keep exactly one machine running: the scheduler + cache are in-process, so a
+  # second machine means a second scheduler. Don't raise max_machines_running
+  # without moving the cache to Redis first.
+  auto_stop_machines = "off"
+  auto_start_machines = false
+  min_machines_running = 1
+  max_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/healthz"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

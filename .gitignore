@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# Xcode / Swift
+xcuserdata/
+*.xcuserstate
+DerivedData/
+.build/
+*.xcworkspace/xcuserdata/
+
+# macOS
+.DS_Store
+
+# XcodeGen-generated project (run `xcodegen generate`)
+ios/Barry.xcodeproj/

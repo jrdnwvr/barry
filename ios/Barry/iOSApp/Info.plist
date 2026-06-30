@@ -20,6 +20,8 @@
     <string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key>
     <string>$(CURRENT_PROJECT_VERSION)</string>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Barry uses your location to find the nearest weather-reporting station for local pressure.</string>
     <key>NSMotionUsageDescription</key>

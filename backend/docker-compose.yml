@@ -1,0 +1,45 @@
+# Barry backend + Cloudflare Tunnel — self-host stack (Unraid, etc.).
+#
+# Publishes the backend at https://barry.wide-stack.com via a Cloudflare Tunnel:
+# no port-forwarding, no exposed home IP, TLS terminated at Cloudflare's edge.
+# See UNRAID.md for the full walkthrough.
+#
+#   CLOUDFLARE_TUNNEL_TOKEN=<token from the Cloudflare dashboard> \
+#   docker compose up -d --build
+#
+# IMPORTANT: run exactly ONE backend instance — the TTL cache, active-station
+# registry, and METAR scheduler are all in-process (see app/cache.py). Do not
+# scale this service without moving that state to Redis first.
+
+services:
+  barry-backend:
+    build: .
+    image: barry-backend:latest
+    container_name: barry-backend
+    restart: unless-stopped
+    environment:
+      - PORT=8080
+    # Optional: also expose on the LAN (e.g. for testing from the server itself).
+    # The tunnel does NOT need this — it reaches the container over the compose
+    # network as http://barry-backend:8080.
+    ports:
+      - "8077:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/healthz').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: barry-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      # Token from Cloudflare Zero Trust → Networks → Tunnels (dashboard-managed).
+      # The public hostname (barry.wide-stack.com → http://barry-backend:8080) is
+      # configured in that dashboard, not here.
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - barry-backend

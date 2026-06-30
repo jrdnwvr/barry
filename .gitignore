@@ -17,3 +17,6 @@ DerivedData/
 
 # XcodeGen-generated project (run `xcodegen generate`)
 ios/Barry.xcodeproj/
+
+# Secrets / env
+.env

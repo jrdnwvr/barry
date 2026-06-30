@@ -24,17 +24,11 @@
     <string>Barry uses your location to find the nearest weather-reporting station for local pressure.</string>
     <key>NSMotionUsageDescription</key>
     <string>Barry uses motion activity to gate the phone barometer — elevator rides and driving produce pressure changes that look like weather fronts. Motion gating keeps those out of the trend analysis.</string>
-    <!-- Backend endpoint. Dev default is localhost; for device testing use your
-         Mac's LAN IP, and for release use https://barry.wide-stack.com -->
+    <!-- Backend endpoint. Production: the self-hosted backend behind the Cloudflare
+         Tunnel (HTTPS). For local dev, point this at http://<your-Mac-LAN-IP>:8077
+         and re-add an NSAppTransportSecurity → NSAllowsLocalNetworking exception. -->
     <key>BarryBackendURL</key>
-    <string>http://192.168.1.107:8077</string>
-    <!-- Dev only: allow plaintext HTTP to a local backend on your LAN.
-         Remove this block once your backend is served over HTTPS. -->
-    <key>NSAppTransportSecurity</key>
-    <dict>
-        <key>NSAllowsLocalNetworking</key>
-        <true/>
-    </dict>
+    <string>https://barry.wide-stack.com</string>
     <key>UIBackgroundModes</key>
     <array>
         <string>fetch</string>

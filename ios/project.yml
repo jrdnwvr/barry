@@ -41,6 +41,9 @@ targets:
     dependencies:
       - target: BarryWatch
       - sdk: CoreMotion.framework
+    scheme:
+      testTargets:
+        - BarryTests
 
   # ---- iOS unit tests ------------------------------------------------------
   BarryTests:

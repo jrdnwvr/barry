@@ -248,11 +248,17 @@ def _scan_features(
     if knee_time is not None:
         return ("front_knee", knee_time)
 
-    # 3. rapid_fall — sustained |slope| over the trailing RAPID_FALL_HOURS
+    # 3. rapid_fall / rapid_rise — sustained steep slope over the trailing window.
+    # Sign-aware: a fast rise (gust front / strong post-frontal clearing) is its own
+    # signal, not a "fall". RAPID_FALL_RATE is the magnitude threshold for both.
     rf_start = now - timedelta(hours=RAPID_FALL_HOURS)
     rf_win = [s for s in smoothed if rf_start <= s.t <= now]
-    if len(rf_win) >= 3 and abs(_slope(rf_win)) >= RAPID_FALL_RATE:
-        return ("rapid_fall", None)
+    if len(rf_win) >= 3:
+        rf_slope = _slope(rf_win)
+        if rf_slope <= -RAPID_FALL_RATE:
+            return ("rapid_fall", None)
+        if rf_slope >= RAPID_FALL_RATE:
+            return ("rapid_rise", None)
 
     # 4. approaching_trough — next trough is in the future
     if nearest_trough is not None and nearest_trough > now:

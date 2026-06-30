@@ -28,7 +28,7 @@ def _fc(hour, precip):
 
 def test_base_sentences():
     assert build_verdict("steady").startswith("Holding steady")
-    assert build_verdict("rising_fast").startswith("Rising and steady")
+    assert build_verdict("rising_fast").startswith("Rising sharply")
     assert "storm system likely" in build_verdict("falling_fast")
 
 
@@ -92,6 +92,13 @@ def test_rapid_fall_uses_storm_phrasing():
     out = build_verdict("falling_fast", None, reading=r)
     assert "storm system likely" in out
     assert "Secure loose items" in out
+
+
+def test_rapid_rise_warns_of_gusty_winds():
+    r = _reading("rapid_rise", trend="rising_fast")
+    out = build_verdict("rising_fast", None, reading=r)
+    assert "rising fast" in out.lower()
+    assert "gusty winds" in out
 
 
 def test_front_knee_phrasing():

@@ -264,11 +264,14 @@ private func scanFeatures(
         return ("front_knee", knee)
     }
 
-    // 3. rapid_fall over trailing window
+    // 3. rapid_fall / rapid_rise over trailing window — sign-aware (a fast rise is
+    // a gust-front / strong-clearing signal, not a "fall").
     let rfStart = now.addingTimeInterval(-InterpreterConstants.rapidFallHours * 3600)
     let rfWin = smoothed.filter { $0.t >= rfStart && $0.t <= now }
-    if rfWin.count >= 3 && abs(slope(rfWin)) >= InterpreterConstants.rapidFallRate {
-        return ("rapid_fall", nil)
+    if rfWin.count >= 3 {
+        let rfSlope = slope(rfWin)
+        if rfSlope <= -InterpreterConstants.rapidFallRate { return ("rapid_fall", nil) }
+        if rfSlope >= InterpreterConstants.rapidFallRate { return ("rapid_rise", nil) }
     }
 
     // 4. approaching_trough

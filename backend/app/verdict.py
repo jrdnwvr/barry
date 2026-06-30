@@ -22,7 +22,7 @@ BASE_VERDICTS = {
     "falling": "Slight fall — keep an eye out, nothing imminent.",
     "steady": "Holding steady — conditions stable.",
     "rising": "Rising and steady — clearing, fair conditions holding.",
-    "rising_fast": "Rising and steady — clearing, fair conditions holding.",
+    "rising_fast": "Rising sharply — clearing, but gusty winds likely.",
 }
 
 # precip probability (%) above which we call out likely rain
@@ -80,6 +80,9 @@ def _feature_sentence(reading: Reading, *, local_hour_offset: float) -> Optional
 
     if f == "rapid_fall":
         return "Pressure falling fast — storm system likely approaching. Secure loose items."
+
+    if f == "rapid_rise":
+        return "Pressure rising fast — gusty winds likely (gust front or strong clearing behind a front)."
 
     return None
 

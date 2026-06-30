@@ -42,6 +42,7 @@ struct ComplicationView: View {
         case "approaching_trough":   return "arrow.down.right"        // still falling toward a low
         case "ridge_peak":           return "arrow.down.from.line"    // at top, falling next
         case "rapid_fall":           return "arrow.down.to.line"      // sharp sustained drop
+        case "rapid_rise":           return "arrow.up.to.line"        // sharp sustained rise (gust front)
         case "front_knee":           return "bolt.horizontal.fill"    // sudden step change
         default:                     return cls.symbolName
         }

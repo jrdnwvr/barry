@@ -79,6 +79,18 @@ def test_rapid_sustained_fall():
     assert r.feature == "rapid_fall", f"feature={r.feature}"
 
 
+# 3b. Rapid sustained rise — gust front / strong clearing, no top in window.
+def test_rapid_sustained_rise():
+    def p(hr):
+        if hr <= -4.0:
+            return 1005.0
+        return 1005.0 + 5.0 * (hr - (-4.0)) / 4.0
+
+    r = interpret(_series(_with_tide(p), t0_hr=-6.0, t1_hr=0.0), now=NOW)
+    assert r.trend in ("rising", "rising_fast"), f"trend={r.trend} rate3h={r.rate3h}"
+    assert r.feature == "rapid_rise", f"feature={r.feature}"
+
+
 # 4. Pure diurnal wobble — THE anti-false-alarm test (brief §4.3.4 #4).
 def test_diurnal_only_no_false_alarm():
     def p(hr):

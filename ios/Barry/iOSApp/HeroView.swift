@@ -25,17 +25,26 @@ struct HeroView: View {
 
     private var tendency: TendencyOut? { combined.tendency }
 
-    /// The phone reading is only trusted when the feature is on, the device has a
-    /// barometer, we're stationary, and we've calibrated against a METAR.
-    private var liveSLP: Double? {
-        guard barometerEnabled, barometer.isAvailable,
-              case .stationary = barometer.motionState,
-              barometer.isCalibrated else { return nil }
-        return barometer.latestLocalSLP
+    /// Time of the last station report — the local reading counts as "current" if it
+    /// belongs to the same period (i.e. is at least as fresh as the last METAR).
+    private var lastMetarTime: Date {
+        combined.observedSeries.last?.t ?? combined.pressure.cachedAt
     }
 
-    private var isLive: Bool { liveSLP != nil }
-    private var displayValue: Double? { liveSLP ?? combined.currentPressure }
+    /// The local reading to show as "current": present, calibrated, and recent —
+    /// from the same period as the last station report (or within the last hour),
+    /// capped so a stale reading can't masquerade. Deliberately does NOT require the
+    /// device to be stationary right now, so moving the phone doesn't hide it.
+    private var localReading: (slp: Double, at: Date)? {
+        guard barometerEnabled, barometer.isCalibrated,
+              let r = barometer.lastLocalReading else { return nil }
+        let sameMetarPeriod = r.at >= lastMetarTime || now.timeIntervalSince(r.at) <= 3600
+        let notAncient = now.timeIntervalSince(r.at) <= 2 * 3600
+        return (sameMetarPeriod && notAncient) ? r : nil
+    }
+
+    private var isLocal: Bool { localReading != nil }
+    private var displayValue: Double? { localReading?.slp ?? combined.currentPressure }
 
     private var minsSinceCalibration: Int? {
         barometer.calibratedAt.map { max(0, Int(now.timeIntervalSince($0) / 60)) }
@@ -45,7 +54,7 @@ struct HeroView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             StatusRow(combined: combined, barometer: barometer, now: now,
-                      barometerEnabled: barometerEnabled)
+                      barometerEnabled: barometerEnabled, localAt: localReading?.at)
 
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 if let v = displayValue {
@@ -62,7 +71,7 @@ struct HeroView: View {
                 if let t = tendency { TendencyBadge(tendency: t, unit: unit) }
             }
 
-            if isLive {
+            if isLocal {
                 provenanceRow
                 if let trend = barometer.microTrend { microLead(trend) }
                 calibrationLine
@@ -84,15 +93,15 @@ struct HeroView: View {
     @ViewBuilder
     private func valueLabel(_ v: Double) -> some View {
         let content = HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Text(valueString(v, live: isLive))
+            Text(valueString(v, live: isLocal))
                 .font(.system(size: 44, weight: .semibold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(isLive && calibrationStale ? .secondary : .primary)
+                .foregroundStyle(isLocal && calibrationStale ? .secondary : .primary)
             Text(unit.label)
                 .font(.headline)
                 .foregroundStyle(.secondary)
         }
-        if isLive {
+        if isLocal {
             Button { withAnimation(.snappy(duration: 0.2)) { showComparison.toggle() } } label: {
                 content
             }
@@ -133,7 +142,7 @@ struct HeroView: View {
 
     /// "station 29.92 · phone −0.04" — how far the phone has moved off the station.
     private var comparisonText: String? {
-        guard let local = liveSLP, let station = combined.currentPressure else { return nil }
+        guard let local = localReading?.slp, let station = combined.currentPressure else { return nil }
         let diff = unit.convertDelta(local - station)
         let dp = unit == .inHg ? 3 : 1
         let mag = String(format: "%.\(dp)f", abs(diff))
@@ -221,6 +230,9 @@ private struct StatusRow: View {
     @ObservedObject var barometer: BarometerManager
     let now: Date
     var barometerEnabled: Bool
+    /// When a recent local reading is being shown, its timestamp — surfaced as an age
+    /// so the header reflects "we're showing local" rather than the raw motion state.
+    var localAt: Date?
 
     var body: some View {
         HStack(spacing: 6) {
@@ -261,14 +273,18 @@ private struct StatusRow: View {
     /// Sensor status when the barometer feature is active + available; nil means
     /// fall back to METAR freshness.
     private var sensorStatus: (text: String, live: Bool)? {
-        guard barometerEnabled, barometer.isAvailable else { return nil }
+        guard barometerEnabled else { return nil }
+        // Showing a recent local reading → surface its age (green dot when fresh),
+        // even while the device is moving.
+        if let localAt {
+            let m = max(0, Int(now.timeIntervalSince(localAt) / 60))
+            return m == 0 ? ("Local · now", true) : ("Local · \(m)m ago", false)
+        }
+        guard barometer.isAvailable else { return nil }
         switch barometer.motionState {
-        case .stationary:
-            return barometer.isCalibrated ? ("Live", true) : ("Calibrating…", false)
-        case .settling:
-            return ("Settling…", false)
-        case .moving:
-            return ("Paused", false)
+        case .stationary: return ("Calibrating…", false)
+        case .settling:   return ("Settling…", false)
+        case .moving:     return ("Paused", false)
         }
     }
 

@@ -36,6 +36,17 @@ struct ConfirmationOverlayView: View {
     }
     private var precipMaxPct: Int { next6h.compactMap { $0.precip_prob }.max() ?? 0 }
     private var windNowKmh: Double { (next6h.first ?? hours.first)?.windspeed ?? 0 }
+    /// Wind direction (degrees the wind blows *from*: 0 = N, 90 = E), if reported.
+    private var windDirNow: Double? { (next6h.first ?? hours.first)?.winddir }
+
+    /// "12 km/h · 230°" — speed plus the from-direction in degrees when available.
+    private var windText: String {
+        var s = "\(windUnit.format(windNowKmh)) \(windUnit.label)"
+        if let dir = windDirNow {
+            s += " · \(Int(dir.rounded()))°"
+        }
+        return s
+    }
 
     var body: some View {
         if hours.isEmpty {
@@ -58,7 +69,7 @@ struct ConfirmationOverlayView: View {
     private var summaryRow: some View {
         HStack(spacing: 16) {
             Label("\(precipMaxPct)%", systemImage: "cloud.rain")
-            Label("\(windUnit.format(windNowKmh)) \(windUnit.label)", systemImage: "wind")
+            Label(windText, systemImage: "wind")
             Text("next 6h").foregroundStyle(.secondary)
             Spacer()
         }

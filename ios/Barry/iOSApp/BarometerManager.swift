@@ -294,6 +294,16 @@ final class BarometerManager: ObservableObject {
     /// Persisted calibrated SLP trace over the last ~48 h (drives the Task 3 overlay).
     var phoneHistoryTrace: [(Date, Double)] { history.trace() }
 
+    /// Most recent trusted local SLP and when it was taken. Unlike `latestLocalSLP`
+    /// (which is nil while moving), this persists across motion — so the UI can keep
+    /// showing the last good local reading; a to-the-second live value isn't required.
+    var lastLocalReading: (slp: Double, at: Date)? {
+        if let live = latestLocalSLP {
+            return (live, buffer.samples.last(where: { $0.trusted })?.date ?? Date())
+        }
+        return history.entries.last.map { ($0.slp, $0.date) }
+    }
+
     init() {
         loadModel()
         loadHistory()

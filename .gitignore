@@ -20,3 +20,6 @@ ios/Barry.xcodeproj/
 
 # Secrets / env
 .env
+
+# Art / design source files (not needed for the build)
+art/

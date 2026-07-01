@@ -109,9 +109,10 @@ extension TendencyClass {
 
     /// Light blue -> deep blue over t in 0...1: the pressure line's intensity ramp,
     /// where t is how *steep* the change is (direction is read from the line's slope).
+    /// Deepest hue is #0019FF.
     static func blueRamp(_ t: Double) -> Color {
-        let pale = (r: 0.60, g: 0.80, b: 0.98)
-        let deep = (r: 0.02, g: 0.20, b: 0.62)
+        let pale = (r: 0.62, g: 0.80, b: 0.99)
+        let deep = (r: 0.0, g: 0.098, b: 1.0)   // #0019FF
         let c = min(1.0, max(0.0, t))
         return Color(
             red: pale.r + (deep.r - pale.r) * c,
@@ -129,5 +130,35 @@ extension TendencyClass {
                            floor: Double = 0.2, ceil: Double = 1.5) -> Color {
         let t = min(1.0, max(0.0, (abs(slope) - floor) / (ceil - floor)))
         return blueRamp(t)
+    }
+}
+
+// MARK: - Windowed slope (noise-robust rate of change)
+
+enum PressureSlope {
+    /// Least-squares slope (hPa per hour) of `values` vs `times` using only the
+    /// points within ±`windowHours` of `times[i]`. Fitting a short window instead of
+    /// reading the single adjacent hop means back-and-forth jitter (e.g. 29.99 →
+    /// 29.98 → 30.00 hourly wobble) averages out to a gentle slope, while a sustained
+    /// rise or fall still registers — so the chart color reflects the real trend, not
+    /// reporting noise. Assumes `times` is sorted ascending and matches `values`.
+    static func windowed(times: [Date], values: [Double], at i: Int,
+                         windowHours: Double = 1.5) -> Double {
+        let n = times.count
+        guard n >= 2, i >= 0, i < n else { return 0 }
+        let t0 = times[i]
+        var xs: [Double] = [], ys: [Double] = []
+        for j in 0..<n {
+            let dtH = times[j].timeIntervalSince(t0) / 3600.0
+            if abs(dtH) <= windowHours { xs.append(dtH); ys.append(values[j]) }
+        }
+        guard xs.count >= 2 else { return 0 }
+        let m = Double(xs.count)
+        let mx = xs.reduce(0, +) / m
+        let my = ys.reduce(0, +) / m
+        let sxx = xs.reduce(0) { $0 + ($1 - mx) * ($1 - mx) }
+        guard sxx > 1e-9 else { return 0 }
+        let sxy = zip(xs, ys).reduce(0) { $0 + ($1.0 - mx) * ($1.1 - my) }
+        return sxy / sxx
     }
 }

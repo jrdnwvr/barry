@@ -11,7 +11,7 @@ struct ForecastCaveatView: View {
     var body: some View {
         HStack(alignment: .top, spacing: 6) {
             Image(systemName: "info.circle")
-            Text("Dashed line is forecast — actual fronts may arrive sharper than the model shows.")
+            Text("Dashed line is forecast.")
         }
         .font(.caption2)
         .foregroundStyle(.tertiary)

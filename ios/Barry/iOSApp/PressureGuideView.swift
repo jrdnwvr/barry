@@ -39,6 +39,29 @@ struct PressureGuideView: View {
                  detail: "A sharp rise often comes right after a cold front clears through: skies brighten, but the tight pressure gradient behind the front commonly brings gusty, strong winds for a time."),
     ]
 
+    private struct Term: Identifiable {
+        let id = UUID()
+        let name: String
+        let meaning: String
+    }
+
+    // Terms Barry uses in its verdicts and on the chart (pins like "trough",
+    // "front edge"). Definitions follow the NWS Weather Glossary (see Sources).
+    private let terms: [Term] = [
+        Term(name: "Front",
+             meaning: "A boundary between two air masses of different temperature. Its passage often brings a wind shift, more cloud, and rain — and it usually shows up as a pressure trough."),
+        Term(name: "Trough",
+             meaning: "An elongated area of relatively low pressure — where the curve bottoms out. Often marks a front and more unsettled weather. Barry pins the low as “trough,” and “past trough” once pressure is recovering."),
+        Term(name: "Ridge",
+             meaning: "An elongated area of relatively high pressure — where the curve peaks. Generally fair, settling weather."),
+        Term(name: "Front edge",
+             meaning: "The sharp kink where a front’s pressure change begins — Barry flags it when the curve turns down abruptly."),
+        Term(name: "Gust front",
+             meaning: "The leading edge of gusty winds pushed out ahead of a storm’s downdraft — a sudden burst of wind, often with a sharp pressure rise."),
+        Term(name: "Tendency",
+             meaning: "The direction and rate of the pressure change over the last ~3 hours — the signal Barry reads to say what’s coming."),
+    ]
+
     private struct Source: Identifiable {
         let id = UUID()
         let name: String
@@ -48,8 +71,8 @@ struct PressureGuideView: View {
     private let sources: [Source] = [
         Source(name: "NOAA SciJinks — High & low pressure systems",
                url: URL(string: "https://scijinks.gov/high-and-low-pressure-systems/")!),
-        Source(name: "US National Weather Service — Glossary: pressure tendency",
-               url: URL(string: "https://forecast.weather.gov/glossary.php?word=pressure%20tendency")!),
+        Source(name: "US National Weather Service — Weather Glossary (pressure tendency, front, trough, ridge, gust front)",
+               url: URL(string: "https://forecast.weather.gov/glossary.php")!),
         Source(name: "UK Met Office — How to read synoptic charts (isobars & wind)",
                url: URL(string: "https://weather.metoffice.gov.uk/learn-about/weather/how-weather-works/synoptic-weather-chart")!),
         Source(name: "Royal Meteorological Society — The highs and lows of wind strength",
@@ -87,6 +110,16 @@ struct PressureGuideView: View {
                     Text("Wind is driven by how sharply pressure changes across distance. The same steep gradients that make pressure rise or fall **quickly** also tend to bring stronger, gustier winds — so a fast move in either direction is often a heads-up for wind, not just rain or clearing.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+
+                Section("Terms you'll see") {
+                    ForEach(terms) { term in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(term.name).font(.subheadline.weight(.semibold))
+                            Text(term.meaning).font(.caption).foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 2)
+                    }
                 }
 
                 Section {

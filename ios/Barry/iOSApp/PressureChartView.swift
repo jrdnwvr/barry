@@ -43,16 +43,6 @@ struct PressureChartView: View {
         let observed: Bool
     }
 
-    /// One drawable line segment between two consecutive points, pre-tinted by its
-    /// local rate of change (color resolved at build time to keep the chart body
-    /// simple enough for the type-checker).
-    private struct Segment: Identifiable {
-        let id: String
-        let p0: Plot
-        let p1: Plot
-        let color: Color
-    }
-
     private struct SelectionPoint: Equatable {
         let date: Date
         let value: Double  // converted to `unit`
@@ -87,27 +77,38 @@ struct PressureChartView: View {
     private static let slopeFloor = 0.2
     private static let slopeCeil = 1.5
 
-    /// Color a segment by its rate of change (shared with the watch sparkline via
-    /// TendencyClass.slopeColor). Forecast segments are lightened.
-    private func slopeColor(_ slopePerHour: Double, forecast: Bool) -> Color {
-        let base = TendencyClass.slopeColor(hPaPerHour: slopePerHour,
-                                            floor: Self.slopeFloor, ceil: Self.slopeCeil)
-        return forecast ? base.opacity(0.6) : base
-    }
+    /// Window (± hours) over which each point's slope is fit. ~3 h total matches the
+    /// tendency timescale and smooths out sub-window reporting jitter.
+    private static let slopeWindowHours = 1.5
 
-    private func segments(_ plots: [Plot], prefix: String, forecast: Bool) -> [Segment] {
-        guard plots.count >= 2 else { return [] }
-        return (0..<(plots.count - 1)).map { i in
-            let a = plots[i], b = plots[i + 1]
-            let dt = b.t.timeIntervalSince(a.t) / 3600.0
-            let slope = dt > 0 ? (b.raw - a.raw) / dt : 0
-            return Segment(id: "\(prefix)-\(i)", p0: a, p1: b,
-                           color: slopeColor(slope, forecast: forecast))
+    /// Gradient color stops for a line: one stop per point, colored by its *windowed*
+    /// slope (so noise doesn't read as steepness) and positioned at the point's
+    /// fraction across the plot-wide x-domain. Swift Charts resolves the gradient in
+    /// plot space, so the line blends smoothly along its length. Forecast is lightened.
+    private func gradientStops(_ plots: [Plot], forecast: Bool) -> [Gradient.Stop] {
+        let (lo, hi) = domainBounds
+        let span = hi.timeIntervalSince(lo)
+        guard plots.count >= 2, span > 0 else { return [] }
+        let times = plots.map(\.t)
+        let raws = plots.map(\.raw)
+        return plots.enumerated().map { i, p in
+            let loc = min(1.0, max(0.0, p.t.timeIntervalSince(lo) / span))
+            let slope = PressureSlope.windowed(times: times, values: raws, at: i,
+                                               windowHours: Self.slopeWindowHours)
+            let base = TendencyClass.slopeColor(hPaPerHour: slope,
+                                                floor: Self.slopeFloor, ceil: Self.slopeCeil)
+            return Gradient.Stop(color: forecast ? base.opacity(0.6) : base, location: loc)
         }
     }
 
-    private var observedSegments: [Segment] { segments(visibleObserved, prefix: "obs", forecast: false) }
-    private var forecastSegments: [Segment] { segments(visibleForecast, prefix: "fc", forecast: true) }
+    private var observedGradient: LinearGradient {
+        LinearGradient(stops: gradientStops(visibleObserved, forecast: false),
+                       startPoint: .leading, endPoint: .trailing)
+    }
+    private var forecastGradient: LinearGradient {
+        LinearGradient(stops: gradientStops(visibleForecast, forecast: true),
+                       startPoint: .leading, endPoint: .trailing)
+    }
 
     // The window the user asked for (−pastHours … +futureHours around now).
     private var requestedBounds: (Date, Date) {
@@ -146,8 +147,15 @@ struct PressureChartView: View {
     private var minPoint: Plot? { (visibleObserved + visibleForecast).min { $0.value < $1.value } }
     private var maxPoint: Plot? { (visibleObserved + visibleForecast).max { $0.value < $1.value } }
 
-    /// Pressure value at "now" — the junction where observed hands off to forecast.
-    private var nowValue: Double? { visibleObserved.last?.value ?? visibleForecast.first?.value }
+    /// The current-reading dot: anchored to the *actual* last observation (its real
+    /// time + value, = the headline number), so it sits on the line where observed
+    /// hands off to forecast — not floating at the "now" tick, which is later than the
+    /// last hourly METAR. Falls back to the first forecast point if there's no observed.
+    private var nowPoint: (date: Date, value: Double)? {
+        if let last = visibleObserved.last { return (last.t, last.value) }
+        if let first = visibleForecast.first { return (first.t, first.value) }
+        return nil
+    }
 
     /// Points the tap-to-read gesture can land on: recorded observations plus the
     /// forecast strictly after the last observation (drops the synthetic bridge point
@@ -167,33 +175,30 @@ struct PressureChartView: View {
 
     // MARK: - Chart content (split so the type-checker doesn't time out)
 
-    // Observed: one colored segment per hop, tinted by its rate of change so a steep
-    // rise/fall reads darker than a gentle one. Two endpoints share a series id so
-    // Charts draws them as a single straight, solidly-colored hop.
+    // Observed: a single smooth line whose color blends along its length by rate of
+    // change (steep = deeper blue), via a plot-space gradient of per-point stops.
     @ChartContentBuilder private var observedLineContent: some ChartContent {
-        ForEach(observedSegments) { seg in
-            LineMark(x: .value("Time", seg.p0.t), y: .value("Pressure", seg.p0.value),
-                     series: .value("Series", seg.id))
-                .foregroundStyle(seg.color)
-                .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
-            LineMark(x: .value("Time", seg.p1.t), y: .value("Pressure", seg.p1.value),
-                     series: .value("Series", seg.id))
-                .foregroundStyle(seg.color)
-                .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
+        if visibleObserved.count >= 2 {
+            ForEach(visibleObserved) { p in
+                LineMark(x: .value("Time", p.t), y: .value("Pressure", p.value),
+                         series: .value("Series", "observed"))
+            }
+            .foregroundStyle(observedGradient)
+            .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
+            .interpolationMethod(.catmullRom)
         }
     }
 
-    // Forecast: same rate-of-change coloring, drawn dashed + lightened.
+    // Forecast: same blended coloring, drawn dashed + lightened.
     @ChartContentBuilder private var forecastLineContent: some ChartContent {
-        ForEach(forecastSegments) { seg in
-            LineMark(x: .value("Time", seg.p0.t), y: .value("Pressure", seg.p0.value),
-                     series: .value("Series", seg.id))
-                .foregroundStyle(seg.color)
-                .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, dash: [5, 4]))
-            LineMark(x: .value("Time", seg.p1.t), y: .value("Pressure", seg.p1.value),
-                     series: .value("Series", seg.id))
-                .foregroundStyle(seg.color)
-                .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, dash: [5, 4]))
+        if visibleForecast.count >= 2 {
+            ForEach(visibleForecast) { p in
+                LineMark(x: .value("Time", p.t), y: .value("Pressure", p.value),
+                         series: .value("Series", "forecast"))
+            }
+            .foregroundStyle(forecastGradient)
+            .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, dash: [5, 4]))
+            .interpolationMethod(.catmullRom)
         }
     }
 
@@ -275,9 +280,9 @@ struct PressureChartView: View {
                 .annotation(position: .top) { marker(hi.value) }
         }
 
-        // Solid blue "now" dot at the observed → forecast junction.
-        if let nowValue {
-            PointMark(x: .value("Now", now), y: .value("Pressure", nowValue))
+        // Solid blue dot on the latest actual reading (observed → forecast junction).
+        if let np = nowPoint {
+            PointMark(x: .value("Now", np.date), y: .value("Pressure", np.value))
                 .foregroundStyle(.blue)
                 .symbolSize(90)
         }

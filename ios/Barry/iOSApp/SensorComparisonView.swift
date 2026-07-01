@@ -103,7 +103,9 @@ struct SensorComparisonView: View {
                 .accessibilityLabel("Comparison time window")
             }
 
-            if phonePlots.isEmpty {
+            // Render the chart whenever there's anything to show — station METARs
+            // alone are useful; the placeholder is only for a truly empty window.
+            if phonePlots.isEmpty && metarPlots.isEmpty {
                 placeholder
             } else {
                 chart
@@ -159,13 +161,16 @@ struct SensorComparisonView: View {
 
     private func runMeasure() async {
         measuring = true
-        lastResult = await barometer.measureNow()
+        lastResult = await barometer.measureNow(stationSLP: combined.currentPressure)
         measuring = false
     }
 
     private func resultMessage(_ r: BarometerManager.ManualMeasurement) -> String {
+        if r.rawHPa == nil {
+            return "Couldn't get a sensor reading — this needs a real device (not the simulator), held still for a moment."
+        }
         guard let slp = r.slp else {
-            return "Measured, but Barry isn't calibrated to your station yet — that happens automatically when you're still and online for a bit."
+            return "Measured, but Barry couldn't calibrate to the station yet — hold the phone still for a moment and try again."
         }
         let shown = String(format: unit == .hPa ? "%.0f" : "%.2f", unit.convert(slp))
         if r.hadMotion {
@@ -215,10 +220,12 @@ struct SensorComparisonView: View {
 
     private var legend: some View {
         HStack(spacing: 16) {
-            Label {
-                Text("Phone (continuous)").font(.caption2).foregroundStyle(.secondary)
-            } icon: {
-                Image(systemName: "line.diagonal").foregroundStyle(.orange)
+            if !phonePlots.isEmpty {
+                Label {
+                    Text("Phone (continuous)").font(.caption2).foregroundStyle(.secondary)
+                } icon: {
+                    Image(systemName: "line.diagonal").foregroundStyle(.orange)
+                }
             }
             Label {
                 Text("Station METAR (hourly)").font(.caption2).foregroundStyle(.secondary)

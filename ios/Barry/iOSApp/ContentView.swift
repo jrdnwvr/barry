@@ -112,6 +112,9 @@ struct ContentView: View {
                     ForecastCaveatView()
                 }
 
+                // Secondary: wind + rain confirmation, always expanded.
+                ConfirmationOverlayView(combined: combined, now: store.now)
+
                 // Sensor vs Station: phone's continuous calibrated trace against the
                 // discrete hourly METAR observations (uses the persisted local history).
                 if phoneBarometerEnabled {
@@ -122,9 +125,6 @@ struct ContentView: View {
                         barometer: barometer
                     )
                 }
-
-                // Secondary: wind + rain confirmation, always expanded.
-                ConfirmationOverlayView(combined: combined, now: store.now)
 
                 DataSourceFootnote(combined: combined)
             }

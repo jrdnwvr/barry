@@ -377,7 +377,11 @@ final class BarometerManager: ObservableObject {
     /// but is NEVER folded into calibration (it doesn't touch the offset or the
     /// calibration buffer), so a bumpy reading can't corrupt the live value.
     @discardableResult
-    func measureNow() async -> ManualMeasurement {
+    func measureNow(stationSLP: Double? = nil) async -> ManualMeasurement {
+        // Keep the latest station SLP fresh so calibration bootstrap works even before
+        // the passive calibration path has run (e.g. right after first launch).
+        if let stationSLP { lastMetarSLP = stationSLP }
+
         // First verdict from the coarse activity gate (live, or a recent-activity query).
         let gateMoving: Bool
         if activityManager != nil {
@@ -398,7 +402,17 @@ final class BarometerManager: ObservableObject {
 
         let raw = stats.mean
         let now = Date()
-        let slp = model.slpEquivalent(for: raw, at: now)  // nil until calibrated
+
+        // Bootstrap calibration from this very reading when we're still but not yet
+        // calibrated — so a deliberate "Measure now" both calibrates against the
+        // latest station SLP and logs a point, instead of silently doing nothing.
+        if model.offset == nil, !moving, let metar = lastMetarSLP {
+            model.add(CalibrationState.make(metarSLP: metar, phonePressureHPa: raw, at: now))
+            syncOutputs()
+            saveModel()
+        }
+
+        let slp = model.slpEquivalent(for: raw, at: now)  // now set once calibrated
 
         var recorded = false
         if let slp {

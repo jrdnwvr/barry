@@ -121,7 +121,10 @@ cd ~/barry/backend && .venv/bin/pytest -q     # run backend tests (36, no networ
 
 ## Status
 
-Backend: done, tested, live-verified. iOS/watch/complication: built and compiling
-(`xcodebuild ** BUILD SUCCEEDED **`). Not yet: cloud deploy (artifacts ready in
-`backend/DEPLOY.md`), push notifications on `falling_fast`, multiple saved stations,
-iOS `CMAltimeter` live-pressure dot.
+Backend: done, tested, live-verified, and **deployed** (self-hosted on Unraid
+behind a Cloudflare Tunnel at `https://barry.wide-stack.com`). iOS/watch/complication:
+built and compiling (`xcodebuild ** BUILD SUCCEEDED **`). Live phone barometer
+(`CMAltimeter` calibration + local trace + on-demand "Measure now") done. **Storm
+alerts** done: local notifications (no push server) on `falling_fast` / `rising_fast`,
+driven by the BGAppRefreshTask in `StormAlerter.swift`. Distributed via TestFlight.
+Not yet: multiple saved stations, `falling_fast` push (local-only for now).

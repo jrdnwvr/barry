@@ -106,4 +106,28 @@ extension TendencyClass {
             blue: amber.b + (red.b - amber.b) * c
         )
     }
+
+    /// Light blue -> deep blue over t in 0...1: the pressure line's intensity ramp,
+    /// where t is how *steep* the change is (direction is read from the line's slope).
+    static func blueRamp(_ t: Double) -> Color {
+        let pale = (r: 0.60, g: 0.80, b: 0.98)
+        let deep = (r: 0.02, g: 0.20, b: 0.62)
+        let c = min(1.0, max(0.0, t))
+        return Color(
+            red: pale.r + (deep.r - pale.r) * c,
+            green: pale.g + (deep.g - pale.g) * c,
+            blue: pale.b + (deep.b - pale.b) * c
+        )
+    }
+
+    /// Color a pressure line/segment by how fast it's changing (|hPa per hour|):
+    /// pale blue when gentle, deepening to saturated blue as the change steepens.
+    /// Direction (rising vs falling) is read from the line's slope, not the hue.
+    /// Shared by the iOS hero chart and the watch sparkline so both read the same.
+    /// `floor`/`ceil` bound where the ramp starts and saturates (hPa/hour).
+    static func slopeColor(hPaPerHour slope: Double,
+                           floor: Double = 0.2, ceil: Double = 1.5) -> Color {
+        let t = min(1.0, max(0.0, (abs(slope) - floor) / (ceil - floor)))
+        return blueRamp(t)
+    }
 }

@@ -12,8 +12,6 @@ struct ConfirmationOverlayView: View {
     let combined: CombinedResponse
     let now: Date
 
-    @State private var expanded = false
-
     @AppStorage("windUnit", store: AppConfig.sharedDefaults)
     private var windUnitRaw: String = WindUnit.kmh.rawValue
     private var windUnit: WindUnit { WindUnit(rawValue: windUnitRaw) ?? .kmh }
@@ -44,21 +42,14 @@ struct ConfirmationOverlayView: View {
             EmptyView()
         } else {
             VStack(alignment: .leading, spacing: 12) {
-                Button {
-                    withAnimation(.snappy(duration: 0.22)) { expanded.toggle() }
-                } label: {
-                    summaryRow
-                }
-                .buttonStyle(.plain)
+                summaryRow
 
-                if expanded {
-                    if hasMeaningfulPrecip { precipChart }
-                    if hasMeaningfulWind { windChart }
-                    if !hasMeaningfulPrecip && !hasMeaningfulWind {
-                        Text("Calm and dry through the forecast window.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                if hasMeaningfulPrecip { precipChart }
+                if hasMeaningfulWind { windChart }
+                if !hasMeaningfulPrecip && !hasMeaningfulWind {
+                    Text("Calm and dry through the forecast window.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -70,12 +61,8 @@ struct ConfirmationOverlayView: View {
             Label("\(windUnit.format(windNowKmh)) \(windUnit.label)", systemImage: "wind")
             Text("next 6h").foregroundStyle(.secondary)
             Spacer()
-            Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
         .font(.subheadline)
-        .contentShape(Rectangle())
     }
 
     // MARK: - Precip chart (0–100 %)

@@ -9,6 +9,7 @@
 
 import CoreLocation
 import SwiftUI
+import UserNotifications
 
 struct SettingsView: View {
     @EnvironmentObject var store: PressureStore
@@ -31,10 +32,13 @@ struct SettingsView: View {
 
     @AppStorage("phoneBarometerEnabled", store: AppConfig.sharedDefaults)
     private var phoneBarometerEnabled: Bool = false
+    @AppStorage(StormAlerter.enabledKey, store: AppConfig.sharedDefaults)
+    private var stormAlertsEnabled: Bool = false
 
     @State private var placeQuery: String = ""
     @State private var geocodeError: String?
     @State private var isGeocoding = false
+    @State private var notifDenied = false
 
     private var locationMode: LocationMode {
         LocationMode(rawValue: locationModeRaw) ?? .device
@@ -51,6 +55,27 @@ struct SettingsView: View {
                 } header: {
                     Text("Phone barometer")
                 }
+
+                Section {
+                    Toggle("Storm alerts", isOn: $stormAlertsEnabled)
+                    Text("Notifies you when pressure changes fast — a sharp drop (storm approaching) or a sharp rise (gust front / clearing). Checked opportunistically in the background, so timing depends on iOS and it won't be instant.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if notifDenied {
+                        Text("Notifications are turned off for Barry. Turn them on in iOS Settings › Notifications › Barry.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                    if stormAlertsEnabled && !notifDenied {
+                        Button("Send a test alert") { StormAlerter.sendTestAlert() }
+                    }
+                } header: {
+                    Text("Storm alerts")
+                }
+                .onChange(of: stormAlertsEnabled) { _, on in
+                    if on { Task { notifDenied = !(await StormAlerter.requestAuthorization()) } }
+                }
+                .task { notifDenied = await StormAlerter.authorizationStatus() == .denied }
 
                 Section("Units") {
                     Picker("Pressure", selection: $unitRaw) {

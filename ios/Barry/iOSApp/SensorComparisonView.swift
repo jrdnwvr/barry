@@ -16,10 +16,16 @@ struct SensorComparisonView: View {
     let combined: CombinedResponse
     let now: Date
     let unit: PressureUnit
-    /// Calibrated phone SLP history, oldest → newest (BarometerManager.phoneHistoryTrace).
-    var history: [(Date, Double)] = []
+    /// Live barometer — supplies the calibrated SLP history and the on-demand reading.
+    @ObservedObject var barometer: BarometerManager
+
+    /// Calibrated phone SLP history, oldest → newest.
+    private var history: [(Date, Double)] { barometer.phoneHistoryTrace }
 
     @State private var window: ComparisonWindow = .hours6
+    @State private var measuring = false
+    @State private var showMotionWarning = false
+    @State private var lastResult: BarometerManager.ManualMeasurement?
 
     enum ComparisonWindow: String, CaseIterable, Identifiable {
         case hours3, hours6, hours12
@@ -103,7 +109,69 @@ struct SensorComparisonView: View {
                 chart
                 legend
             }
+
+            measureButton
         }
+        .alert("You're moving", isPresented: $showMotionWarning) {
+            Button("Measure anyway") { Task { await runMeasure() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Movement — walking, driving, elevators — changes pressure and can throw off a reading. Barry will log it on the chart but won't use it to calibrate.")
+        }
+    }
+
+    // MARK: - Measure now
+
+    private var measureButton: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button(action: triggerMeasure) {
+                HStack(spacing: 6) {
+                    if measuring {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "dot.scope")
+                    }
+                    Text(measuring ? "Measuring…" : "Measure now")
+                        .fontWeight(.medium)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .disabled(measuring)
+
+            if let r = lastResult {
+                Text(resultMessage(r))
+                    .font(.caption2)
+                    .foregroundStyle(r.hadMotion || r.slp == nil ? .orange : .secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func triggerMeasure() {
+        // Motion detected → warn but still let them proceed.
+        if barometer.isStationaryNow {
+            Task { await runMeasure() }
+        } else {
+            showMotionWarning = true
+        }
+    }
+
+    private func runMeasure() async {
+        measuring = true
+        lastResult = await barometer.measureNow()
+        measuring = false
+    }
+
+    private func resultMessage(_ r: BarometerManager.ManualMeasurement) -> String {
+        guard let slp = r.slp else {
+            return "Measured, but Barry isn't calibrated to your station yet — that happens automatically when you're still and online for a bit."
+        }
+        let shown = String(format: unit == .hPa ? "%.0f" : "%.2f", unit.convert(slp))
+        if r.hadMotion {
+            return "Logged \(shown) \(unit.label) while moving — shown on the chart but excluded from calibration."
+        }
+        return "Logged \(shown) \(unit.label)."
     }
 
     // MARK: - Subviews

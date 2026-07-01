@@ -35,10 +35,13 @@ enum BackgroundRefresh {
     /// (main-actor) store + barometer. Network + a ~3 s sensor sample fit easily in
     /// the task's runtime budget.
     @MainActor
-    static func run(store: PressureStore, barometer: BarometerManager, sensorEnabled: Bool) async {
+    static func run(store: PressureStore, barometer: BarometerManager,
+                    sensorEnabled: Bool, stormAlertsEnabled: Bool) async {
         await store.load()
         if sensorEnabled, let slp = store.combined?.currentPressure {
             await barometer.recalibrateInBackground(metarSLP: slp)
         }
+        // Fresh reading in hand — check whether it just turned stormy.
+        await StormAlerter.evaluate(store.combined, enabled: stormAlertsEnabled)
     }
 }

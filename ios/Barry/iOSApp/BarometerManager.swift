@@ -161,7 +161,7 @@ struct MotionGate: Equatable {
         case moving
     }
 
-    static let settleSeconds: Double = 120.0
+    static let settleSeconds: Double = 45.0
 
     var state: State
 
@@ -284,6 +284,10 @@ final class BarometerManager: ObservableObject {
 
     var isCalibrated: Bool { offsetHPa != nil }
 
+    /// Barry's current motion verdict — true only when the device is classified still.
+    /// Drives the "you're moving" warning before a manual reading.
+    var isStationaryNow: Bool { gate.isStationary }
+
     /// Calibrated + trusted SLP trace for the last ~60 min (drives the chart overlay).
     var phoneTrace: [(Date, Double)] { buffer.phoneTrace() }
 
@@ -304,6 +308,10 @@ final class BarometerManager: ObservableObject {
         startAltimeter()
         if CMMotionActivityManager.isActivityAvailable() {
             startActivityMonitor()
+            // A phone already at rest when we start won't get a fresh "stationary"
+            // event (updates are change-driven), so seed from recent history — else
+            // the gate can sit in .moving indefinitely and never record a thing.
+            Task { await seedStationarityIfResting() }
         } else {
             // No motion coprocessor (some iPads) — treat device as stationary so
             // calibration can proceed; user understands motion-gating won't fire.
@@ -353,6 +361,63 @@ final class BarometerManager: ObservableObject {
         if let slp = lastMetarSLP { attemptCalibration(metarSLP: slp) }
     }
 
+    // MARK: - On-demand measurement
+
+    /// The result of a user-triggered "Measure now" reading.
+    struct ManualMeasurement: Equatable {
+        let slp: Double?     // calibrated SLP-equivalent, nil if not calibrated yet
+        let rawHPa: Double?  // raw station pressure sampled, nil if no sensor data
+        let hadMotion: Bool  // device was moving during the reading
+        let recorded: Bool   // stored to the persisted trace (shows on the chart)
+    }
+
+    /// Take a reading on demand — independent of the passive 120 s settle timer, so
+    /// users can log a point whenever they feel the need. Motion is allowed but
+    /// flagged: a reading taken while moving is still stored to the visible trace,
+    /// but is NEVER folded into calibration (it doesn't touch the offset or the
+    /// calibration buffer), so a bumpy reading can't corrupt the live value.
+    @discardableResult
+    func measureNow() async -> ManualMeasurement {
+        // First verdict from the coarse activity gate (live, or a recent-activity query).
+        let gateMoving: Bool
+        if activityManager != nil {
+            gateMoving = !gate.isStationary
+        } else {
+            gateMoving = !(await wasRecentlyStationary())
+        }
+
+        guard let stats = await sampleAltimeterOnce(seconds: 2) else {
+            return ManualMeasurement(slp: nil, rawHPa: nil, hadMotion: gateMoving, recorded: false)
+        }
+        // Physical stability overrides a stale "moving" verdict: a phone on a surface
+        // is rock-steady, so a tight sample means it's safe to trust even if the
+        // activity classifier hasn't caught up. Walking/elevators perturb the readings
+        // enough that this won't misfire.
+        let rockSteady = stats.count >= 3 && stats.spread < Self.steadySpreadHPa
+        let moving = gateMoving && !rockSteady
+
+        let raw = stats.mean
+        let now = Date()
+        let slp = model.slpEquivalent(for: raw, at: now)  // nil until calibrated
+
+        var recorded = false
+        if let slp {
+            // Always log the point (force past the downsample throttle) so a deliberate
+            // tap always lands on the chart.
+            if history.record(slp: slp, at: now, force: true) {
+                saveHistory()
+                recorded = true
+            }
+            // Feed calibration ONLY when still — a moving reading is excluded.
+            if !moving {
+                buffer.add(BarometerSample(date: now, stationPressureHPa: raw,
+                                           slpEquivalent: slp, trusted: true))
+            }
+        }
+        refreshDerivedState()
+        return ManualMeasurement(slp: slp, rawHPa: raw, hadMotion: moving, recorded: recorded)
+    }
+
     /// Background one-shot recalibration for BGAppRefreshTask. Unlike the live path
     /// (which needs a 120 s motion settle) this confirms stationarity from recent
     /// *historical* activity, takes a brief altimeter sample, and folds it into the
@@ -362,7 +427,8 @@ final class BarometerManager: ObservableObject {
         lastMetarSLP = metarSLP
         guard CMAltimeter.isRelativeAltitudeAvailable() else { return }
         guard await wasRecentlyStationary() else { return }
-        guard let pressure = await sampleAltimeterOnce() else { return }
+        guard let stats = await sampleAltimeterOnce() else { return }
+        let pressure = stats.mean
         let now = Date()
         model.add(CalibrationState.make(metarSLP: metarSLP, phonePressureHPa: pressure, at: now))
         syncOutputs()
@@ -373,6 +439,24 @@ final class BarometerManager: ObservableObject {
     }
 
     // MARK: - Private
+
+    /// Peak-to-peak pressure (hPa) below which a short sample is treated as physically
+    /// stable — a phone on a surface is rock-steady (typically < 0.02), while walking
+    /// or an elevator visibly perturbs it. Used to override a stale "moving" verdict
+    /// on a manual reading (≈ 0.08 hPa ≈ 0.7 m of altitude noise).
+    static let steadySpreadHPa: Double = 0.08
+
+    /// Trust an already-resting phone immediately at start-up: if recent history says
+    /// it's been still, the barometer is already settled, so skip the post-motion
+    /// settle wait and go straight to .stationary. No-op once a live event has moved us.
+    private func seedStationarityIfResting() async {
+        guard gate.isMoving else { return }
+        guard await wasRecentlyStationary(window: 90) else { return }
+        guard gate.isMoving else { return }  // re-check after the await
+        gate.state = .stationary
+        motionState = .stationary
+        refreshDerivedState()
+    }
 
     /// True if the most recent classified motion activity in the last `window`
     /// seconds was stationary. Background-safe substitute for the live settle timer.
@@ -389,9 +473,10 @@ final class BarometerManager: ObservableObject {
         return activities.last?.stationary ?? false
     }
 
-    /// Briefly stream the altimeter (~`seconds`) and return the mean station
-    /// pressure (hPa), or nil if no samples arrived. Independent of the live session.
-    private func sampleAltimeterOnce(seconds: Double = 3) async -> Double? {
+    /// Briefly stream the altimeter (~`seconds`) and return the mean station pressure
+    /// plus its peak-to-peak spread and sample count, or nil if no samples arrived.
+    /// Independent of the live session.
+    private func sampleAltimeterOnce(seconds: Double = 3) async -> SampleStats? {
         guard CMAltimeter.isRelativeAltitudeAvailable() else { return nil }
         let alt = CMAltimeter()
         let acc = CaptureAccumulator()
@@ -402,7 +487,7 @@ final class BarometerManager: ObservableObject {
         }
         try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
         alt.stopRelativeAltitudeUpdates()
-        return acc.mean
+        return acc.stats
     }
 
     private func loadModel() {
@@ -521,10 +606,21 @@ final class BarometerManager: ObservableObject {
     }
 }
 
-/// Main-actor sample collector for the background one-shot altimeter read.
+/// Summary of a short one-shot altimeter capture.
+struct SampleStats {
+    let mean: Double     // mean station pressure (hPa)
+    let spread: Double   // peak-to-peak over the sample (hPa) — a stillness proxy
+    let count: Int
+}
+
+/// Main-actor sample collector for one-shot altimeter reads.
 @MainActor
 private final class CaptureAccumulator {
     private var values: [Double] = []
     func add(_ v: Double) { values.append(v) }
     var mean: Double? { values.isEmpty ? nil : values.reduce(0, +) / Double(values.count) }
+    var stats: SampleStats? {
+        guard let mean, let lo = values.min(), let hi = values.max() else { return nil }
+        return SampleStats(mean: mean, spread: hi - lo, count: values.count)
+    }
 }

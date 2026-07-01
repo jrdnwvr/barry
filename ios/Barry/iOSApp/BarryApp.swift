@@ -4,6 +4,7 @@
 //  @main entry. iOS 17+.
 
 import SwiftUI
+import UserNotifications
 
 @main
 struct BarryApp: App {
@@ -13,6 +14,13 @@ struct BarryApp: App {
 
     @AppStorage("phoneBarometerEnabled", store: AppConfig.sharedDefaults)
     private var phoneBarometerEnabled: Bool = false
+    @AppStorage(StormAlerter.enabledKey, store: AppConfig.sharedDefaults)
+    private var stormAlertsEnabled: Bool = false
+
+    init() {
+        // Let storm alerts surface as banners even while the app is open.
+        UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -28,8 +36,10 @@ struct BarryApp: App {
                         if phoneBarometerEnabled { barometer.start() }
                     case .background:
                         barometer.stop()
-                        // Only ask for background slots when the sensor feature is on.
-                        if phoneBarometerEnabled { BackgroundRefresh.schedule() }
+                        // Ask for background slots when either background feature is on.
+                        if phoneBarometerEnabled || stormAlertsEnabled {
+                            BackgroundRefresh.schedule()
+                        }
                     default:
                         break
                     }
@@ -40,7 +50,8 @@ struct BarryApp: App {
         }
         .backgroundTask(.appRefresh(BackgroundRefresh.taskID)) {
             await BackgroundRefresh.run(store: store, barometer: barometer,
-                                        sensorEnabled: phoneBarometerEnabled)
+                                        sensorEnabled: phoneBarometerEnabled,
+                                        stormAlertsEnabled: stormAlertsEnabled)
             BackgroundRefresh.schedule()  // chain the next opportunistic refresh
         }
     }

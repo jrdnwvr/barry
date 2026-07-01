@@ -25,15 +25,16 @@ struct PressureLogEntry: Equatable, Codable {
 
 struct PressureHistory: Equatable, Codable {
     /// Minimum spacing between stored points. Trusted samples arrive far more often
-    /// than this; we downsample so 48 h of history stays small and chartable.
-    static let minSampleInterval: TimeInterval = 150     // ~2.5 min
+    /// than this; we downsample so 48 h of history stays small and chartable. Kept
+    /// tight (~1 min) so the trace builds up quickly and reliably while the app is open.
+    static let minSampleInterval: TimeInterval = 60      // ~1 min
 
     /// How far back to retain. Older points are pruned on each write.
     static let maxAgeSeconds: TimeInterval = 48 * 3600   // ~48 h
 
     /// Hard safety cap so a clock anomaly can't grow the log without bound
-    /// (48 h / 2.5 min ≈ 1152 points; this leaves generous headroom).
-    static let maxPoints = 2000
+    /// (48 h / 1 min ≈ 2880 points; this leaves headroom for the full window).
+    static let maxPoints = 3200
 
     var entries: [PressureLogEntry] = []
 
@@ -41,12 +42,14 @@ struct PressureHistory: Equatable, Codable {
     /// stored point (downsampling), then prune anything older than `maxAgeSeconds`.
     /// Returns true when the reading was actually stored — the caller should persist
     /// only then, so writes are throttled too. Out-of-order / duplicate timestamps
-    /// (Δt < interval, including non-positive) are ignored.
+    /// (non-positive Δt) are always ignored. `force` bypasses the downsample throttle
+    /// (but not the ordering guard) for deliberate, user-triggered "measure now" taps.
     @discardableResult
-    mutating func record(slp: Double, at date: Date) -> Bool {
-        if let last = entries.last,
-           date.timeIntervalSince(last.date) < Self.minSampleInterval {
-            return false
+    mutating func record(slp: Double, at date: Date, force: Bool = false) -> Bool {
+        if let last = entries.last {
+            let dt = date.timeIntervalSince(last.date)
+            if dt <= 0 { return false }                              // out-of-order / duplicate
+            if !force && dt < Self.minSampleInterval { return false } // downsample
         }
         entries.append(PressureLogEntry(date: date, slp: slp))
         prune(now: date)

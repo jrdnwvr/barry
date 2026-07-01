@@ -59,8 +59,13 @@ final class PressureStore: ObservableObject {
         }
     }
 
-    func load(lat: Double? = nil, lon: Double? = nil) async {
-        state = .loading
+    /// Fetch the combined payload. A `silent` refresh (used for the periodic and
+    /// return-to-foreground updates) keeps the current reading on screen instead of
+    /// flashing the full-screen spinner, and leaves the last good data in place if a
+    /// transient refresh fails — so glancing at an open app never blanks out.
+    func load(lat: Double? = nil, lon: Double? = nil, silent: Bool = false) async {
+        let hadData = combined != nil
+        if !(silent && hadData) { state = .loading }
         now = Date()
         do {
             let combined = try await api.combined(station: station, lat: lat, lon: lon)
@@ -69,6 +74,7 @@ final class PressureStore: ObservableObject {
             SnapshotStore.save(TendencySnapshot(from: combined, updatedAt: now))
             WidgetCenter.shared.reloadAllTimelines()
         } catch {
+            if silent && hadData { return }  // keep showing the last good reading
             let message = (error as? APIError)?.errorDescription ?? error.localizedDescription
             state = .failed(message)
         }

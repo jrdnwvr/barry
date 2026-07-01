@@ -21,6 +21,7 @@ struct HeroView: View {
     var barometerEnabled: Bool
 
     @State private var showComparison = false
+    @State private var showGuide = false
 
     private var tendency: TendencyOut? { combined.tendency }
 
@@ -46,10 +47,17 @@ struct HeroView: View {
             StatusRow(combined: combined, barometer: barometer, now: now,
                       barometerEnabled: barometerEnabled)
 
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 if let v = displayValue {
                     valueLabel(v)
                 }
+                Button { showGuide = true } label: {
+                    Image(systemName: "info.circle")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("What do pressure changes mean?")
                 Spacer()
                 if let t = tendency { TendencyBadge(tendency: t, unit: unit) }
             }
@@ -68,6 +76,7 @@ struct HeroView: View {
                 Text(note).font(.caption).foregroundStyle(.secondary)
             }
         }
+        .sheet(isPresented: $showGuide) { PressureGuideView() }
     }
 
     // MARK: - Value (tap to compare)

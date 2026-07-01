@@ -48,8 +48,20 @@ struct ContentView: View {
             }
             .refreshable { await reload() }
             .task { await initialLoad() }
-            // Refresh + recalibrate each time the app returns to the foreground.
-            // Skip the first activation at launch (.task already does the initial load).
+            // Keep the reading live while the app is open. Keyed on scenePhase so the
+            // loop only runs while frontmost — it stops the moment the app is dimmed
+            // away / backgrounded, so the screen still sleeps normally and no work
+            // happens in your pocket.
+            .task(id: scenePhase) {
+                guard scenePhase == .active else { return }
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(300))
+                    if Task.isCancelled { break }
+                    await reload()
+                }
+            }
+            // Refresh each time the app returns to the foreground (silent — the
+            // on-screen reading stays put instead of flashing a spinner).
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active, store.combined != nil {
                     Task { await reload() }
@@ -90,7 +102,6 @@ struct ContentView: View {
                         phoneTrace: phoneBarometerEnabled ? barometer.phoneTrace : [],
                         window: chartWindow
                     )
-                    .frame(height: 240)
                     // Trigger calibration whenever a fresh combined response arrives.
                     .onChange(of: combined) { _, newCombined in
                         if let slp = newCombined.currentPressure {
@@ -108,11 +119,11 @@ struct ContentView: View {
                         combined: combined,
                         now: store.now,
                         unit: unit,
-                        history: barometer.phoneHistoryTrace
+                        barometer: barometer
                     )
                 }
 
-                // Secondary: wind + rain, collapsed to a one-line summary by default.
+                // Secondary: wind + rain confirmation, always expanded.
                 ConfirmationOverlayView(combined: combined, now: store.now)
 
                 DataSourceFootnote(combined: combined)
@@ -126,19 +137,19 @@ struct ContentView: View {
         await loadForCurrentMode()
     }
 
-    private func reload() async { await loadForCurrentMode() }
+    private func reload() async { await loadForCurrentMode(silent: true) }
 
-    private func loadForCurrentMode() async {
+    private func loadForCurrentMode(silent: Bool = false) async {
         switch LocationMode(rawValue: locationModeRaw) ?? .device {
         case .device:
             await store.resolveStationFromLocation()
-            await store.load()
+            await store.load(silent: silent)
         case .place:
             await store.resolveStation(lat: placeLat, lon: placeLon)
-            await store.load(lat: placeLat, lon: placeLon)
+            await store.load(lat: placeLat, lon: placeLon, silent: silent)
         case .airport:
             store.station = homeStation.uppercased()
-            await store.load()
+            await store.load(silent: silent)
         }
     }
 }

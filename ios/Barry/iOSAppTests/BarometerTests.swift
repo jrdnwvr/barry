@@ -298,27 +298,34 @@ struct BarometerTests {
         for i in 0..<20 {
             if h.record(slp: 1013.0, at: t.addingTimeInterval(Double(i) * 30)) { stored += 1 }
         }
-        // 20 samples × 30s = 9.5 min span; at a 2.5-min floor that's the first point
-        // plus one roughly every 5 samples.
+        // 20 samples × 30s = 9.5 min span; at a 1-min floor that's the first point
+        // plus one roughly every other sample.
         #expect(stored == h.entries.count, "record() return value matches stored count")
-        #expect(h.entries.count >= 3 && h.entries.count <= 5,
-                "10 min at a 2.5-min floor stores ~4 points, got \(h.entries.count)")
+        #expect(h.entries.count >= 8 && h.entries.count <= 11,
+                "9.5 min at a 1-min floor stores ~10 points, got \(h.entries.count)")
     }
 
     @Test func historyThrottlesTooSoonAndOutOfOrder() {
         var h = PressureHistory()
         let t = Date(timeIntervalSince1970: 1_000_000)
         let first = h.record(slp: 1013.0, at: t)
-        let tooSoon = h.record(slp: 1013.1, at: t.addingTimeInterval(60))
+        let tooSoon = h.record(slp: 1013.1, at: t.addingTimeInterval(30))
         let outOfOrder = h.record(slp: 1012.0, at: t.addingTimeInterval(-300))
         #expect(first, "First point always stores")
-        #expect(!tooSoon, "A point 60s later is throttled (< 2.5 min)")
+        #expect(!tooSoon, "A point 30s later is throttled (< 1 min)")
         #expect(!outOfOrder, "An out-of-order (earlier) timestamp is ignored")
         #expect(h.entries.count == 1)
 
-        let later = h.record(slp: 1014.0, at: t.addingTimeInterval(200))
-        #expect(later, "A point past the 2.5-min floor stores")
+        let later = h.record(slp: 1014.0, at: t.addingTimeInterval(90))
+        #expect(later, "A point past the 1-min floor stores")
         #expect(h.entries.count == 2)
+
+        // `force` bypasses the downsample throttle but not the ordering guard.
+        let forced = h.record(slp: 1014.5, at: t.addingTimeInterval(100), force: true)
+        let forcedOutOfOrder = h.record(slp: 1011.0, at: t.addingTimeInterval(50), force: true)
+        #expect(forced, "A forced (manual) point stores even within the 1-min floor")
+        #expect(!forcedOutOfOrder, "force does not override the out-of-order guard")
+        #expect(h.entries.count == 3)
     }
 
     @Test func historyRetainsAboutFortyEightHours() {

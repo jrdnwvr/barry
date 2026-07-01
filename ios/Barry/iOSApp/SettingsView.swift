@@ -30,6 +30,7 @@ struct SettingsView: View {
     @AppStorage("placeLon", store: AppConfig.sharedDefaults)
     private var placeLon: Double = 0
 
+    @EnvironmentObject var barometer: BarometerManager
     @AppStorage("phoneBarometerEnabled", store: AppConfig.sharedDefaults)
     private var phoneBarometerEnabled: Bool = false
     @AppStorage(StormAlerter.enabledKey, store: AppConfig.sharedDefaults)
@@ -111,6 +112,22 @@ struct SettingsView: View {
                     case .airport:
                         airportSection
                     }
+                }
+
+                Section {
+                    Button("Load 48h sample history") {
+                        let obs = store.combined?.observedSeries
+                            .compactMap { p in p.pressure.map { (p.t, $0) } } ?? []
+                        barometer.loadSampleHistory(observed: obs, now: store.now)
+                    }
+                    Button("Clear phone history", role: .destructive) {
+                        barometer.clearHistory()
+                    }
+                    Text("Fills the Sensor vs Station trace with ~48 h of sample points (based on the station's recent history) so you can test the UI without waiting for live readings.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("Testing")
                 }
             }
             .navigationTitle("Settings")

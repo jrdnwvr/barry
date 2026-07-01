@@ -382,23 +382,19 @@ final class BarometerManager: ObservableObject {
         // the passive calibration path has run (e.g. right after first launch).
         if let stationSLP { lastMetarSLP = stationSLP }
 
-        // First verdict from the coarse activity gate (live, or a recent-activity query).
-        let gateMoving: Bool
-        if activityManager != nil {
-            gateMoving = !gate.isStationary
-        } else {
-            gateMoving = !(await wasRecentlyStationary())
+        // Sample the barometer for a few seconds. Whether the reading is usable is
+        // decided by the barometer's *own steadiness*, not the coarse activity
+        // classifier: hand tremor that trips CMMotionActivity doesn't move the phone
+        // enough to change the pressure (~0.7 m of altitude ≈ 0.08 hPa). Only a
+        // genuinely noisy sample — real vertical movement (stairs, elevator, a car) —
+        // counts as "moving". Falls back to the gate only if too few samples arrived.
+        guard let stats = await sampleAltimeterOnce(seconds: 3) else {
+            return ManualMeasurement(slp: nil, rawHPa: nil,
+                                     hadMotion: !gate.isStationary, recorded: false)
         }
-
-        guard let stats = await sampleAltimeterOnce(seconds: 2) else {
-            return ManualMeasurement(slp: nil, rawHPa: nil, hadMotion: gateMoving, recorded: false)
-        }
-        // Physical stability overrides a stale "moving" verdict: a phone on a surface
-        // is rock-steady, so a tight sample means it's safe to trust even if the
-        // activity classifier hasn't caught up. Walking/elevators perturb the readings
-        // enough that this won't misfire.
-        let rockSteady = stats.count >= 3 && stats.spread < Self.steadySpreadHPa
-        let moving = gateMoving && !rockSteady
+        let steady = stats.count >= 2 ? stats.spread < Self.steadySpreadHPa
+                                      : gate.isStationary
+        let moving = !steady
 
         let raw = stats.mean
         let now = Date()
@@ -452,13 +448,56 @@ final class BarometerManager: ObservableObject {
         }
     }
 
+    // MARK: - Testing helpers
+
+    /// Seed the persisted phone-SLP history with ~48 h of points based on the real
+    /// observed station series (offset slightly to mimic a calibrated phone; the
+    /// stretch older than the observed data is synthesized with a gentle wave). Lets
+    /// the Sensor-vs-Station overlay show a full trace across all its windows without
+    /// waiting to accumulate live readings.
+    func loadSampleHistory(observed: [(Date, Double)], now: Date = Date()) {
+        var seeded = PressureHistory()
+        let start = now.addingTimeInterval(-48 * 3600)
+        let offset = 0.25  // phone reads a touch off the station
+        let real = observed.filter { $0.0 >= start && $0.0 <= now }.sorted { $0.0 < $1.0 }
+        let anchorVal = real.first?.1 ?? real.last?.1 ?? 1018.0
+        let anchorDate = real.first?.0 ?? now
+
+        // Synthesize the window older than the earliest real observation.
+        var t = start
+        while t < anchorDate {
+            let hrs = t.timeIntervalSince(start) / 3600.0
+            let wave = 2.0 * sin(2 * .pi * hrs / 26.0 - 0.5) + 0.4 * sin(2 * .pi * hrs / 12.0)
+            seeded.record(slp: anchorVal + wave + offset, at: t, force: true)
+            t = t.addingTimeInterval(20 * 60)
+        }
+        // Real observed points as the recent phone trace (offset + a touch of jitter).
+        for (d, v) in real {
+            let jitter = 0.04 * sin(d.timeIntervalSince(start) / 600.0)
+            seeded.record(slp: v + offset + jitter, at: d, force: true)
+        }
+
+        objectWillChange.send()
+        history = seeded
+        saveHistory()
+        refreshDerivedState()
+    }
+
+    /// Wipe the persisted phone-SLP history (testing).
+    func clearHistory() {
+        objectWillChange.send()
+        history = PressureHistory()
+        saveHistory()
+        refreshDerivedState()
+    }
+
     // MARK: - Private
 
     /// Peak-to-peak pressure (hPa) below which a short sample is treated as physically
-    /// stable — a phone on a surface is rock-steady (typically < 0.02), while walking
-    /// or an elevator visibly perturbs it. Used to override a stale "moving" verdict
-    /// on a manual reading (≈ 0.08 hPa ≈ 0.7 m of altitude noise).
-    static let steadySpreadHPa: Double = 0.08
+    /// stable. A phone in the hand is typically < 0.02; real vertical movement (stairs,
+    /// elevator, a car) blows well past this. ≈ 0.10 hPa ≈ 0.8 m of altitude noise —
+    /// generous enough to tolerate hand-hold jitter, tight enough to reject real motion.
+    static let steadySpreadHPa: Double = 0.10
 
     /// Trust an already-resting phone immediately at start-up: if recent history says
     /// it's been still, the barometer is already settled, so skip the post-motion

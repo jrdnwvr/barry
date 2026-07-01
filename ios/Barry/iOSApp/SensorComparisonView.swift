@@ -24,7 +24,6 @@ struct SensorComparisonView: View {
 
     @State private var window: ComparisonWindow = .hours6
     @State private var measuring = false
-    @State private var showMotionWarning = false
     @State private var lastResult: BarometerManager.ManualMeasurement?
 
     enum ComparisonWindow: String, CaseIterable, Identifiable {
@@ -114,12 +113,6 @@ struct SensorComparisonView: View {
 
             measureButton
         }
-        .alert("You're moving", isPresented: $showMotionWarning) {
-            Button("Measure anyway") { Task { await runMeasure() } }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Movement — walking, driving, elevators — changes pressure and can throw off a reading. Barry will log it on the chart but won't use it to calibrate.")
-        }
     }
 
     // MARK: - Measure now
@@ -151,12 +144,7 @@ struct SensorComparisonView: View {
     }
 
     private func triggerMeasure() {
-        // Motion detected → warn but still let them proceed.
-        if barometer.isStationaryNow {
-            Task { await runMeasure() }
-        } else {
-            showMotionWarning = true
-        }
+        Task { await runMeasure() }
     }
 
     private func runMeasure() async {

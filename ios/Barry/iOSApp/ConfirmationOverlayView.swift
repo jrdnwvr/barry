@@ -35,13 +35,37 @@ struct ConfirmationOverlayView: View {
         hours.filter { $0.t <= now.addingTimeInterval(6 * 3600) }
     }
     private var precipMaxPct: Int { next6h.compactMap { $0.precip_prob }.max() ?? 0 }
-    private var windNowKmh: Double { (next6h.first ?? hours.first)?.windspeed ?? 0 }
-    /// Wind direction (degrees the wind blows *from*: 0 = N, 90 = E), if reported.
-    private var windDirNow: Double? { (next6h.first ?? hours.first)?.winddir }
 
-    /// "12 km/h · 230°" — speed plus the from-direction in degrees when available.
+    // Current wind: METAR-first — the station's measured wind beats the model's
+    // value for "now"; the forecast hour is only the fallback (old backend / no obs).
+    private var metarWind: CurrentObs? {
+        combined.pressure.current.windspeed != nil ? combined.pressure.current : nil
+    }
+    private var windNowKmh: Double {
+        metarWind?.windspeed ?? (next6h.first ?? hours.first)?.windspeed ?? 0
+    }
+    /// Wind direction (degrees the wind blows *from*: 0 = N, 90 = E), if reported.
+    private var windDirNow: Double? {
+        metarWind?.winddir ?? (next6h.first ?? hours.first)?.winddir
+    }
+    /// Current gust: a METAR gust is inherently notable (stations only report one
+    /// when peaks exceed the sustained wind meaningfully). A forecast-derived gust
+    /// is model output, so it must clearly exceed sustained before we surface it.
+    private var windGustNow: Double? {
+        if let g = metarWind?.windgust { return g }
+        guard metarWind == nil,
+              let g = (next6h.first ?? hours.first)?.windgust,
+              g > windNowKmh + 8 else { return nil }
+        return g
+    }
+
+    /// "12 mph G 22 · 230°" — METAR-style: speed, gust when notable, direction.
     private var windText: String {
-        var s = "\(windUnit.format(windNowKmh)) \(windUnit.label)"
+        var s = "\(windUnit.format(windNowKmh))"
+        if let g = windGustNow {
+            s += " G \(windUnit.format(g))"
+        }
+        s += " \(windUnit.label)"
         if let dir = windDirNow {
             s += " · \(Int(dir.rounded()))°"
         }
@@ -52,6 +76,7 @@ struct ConfirmationOverlayView: View {
     private struct WindSelection: Equatable {
         let date: Date
         let speedKmh: Double
+        let gustKmh: Double?
         let dir: Double?
     }
     @State private var windSelection: WindSelection?
@@ -156,10 +181,36 @@ struct ConfirmationOverlayView: View {
 
                         LineMark(
                             x: .value("Time", h.t),
-                            y: .value("Wind", windUnit.convert(w))
+                            y: .value("Wind", windUnit.convert(w)),
+                            series: .value("Series", "wind")
                         )
                         .foregroundStyle(.teal)
                         .lineStyle(StrokeStyle(lineWidth: 1.5))
+                        .interpolationMethod(.catmullRom)
+                    }
+                }
+
+                // Gust band: shaded from sustained up to the gust forecast, with a
+                // faint dashed ceiling. Collapses to nothing in laminar air and
+                // balloons ahead of fronts — the geometry IS the information. Dashed
+                // because gusts here are model output, not observations.
+                ForEach(windHours) { h in
+                    if let w = h.windspeed, let g = h.windgust, g > w {
+                        AreaMark(
+                            x: .value("Time", h.t),
+                            yStart: .value("Wind", windUnit.convert(w)),
+                            yEnd: .value("Gust", windUnit.convert(g))
+                        )
+                        .foregroundStyle(.teal.opacity(0.16))
+                        .interpolationMethod(.catmullRom)
+
+                        LineMark(
+                            x: .value("Time", h.t),
+                            y: .value("Gust", windUnit.convert(g)),
+                            series: .value("Series", "gust")
+                        )
+                        .foregroundStyle(.teal.opacity(0.45))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                         .interpolationMethod(.catmullRom)
                     }
                 }
@@ -235,7 +286,8 @@ struct ConfirmationOverlayView: View {
               }),
               let speed = nearest.windspeed
         else { return }
-        windSelection = WindSelection(date: nearest.t, speedKmh: speed, dir: nearest.winddir)
+        windSelection = WindSelection(date: nearest.t, speedKmh: speed,
+                                      gustKmh: nearest.windgust, dir: nearest.winddir)
     }
 
     private func windReadout(_ sel: WindSelection) -> some View {
@@ -243,7 +295,9 @@ struct ConfirmationOverlayView: View {
             Circle().fill(.teal).frame(width: 8, height: 8)
             Text(sel.date, format: .dateTime.weekday(.abbreviated).hour().minute())
                 .font(.caption).foregroundStyle(.secondary)
-            Text("\(windUnit.format(sel.speedKmh)) \(windUnit.label)")
+            Text(sel.gustKmh.map { g in
+                    "\(windUnit.format(sel.speedKmh)) G \(windUnit.format(g)) \(windUnit.label)"
+                 } ?? "\(windUnit.format(sel.speedKmh)) \(windUnit.label)")
                 .font(.caption.weight(.semibold)).monospacedDigit()
             if let dir = sel.dir {
                 Text("\(Int(dir.rounded()))°")

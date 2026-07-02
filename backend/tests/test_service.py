@@ -35,6 +35,13 @@ async def test_combined_shape(service, upstream):
     assert any(k in v for k in ("front", "trough", "falling", "drop", "bottom"))
     assert "rain likely around" in resp.verdict
 
+    # METAR-first wind: current wind comes from the newest METAR (10 kt / 230°,
+    # gusting 18 kt), converted to km/h. Forecast hours carry model gusts.
+    assert resp.pressure.current.windspeed == pytest.approx(18.5, abs=0.1)
+    assert resp.pressure.current.winddir == 230.0
+    assert resp.pressure.current.windgust == pytest.approx(33.3, abs=0.1)
+    assert resp.forecast.hourly[0].windgust == pytest.approx(14.0)
+
 
 async def test_combined_serializes_class_alias(service):
     resp = await service.get_combined("KLUK", 39.1, -84.5)

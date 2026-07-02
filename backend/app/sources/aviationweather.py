@@ -33,6 +33,26 @@ def _epoch_to_dt(epoch: Optional[float]) -> Optional[datetime]:
     return datetime.fromtimestamp(float(epoch), tz=timezone.utc)
 
 
+# AWC reports wind in knots; the API contract (and Open-Meteo) use km/h.
+KT_TO_KMH = 1.852
+
+
+def _wind_kmh(value) -> Optional[float]:
+    """Knots → km/h; tolerates missing/non-numeric values."""
+    try:
+        return round(float(value) * KT_TO_KMH, 1)
+    except (TypeError, ValueError):
+        return None
+
+
+def _wind_dir(value) -> Optional[float]:
+    """Degrees as float; AWC uses the string "VRB" for variable wind → None."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def parse_records(records: Sequence[dict]) -> Dict[str, dict]:
     """Group raw METAR records by station id into a normalized intermediate form.
 
@@ -62,6 +82,9 @@ def parse_records(records: Sequence[dict]) -> Dict[str, dict]:
                     "name": r.get("name"),
                     "lat": r.get("lat"),
                     "lon": r.get("lon"),
+                    "wspd": r.get("wspd"),
+                    "wdir": r.get("wdir"),
+                    "wgst": r.get("wgst"),
                 }
             )
         if not points:
@@ -75,7 +98,15 @@ def parse_records(records: Sequence[dict]) -> Dict[str, dict]:
             "series": [
                 SeriesPoint(t=p["t"], slp=p["slp"], altim=p["altim"]) for p in points
             ],
-            "current": CurrentObs(slp=newest.get("slp"), presTend=newest.get("presTend")),
+            # Wind from the newest METAR — a real measurement, so the client can
+            # prefer it over the model forecast for "now" (METAR-first policy).
+            "current": CurrentObs(
+                slp=newest.get("slp"),
+                presTend=newest.get("presTend"),
+                windspeed=_wind_kmh(newest.get("wspd")),
+                winddir=_wind_dir(newest.get("wdir")),
+                windgust=_wind_kmh(newest.get("wgst")),
+            ),
             "presTend": newest.get("presTend"),
             "_raw_points": points,
         }

@@ -19,6 +19,12 @@ struct SeriesPoint: Codable, Identifiable, Hashable {
 struct CurrentObs: Codable, Hashable {
     let slp: Double?
     let presTend: Double?
+    /// Wind from the latest METAR — a real measurement, preferred over the model
+    /// forecast for "now" (km/h + degrees). `windgust` only present when the
+    /// station reported one (inherently notable). Optional: absent on old backends.
+    var windspeed: Double?
+    var winddir: Double?
+    var windgust: Double?
 }
 
 struct TendencyOut: Codable, Hashable {
@@ -50,6 +56,7 @@ struct ForecastHour: Codable, Identifiable, Hashable {
     let pressure_msl: Double?
     let windspeed: Double?
     let winddir: Double?
+    var windgust: Double?  // model gusts (km/h); optional: absent on old backends
     let precip_prob: Int?
 
     var id: Date { t }

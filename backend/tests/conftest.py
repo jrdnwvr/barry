@@ -9,7 +9,8 @@ import httpx
 import pytest
 
 
-def _metar_record(sid, obs_time, slp, *, altim=None, pres_tend=None, name="Test Field"):
+def _metar_record(sid, obs_time, slp, *, altim=None, pres_tend=None, name="Test Field",
+                  wspd=10, wdir=230, wgst=None):
     return {
         "icaoId": sid,
         "obsTime": obs_time,
@@ -19,6 +20,9 @@ def _metar_record(sid, obs_time, slp, *, altim=None, pres_tend=None, name="Test 
         "name": name,
         "lat": 39.103,
         "lon": -84.419,
+        "wspd": wspd,
+        "wdir": wdir,
+        "wgst": wgst,
     }
 
 
@@ -38,7 +42,9 @@ def sample_metars(sid="KLUK", *, with_pres_tend=True):
     recs = []
     for i, (t, slp) in enumerate(pts):
         pt = -2.4 if (with_pres_tend and i == len(pts) - 1) else None
-        recs.append(_metar_record(sid, t, slp, altim=slp + 0.7, pres_tend=pt))
+        # Newest record carries a gust so the METAR-wind extraction is exercised.
+        gust = 18 if i == len(pts) - 1 else None
+        recs.append(_metar_record(sid, t, slp, altim=slp + 0.7, pres_tend=pt, wgst=gust))
     return recs
 
 
@@ -62,6 +68,7 @@ def sample_forecast():
             "surface_pressure": [1008.0 - 0.3 * i for i in range(n)],
             "windspeed_10m": [8.0 + 1.5 * i for i in range(n)],
             "winddirection_10m": [210 for _ in range(n)],
+            "wind_gusts_10m": [14.0 + 2.5 * i for i in range(n)],
             # precip crosses 40% partway through
             "precipitation_probability": [10, 15, 20, 30, 45, 60, 70, 65, 50, 40, 30, 20],
         }

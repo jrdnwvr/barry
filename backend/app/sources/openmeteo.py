@@ -23,6 +23,7 @@ HOURLY_FIELDS = [
     "surface_pressure",
     "windspeed_10m",
     "winddirection_10m",
+    "wind_gusts_10m",
     "precipitation_probability",
 ]
 
@@ -39,6 +40,7 @@ def parse_forecast(data: dict) -> List[ForecastHour]:
     pmsl = hourly.get("pressure_msl") or []
     wspd = hourly.get("windspeed_10m") or []
     wdir = hourly.get("winddirection_10m") or []
+    wgst = hourly.get("wind_gusts_10m") or []
     pprob = hourly.get("precipitation_probability") or []
 
     def at(seq, i):
@@ -52,6 +54,7 @@ def parse_forecast(data: dict) -> List[ForecastHour]:
                 pressure_msl=at(pmsl, i),
                 windspeed=at(wspd, i),
                 winddir=at(wdir, i),
+                windgust=at(wgst, i),
                 precip_prob=at(pprob, i),
             )
         )

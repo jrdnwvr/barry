@@ -21,6 +21,12 @@ class SeriesPoint(BaseModel):
 class CurrentObs(BaseModel):
     slp: Optional[float] = None
     presTend: Optional[float] = None
+    # Wind from the latest METAR — a real measurement, preferred over the model
+    # forecast for "now" (METAR-first, Open-Meteo supplements). km/h + degrees;
+    # windgust is only present when the station reported one (inherently notable).
+    windspeed: Optional[float] = None
+    winddir: Optional[float] = None
+    windgust: Optional[float] = None
 
 
 class TendencyOut(BaseModel):
@@ -48,6 +54,7 @@ class ForecastHour(BaseModel):
     pressure_msl: Optional[float] = None
     windspeed: Optional[float] = None
     winddir: Optional[float] = None
+    windgust: Optional[float] = None
     precip_prob: Optional[int] = None
 
 

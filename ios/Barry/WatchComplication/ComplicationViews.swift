@@ -75,22 +75,36 @@ struct ComplicationView: View {
         .tint(tint)
     }
 
-    // Corner: two bold lines of text in the inset — absolute pressure over the
-    // signed 3-hour delta. No glyph, no bezel label; tinted/mono-aware so it reads
-    // like a stock Apple corner complication on any face.
+    // Corner: native curved-text style (like aviation METAR complications) — the
+    // outer bezel arc carries the short trend descriptor (curved content, takes the
+    // face's accent tint), and the inner arc — nearest the dial — carries the
+    // pressure reading as the widgetLabel, which the system renders in white type.
     private var corner: some View {
-        VStack(spacing: -1) {
-            Text("\(pressureShort) \(unit.label)")
-                .font(.system(size: 15, weight: .bold))
-                .monospacedDigit()
-            Text(deltaShort)
-                .font(.system(size: 13, weight: .bold))
-                .monospacedDigit()
+        Text(trendDescriptor)
+            .font(.system(size: 14, weight: .bold))
+            .minimumScaleFactor(0.6)
+            .lineLimit(1)
+            .foregroundStyle(accentTint)
+            .widgetCurvesContent()
+            .widgetLabel {
+                Text("\(pressureShort) \(unit.label)")
+                    .font(.system(size: 15, weight: .bold))
+                    .monospacedDigit()
+            }
+            .widgetAccentable()
+    }
+
+    /// Short, uppercase trend descriptor for the corner's outer arc — sized to fit
+    /// a curved bezel label (matches the aviation-style all-caps look).
+    private var trendDescriptor: String {
+        switch cls {
+        case .risingFast:  return "RISING FAST"
+        case .rising:      return "RISING"
+        case .steady:      return "STEADY"
+        case .falling:     return "FALLING"
+        case .fallingMod:  return "FALLING"
+        case .fallingFast: return "FALLING FAST"
         }
-        .minimumScaleFactor(0.6)
-        .lineLimit(1)
-        .foregroundStyle(accentTint)
-        .widgetAccentable()
     }
 
     // Inline: single line that sits next to the time — mirrors the corner so the

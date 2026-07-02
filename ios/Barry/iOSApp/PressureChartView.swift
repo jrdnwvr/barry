@@ -260,10 +260,12 @@ struct PressureChartView: View {
     }
 
     @ChartContentBuilder private var overlayContent: some ChartContent {
+        // "now" label sits below the chart — keeps the top clear for the feature
+        // pin ("trough", "front edge", …) so the two never overlap.
         RuleMark(x: .value("Now", now))
             .foregroundStyle(.secondary.opacity(0.5))
             .lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 3]))
-            .annotation(position: .top, alignment: .center) {
+            .annotation(position: .bottom, alignment: .center, spacing: 2) {
                 Text("now").font(.caption2).foregroundStyle(.secondary)
             }
 

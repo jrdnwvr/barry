@@ -28,6 +28,44 @@ BASE_VERDICTS = {
 # precip probability (%) above which we call out likely rain
 PRECIP_THRESHOLD = 40
 
+# --- calm-forecast softening -------------------------------------------------
+# A sharp fall with no forecast corroboration (no rain, no meaningful wind) is
+# often a dry trough or large-scale rebalancing — the verdict should say so
+# instead of crying storm. Keeps trust with users who watch pressure for
+# non-storm reasons while staying useful as a timing cue when the sky already
+# looks bad.
+CALM_PRECIP_MAX = 25      # % probability at/below which the window counts as dry
+CALM_WIND_MAX_KMH = 20.0  # km/h at/below which the window counts as calm
+
+# Softened replacements for the generic alarm sentences. Feature sentences that
+# carry specific information (trough timing, front passage) are never replaced.
+CALM_SOFTENINGS = {
+    "falling_fast": (
+        "Sharp drop, but the forecast stays calm and dry — this may pass with "
+        "little more than a wind shift. If the sky looks threatening, use the "
+        "trend for timing."
+    ),
+    "falling_mod": (
+        "Pressure falling steadily, but the forecast stays calm and dry — "
+        "not every fall brings weather; watch the sky."
+    ),
+}
+
+
+def forecast_stays_calm(forecast: Sequence[ForecastHour]) -> bool:
+    """True when the forecast window is dry AND calm enough that a pressure fall
+    shouldn't be sold as an approaching storm. Requires real precip data — an
+    empty or precip-less forecast proves nothing and never softens."""
+    with_precip = [h for h in forecast if h.precip_prob is not None]
+    if len(with_precip) < 3:
+        return False
+    if any((h.precip_prob or 0) > CALM_PRECIP_MAX for h in with_precip):
+        return False
+    if any(h.windspeed > CALM_WIND_MAX_KMH
+           for h in forecast if h.windspeed is not None):
+        return False
+    return True
+
 
 def _fmt_local_hour(t: datetime, local_hour_offset: float = 0.0) -> str:
     """Render an hour label like '3 PM' from a (UTC) datetime + local offset."""
@@ -111,5 +149,13 @@ def build_verdict(
         peak = find_precip_peak(forecast)
         if peak is not None:
             sentence += f" — rain likely around {_fmt_local_hour(peak.t, local_hour_offset)}."
+        elif forecast_stays_calm(forecast):
+            # No rain coming and no meaningful wind: swap the generic alarm
+            # sentence for the honest "big change, maybe no weather" version.
+            # Feature sentences with specific info (trough timing, front passage)
+            # are kept — only the generic/rapid-fall phrasings soften.
+            feature = reading.feature if reading is not None else None
+            if feature in (None, "none", "diurnal_only", "rapid_fall"):
+                sentence = CALM_SOFTENINGS.get(effective_class, sentence)
 
     return sentence

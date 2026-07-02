@@ -26,6 +26,14 @@ def _fc(hour, precip):
     )
 
 
+def _fc_wind(hour, precip, wind):
+    return ForecastHour(
+        t=datetime(2026, 6, 28, hour, 0, tzinfo=timezone.utc),
+        precip_prob=precip,
+        windspeed=wind,
+    )
+
+
 def test_base_sentences():
     assert build_verdict("steady").startswith("Holding steady")
     assert build_verdict("rising_fast").startswith("Rising sharply")
@@ -125,6 +133,63 @@ def test_diurnal_only_defers_to_steady_base():
     r = _reading("diurnal_only", trend="steady")
     out = build_verdict("steady", None, reading=r)
     assert out == "Holding steady — conditions stable."
+
+
+# --- calm-forecast softening ------------------------------------------------
+
+
+def test_falling_fast_softened_when_forecast_calm_and_dry():
+    forecast = [_fc_wind(h, 5, 8.0) for h in range(10, 16)]
+    out = build_verdict("falling_fast", forecast)
+    assert "storm system likely" not in out
+    assert "calm and dry" in out
+
+
+def test_rapid_fall_feature_also_softens():
+    r = _reading("rapid_fall", trend="falling_fast")
+    forecast = [_fc_wind(h, 5, 8.0) for h in range(10, 16)]
+    out = build_verdict("falling_fast", forecast, reading=r)
+    assert "Secure loose items" not in out
+    assert "calm and dry" in out
+
+
+def test_no_softening_when_forecast_windy():
+    forecast = [_fc_wind(h, 5, 35.0) for h in range(10, 16)]
+    out = build_verdict("falling_fast", forecast)
+    assert "storm system likely" in out
+
+
+def test_no_softening_when_rain_coming():
+    forecast = [_fc_wind(10, 5, 8.0), _fc_wind(11, 20, 8.0), _fc_wind(15, 55, 8.0)]
+    out = build_verdict("falling_fast", forecast)
+    assert "rain likely around 3 PM" in out
+    assert "calm and dry" not in out
+
+
+def test_no_softening_without_precip_data():
+    # A forecast with no precip data proves nothing — keep the alarm sentence.
+    forecast = [
+        ForecastHour(t=datetime(2026, 6, 28, h, 0, tzinfo=timezone.utc), windspeed=5.0)
+        for h in range(10, 16)
+    ]
+    out = build_verdict("falling_fast", forecast)
+    assert "storm system likely" in out
+
+
+def test_timed_trough_feature_keeps_its_sentence_when_calm():
+    # approaching_trough carries timing info — never replaced by the softening.
+    trough = datetime(2026, 6, 28, 22, 0, tzinfo=timezone.utc)
+    r = _reading("approaching_trough", featureTime=trough, caveats=["forecast_derived"])
+    forecast = [_fc_wind(h, 5, 8.0) for h in range(10, 16)]
+    out = build_verdict("falling_mod", forecast, reading=r)
+    assert "bottom out" in out
+
+
+def test_plain_falling_not_softened():
+    # "Slight fall — keep an eye out" is already mild; no replacement needed.
+    forecast = [_fc_wind(h, 5, 8.0) for h in range(10, 16)]
+    out = build_verdict("falling", forecast)
+    assert out.startswith("Slight fall")
 
 
 def test_feature_enrichment_still_layers_precip():

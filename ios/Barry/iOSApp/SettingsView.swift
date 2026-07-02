@@ -50,7 +50,7 @@ struct SettingsView: View {
             Form {
                 Section {
                     Toggle("Live phone sensor", isOn: $phoneBarometerEnabled)
-                    Text("Supplements METAR reports with a calibrated local reading between updates. Motion gating (§4.5.3) prevents elevator and driving spikes from registering as weather. Off by default — only useful when stationary with a clear sky view. Requires a physical device; has no effect on the simulator.")
+                    Text("Supplements METAR reports with a calibrated local reading between updates. Uses motion gating and calibrates using historical METAR data.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } header: {
@@ -59,7 +59,7 @@ struct SettingsView: View {
 
                 Section {
                     Toggle("Storm alerts", isOn: $stormAlertsEnabled)
-                    Text("Notifies you when pressure changes fast — a sharp drop (storm approaching) or a sharp rise (gust front / clearing). Checked opportunistically in the background, so timing depends on iOS and it won't be instant.")
+                    Text("Notifies you when pressure changes fast — a sharp drop (storm approaching) or a sharp rise (gust front / clearing).")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if notifDenied {
@@ -114,6 +114,9 @@ struct SettingsView: View {
                     }
                 }
 
+                // Dev-only helpers — compiled out of Release/TestFlight builds so
+                // testers can't seed fake readings into their real data.
+                #if DEBUG
                 Section {
                     Button("Load 48h sample history") {
                         let obs = store.combined?.observedSeries
@@ -123,12 +126,13 @@ struct SettingsView: View {
                     Button("Clear phone history", role: .destructive) {
                         barometer.clearHistory()
                     }
-                    Text("Fills the Sensor vs Station trace with ~48 h of sample points (based on the station's recent history) so you can test the UI without waiting for live readings.")
+                    Text("Fills history with METAR data for UI testing.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } header: {
                     Text("Testing")
                 }
+                #endif
             }
             .navigationTitle("Settings")
             .toolbar {

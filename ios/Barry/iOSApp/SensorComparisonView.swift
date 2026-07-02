@@ -75,32 +75,19 @@ struct SensorComparisonView: View {
             .compactMap { p in p.pressure.map { Plot(t: p.t, value: unit.convert($0)) } }
     }
 
-    /// Latest phone reading minus the nearest-in-time METAR observation — the live
-    /// divergence the chart is making visible. nil unless both sides have data.
     private var divergenceHPa: Double? {
-        guard let lastPhone = history.last,
-              let nearestMetar = combined.observedSeries
-                .min(by: { abs($0.t.timeIntervalSince(lastPhone.0)) < abs($1.t.timeIntervalSince(lastPhone.0)) }),
-              let metarPressure = nearestMetar.pressure
-        else { return nil }
-        return lastPhone.1 - metarPressure
+        sensorStationDivergence(history: history, combined: combined)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Sensor vs Station")
-                    .font(.headline)
-                Spacer()
-                Picker("Window", selection: $window) {
-                    ForEach(ComparisonWindow.allCases) { w in
-                        Text(w.label).tag(w)
-                    }
+            Picker("Window", selection: $window) {
+                ForEach(ComparisonWindow.allCases) { w in
+                    Text(w.label).tag(w)
                 }
-                .pickerStyle(.segmented)
-                .fixedSize()
-                .accessibilityLabel("Comparison time window")
             }
+            .pickerStyle(.segmented)
+            .accessibilityLabel("Comparison time window")
 
             // Render the chart whenever there's anything to show — station METARs
             // alone are useful; the placeholder is only for a truly empty window.
@@ -251,5 +238,89 @@ struct SensorComparisonView: View {
         }
         let pad = max((hi - lo) * 0.15, unit == .hPa ? 0.5 : 0.02)
         return (lo - pad)...(hi + pad)
+    }
+}
+
+/// Latest phone reading minus the nearest-in-time METAR observation — the live
+/// divergence the comparison makes visible. nil unless both sides have data.
+private func sensorStationDivergence(history: [(Date, Double)],
+                                     combined: CombinedResponse) -> Double? {
+    guard let lastPhone = history.last,
+          let nearestMetar = combined.observedSeries
+            .min(by: { abs($0.t.timeIntervalSince(lastPhone.0)) < abs($1.t.timeIntervalSince(lastPhone.0)) }),
+          let metarPressure = nearestMetar.pressure
+    else { return nil }
+    return lastPhone.1 - metarPressure
+}
+
+// MARK: - Main-screen entry point
+
+/// Dedicated screen for the full comparison panel — the instrumentation (windows,
+/// legend, Δ, Measure now) lives here so the main screen stays glance-simple.
+struct SensorStationDetailView: View {
+    let combined: CombinedResponse
+    let now: Date
+    let unit: PressureUnit
+    @ObservedObject var barometer: BarometerManager
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("The phone's continuous calibrated trace (orange) against the station's hourly reports (blue). Divergence between them is the phone catching a change before the next report lands.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                SensorComparisonView(combined: combined, now: now, unit: unit,
+                                     barometer: barometer)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+        }
+        .navigationTitle("Sensor vs Station")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// Compact row on the main screen: one line + the live Δ, tap for the full screen.
+struct SensorStationRow: View {
+    let combined: CombinedResponse
+    let now: Date
+    let unit: PressureUnit
+    @ObservedObject var barometer: BarometerManager
+
+    private var divergence: Double? {
+        sensorStationDivergence(history: barometer.phoneHistoryTrace, combined: combined)
+    }
+
+    var body: some View {
+        NavigationLink {
+            SensorStationDetailView(combined: combined, now: now, unit: unit,
+                                    barometer: barometer)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "dot.scope")
+                    .font(.subheadline)
+                    .foregroundStyle(.orange)
+                Text("Sensor vs Station")
+                    .font(.subheadline.weight(.medium))
+                Spacer()
+                if let d = divergence {
+                    Text("Δ \(unit.formatDelta(d))")
+                        .font(.caption).monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("Phone differs from station by \(unit.formatDelta(d))")
+                }
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
+            .background(Color(.secondarySystemBackground),
+                        in: RoundedRectangle(cornerRadius: 12))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Sensor vs Station details")
     }
 }

@@ -115,10 +115,11 @@ struct ContentView: View {
                 // Secondary: wind + rain confirmation, always expanded.
                 ConfirmationOverlayView(combined: combined, now: store.now)
 
-                // Sensor vs Station: phone's continuous calibrated trace against the
-                // discrete hourly METAR observations (uses the persisted local history).
+                // Sensor vs Station: a compact entry row — the full comparison panel
+                // (windows, legend, Δ, Measure now) lives on its own screen so the
+                // default experience stays glance + verdict + chart.
                 if phoneBarometerEnabled {
-                    SensorComparisonView(
+                    SensorStationRow(
                         combined: combined,
                         now: store.now,
                         unit: unit,

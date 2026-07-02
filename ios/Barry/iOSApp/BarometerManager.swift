@@ -458,8 +458,9 @@ final class BarometerManager: ObservableObject {
         }
     }
 
-    // MARK: - Testing helpers
+    // MARK: - Testing helpers (Debug builds only)
 
+    #if DEBUG
     /// Seed the persisted phone-SLP history with ~48 h of points based on the real
     /// observed station series (offset slightly to mimic a calibrated phone; the
     /// stretch older than the observed data is synthesized with a gentle wave). Lets
@@ -500,6 +501,7 @@ final class BarometerManager: ObservableObject {
         saveHistory()
         refreshDerivedState()
     }
+    #endif
 
     // MARK: - Private
 

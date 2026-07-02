@@ -36,21 +36,10 @@ struct ComplicationView: View {
         renderingMode == .fullColor ? tint : .primary
     }
 
-    /// Forecast-aware glyph: when the interpreter's reading carries a feature
-    /// it tells us what's *about* to happen (bottoming out, topping out, sharp
-    /// fall just started), which is more useful than just "currently falling".
-    /// Falls back to the trend-only icon when there's no clear feature.
+    /// Forecast-aware glyph — shared mapping (TendencySnapshot.trendSymbolName) so
+    /// the watch complication and the iPhone widget can never drift apart.
     private var trendSymbol: String {
-        switch feature {
-        case "trough_passing":       return "arrow.up.from.line"     // at bottom, rising next
-        case "post_trough_recovery": return "arrow.up.right"          // already rising off a low
-        case "approaching_trough":   return "arrow.down.right"        // still falling toward a low
-        case "ridge_peak":           return "arrow.down.from.line"    // at top, falling next
-        case "rapid_fall":           return "arrow.down.to.line"      // sharp sustained drop
-        case "rapid_rise":           return "arrow.up.to.line"        // sharp sustained rise (gust front)
-        case "front_knee":           return "bolt.horizontal.fill"    // sudden step change
-        default:                     return cls.symbolName
-        }
+        entry.snapshot?.trendSymbolName ?? cls.symbolName
     }
 
     var body: some View {

@@ -6,12 +6,12 @@
 //  The content is grounded in published meteorology, not folklore — every claim maps
 //  to one of the cited sources listed at the bottom of the sheet:
 //    • Pressure *tendency* = the 3-hour change (NWS Glossary).
-//    • Low pressure / falling → clouds, rain; high pressure / rising → fair, dry;
-//      an approaching storm shows up as falling pressure (NOAA SciJinks).
+//    • Low pressure / falling → clouds, rain; high pressure / rising → settled, dry
+//      (UK Met Office, "High and low pressure").
 //    • Wind is set by the pressure gradient — closely spaced isobars (i.e. fast
-//      pressure change) mean strong winds (UK Met Office; Royal Meteorological Soc.).
+//      pressure change) mean strong winds (UK Met Office, synoptic charts).
 //    • The most extreme drops mark rapidly intensifying storms — "bombogenesis",
-//      ~24 hPa in 24 h at high latitudes (NOAA Ocean Service).
+//      ~24 hPa in 24 h at 60° latitude, less nearer the equator (NOAA Ocean Service).
 
 import SwiftUI
 
@@ -28,7 +28,7 @@ struct PressureGuideView: View {
 
     private let movements: [Movement] = [
         Movement(cls: .fallingFast, intensity: 1.0, title: "Falling fast",
-                 detail: "A sharp drop usually means a vigorous storm system is moving in quickly — expect thickening cloud, rain, and often strengthening winds. The steepest, deepest drops mark rapidly intensifying storms (an extreme case is called “bombogenesis” — on the order of a 24 hPa fall in 24 hours)."),
+                 detail: "A sharp drop usually means a vigorous storm system is moving in quickly — expect thickening cloud, rain, and often strengthening winds. The steepest, deepest drops mark rapidly intensifying storms (an extreme case is called “bombogenesis” — roughly a 24 hPa fall in 24 hours, less at lower latitudes)."),
         Movement(cls: .fallingMod, intensity: 0.5, title: "Falling",
                  detail: "Falling pressure signals an approaching low-pressure system or front. Weather tends to deteriorate: increasing cloud, with rain becoming more likely."),
         Movement(cls: .steady, intensity: 0, title: "Steady",
@@ -68,15 +68,16 @@ struct PressureGuideView: View {
         let url: URL
     }
 
+    // Verified reachable 2026-07 — SciJinks (expired TLS cert) and RMetS (blocked)
+    // were replaced by the Met Office pressure-systems page, which covers the same
+    // claims (high = settled, low = unsettled/rain/wind).
     private let sources: [Source] = [
-        Source(name: "NOAA SciJinks — High & low pressure systems",
-               url: URL(string: "https://scijinks.gov/high-and-low-pressure-systems/")!),
         Source(name: "US National Weather Service — Weather Glossary (pressure tendency, front, trough, ridge, gust front)",
                url: URL(string: "https://forecast.weather.gov/glossary.php")!),
+        Source(name: "UK Met Office — High and low pressure",
+               url: URL(string: "https://weather.metoffice.gov.uk/learn-about/weather/how-weather-works/high-and-low-pressure")!),
         Source(name: "UK Met Office — How to read synoptic charts (isobars & wind)",
                url: URL(string: "https://weather.metoffice.gov.uk/learn-about/weather/how-weather-works/synoptic-weather-chart")!),
-        Source(name: "Royal Meteorological Society — The highs and lows of wind strength",
-               url: URL(string: "https://www.rmets.org/metmatters/highs-and-lows-wind-strength")!),
         Source(name: "NOAA Ocean Service — What is bombogenesis?",
                url: URL(string: "https://oceanservice.noaa.gov/facts/bombogenesis.html")!),
     ]
@@ -108,6 +109,12 @@ struct PressureGuideView: View {
 
                 Section("Why fast changes hint at wind") {
                     Text("Wind is driven by how sharply pressure changes across distance. The same steep gradients that make pressure rise or fall **quickly** also tend to bring stronger, gustier winds — so a fast move in either direction is often a heads-up for wind, not just rain or clearing.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("A big change isn't a guarantee") {
+                    Text("Pressure can move sharply without dramatic weather — dry fronts and troughs pass with little more than a wind shift, and some swings are just the atmosphere rebalancing. Read the trend **together with** the sky and the wind/rain forecast below the chart: if conditions already look threatening, the trend is your best clue to **timing and intensity**; if the forecast stays calm and dry, a big move may amount to nothing more than a breezy change.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

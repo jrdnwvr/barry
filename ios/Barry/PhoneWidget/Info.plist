@@ -15,14 +15,13 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
     <key>CFBundleDisplayName</key>
-    <string>Pressure Trend</string>
+    <string>Barry</string>
     <key>CFBundleShortVersionString</key>
     <string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key>
     <string>$(CURRENT_PROJECT_VERSION)</string>
-    <!-- The self-fetching TendencyProvider resolves the backend from Bundle.main,
-         which in an extension is THIS bundle — so the key must live here too, or
-         the complication's fetch silently falls back to 127.0.0.1. -->
+    <!-- TendencyProvider resolves the backend from Bundle.main, which in an
+         extension is THIS bundle — the key must be present here. -->
     <key>BarryBackendURL</key>
     <string>https://barry.wide-stack.com</string>
     <key>NSExtension</key>

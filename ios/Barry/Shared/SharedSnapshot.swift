@@ -40,6 +40,23 @@ struct TendencySnapshot: Codable, Hashable {
 }
 
 extension TendencySnapshot {
+    /// Forecast-aware glyph shared by the watch complication and the iPhone widget:
+    /// when the interpreter's reading carries a feature it tells us what's *about*
+    /// to happen (bottoming out, topping out, sharp fall just started), which is
+    /// more useful than just "currently falling". Falls back to the trend icon.
+    var trendSymbolName: String {
+        switch feature {
+        case "trough_passing":       return "arrow.up.from.line"     // at bottom, rising next
+        case "post_trough_recovery": return "arrow.up.right"          // already rising off a low
+        case "approaching_trough":   return "arrow.down.right"        // still falling toward a low
+        case "ridge_peak":           return "arrow.down.from.line"    // at top, falling next
+        case "rapid_fall":           return "arrow.down.to.line"      // sharp sustained drop
+        case "rapid_rise":           return "arrow.up.to.line"        // sharp sustained rise (gust front)
+        case "front_knee":           return "bolt.horizontal.fill"    // sudden step change
+        default:                     return cls.symbolName
+        }
+    }
+
     /// Age beyond which the complication stops presenting the trend as current.
     /// METARs land hourly and the provider refreshes on WidgetKit's ~20-min budget,
     /// so 2 h of age means several consecutive refresh failures — say so instead of

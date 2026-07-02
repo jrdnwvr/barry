@@ -12,23 +12,28 @@ struct ComplicationView: View {
     @Environment(\.widgetFamily) private var family
     @Environment(\.widgetRenderingMode) private var renderingMode
     @AppStorage("pressureUnit", store: AppConfig.sharedDefaults)
-    private var unitRaw: String = PressureUnit.hPa.rawValue
+    private var unitRaw: String = PressureUnit.inHg.rawValue
     let entry: TendencyEntry
 
-    private var unit: PressureUnit { PressureUnit(rawValue: unitRaw) ?? .hPa }
+    private var unit: PressureUnit { PressureUnit(rawValue: unitRaw) ?? .inHg }
     private var cls: TendencyClass { entry.snapshot?.cls ?? .steady }
     private var intensity: Double { entry.snapshot?.intensity ?? 0 }
     private var delta: Double { entry.snapshot?.delta3h ?? 0 }
     private var currentHPa: Double? { entry.snapshot?.currentPressureHPa }
     private var feature: String? { entry.snapshot?.feature }
-    private var tint: Color { cls.color(intensity: intensity) }
+
+    /// Data too old to present as current — the trend word becomes "STALE" and the
+    /// trend color drops to gray, so old data never masquerades as live.
+    private var isStale: Bool { entry.snapshot?.isStale(asOf: entry.date) ?? false }
+
+    private var tint: Color { isStale ? .gray : cls.color(intensity: intensity) }
 
     /// Tinted/mono-aware tint: the real trend color only in full-color rendering.
     /// In the system's accented/vibrant modes we defer to `.primary` (paired with
     /// `.widgetAccentable()`) so the watch face's own tint drives the look — which
     /// is what makes it read like a regular Apple complication everywhere.
     private var accentTint: Color {
-        renderingMode == .fullColor ? cls.color(intensity: intensity) : .primary
+        renderingMode == .fullColor ? tint : .primary
     }
 
     /// Forecast-aware glyph: when the interpreter's reading carries a feature
@@ -95,8 +100,10 @@ struct ComplicationView: View {
     }
 
     /// Short, uppercase trend descriptor for the corner's outer arc — sized to fit
-    /// a curved bezel label (matches the aviation-style all-caps look).
+    /// a curved bezel label (matches the aviation-style all-caps look). Reads
+    /// "STALE" when the snapshot is too old to present as the current trend.
     private var trendDescriptor: String {
+        if isStale { return "STALE" }
         switch cls {
         case .risingFast:  return "RISING FAST"
         case .rising:      return "RISING"
@@ -110,7 +117,9 @@ struct ComplicationView: View {
     // Inline: single line that sits next to the time — mirrors the corner so the
     // top and bottom slots read consistently.
     private var inline: some View {
-        Label("\(pressureShort) \(unit.label)", systemImage: trendSymbol)
+        Label(isStale ? "\(pressureShort) \(unit.label) · Stale"
+                      : "\(pressureShort) \(unit.label)",
+              systemImage: trendSymbol)
     }
 
     // Rectangular: the richest tiny surface — glyph, delta, and class label.
@@ -120,7 +129,7 @@ struct ComplicationView: View {
                 .font(.title3.weight(.bold))
                 .foregroundStyle(tint)
             VStack(alignment: .leading, spacing: 1) {
-                Text(cls.label)
+                Text(isStale ? "Stale" : cls.label)
                     .font(.caption.weight(.semibold))
                 Text("\(deltaShort) \(unit.label) · 3h")
                     .font(.caption2).monospacedDigit()

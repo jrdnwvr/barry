@@ -16,9 +16,9 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage("pressureUnit", store: AppConfig.sharedDefaults)
-    private var unitRaw: String = PressureUnit.hPa.rawValue
+    private var unitRaw: String = PressureUnit.inHg.rawValue
     @AppStorage("windUnit", store: AppConfig.sharedDefaults)
-    private var windUnitRaw: String = WindUnit.kmh.rawValue
+    private var windUnitRaw: String = WindUnit.mph.rawValue
     @AppStorage("locationMode", store: AppConfig.sharedDefaults)
     private var locationModeRaw: String = LocationMode.device.rawValue
     @AppStorage("homeStation", store: AppConfig.sharedDefaults)

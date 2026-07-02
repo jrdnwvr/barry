@@ -13,8 +13,8 @@ struct ConfirmationOverlayView: View {
     let now: Date
 
     @AppStorage("windUnit", store: AppConfig.sharedDefaults)
-    private var windUnitRaw: String = WindUnit.kmh.rawValue
-    private var windUnit: WindUnit { WindUnit(rawValue: windUnitRaw) ?? .kmh }
+    private var windUnitRaw: String = WindUnit.mph.rawValue
+    private var windUnit: WindUnit { WindUnit(rawValue: windUnitRaw) ?? .mph }
 
     private var hours: [ForecastHour] {
         (combined.forecast?.hourly ?? [])
@@ -48,6 +48,14 @@ struct ConfirmationOverlayView: View {
         return s
     }
 
+    /// The forecast hour the user last tapped on the wind chart.
+    private struct WindSelection: Equatable {
+        let date: Date
+        let speedKmh: Double
+        let dir: Double?
+    }
+    @State private var windSelection: WindSelection?
+
     var body: some View {
         if hours.isEmpty {
             EmptyView()
@@ -63,6 +71,8 @@ struct ConfirmationOverlayView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            // Fresh forecast → any tapped point may no longer exist; clear it.
+            .onChange(of: combined) { _, _ in windSelection = nil }
         }
     }
 
@@ -174,6 +184,17 @@ struct ConfirmationOverlayView: View {
                         }
                     }
                 }
+
+                // Tap-to-read selection — same pattern as the pressure chart.
+                if let sel = windSelection {
+                    RuleMark(x: .value("Selected", sel.date))
+                        .foregroundStyle(.primary.opacity(0.25))
+                        .lineStyle(StrokeStyle(lineWidth: 1))
+                    PointMark(x: .value("Selected", sel.date),
+                              y: .value("Wind", windUnit.convert(sel.speedKmh)))
+                        .foregroundStyle(.teal)
+                        .symbolSize(60)
+                }
             }
             .frame(height: 56)
             .chartYAxis {
@@ -188,6 +209,55 @@ struct ConfirmationOverlayView: View {
                     AxisValueLabel(format: .dateTime.hour()).font(.system(size: 9))
                 }
             }
+            .chartOverlay { proxy in
+                GeometryReader { geo in
+                    Rectangle().fill(.clear).contentShape(Rectangle())
+                        .gesture(
+                            SpatialTapGesture().onEnded { value in
+                                selectWind(at: value.location, proxy: proxy, geo: geo)
+                            }
+                        )
+                }
+            }
+
+            if let sel = windSelection {
+                windReadout(sel)
+            }
+        }
+    }
+
+    private func selectWind(at location: CGPoint, proxy: ChartProxy, geo: GeometryProxy) {
+        guard let plotFrame = proxy.plotFrame else { return }
+        let xInPlot = location.x - geo[plotFrame].origin.x
+        guard let date: Date = proxy.value(atX: xInPlot),
+              let nearest = windHours.min(by: {
+                  abs($0.t.timeIntervalSince(date)) < abs($1.t.timeIntervalSince(date))
+              }),
+              let speed = nearest.windspeed
+        else { return }
+        windSelection = WindSelection(date: nearest.t, speedKmh: speed, dir: nearest.winddir)
+    }
+
+    private func windReadout(_ sel: WindSelection) -> some View {
+        HStack(spacing: 8) {
+            Circle().fill(.teal).frame(width: 8, height: 8)
+            Text(sel.date, format: .dateTime.weekday(.abbreviated).hour().minute())
+                .font(.caption).foregroundStyle(.secondary)
+            Text("\(windUnit.format(sel.speedKmh)) \(windUnit.label)")
+                .font(.caption.weight(.semibold)).monospacedDigit()
+            if let dir = sel.dir {
+                Text("\(Int(dir.rounded()))°")
+                    .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+            }
+            Text("forecast")
+                .font(.caption2).foregroundStyle(.secondary)
+            Spacer()
+            Button { windSelection = nil } label: {
+                Image(systemName: "xmark.circle.fill")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.tertiary)
+            .accessibilityLabel("Clear selection")
         }
     }
 }

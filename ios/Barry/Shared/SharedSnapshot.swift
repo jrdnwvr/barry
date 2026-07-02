@@ -39,6 +39,18 @@ struct TendencySnapshot: Codable, Hashable {
     }
 }
 
+extension TendencySnapshot {
+    /// Age beyond which the complication stops presenting the trend as current.
+    /// METARs land hourly and the provider refreshes on WidgetKit's ~20-min budget,
+    /// so 2 h of age means several consecutive refresh failures — say so instead of
+    /// letting old data masquerade as live (the app's honesty principle).
+    static let staleAfter: TimeInterval = 2 * 3600
+
+    func isStale(asOf date: Date = Date()) -> Bool {
+        date.timeIntervalSince(updatedAt) > Self.staleAfter
+    }
+}
+
 enum SnapshotStore {
     private static let key = "tendency.snapshot.v1"
 

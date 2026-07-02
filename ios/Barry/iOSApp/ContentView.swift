@@ -10,7 +10,7 @@ struct ContentView: View {
     @EnvironmentObject var store: PressureStore
     @EnvironmentObject var barometer: BarometerManager
     @AppStorage("pressureUnit", store: AppConfig.sharedDefaults)
-    private var unitRaw: String = PressureUnit.hPa.rawValue
+    private var unitRaw: String = PressureUnit.inHg.rawValue
     @AppStorage("locationMode", store: AppConfig.sharedDefaults)
     private var locationModeRaw: String = LocationMode.device.rawValue
     @AppStorage("homeStation", store: AppConfig.sharedDefaults)
@@ -26,7 +26,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var showSettings = false
 
-    private var unit: PressureUnit { PressureUnit(rawValue: unitRaw) ?? .hPa }
+    private var unit: PressureUnit { PressureUnit(rawValue: unitRaw) ?? .inHg }
     private var chartWindow: ChartWindow { ChartWindow(rawValue: chartWindowRaw) ?? .hours6 }
 
     var body: some View {

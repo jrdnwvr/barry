@@ -11,8 +11,8 @@ import Charts
 struct WatchContentView: View {
     @EnvironmentObject var store: PressureStore
     @AppStorage("pressureUnit", store: AppConfig.sharedDefaults)
-    private var unitRaw: String = PressureUnit.hPa.rawValue
-    private var unit: PressureUnit { PressureUnit(rawValue: unitRaw) ?? .hPa }
+    private var unitRaw: String = PressureUnit.inHg.rawValue
+    private var unit: PressureUnit { PressureUnit(rawValue: unitRaw) ?? .inHg }
 
     var body: some View {
         NavigationStack {

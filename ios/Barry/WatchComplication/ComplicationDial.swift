@@ -13,13 +13,13 @@ import SwiftUI
 struct DialComplicationView: View {
     @Environment(\.widgetRenderingMode) private var renderingMode
     @AppStorage("pressureUnit", store: AppConfig.sharedDefaults)
-    private var unitRaw: String = PressureUnit.hPa.rawValue
+    private var unitRaw: String = PressureUnit.inHg.rawValue
     let entry: TendencyEntry
 
     /// Full-scale change (hPa/3h) at which the gauge pegs to an end.
     private let scale = 4.0
 
-    private var unit: PressureUnit { PressureUnit(rawValue: unitRaw) ?? .hPa }
+    private var unit: PressureUnit { PressureUnit(rawValue: unitRaw) ?? .inHg }
     private var snap: TendencySnapshot? { entry.snapshot }
 
     /// Expected next-3h change drives the gauge position + color. Falls back to the
@@ -30,11 +30,14 @@ struct DialComplicationView: View {
     private var changeClass: TendencyClass { TendencyClass.classify(delta3h: change) }
     private var changeIntensity: Double { TendencyIntensity.intensity(delta3h: change) }
 
-    /// Real trend color in full color; defer to the face tint in accented/vibrant.
+    /// Data too old to present as current (matches ComplicationView.isStale).
+    private var isStale: Bool { snap?.isStale(asOf: entry.date) ?? false }
+
+    /// Real trend color in full color (gray when stale); defer to the face tint in
+    /// accented/vibrant.
     private var tint: Color {
-        renderingMode == .fullColor
-            ? changeClass.color(intensity: changeIntensity)
-            : .primary
+        guard renderingMode == .fullColor else { return .primary }
+        return isStale ? .gray : changeClass.color(intensity: changeIntensity)
     }
 
     private var pressureText: String {

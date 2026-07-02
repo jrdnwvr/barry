@@ -10,7 +10,7 @@ import SwiftUI
 
 struct WatchSettingsView: View {
     @AppStorage("pressureUnit", store: AppConfig.sharedDefaults)
-    private var unitRaw: String = PressureUnit.hPa.rawValue
+    private var unitRaw: String = PressureUnit.inHg.rawValue
 
     var body: some View {
         Form {

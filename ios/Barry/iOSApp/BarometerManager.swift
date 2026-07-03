@@ -22,7 +22,13 @@ struct BarometerSample: Equatable {
     let date: Date
     let stationPressureHPa: Double  // raw phone reading (kPa × 10), NOT SLP
     var slpEquivalent: Double?      // set after calibration against a METAR
-    var trusted: Bool               // false while moving / uncalibrated
+    /// Usable for display / micro-trend / history. True when the classifier says
+    /// stationary, OR when the pressure stream itself is weather-plausible while
+    /// hand-carried (physics check) — the barometer only cares about vertical motion.
+    var trusted: Bool
+    /// Calibration-grade: the activity classifier vouched for stillness. Only these
+    /// feed the offset model — mis-calibration is expensive, a display sample isn't.
+    var stationary: Bool = true
 }
 
 // MARK: - MicroTrend
@@ -228,6 +234,17 @@ struct MotionGate: Equatable {
 struct SampleBuffer: Equatable {
     static let maxAgeSeconds: Double = 3600.0
 
+    // --- carried-clean physics check (trusting data while the classifier says
+    // "moving"). Weather moves pressure at ~0.1 hPa per 10 MINUTES; elevation moves
+    // it at 0.12 hPa per METER — hugely separable rates. A short window catches
+    // elevators/stairs; the long window catches slow sustained ramps (gentle hills)
+    // that stay inside each short window but accumulate.
+    static let carriedShortWindow: TimeInterval = 120
+    static let carriedShortSpreadHPa = 0.25   // ≈ same-floor handling tolerance (~2 m)
+    static let carriedLongWindow: TimeInterval = 600
+    static let carriedLongSpreadHPa = 0.5
+    static let carriedMinSamples = 3
+
     var samples: [BarometerSample] = []
 
     mutating func add(_ sample: BarometerSample) {
@@ -240,17 +257,48 @@ struct SampleBuffer: Equatable {
         samples.filter { $0.trusted && $0.slpEquivalent != nil }
     }
 
-    /// Mean raw station pressure over the last `windowSeconds` of stationary
-    /// (trusted) samples. Calibrating against this average instead of a single
-    /// reading removes sensor jitter from the offset. Falls back to the latest
-    /// stationary sample (then the latest sample) if the window is empty; nil only
-    /// when there are no samples at all.
+    /// True when a new raw reading taken while the classifier reports motion is
+    /// still barometrically clean: peak-to-peak spread within weather-plausible
+    /// bounds over both windows. Raw values are compared regardless of trust —
+    /// raw is raw. Requires a minimum of recent context; a cold buffer proves nothing.
+    func isCleanWhileMoving(candidateHPa: Double, at now: Date) -> Bool {
+        func spread(_ values: [Double]) -> Double {
+            guard let lo = values.min(), let hi = values.max() else { return .infinity }
+            return hi - lo
+        }
+        let shortStart = now.addingTimeInterval(-Self.carriedShortWindow)
+        let short = samples.filter { $0.date >= shortStart }
+            .map(\.stationPressureHPa) + [candidateHPa]
+        guard short.count >= Self.carriedMinSamples,
+              spread(short) <= Self.carriedShortSpreadHPa else { return false }
+
+        let longStart = now.addingTimeInterval(-Self.carriedLongWindow)
+        let long = samples.filter { $0.date >= longStart }
+            .map(\.stationPressureHPa) + [candidateHPa]
+        return spread(long) <= Self.carriedLongSpreadHPa
+    }
+
+    /// Scoped retroactive untrust for the classifier's detection lag: motion is
+    /// reported late, so only samples inside the lag window are suspect — not the
+    /// whole buffer. Demotes both trust tiers (they may be motion-contaminated).
+    mutating func untrustRecent(since cutoff: Date) {
+        for i in samples.indices where samples[i].date >= cutoff {
+            samples[i].trusted = false
+            samples[i].stationary = false
+        }
+    }
+
+    /// Mean raw station pressure over the last `windowSeconds` of CALIBRATION-GRADE
+    /// (classifier-stationary + trusted) samples. Calibrating against this average
+    /// instead of a single reading removes sensor jitter from the offset. Falls back
+    /// to the latest calibration-grade sample (then the latest sample) if the window
+    /// is empty; nil only when there are no samples at all.
     func averageStationPressure(windowSeconds: Double = 300) -> Double? {
         guard let last = samples.last else { return nil }
         let start = last.date.addingTimeInterval(-windowSeconds)
-        let win = samples.filter { $0.trusted && $0.date >= start }
+        let win = samples.filter { $0.trusted && $0.stationary && $0.date >= start }
         guard !win.isEmpty else {
-            return (samples.last(where: { $0.trusted }) ?? last).stationPressureHPa
+            return (samples.last(where: { $0.trusted && $0.stationary }) ?? last).stationPressureHPa
         }
         return win.map(\.stationPressureHPa).reduce(0, +) / Double(win.count)
     }
@@ -306,6 +354,10 @@ final class BarometerManager: ObservableObject {
     /// Ignore altitude deltas below this — inside GPS noise (≈0.5 hPa).
     private static let minBridgeMeters: Double = 4.0
     private var bridgeInFlight = false
+
+    /// How far back the stationary→moving transition retroactively untrusts —
+    /// covers the activity classifier's detection lag, nothing more.
+    private static let retroactiveUntrustSeconds: TimeInterval = 90
 
     /// Dedicated best-accuracy location source for vertical fixes (the shared
     /// station-lookup manager uses km accuracy, useless for altitude).
@@ -804,9 +856,12 @@ final class BarometerManager: ObservableObject {
         gate.process(stationaryActivity: activity.stationary, at: activity.startDate)
         motionState = gate.state
 
-        // When transitioning stationary → moving, retroactively untrust the buffer.
+        // Stationary → moving: the classifier detects motion late, so samples inside
+        // its lag window may be contaminated — untrust just those ~90 s, not the
+        // whole hour of provably-still data (checking the app shouldn't destroy the
+        // very trend it displays).
         if wasStationary && !gate.isStationary {
-            for i in buffer.samples.indices { buffer.samples[i].trusted = false }
+            buffer.untrustRecent(since: Date().addingTimeInterval(-Self.retroactiveUntrustSeconds))
         }
 
         // Came to rest → check whether we changed altitude while moving and shift
@@ -821,7 +876,13 @@ final class BarometerManager: ObservableObject {
 
     private func handlePressure(_ pressureHPa: Double) {
         let now = Date()
-        let trusted = gate.isStationary
+        let stationary = gate.isStationary
+        // Trust matrix: classifier-stationary → trust everything, even fast changes
+        // (a pressure jump on a resting phone is REAL WEATHER — the event Barry
+        // exists to catch). Classifier-moving → let the pressure stream vouch for
+        // itself; only "moving AND pressure changing fast" is truly unknowable
+        // (can't split altitude from weather) and gets discarded.
+        let trusted = stationary || buffer.isCleanWhileMoving(candidateHPa: pressureHPa, at: now)
         let calibratedSLP = trusted ? model.slpEquivalent(for: pressureHPa, at: now) : nil
         // The GPS bootstrap drives the live value too, but is kept out of the
         // persisted history — only METAR-calibrated points are logged.
@@ -831,7 +892,8 @@ final class BarometerManager: ObservableObject {
             date: now,
             stationPressureHPa: pressureHPa,
             slpEquivalent: slpEquiv,
-            trusted: trusted
+            trusted: trusted,
+            stationary: stationary
         ))
         // Feed the persisted long-horizon log only with trusted, calibrated readings.
         // record() downsamples internally; persist only when a point was actually stored.
@@ -849,9 +911,12 @@ final class BarometerManager: ObservableObject {
     }
 
     private func refreshDerivedState() {
-        if gate.isStationary,
-           model.offset != nil || provisionalOffset != nil,
-           let latest = buffer.samples.last(where: { $0.trusted }) {
+        // Live value tracks TRUST (which includes carried-clean data), not the raw
+        // classifier state — handling the phone no longer blanks the reading. The
+        // most recent sample must itself be trusted so a stale value can't linger
+        // through an elevator ride.
+        if model.offset != nil || provisionalOffset != nil,
+           let latest = buffer.samples.last, latest.trusted {
             latestLocalSLP = effectiveSLP(for: latest.stationPressureHPa, at: latest.date)
         } else {
             latestLocalSLP = nil

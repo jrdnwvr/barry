@@ -288,6 +288,81 @@ struct BarometerTests {
         #expect(m.points.count == 1, "Points older than 6h are dropped")
     }
 
+    // MARK: - Carried-clean physics gating (trusting data while classifier says moving)
+
+    @Test func carriedFlatPressureIsClean() {
+        var b = SampleBuffer()
+        let t = Date(timeIntervalSince1970: 1_000_000)
+        // Hand-carried around one floor: raw wobbles ±0.02 hPa.
+        for i in 0..<6 {
+            b.add(BarometerSample(date: t.addingTimeInterval(Double(i) * 20),
+                                  stationPressureHPa: 1000.0 + 0.02 * Double(i % 2),
+                                  slpEquivalent: nil, trusted: false, stationary: false))
+        }
+        #expect(b.isCleanWhileMoving(candidateHPa: 1000.03, at: t.addingTimeInterval(120)),
+                "Weather-plausible pressure while moving is trusted")
+    }
+
+    @Test func elevatorRateRejectedWhileMoving() {
+        var b = SampleBuffer()
+        let t = Date(timeIntervalSince1970: 1_000_000)
+        // Elevator: ~1 m/s = 0.12 hPa/s — unmistakable vs weather.
+        for i in 0..<6 {
+            b.add(BarometerSample(date: t.addingTimeInterval(Double(i) * 20),
+                                  stationPressureHPa: 1000.0 - 2.4 * Double(i),
+                                  slpEquivalent: nil, trusted: false, stationary: false))
+        }
+        #expect(!b.isCleanWhileMoving(candidateHPa: 1000.0 - 2.4 * 6,
+                                      at: t.addingTimeInterval(120)),
+                "Elevator-rate pressure change is rejected")
+    }
+
+    @Test func slowRampCaughtByLongWindow() {
+        var b = SampleBuffer()
+        let t = Date(timeIntervalSince1970: 1_000_000)
+        // Gentle sustained climb: +0.04 hPa per 30 s stays inside each short window
+        // (spread ≈ 0.16 ≤ 0.25) but accumulates 0.8 hPa over 10 min.
+        for i in 0..<20 {
+            b.add(BarometerSample(date: t.addingTimeInterval(Double(i) * 30),
+                                  stationPressureHPa: 1000.0 + 0.04 * Double(i),
+                                  slpEquivalent: nil, trusted: false, stationary: false))
+        }
+        #expect(!b.isCleanWhileMoving(candidateHPa: 1000.8, at: t.addingTimeInterval(600)),
+                "A slow ramp must be caught by the long accumulation window")
+    }
+
+    @Test func coldBufferIsNotClean() {
+        let b = SampleBuffer()
+        #expect(!b.isCleanWhileMoving(candidateHPa: 1000.0, at: Date()),
+                "No recent context proves nothing — stay conservative")
+    }
+
+    @Test func untrustRecentIsScoped() {
+        var b = SampleBuffer()
+        let t = Date(timeIntervalSince1970: 1_000_000)
+        b.add(BarometerSample(date: t, stationPressureHPa: 1000.0,
+                              slpEquivalent: 1013.0, trusted: true))
+        b.add(BarometerSample(date: t.addingTimeInterval(540), stationPressureHPa: 1000.1,
+                              slpEquivalent: 1013.1, trusted: true))
+        // Motion detected at t+600 → only the classifier-lag window is suspect.
+        b.untrustRecent(since: t.addingTimeInterval(600 - 90))
+        #expect(b.samples[0].trusted, "Old, provably-still data survives")
+        #expect(!b.samples[1].trusted && !b.samples[1].stationary,
+                "Data inside the lag window is demoted from both tiers")
+    }
+
+    @Test func calibrationAverageUsesOnlyStationaryGrade() {
+        var b = SampleBuffer()
+        let t = Date(timeIntervalSince1970: 1_000_000)
+        b.add(BarometerSample(date: t, stationPressureHPa: 1000.0,
+                              slpEquivalent: nil, trusted: true, stationary: true))
+        // Carried-clean sample: display-trusted, but NOT calibration-grade.
+        b.add(BarometerSample(date: t.addingTimeInterval(60), stationPressureHPa: 1010.0,
+                              slpEquivalent: nil, trusted: true, stationary: false))
+        #expect(b.averageStationPressure() == 1000.0,
+                "Carried samples must never feed the calibration offset")
+    }
+
     // MARK: - Altitude bridge (GPS-referenced offset shifting)
 
     @Test func shiftOffsetsMovesAllPointsUniformly() {

@@ -315,7 +315,15 @@ struct PressureChartView: View {
         .chartXAxis {
             AxisMarks(values: .stride(by: .hour, count: window.axisStrideHours)) { value in
                 AxisGridLine()
-                AxisValueLabel(format: .dateTime.hour())
+                // Hour labels pushed down a row so the "now" label (annotated at the
+                // bottom of the now-rule) gets the band directly under the plot to
+                // itself — no more colliding with a time label.
+                AxisValueLabel {
+                    if let d = value.as(Date.self) {
+                        Text(d, format: .dateTime.hour())
+                            .padding(.top, 14)
+                    }
+                }
             }
         }
         .chartYAxisLabel(unit.label)

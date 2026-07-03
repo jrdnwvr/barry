@@ -136,7 +136,8 @@ struct SensorComparisonView: View {
 
     private func runMeasure() async {
         measuring = true
-        lastResult = await barometer.measureNow(stationSLP: combined.currentPressure)
+        lastResult = await barometer.measureNow(stationSLP: combined.currentPressure,
+                                                observedAt: combined.observedSeries.last?.t)
         measuring = false
     }
 

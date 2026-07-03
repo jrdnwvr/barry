@@ -105,9 +105,12 @@ struct ContentView: View {
                         window: chartWindow
                     )
                     // Trigger calibration whenever a fresh combined response arrives.
+                    // The obs time makes it one calibration point per METAR report.
                     .onChange(of: combined) { _, newCombined in
                         if let slp = newCombined.currentPressure {
-                            barometer.attemptCalibration(metarSLP: slp)
+                            barometer.attemptCalibration(
+                                metarSLP: slp,
+                                observedAt: newCombined.observedSeries.last?.t)
                         }
                     }
 

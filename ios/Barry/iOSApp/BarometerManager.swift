@@ -46,6 +46,11 @@ struct MicroTrend: Equatable {
 struct CalibrationState: Equatable, Codable {
     let offset: Double
     let calibratedAt: Date
+    /// The station observation this point was paired against. Drives dedupe: one
+    /// calibration point per METAR obs, so frequent app refreshes against the same
+    /// (frozen) report can't cluster the model or absorb between-report weather
+    /// change into the offset. Optional so pre-existing persisted points decode.
+    var metarObsTime: Date? = nil
 
     /// A sudden jump of this magnitude means the user changed altitude, not the weather.
     static let maxOffsetJump: Double = 5.0
@@ -54,8 +59,10 @@ struct CalibrationState: Equatable, Codable {
         stationPressureHPa + offset
     }
 
-    static func make(metarSLP: Double, phonePressureHPa: Double, at date: Date = Date()) -> CalibrationState {
-        CalibrationState(offset: metarSLP - phonePressureHPa, calibratedAt: date)
+    static func make(metarSLP: Double, phonePressureHPa: Double, at date: Date = Date(),
+                     obsTime: Date? = nil) -> CalibrationState {
+        CalibrationState(offset: metarSLP - phonePressureHPa, calibratedAt: date,
+                         metarObsTime: obsTime)
     }
 }
 
@@ -65,13 +72,15 @@ func isAltitudeJump(from existing: CalibrationState, to incoming: CalibrationSta
 
 // MARK: - CalibrationModel (multi-point, persistable)
 
-/// Keeps the last few calibration points (~6h) and derives a robust offset by
-/// averaging them — so one noisy METAR can't yank the live reading — plus a drift
-/// estimate (how fast the offset is wandering, i.e. sensor drift). Pure + Codable
-/// so it persists across launches and is unit-testable.
+/// Keeps the last several calibration points (~12h) and derives a robust offset
+/// as their median — so a noisy or outlier METAR can't yank the live reading —
+/// plus a drift estimate (how fast the offset is wandering, i.e. sensor drift).
+/// With one point per METAR obs (deduped upstream) the window genuinely spans
+/// hours, which is what makes the drift fit meaningful. Pure + Codable so it
+/// persists across launches and is unit-testable.
 struct CalibrationModel: Equatable, Codable {
-    static let maxPoints = 8
-    static let maxAgeSeconds: Double = 6 * 3600
+    static let maxPoints = 12
+    static let maxAgeSeconds: Double = 12 * 3600
     static let maxOffsetJump = CalibrationState.maxOffsetJump
     /// Cap how far past the last calibration the drift trend is extrapolated.
     static let maxExtrapolationHours: Double = 2.0
@@ -80,10 +89,19 @@ struct CalibrationModel: Equatable, Codable {
 
     var points: [CalibrationState] = []
 
-    /// Robust offset = mean of retained per-point offsets. nil when empty.
+    /// Robust offset = MEDIAN of retained per-point offsets — outlier-resistant
+    /// beyond what the altitude-jump gate alone provides. nil when empty.
     var offset: Double? {
         guard !points.isEmpty else { return nil }
-        return points.map(\.offset).reduce(0, +) / Double(points.count)
+        let sorted = points.map(\.offset).sorted()
+        let n = sorted.count
+        return n % 2 == 1 ? sorted[n / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2
+    }
+
+    /// True when a point paired against this station observation is already
+    /// retained — the caller should skip adding a duplicate.
+    func containsObservation(_ obsTime: Date) -> Bool {
+        points.contains { $0.metarObsTime == obsTime }
     }
 
     var calibratedAt: Date? { points.last?.calibratedAt }
@@ -161,7 +179,8 @@ struct CalibrationModel: Equatable, Codable {
     /// regression's slope, so drift tracking survives the move.
     mutating func shiftOffsets(by delta: Double) {
         points = points.map { CalibrationState(offset: $0.offset + delta,
-                                               calibratedAt: $0.calibratedAt) }
+                                               calibratedAt: $0.calibratedAt,
+                                               metarObsTime: $0.metarObsTime) }
     }
 }
 
@@ -303,6 +322,19 @@ struct SampleBuffer: Equatable {
         return win.map(\.stationPressureHPa).reduce(0, +) / Double(win.count)
     }
 
+    /// Mean raw pressure from calibration-grade samples within ±`halfWindow` of the
+    /// station's observation time — pairs the phone with the station AT the moment
+    /// it reported, not "now" (pressure may have moved since). Falls back to the
+    /// trailing-window average when nothing surrounds the obs (app opened later).
+    func averageStationPressure(around obsTime: Date, halfWindow: Double = 300) -> Double? {
+        let win = samples.filter {
+            $0.trusted && $0.stationary
+                && abs($0.date.timeIntervalSince(obsTime)) <= halfWindow
+        }
+        guard !win.isEmpty else { return averageStationPressure() }
+        return win.map(\.stationPressureHPa).reduce(0, +) / Double(win.count)
+    }
+
     /// Calibrated (SLP-equivalent) points for the chart trace, oldest → newest.
     func phoneTrace() -> [(Date, Double)] {
         trustedSamples().compactMap { s in s.slpEquivalent.map { (s.date, $0) } }
@@ -345,6 +377,7 @@ final class BarometerManager: ObservableObject {
 
     private var model = CalibrationModel()
     private var lastMetarSLP: Double?
+    private var lastMetarObsTime: Date?
     private static let storeKey = "barometer.calibration.v1"
 
     /// Altitude (m, MSL) captured at the last calibration — the datum the altitude
@@ -461,10 +494,20 @@ final class BarometerManager: ObservableObject {
     /// Call whenever PressureStore receives a fresh METAR with a valid SLP.
     /// Adds a calibration point (when stationary), folding it into the robust offset;
     /// a large deviation is treated as an altitude change and resets the history.
-    func attemptCalibration(metarSLP: Double) {
+    /// One point per station observation: refreshes that carry the same (frozen)
+    /// METAR are skipped, so between-report weather change can't bias the offset
+    /// and the retained points genuinely span hours (what drift fitting needs).
+    func attemptCalibration(metarSLP: Double, observedAt: Date? = nil) {
         lastMetarSLP = metarSLP
-        guard gate.isStationary, let phonePressure = buffer.averageStationPressure() else { return }
-        let point = CalibrationState.make(metarSLP: metarSLP, phonePressureHPa: phonePressure)
+        lastMetarObsTime = observedAt
+        if let observedAt, model.containsObservation(observedAt) { return }
+        guard gate.isStationary else { return }
+        // Pair the phone's average AT the obs time when we have surrounding samples.
+        let phonePressureMaybe = observedAt.map { buffer.averageStationPressure(around: $0) }
+            ?? buffer.averageStationPressure()
+        guard let phonePressure = phonePressureMaybe else { return }
+        let point = CalibrationState.make(metarSLP: metarSLP, phonePressureHPa: phonePressure,
+                                          obsTime: observedAt)
         let didReset = model.add(point)
         lastResetWasAltitude = didReset
         if didReset {
@@ -493,7 +536,7 @@ final class BarometerManager: ObservableObject {
         saveModel()
         saveHistory()
         refreshDerivedState()
-        if let slp = lastMetarSLP { attemptCalibration(metarSLP: slp) }
+        if let slp = lastMetarSLP { attemptCalibration(metarSLP: slp, observedAt: lastMetarObsTime) }
     }
 
     // MARK: - On-demand measurement
@@ -512,10 +555,13 @@ final class BarometerManager: ObservableObject {
     /// but is NEVER folded into calibration (it doesn't touch the offset or the
     /// calibration buffer), so a bumpy reading can't corrupt the live value.
     @discardableResult
-    func measureNow(stationSLP: Double? = nil) async -> ManualMeasurement {
+    func measureNow(stationSLP: Double? = nil, observedAt: Date? = nil) async -> ManualMeasurement {
         // Keep the latest station SLP fresh so calibration bootstrap works even before
         // the passive calibration path has run (e.g. right after first launch).
-        if let stationSLP { lastMetarSLP = stationSLP }
+        if let stationSLP {
+            lastMetarSLP = stationSLP
+            lastMetarObsTime = observedAt
+        }
 
         // Sample the barometer for a few seconds. Whether the reading is usable is
         // decided by the barometer's *own steadiness*, not the coarse activity
@@ -540,7 +586,8 @@ final class BarometerManager: ObservableObject {
         // produces a value rather than silently doing nothing.
         if model.offset == nil, !moving {
             if let metar = lastMetarSLP {
-                model.add(CalibrationState.make(metarSLP: metar, phonePressureHPa: raw, at: now))
+                model.add(CalibrationState.make(metarSLP: metar, phonePressureHPa: raw,
+                                                at: now, obsTime: lastMetarObsTime))
                 provisionalOffset = nil
                 syncOutputs()
                 saveModel()
@@ -578,14 +625,17 @@ final class BarometerManager: ObservableObject {
     /// *historical* activity, takes a brief altimeter sample, and folds it into the
     /// calibration model. No-op if the sensor is unavailable or the device wasn't
     /// recently still. Does its own start/stop — independent of the live session.
-    func recalibrateInBackground(metarSLP: Double) async {
+    func recalibrateInBackground(metarSLP: Double, observedAt: Date? = nil) async {
         lastMetarSLP = metarSLP
+        lastMetarObsTime = observedAt
+        if let observedAt, model.containsObservation(observedAt) { return }
         guard CMAltimeter.isRelativeAltitudeAvailable() else { return }
         guard await wasRecentlyStationary() else { return }
         guard let stats = await sampleAltimeterOnce() else { return }
         let pressure = stats.mean
         let now = Date()
-        model.add(CalibrationState.make(metarSLP: metarSLP, phonePressureHPa: pressure, at: now))
+        model.add(CalibrationState.make(metarSLP: metarSLP, phonePressureHPa: pressure,
+                                        at: now, obsTime: observedAt))
         syncOutputs()
         saveModel()
         if let slp = model.slpEquivalent(for: pressure, at: now), history.record(slp: slp, at: now) {

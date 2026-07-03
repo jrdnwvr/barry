@@ -210,7 +210,7 @@ struct BarometerTests {
         m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 990, at: t))                    // +24
         m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 989,
                                     at: t.addingTimeInterval(3600)))                                  // +25
-        #expect(m.offset == 24.5, "Robust offset is the mean of retained points")
+        #expect(m.offset == 24.5, "Robust offset (median; = mean for 2 points)")
         #expect(m.slpEquivalent(for: 990) == 1014.5)
     }
 
@@ -282,10 +282,47 @@ struct BarometerTests {
         var m = CalibrationModel()
         let t = Date(timeIntervalSince1970: 1_000_000)
         m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 990, at: t))
-        // 7h later — the first point is older than the 6h window and is pruned.
+        // 13h later — the first point is older than the 12h window and is pruned.
         m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 990,
-                                    at: t.addingTimeInterval(7 * 3600)))
-        #expect(m.points.count == 1, "Points older than 6h are dropped")
+                                    at: t.addingTimeInterval(13 * 3600)))
+        #expect(m.points.count == 1, "Points older than the retention window are dropped")
+    }
+
+    @Test func offsetIsMedianNotMean() {
+        var m = CalibrationModel()
+        let t = Date(timeIntervalSince1970: 1_000_000)
+        // Two agreeing points + one 4-hPa outlier (inside the 5-hPa jump gate, so
+        // it's retained). Median ignores it; a mean would be dragged ~1.3 hPa.
+        m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 990, at: t))          // +24.0
+        m.add(CalibrationState.make(metarSLP: 1014.2, phonePressureHPa: 990,
+                                    at: t.addingTimeInterval(3600)))                        // +24.2
+        m.add(CalibrationState.make(metarSLP: 1018, phonePressureHPa: 990,
+                                    at: t.addingTimeInterval(7200)))                        // +28.0 outlier
+        #expect(abs((m.offset ?? 0) - 24.2) < 1e-9, "Median resists a single outlier point")
+    }
+
+    @Test func modelTracksObservationDedupe() {
+        var m = CalibrationModel()
+        let t = Date(timeIntervalSince1970: 1_000_000)
+        let obs = t.addingTimeInterval(-600)
+        m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 990, at: t, obsTime: obs))
+        #expect(m.containsObservation(obs), "The paired obs is remembered")
+        #expect(!m.containsObservation(obs.addingTimeInterval(3600)),
+                "A new obs is not falsely deduped")
+    }
+
+    @Test func averageAroundObsTimePairsLikeWithLike() {
+        var b = SampleBuffer()
+        let t = Date(timeIntervalSince1970: 1_000_000)
+        // Pressure fell 0.6 hPa between the obs (at t) and "now" (t+30 min).
+        b.add(BarometerSample(date: t, stationPressureHPa: 1000.0,
+                              slpEquivalent: nil, trusted: true, stationary: true))
+        b.add(BarometerSample(date: t.addingTimeInterval(1800), stationPressureHPa: 999.4,
+                              slpEquivalent: nil, trusted: true, stationary: true))
+        // Around the obs time → the reading taken THEN, not the newer one.
+        #expect(b.averageStationPressure(around: t) == 1000.0)
+        // No samples near a much older obs → falls back to the trailing average.
+        #expect(b.averageStationPressure(around: t.addingTimeInterval(-7200)) != nil)
     }
 
     // MARK: - Carried-clean physics gating (trusting data while classifier says moving)

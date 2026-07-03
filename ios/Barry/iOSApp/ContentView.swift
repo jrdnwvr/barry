@@ -87,8 +87,6 @@ struct ContentView: View {
 
                 // The focused trend: window toggle + chart + the honest caveat.
                 VStack(alignment: .leading, spacing: 8) {
-                    SectionBar(title: "Pressure Trend", color: ChecklistPalette.slate)
-
                     Picker("Window", selection: $chartWindowRaw) {
                         ForEach(ChartWindow.allCases) { w in
                             Text(w.label).tag(w.rawValue)
@@ -117,10 +115,7 @@ struct ContentView: View {
                 }
 
                 // Secondary: wind + rain confirmation, always expanded.
-                VStack(alignment: .leading, spacing: 8) {
-                    SectionBar(title: "Conditions", color: ChecklistPalette.teal)
-                    ConfirmationOverlayView(combined: combined, now: store.now)
-                }
+                ConfirmationOverlayView(combined: combined, now: store.now)
 
                 // Sensor vs Station: a compact entry row — the full comparison panel
                 // (windows, legend, Δ, Measure now) lives on its own screen so the
@@ -165,14 +160,12 @@ struct ContentView: View {
 private struct DataSourceFootnote: View {
     let combined: CombinedResponse
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            DotLeaderRow(label: "Station",
-                         value: combined.pressure.name ?? combined.pressure.station)
-            DotLeaderRow(label: "Source", value: combined.pressure.source)
-            DotLeaderRow(label: "Updated",
-                         value: combined.pressure.cachedAt.formatted(date: .omitted, time: .shortened))
+        VStack(alignment: .leading, spacing: 2) {
+            Text("\(combined.pressure.name ?? combined.pressure.station) · \(combined.pressure.source)")
+            Text("Updated \(combined.pressure.cachedAt.formatted(date: .omitted, time: .shortened))")
         }
-        .opacity(0.75)
+        .font(.caption2)
+        .foregroundStyle(.tertiary)
     }
 }
 

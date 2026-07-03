@@ -353,30 +353,27 @@ struct SensorStationRow: View {
             SensorStationDetailView(combined: combined, now: now, unit: unit,
                                     barometer: barometer)
         } label: {
-            // Checklist section bar as a tappable row — orange = the sensor/local
-            // family (mirrors the checklist's "STARTING ENGINE" bar).
-            HStack(spacing: 0) {
-                Rectangle()
-                    .fill(.primary)
-                    .frame(width: 4)
-                HStack(spacing: 8) {
-                    Text("SENSOR VS STATION")
-                        .font(.system(size: 13, weight: .bold, design: .monospaced))
-                        .kerning(1.1)
-                    Spacer(minLength: 0)
-                    if let d = divergence {
-                        Text("Δ \(unit.formatDelta(d))")
-                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                            .accessibilityLabel("Phone differs from station by \(unit.formatDelta(d))")
-                    }
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.bold))
+            HStack(spacing: 8) {
+                Image(systemName: "dot.scope")
+                    .font(.subheadline)
+                    .foregroundStyle(.orange)
+                Text("Sensor vs Station")
+                    .font(.subheadline.weight(.medium))
+                Spacer()
+                if let d = divergence {
+                    Text("Δ \(unit.formatDelta(d))")
+                        .font(.caption).monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("Phone differs from station by \(unit.formatDelta(d))")
                 }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 7)
-                .background(ChecklistPalette.orange)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
+            .background(Color(.secondarySystemBackground),
+                        in: RoundedRectangle(cornerRadius: 12))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

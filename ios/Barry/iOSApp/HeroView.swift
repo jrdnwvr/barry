@@ -46,19 +46,6 @@ struct HeroView: View {
     private var isLocal: Bool { localReading != nil }
     private var displayValue: Double? { localReading?.slp ?? combined.currentPressure }
 
-    /// Banner background: the tendency palette, remapped for white-text contrast
-    /// (the glyph tints are calibrated for colored-on-light, not white-on-color).
-    private var verdictColor: Color {
-        switch tendency?.cls ?? .steady {
-        case .rising, .risingFast:
-            return Color(red: 0.13, green: 0.55, blue: 0.28)
-        case .steady:
-            return ChecklistPalette.slate
-        case .falling, .fallingMod, .fallingFast:
-            return TendencyClass.amberToRed(max(0.45, tendency?.intensity ?? 0))
-        }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             StatusRow(combined: combined, barometer: barometer, now: now,
@@ -88,10 +75,9 @@ struct HeroView: View {
                 if let trend = barometer.microTrend { microLead(trend) }
             }
 
-            // The verdict as a checklist-style directive banner ("LAND STRAIGHT
-            // AHEAD" treatment) — tendency color carries severity. Intensity is
-            // floored so pale low-intensity tints keep white-text contrast.
-            DirectiveBanner(text: combined.verdict, color: verdictColor)
+            Text(combined.verdict)
+                .font(.headline)
+                .fixedSize(horizontal: false, vertical: true)
 
             if let note = honestyNote {
                 Text(note).font(.caption).foregroundStyle(.secondary)

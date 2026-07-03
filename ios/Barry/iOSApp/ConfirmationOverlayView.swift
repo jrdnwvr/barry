@@ -115,7 +115,9 @@ struct ConfirmationOverlayView: View {
 
     private var precipChart: some View {
         VStack(alignment: .leading, spacing: 4) {
-            SectionBar(title: "Precip Probability", color: ChecklistPalette.blue, compact: true)
+            Label("Precip probability", systemImage: "cloud.rain")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
 
             Chart {
                 ForEach(precipHours) { h in
@@ -162,7 +164,9 @@ struct ConfirmationOverlayView: View {
 
     private var windChart: some View {
         VStack(alignment: .leading, spacing: 4) {
-            SectionBar(title: "Wind (\(windUnit.label))", color: ChecklistPalette.teal, compact: true)
+            Label("Wind (\(windUnit.label))", systemImage: "wind")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
 
             Chart {
                 // Sustained wind: just the line — no under-fill (the old 0→wind

@@ -50,7 +50,6 @@
 		62FE249CDA4A80409C304F3D /* Tendency.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2542DA2C850B2399B31A9069 /* Tendency.swift */; };
 		63129BEFD89CFA743A98860E /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918B4D14CC966B0E820FC1AC /* Models.swift */; };
 		6341C06F45343F3FAAAE7353 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918B4D14CC966B0E820FC1AC /* Models.swift */; };
-		7205F45FA663D38FC9754D7D /* ChecklistStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C35CE2E7C89988019D2C6AD4 /* ChecklistStyle.swift */; };
 		73C115787B3F6EB1F3D44776 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918B4D14CC966B0E820FC1AC /* Models.swift */; };
 		772708512B575F16B6A02B14 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0094727B647701DDDCF17BD2 /* LocationManager.swift */; };
 		77A46CEAE1569CD88532A37F /* BarometerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C00F07F019E06DA06E95BD0 /* BarometerTests.swift */; };
@@ -194,7 +193,6 @@
 		A59F4AD2D2CF0AC8FB31B534 /* ConfirmationOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmationOverlayView.swift; sourceTree = "<group>"; };
 		B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureHistory.swift; sourceTree = "<group>"; };
 		C1326419A7770149C91B0438 /* PhoneWidgetViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWidgetViews.swift; sourceTree = "<group>"; };
-		C35CE2E7C89988019D2C6AD4 /* ChecklistStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChecklistStyle.swift; sourceTree = "<group>"; };
 		CD077DE63D0DE437229C43CC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CF51EF6C7C37D4CEE92CE308 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		DA12AC45B8A41856114FD9A7 /* SensorComparisonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorComparisonView.swift; sourceTree = "<group>"; };
@@ -322,7 +320,6 @@
 				02CC4610E9A811E4A3554DCB /* BarometerManager.swift */,
 				9639018DA53DA80272AC71E9 /* Barry.entitlements */,
 				4B8FF4A39677C2C8F46B98F7 /* BarryApp.swift */,
-				C35CE2E7C89988019D2C6AD4 /* ChecklistStyle.swift */,
 				A59F4AD2D2CF0AC8FB31B534 /* ConfirmationOverlayView.swift */,
 				4EB1F388C1A5FE3D18F1D62E /* ContentView.swift */,
 				031482E889A2274CBD689E88 /* ForecastCaveatView.swift */,
@@ -572,7 +569,6 @@
 				8F156D0C3F3371A2376F2394 /* BarometerManager.swift in Sources */,
 				D3CCE6CB0DB066A238922179 /* BarryAPI.swift in Sources */,
 				DACD1A75954EE1A27EDEC976 /* BarryApp.swift in Sources */,
-				7205F45FA663D38FC9754D7D /* ChecklistStyle.swift in Sources */,
 				3FD01657A6175EE55DF94D91 /* ConfirmationOverlayView.swift in Sources */,
 				E1DA0A2BA6D5DAE408366B62 /* ContentView.swift in Sources */,
 				17B2F3F6A33ED2C6DB766640 /* ForecastCaveatView.swift in Sources */,

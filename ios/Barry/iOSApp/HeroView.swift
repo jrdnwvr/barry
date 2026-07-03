@@ -36,7 +36,7 @@ struct HeroView: View {
     /// capped so a stale reading can't masquerade. Deliberately does NOT require the
     /// device to be stationary right now, so moving the phone doesn't hide it.
     private var localReading: (slp: Double, at: Date)? {
-        guard barometerEnabled, barometer.isCalibrated,
+        guard barometerEnabled, barometer.isCalibrated || barometer.isProvisional,
               let r = barometer.lastLocalReading else { return nil }
         let sameMetarPeriod = r.at >= lastMetarTime || now.timeIntervalSince(r.at) <= 3600
         let notAncient = now.timeIntervalSince(r.at) <= 2 * 3600
@@ -45,11 +45,6 @@ struct HeroView: View {
 
     private var isLocal: Bool { localReading != nil }
     private var displayValue: Double? { localReading?.slp ?? combined.currentPressure }
-
-    private var minsSinceCalibration: Int? {
-        barometer.calibratedAt.map { max(0, Int(now.timeIntervalSince($0) / 60)) }
-    }
-    private var calibrationStale: Bool { (minsSinceCalibration ?? 0) > 75 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -71,10 +66,13 @@ struct HeroView: View {
                 if let t = tendency { TendencyBadge(tendency: t, unit: unit) }
             }
 
+            // Only user-actionable state lives here: the LOCAL source tag (+ tap to
+            // compare) and the micro-trend — a *weather* signal. Machinery state
+            // (calibration age, drift, Recalibrate) moved to Sensor vs Station:
+            // the engine self-heals at the next report, so it isn't the user's job.
             if isLocal {
                 provenanceRow
                 if let trend = barometer.microTrend { microLead(trend) }
-                calibrationLine
             }
 
             Text(combined.verdict)
@@ -96,7 +94,6 @@ struct HeroView: View {
             Text(valueString(v, live: isLocal))
                 .font(.system(size: 44, weight: .semibold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(isLocal && calibrationStale ? .secondary : .primary)
             Text(unit.label)
                 .font(.headline)
                 .foregroundStyle(.secondary)
@@ -177,36 +174,6 @@ struct HeroView: View {
         let hours = max(Double(t.windowMinutes) / 60.0, 1.0 / 12.0)
         let local3h = t.deltaHPa / hours * 3.0
         return abs(local3h) > abs(metar3h) + 0.7 && (local3h * metar3h >= 0 || abs(metar3h) < 0.3)
-    }
-
-    // MARK: - Calibration line
-
-    @ViewBuilder
-    private var calibrationLine: some View {
-        if barometer.lastResetWasAltitude {
-            Label("elevation changed — recalibrating at next report",
-                  systemImage: "arrow.up.arrow.down")
-                .font(.caption2)
-                .foregroundStyle(.orange)
-        } else if let mins = minsSinceCalibration {
-            HStack(spacing: 8) {
-                Text(calibrationStale
-                     ? "calibration stale (\(mins)m) vs \(combined.pressure.station)"
-                     : "calibrated \(mins)m ago vs \(combined.pressure.station)")
-                    .font(.caption2)
-                    .foregroundStyle(calibrationStale ? Color.orange : Color.secondary)
-
-                Button("Recalibrate") { barometer.recalibrate() }
-                    .font(.caption2.weight(.medium))
-                    .buttonStyle(.borderless)
-
-                if let drift = barometer.driftPerHour, abs(drift) >= 0.3 {
-                    Text("· drift \(String(format: "%.1f", abs(drift))) hPa/h")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-        }
     }
 
     // MARK: - Honesty note

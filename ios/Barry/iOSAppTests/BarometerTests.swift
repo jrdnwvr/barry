@@ -288,6 +288,43 @@ struct BarometerTests {
         #expect(m.points.count == 1, "Points older than 6h are dropped")
     }
 
+    // MARK: - Altitude bridge (GPS-referenced offset shifting)
+
+    @Test func shiftOffsetsMovesAllPointsUniformly() {
+        var m = CalibrationModel()
+        let t = Date(timeIntervalSince1970: 1_000_000)
+        m.add(CalibrationState(offset: 10.0, calibratedAt: t))
+        m.add(CalibrationState(offset: 10.4, calibratedAt: t.addingTimeInterval(600)))
+        // Climb 20 m → raw pressure drops ~2.36 hPa → offset must grow to match.
+        m.shiftOffsets(by: 20 * PressureAltitude.hPaPerMeter)
+        #expect(abs((m.offset ?? 0) - (10.2 + 2.36)) < 0.01,
+                "Mean offset shifts by Δh × hPa/m")
+    }
+
+    @Test func shiftOffsetsPreservesDrift() {
+        var m = CalibrationModel()
+        let t = Date(timeIntervalSince1970: 1_000_000)
+        // 0.5 hPa/h drift across 3 points.
+        for i in 0..<3 {
+            m.add(CalibrationState(offset: 10.0 + 0.5 * Double(i),
+                                   calibratedAt: t.addingTimeInterval(Double(i) * 3600)))
+        }
+        let before = m.driftPerHour
+        m.shiftOffsets(by: 2.4)
+        #expect(before != nil && m.driftPerHour != nil)
+        #expect(abs((m.driftPerHour ?? 0) - (before ?? 0)) < 1e-9,
+                "A uniform shift must not change the drift slope")
+    }
+
+    @Test func standardAtmosphereReduction() {
+        // At sea level the reduction is the identity.
+        #expect(abs(PressureAltitude.standardSLP(rawHPa: 1013.25, altitudeM: 0) - 1013.25) < 1e-9)
+        // At 200 m, SLP ≈ raw + ~23.6 hPa (0.118 hPa/m regime).
+        let slp = PressureAltitude.standardSLP(rawHPa: 990.0, altitudeM: 200)
+        #expect(abs(slp - (990.0 + 200 * PressureAltitude.hPaPerMeter)) < 0.5,
+                "ISA reduction should agree with the linear rate for small heights, got \(slp)")
+    }
+
     // MARK: - PressureHistory (persisted, downsampled long-horizon log — Task 2)
 
     @Test func historyDownsamplesRapidSamples() {

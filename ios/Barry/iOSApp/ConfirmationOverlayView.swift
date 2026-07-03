@@ -169,16 +169,10 @@ struct ConfirmationOverlayView: View {
                 .foregroundStyle(.secondary)
 
             Chart {
+                // Sustained wind: just the line — no under-fill (the old 0→wind
+                // area read as a mystery wedge once the gust band was added).
                 ForEach(windHours) { h in
                     if let w = h.windspeed {
-                        AreaMark(
-                            x: .value("Time", h.t),
-                            yStart: .value("Base", 0),
-                            yEnd: .value("Wind", windUnit.convert(w))
-                        )
-                        .foregroundStyle(.teal.opacity(0.12))
-                        .interpolationMethod(.catmullRom)
-
                         LineMark(
                             x: .value("Time", h.t),
                             y: .value("Wind", windUnit.convert(w)),
@@ -191,22 +185,24 @@ struct ConfirmationOverlayView: View {
                 }
 
                 // Gust band: shaded from sustained up to the gust forecast, with a
-                // faint dashed ceiling. Collapses to nothing in laminar air and
-                // balloons ahead of fronts — the geometry IS the information. Dashed
-                // because gusts here are model output, not observations.
+                // faint dashed ceiling. Drawn at EVERY hour (zero-width where gusts
+                // don't exceed sustained) so its bottom edge interpolates through
+                // the same points as the line and stays glued to it — skipping
+                // hours makes the band detach and float. Dashed because gusts here
+                // are model output, not observations.
                 ForEach(windHours) { h in
-                    if let w = h.windspeed, let g = h.windgust, g > w {
+                    if let w = h.windspeed, let g = h.windgust {
                         AreaMark(
                             x: .value("Time", h.t),
                             yStart: .value("Wind", windUnit.convert(w)),
-                            yEnd: .value("Gust", windUnit.convert(g))
+                            yEnd: .value("Gust", windUnit.convert(max(g, w)))
                         )
                         .foregroundStyle(.teal.opacity(0.16))
                         .interpolationMethod(.catmullRom)
 
                         LineMark(
                             x: .value("Time", h.t),
-                            y: .value("Gust", windUnit.convert(g)),
+                            y: .value("Gust", windUnit.convert(max(g, w))),
                             series: .value("Series", "gust")
                         )
                         .foregroundStyle(.teal.opacity(0.45))

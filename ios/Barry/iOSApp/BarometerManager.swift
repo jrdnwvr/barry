@@ -11,6 +11,7 @@
 //  The feature is off by default. Start/stop is controlled externally (BarryApp reads
 //  the "phoneBarometerEnabled" AppStorage key and calls start()/stop() accordingly).
 
+import CoreLocation
 import CoreMotion
 import Foundation
 import SwiftUI
@@ -147,6 +148,31 @@ struct CalibrationModel: Equatable, Codable {
         let cutoff = now.addingTimeInterval(-Self.maxAgeSeconds)
         points.removeAll { $0.calibratedAt < cutoff }
     }
+
+    /// Shift every retained offset by `delta` hPa — used when a measured altitude
+    /// change moves the sensor's datum (offset = altitude term + sensor bias; the
+    /// altitude term changed, the bias didn't). A uniform shift preserves the drift
+    /// regression's slope, so drift tracking survives the move.
+    mutating func shiftOffsets(by delta: Double) {
+        points = points.map { CalibrationState(offset: $0.offset + delta,
+                                               calibratedAt: $0.calibratedAt) }
+    }
+}
+
+// MARK: - Altitude ↔ pressure helpers
+
+enum PressureAltitude {
+    /// Local rate of pressure change with height near the surface (hPa per meter).
+    /// ~0.120 at sea level, ~0.110 at 800 m — 0.118 is a good constant for the
+    /// small moves (hills, garages, buildings) the altitude bridge handles.
+    static let hPaPerMeter = 0.118
+
+    /// ISA (standard atmosphere) sea-level reduction: what SLP would be if the
+    /// sensor reading `rawHPa` was taken `altitudeM` above sea level. Used only for
+    /// the GPS *bootstrap* (±1–2 hPa) — METAR calibration replaces it when it lands.
+    static func standardSLP(rawHPa: Double, altitudeM h: Double) -> Double {
+        rawHPa * pow(1.0 - 0.0065 * h / 288.15, -5.257)
+    }
 }
 
 // MARK: - MotionGate (pure state machine)
@@ -264,9 +290,26 @@ final class BarometerManager: ObservableObject {
     /// True when the most recent calibration discarded history as an altitude change.
     @Published private(set) var lastResetWasAltitude: Bool = false
 
+    /// Provisional GPS-altitude-derived offset (ISA reduction). Drives the live
+    /// value before the first METAR calibration; never persisted, never fed into
+    /// the history log, and cleared the moment a real calibration point lands.
+    @Published private(set) var provisionalOffset: Double?
+
     private var model = CalibrationModel()
     private var lastMetarSLP: Double?
     private static let storeKey = "barometer.calibration.v1"
+
+    /// Altitude (m, MSL) captured at the last calibration — the datum the altitude
+    /// bridge compares against after the device moves. Persisted with the model.
+    private var referenceAltitudeM: Double?
+    private static let refAltitudeKey = "barometer.refAltitude.v1"
+    /// Ignore altitude deltas below this — inside GPS noise (≈0.5 hPa).
+    private static let minBridgeMeters: Double = 4.0
+    private var bridgeInFlight = false
+
+    /// Dedicated best-accuracy location source for vertical fixes (the shared
+    /// station-lookup manager uses km accuracy, useless for altitude).
+    private lazy var altitudeLocation = LocationManager(desiredAccuracy: kCLLocationAccuracyBest)
 
     /// Persisted, downsampled long-horizon log of calibrated SLP readings (Task 2).
     private var history = PressureHistory()
@@ -284,6 +327,15 @@ final class BarometerManager: ObservableObject {
 
     var isCalibrated: Bool { offsetHPa != nil }
 
+    /// True while running on the GPS-altitude bootstrap (no METAR calibration yet):
+    /// absolute values are approximate (±1–2 hPa); trends are already sound.
+    var isProvisional: Bool { offsetHPa == nil && provisionalOffset != nil }
+
+    /// Model offset when calibrated, else the GPS bootstrap offset.
+    private func effectiveSLP(for rawHPa: Double, at date: Date) -> Double? {
+        model.slpEquivalent(for: rawHPa, at: date) ?? provisionalOffset.map { rawHPa + $0 }
+    }
+
     /// Barry's current motion verdict — true only when the device is classified still.
     /// Drives the "you're moving" warning before a manual reading.
     var isStationaryNow: Bool { gate.isStationary }
@@ -293,6 +345,15 @@ final class BarometerManager: ObservableObject {
 
     /// Persisted calibrated SLP trace over the last ~48 h (drives the Task 3 overlay).
     var phoneHistoryTrace: [(Date, Double)] { history.trace() }
+
+    /// Persisted trusted trace clipped to the last 2 h — the hero chart's orange
+    /// "local" accent. Unlike `phoneTrace` (in-memory buffer, retroactively wiped
+    /// the moment motion is detected), this persists across movement, matching the
+    /// headline local reading: last *good* readings stay visible and only age out.
+    var recentLocalTrace: [(Date, Double)] {
+        let cutoff = Date().addingTimeInterval(-2 * 3600)
+        return history.trace().filter { $0.0 >= cutoff }
+    }
 
     /// Most recent trusted local SLP and when it was taken. Unlike `latestLocalSLP`
     /// (which is nil while moving), this persists across motion — so the UI can keep
@@ -307,6 +368,7 @@ final class BarometerManager: ObservableObject {
     init() {
         loadModel()
         loadHistory()
+        loadReferenceAltitude()
     }
 
     // MARK: Lifecycle
@@ -321,7 +383,13 @@ final class BarometerManager: ObservableObject {
             // A phone already at rest when we start won't get a fresh "stationary"
             // event (updates are change-driven), so seed from recent history — else
             // the gate can sit in .moving indefinitely and never record a thing.
-            Task { await seedStationarityIfResting() }
+            // Then: bridge any altitude change since the last calibration, and if
+            // never calibrated, bootstrap a provisional offset from GPS altitude.
+            Task {
+                await seedStationarityIfResting()
+                await bridgeForAltitudeChangeIfNeeded()
+                await bootstrapFromGPSIfNeeded()
+            }
         } else {
             // No motion coprocessor (some iPads) — treat device as stationary so
             // calibration can proceed; user understands motion-gating won't fire.
@@ -351,10 +419,14 @@ final class BarometerManager: ObservableObject {
             // Altitude changed between METAR cycles; discard the stale local trace too.
             buffer = SampleBuffer()
         }
+        provisionalOffset = nil  // real calibration supersedes the GPS bootstrap
         syncOutputs()
         backfillCalibration()
         saveModel()
         refreshDerivedState()
+        // Stamp the altitude this calibration was taken at — the datum the bridge
+        // compares against after the next move.
+        Task { await updateReferenceAltitude() }
     }
 
     /// Manual hard reset: forget the offset history and recalibrate from scratch
@@ -362,6 +434,7 @@ final class BarometerManager: ObservableObject {
     func recalibrate() {
         model = CalibrationModel()
         lastResetWasAltitude = false
+        provisionalOffset = nil
         buffer = SampleBuffer()
         history = PressureHistory()
         syncOutputs()
@@ -410,21 +483,31 @@ final class BarometerManager: ObservableObject {
         let now = Date()
 
         // Bootstrap calibration from this very reading when we're still but not yet
-        // calibrated — so a deliberate "Measure now" both calibrates against the
-        // latest station SLP and logs a point, instead of silently doing nothing.
-        if model.offset == nil, !moving, let metar = lastMetarSLP {
-            model.add(CalibrationState.make(metarSLP: metar, phonePressureHPa: raw, at: now))
-            syncOutputs()
-            saveModel()
+        // calibrated: prefer the latest station SLP (full precision); fall back to
+        // GPS altitude + ISA reduction (approximate) so a deliberate tap always
+        // produces a value rather than silently doing nothing.
+        if model.offset == nil, !moving {
+            if let metar = lastMetarSLP {
+                model.add(CalibrationState.make(metarSLP: metar, phonePressureHPa: raw, at: now))
+                provisionalOffset = nil
+                syncOutputs()
+                saveModel()
+                Task { await updateReferenceAltitude() }
+            } else if provisionalOffset == nil, let fix = await sampleAltitude() {
+                provisionalOffset = PressureAltitude.standardSLP(rawHPa: raw,
+                                                                 altitudeM: fix.meters) - raw
+            }
         }
 
-        let slp = model.slpEquivalent(for: raw, at: now)  // now set once calibrated
+        let calibratedSLP = model.slpEquivalent(for: raw, at: now)
+        let slp = calibratedSLP ?? provisionalOffset.map { raw + $0 }
 
         var recorded = false
         if let slp {
-            // Always log the point (force past the downsample throttle) so a deliberate
-            // tap always lands on the chart.
-            if history.record(slp: slp, at: now, force: true) {
+            // Log deliberate taps (force past the downsample throttle) — but only
+            // METAR-calibrated values enter the persisted history; the GPS bootstrap
+            // drives the live display without contaminating the log.
+            if calibratedSLP != nil, history.record(slp: slp, at: now, force: true) {
                 saveHistory()
                 recorded = true
             }
@@ -523,6 +606,113 @@ final class BarometerManager: ObservableObject {
         refreshDerivedState()
     }
 
+    // MARK: - Altitude sensing (fused absolute altitude → GPS fallback)
+
+    struct AltitudeFix {
+        let meters: Double    // MSL
+        let accuracy: Double  // 1σ vertical, meters
+    }
+
+    /// Reject fixes worse than this — ±8 m ≈ ±1 hPa, the useful floor.
+    private static let maxAltitudeAccuracy: Double = 8.0
+
+    /// Best available altitude: CMAltimeter's *absolute altitude* first (fuses
+    /// GPS + barometer + Wi-Fi + map data; meter-class on iPhone 12+), falling back
+    /// to a raw GPS vertical fix. nil when neither meets the accuracy gate — better
+    /// no bridge than a wrong one.
+    private func sampleAltitude() async -> AltitudeFix? {
+        if CMAltimeter.isAbsoluteAltitudeAvailable(),
+           let fix = await sampleAbsoluteAltitude(),
+           fix.accuracy <= Self.maxAltitudeAccuracy {
+            return fix
+        }
+        guard let loc = await altitudeLocation.requestLocation(),
+              loc.verticalAccuracy > 0,
+              loc.verticalAccuracy <= Self.maxAltitudeAccuracy else { return nil }
+        return AltitudeFix(meters: loc.altitude, accuracy: loc.verticalAccuracy)
+    }
+
+    /// One-shot read of the fused absolute-altitude stream (short timeout).
+    private func sampleAbsoluteAltitude(timeout: Double = 4) async -> AltitudeFix? {
+        let alt = CMAltimeter()
+        let latch = OneShotGate()
+        return await withCheckedContinuation { cont in
+            alt.startAbsoluteAltitudeUpdates(to: operationQueue) { data, _ in
+                guard let data else { return }
+                let fix = AltitudeFix(meters: data.altitude, accuracy: data.accuracy)
+                Task { @MainActor in
+                    guard latch.claim() else { return }
+                    alt.stopAbsoluteAltitudeUpdates()
+                    cont.resume(returning: fix)
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + timeout) {
+                Task { @MainActor in
+                    guard latch.claim() else { return }
+                    alt.stopAbsoluteAltitudeUpdates()
+                    cont.resume(returning: nil)
+                }
+            }
+        }
+    }
+
+    /// Re-stamp the calibration's altitude datum (call after adding a METAR point).
+    private func updateReferenceAltitude() async {
+        guard let fix = await sampleAltitude() else { return }
+        referenceAltitudeM = fix.meters
+        saveReferenceAltitude()
+    }
+
+    /// The altitude bridge: on coming to rest, compare current altitude against the
+    /// calibration's datum; if the device moved vertically, shift the offsets by
+    /// Δh × 0.118 hPa/m instead of serving wrong values until the next METAR
+    /// exposes the jump. METAR remains truth — the next point lands on the shifted
+    /// offsets with no jump, and full precision resumes seamlessly.
+    private func bridgeForAltitudeChangeIfNeeded() async {
+        guard !bridgeInFlight else { return }
+        bridgeInFlight = true
+        defer { bridgeInFlight = false }
+
+        guard gate.isStationary, model.offset != nil else { return }
+        guard let ref = referenceAltitudeM else {
+            // Calibrated before this feature existed — capture a datum so the
+            // NEXT move can bridge.
+            await updateReferenceAltitude()
+            return
+        }
+        guard let fix = await sampleAltitude() else { return }
+        let dh = fix.meters - ref
+        guard abs(dh) >= Self.minBridgeMeters else { return }
+
+        model.shiftOffsets(by: dh * PressureAltitude.hPaPerMeter)
+        referenceAltitudeM = fix.meters
+        saveReferenceAltitude()
+        lastResetWasAltitude = false
+        syncOutputs()
+        saveModel()
+        refreshDerivedState()
+    }
+
+    /// GPS bootstrap: before the first METAR calibration, derive an approximate
+    /// offset from altitude + ISA reduction so the app shows a local reading
+    /// immediately. Superseded (cleared) by the first real calibration point.
+    private func bootstrapFromGPSIfNeeded() async {
+        guard model.offset == nil, provisionalOffset == nil, gate.isStationary else { return }
+        guard let stats = await sampleAltimeterOnce(seconds: 2) else { return }
+        guard let fix = await sampleAltitude() else { return }
+        provisionalOffset = PressureAltitude.standardSLP(rawHPa: stats.mean,
+                                                         altitudeM: fix.meters) - stats.mean
+        refreshDerivedState()
+    }
+
+    private func loadReferenceAltitude() {
+        referenceAltitudeM = AppConfig.sharedDefaults.object(forKey: Self.refAltitudeKey) as? Double
+    }
+
+    private func saveReferenceAltitude() {
+        AppConfig.sharedDefaults.set(referenceAltitudeM, forKey: Self.refAltitudeKey)
+    }
+
     /// True if the most recent classified motion activity in the last `window`
     /// seconds was stationary. Background-safe substitute for the live settle timer.
     private func wasRecentlyStationary(window: TimeInterval = 300) async -> Bool {
@@ -619,13 +809,24 @@ final class BarometerManager: ObservableObject {
             for i in buffer.samples.indices { buffer.samples[i].trusted = false }
         }
 
+        // Came to rest → check whether we changed altitude while moving and shift
+        // the calibration accordingly (instead of serving wrong values until the
+        // next METAR exposes the jump).
+        if !wasStationary && gate.isStationary {
+            Task { await bridgeForAltitudeChangeIfNeeded() }
+        }
+
         scheduleSettleCheckIfNeeded()
     }
 
     private func handlePressure(_ pressureHPa: Double) {
         let now = Date()
         let trusted = gate.isStationary
-        let slpEquiv = trusted ? model.slpEquivalent(for: pressureHPa, at: now) : nil
+        let calibratedSLP = trusted ? model.slpEquivalent(for: pressureHPa, at: now) : nil
+        // The GPS bootstrap drives the live value too, but is kept out of the
+        // persisted history — only METAR-calibrated points are logged.
+        let slpEquiv = calibratedSLP
+            ?? (trusted ? provisionalOffset.map { pressureHPa + $0 } : nil)
         buffer.add(BarometerSample(
             date: now,
             stationPressureHPa: pressureHPa,
@@ -634,7 +835,7 @@ final class BarometerManager: ObservableObject {
         ))
         // Feed the persisted long-horizon log only with trusted, calibrated readings.
         // record() downsamples internally; persist only when a point was actually stored.
-        if let slp = slpEquiv, history.record(slp: slp, at: now) {
+        if let slp = calibratedSLP, history.record(slp: slp, at: now) {
             saveHistory()
         }
         refreshDerivedState()
@@ -649,9 +850,9 @@ final class BarometerManager: ObservableObject {
 
     private func refreshDerivedState() {
         if gate.isStationary,
-           model.offset != nil,
+           model.offset != nil || provisionalOffset != nil,
            let latest = buffer.samples.last(where: { $0.trusted }) {
-            latestLocalSLP = model.slpEquivalent(for: latest.stationPressureHPa, at: latest.date)
+            latestLocalSLP = effectiveSLP(for: latest.stationPressureHPa, at: latest.date)
         } else {
             latestLocalSLP = nil
         }
@@ -665,8 +866,12 @@ final class BarometerManager: ObservableObject {
         let delay = until.timeIntervalSinceNow + 0.5
         DispatchQueue.main.asyncAfter(deadline: .now() + max(0, delay)) { [weak self] in
             guard let self else { return }
+            let wasStationary = self.gate.isStationary
             self.gate.process(stationaryActivity: true, at: Date())
             self.motionState = self.gate.state
+            if !wasStationary && self.gate.isStationary {
+                Task { await self.bridgeForAltitudeChangeIfNeeded() }
+            }
         }
     }
 }
@@ -676,6 +881,19 @@ struct SampleStats {
     let mean: Double     // mean station pressure (hPa)
     let spread: Double   // peak-to-peak over the sample (hPa) — a stillness proxy
     let count: Int
+}
+
+/// Main-actor once-only latch for continuation-based one-shot sensor reads
+/// (callback vs. timeout race — exactly one side may resume).
+@MainActor
+private final class OneShotGate {
+    private var claimed = false
+    /// Returns true exactly once.
+    func claim() -> Bool {
+        if claimed { return false }
+        claimed = true
+        return true
+    }
 }
 
 /// Main-actor sample collector for one-shot altimeter reads.

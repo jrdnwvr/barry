@@ -115,22 +115,23 @@ struct SettingsView: View {
                 }
 
                 // Dev-only helpers — compiled out of Release/TestFlight builds so
-                // testers can't seed fake readings into their real data.
+                // testers can't seed fake readings into their real data. Collapsed
+                // by default so day-to-day settings visits don't wade through it.
                 #if DEBUG
                 Section {
-                    Button("Load 48h sample history") {
-                        let obs = store.combined?.observedSeries
-                            .compactMap { p in p.pressure.map { (p.t, $0) } } ?? []
-                        barometer.loadSampleHistory(observed: obs, now: store.now)
+                    DisclosureGroup("Testing") {
+                        Button("Load 48h sample history") {
+                            let obs = store.combined?.observedSeries
+                                .compactMap { p in p.pressure.map { (p.t, $0) } } ?? []
+                            barometer.loadSampleHistory(observed: obs, now: store.now)
+                        }
+                        Button("Clear phone history", role: .destructive) {
+                            barometer.clearHistory()
+                        }
+                        Text("Fills history with METAR data for UI testing.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    Button("Clear phone history", role: .destructive) {
-                        barometer.clearHistory()
-                    }
-                    Text("Fills history with METAR data for UI testing.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } header: {
-                    Text("Testing")
                 }
                 #endif
             }

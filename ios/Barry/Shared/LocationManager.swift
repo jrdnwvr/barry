@@ -15,10 +15,12 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
     private let manager = CLLocationManager()
     private var continuation: CheckedContinuation<CLLocation?, Never>?
 
-    override init() {
+    /// Station lookup only needs ~km fixes; altitude-reference sampling (barometer
+    /// calibration) asks for `kCLLocationAccuracyBest` to get a usable vertical fix.
+    init(desiredAccuracy: CLLocationAccuracy = kCLLocationAccuracyKilometer) {
         super.init()
         manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyKilometer // station-level is plenty
+        manager.desiredAccuracy = desiredAccuracy
         authorization = manager.authorizationStatus
     }
 

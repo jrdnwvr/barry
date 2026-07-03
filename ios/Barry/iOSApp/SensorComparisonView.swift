@@ -151,6 +151,9 @@ struct SensorComparisonView: View {
         if r.hadMotion {
             return "Logged \(shown) \(unit.label) while moving — shown on the chart but excluded from calibration."
         }
+        if barometer.isProvisional {
+            return "Measured \(shown) \(unit.label) — approximate (GPS altitude) until Barry calibrates against the station."
+        }
         return "Logged \(shown) \(unit.label)."
     }
 
@@ -272,12 +275,65 @@ struct SensorStationDetailView: View {
 
                 SensorComparisonView(combined: combined, now: now, unit: unit,
                                      barometer: barometer)
+
+                Divider()
+
+                calibrationSection
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
         }
         .navigationTitle("Sensor vs Station")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: - Calibration (machinery state — deliberately off the main screen)
+
+    private var minsSinceCalibration: Int? {
+        barometer.calibratedAt.map { max(0, Int(now.timeIntervalSince($0) / 60)) }
+    }
+    private var calibrationStale: Bool { (minsSinceCalibration ?? 0) > 75 }
+
+    @ViewBuilder private var calibrationSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Calibration")
+                .font(.headline)
+
+            if barometer.lastResetWasAltitude {
+                Label("Elevation changed — Barry recalibrates at the next station report.",
+                      systemImage: "arrow.up.arrow.down")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            } else if let mins = minsSinceCalibration {
+                Text(calibrationStale
+                     ? "Last calibrated \(mins)m ago against \(combined.pressure.station) — aging, refreshes automatically at the next report."
+                     : "Calibrated \(mins)m ago against \(combined.pressure.station).")
+                    .font(.caption)
+                    .foregroundStyle(calibrationStale ? Color.orange : Color.secondary)
+            } else if barometer.isProvisional {
+                Text("Approximate — derived from GPS altitude (±1–2 hPa). Refines automatically at the first station report while the phone is still. Trends are already accurate.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Not calibrated yet — happens automatically once the phone is still and a station report arrives.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let drift = barometer.driftPerHour, abs(drift) >= 0.3 {
+                Text("Sensor drift ≈ \(String(format: "%.1f", abs(drift))) hPa/h — folded into the live value automatically.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            Button("Recalibrate now") { barometer.recalibrate() }
+                .font(.caption.weight(.medium))
+                .buttonStyle(.bordered)
+
+            Text("Calibration pins the phone's sensor to the station's sea-level pressure and maintains itself — you shouldn't need this button unless a reading looks clearly wrong.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
     }
 }
 

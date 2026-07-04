@@ -128,6 +128,10 @@ struct SettingsView: View {
                         Button("Clear phone history", role: .destructive) {
                             barometer.clearHistory()
                         }
+                        Button("Show onboarding again") {
+                            AppConfig.sharedDefaults.set(false, forKey: "hasOnboarded")
+                            dismiss()
+                        }
                         Text("Fills history with METAR data for UI testing.")
                             .font(.caption)
                             .foregroundStyle(.secondary)

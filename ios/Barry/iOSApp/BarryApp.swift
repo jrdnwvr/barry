@@ -16,6 +16,8 @@ struct BarryApp: App {
     private var phoneBarometerEnabled: Bool = false
     @AppStorage(StormAlerter.enabledKey, store: AppConfig.sharedDefaults)
     private var stormAlertsEnabled: Bool = false
+    @AppStorage("hasOnboarded", store: AppConfig.sharedDefaults)
+    private var hasOnboarded: Bool = false
 
     init() {
         // Let storm alerts surface as banners even while the app is open.
@@ -24,7 +26,15 @@ struct BarryApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            // First run shows onboarding as the root (not a cover) so nothing —
+            // station lookup, location prompt — starts until the user is through.
+            Group {
+                if hasOnboarded {
+                    ContentView()
+                } else {
+                    OnboardingView()
+                }
+            }
                 .environmentObject(store)
                 .environmentObject(barometer)
                 .onChange(of: scenePhase) { _, phase in

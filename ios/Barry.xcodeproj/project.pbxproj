@@ -43,6 +43,7 @@
 		568F6FDF35365FFD67F5D81D /* WindUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E3203C0CBC7B1D5F0A57759 /* WindUnit.swift */; };
 		56B07C1F7EC0EC1BF3B731E8 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C59EF4878E06062DC20D1D7 /* AppConfig.swift */; };
 		571426E9EFB2689033DDB2CD /* BarryAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */; };
+		57240D7CD7B6FC81EE382681 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B98E77604746429DE78EF9C4 /* OnboardingView.swift */; };
 		57789B75BDC58D0AACC5CA36 /* Tendency.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2542DA2C850B2399B31A9069 /* Tendency.swift */; };
 		5976B0374D4F59B1A90268F5 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C59EF4878E06062DC20D1D7 /* AppConfig.swift */; };
 		59DA22C45F3ECB63E17189B1 /* PressureUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D967187F3CE6292310A2937 /* PressureUnit.swift */; };
@@ -192,6 +193,7 @@
 		9639018DA53DA80272AC71E9 /* Barry.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Barry.entitlements; sourceTree = "<group>"; };
 		A59F4AD2D2CF0AC8FB31B534 /* ConfirmationOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmationOverlayView.swift; sourceTree = "<group>"; };
 		B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureHistory.swift; sourceTree = "<group>"; };
+		B98E77604746429DE78EF9C4 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		C1326419A7770149C91B0438 /* PhoneWidgetViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWidgetViews.swift; sourceTree = "<group>"; };
 		CD077DE63D0DE437229C43CC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CF51EF6C7C37D4CEE92CE308 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -325,6 +327,7 @@
 				031482E889A2274CBD689E88 /* ForecastCaveatView.swift */,
 				01599505777741EA095092C0 /* HeroView.swift */,
 				F4C5676D3E1E52D59CDFED12 /* Info.plist */,
+				B98E77604746429DE78EF9C4 /* OnboardingView.swift */,
 				778E430DEB72ECE6B1DB5CCA /* PressureChartView.swift */,
 				6978CE026B8EEE1A560877C0 /* PressureGuideView.swift */,
 				DA12AC45B8A41856114FD9A7 /* SensorComparisonView.swift */,
@@ -576,6 +579,7 @@
 				3BE203844E7BC24AC1600A7B /* Interpreter.swift in Sources */,
 				8C7B2F5AFF63137EA0451EA1 /* LocationManager.swift in Sources */,
 				63129BEFD89CFA743A98860E /* Models.swift in Sources */,
+				57240D7CD7B6FC81EE382681 /* OnboardingView.swift in Sources */,
 				83F986D9DDC3CCBE8FA83873 /* PressureChartView.swift in Sources */,
 				98A632AA5A2B036CFA27697A /* PressureGuideView.swift in Sources */,
 				77F617DE1799A58749B82524 /* PressureHistory.swift in Sources */,

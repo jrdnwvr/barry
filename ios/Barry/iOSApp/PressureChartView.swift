@@ -203,18 +203,11 @@ struct PressureChartView: View {
     }
 
     @ChartContentBuilder private var phoneContent: some ChartContent {
-        // Phone barometer local trace (§4.5.5): short orange line over the last
-        // ~60 min, shown only when calibrated + stationary.
+        // Phone barometer local trace: recent calibrated readings as an orange line.
+        // (The old "divergence band" against a flat last-METAR baseline is gone —
+        // during a real pressure fall the flat baseline made the band balloon into
+        // a meaningless shape. The Δ readout + Sensor vs Station carry divergence.)
         if !visiblePhone.isEmpty {
-            if let baseline = (visibleObserved.last ?? observed.last)?.value {
-                ForEach(visiblePhone) { p in
-                    AreaMark(x: .value("Time", p.t),
-                             yStart: .value("Baseline", baseline),
-                             yEnd: .value("Local", p.value))
-                        .foregroundStyle(.orange.opacity(0.12))
-                        .interpolationMethod(.catmullRom)
-                }
-            }
             ForEach(visiblePhone) { p in
                 LineMark(x: .value("Time", p.t), y: .value("Pressure", p.value),
                          series: .value("Series", "phone"))
@@ -222,14 +215,12 @@ struct PressureChartView: View {
                     .lineStyle(StrokeStyle(lineWidth: 2))
                     .interpolationMethod(.catmullRom)
             }
+            // End dot only — the "local" text label lives in the legend row below,
+            // where it can't collide with the now-dot / forecast line at the seam.
             if let last = visiblePhone.last {
                 PointMark(x: .value("Time", last.t), y: .value("Pressure", last.value))
                     .foregroundStyle(.orange)
-                    .annotation(position: .trailing, alignment: .center) {
-                        Text("local")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.orange)
-                    }
+                    .symbolSize(40)
             }
         }
     }
@@ -385,6 +376,9 @@ struct PressureChartView: View {
         HStack(spacing: 10) {
             legendSwatch(colors: [TendencyClass.blueRamp(0.0), TendencyClass.blueRamp(1.0)],
                          label: "deeper = faster change")
+            if !visiblePhone.isEmpty {
+                legendSwatch(colors: [.orange, .orange], label: "local")
+            }
             Spacer()
             Text("tap to read")
                 .font(.caption2).foregroundStyle(.tertiary)

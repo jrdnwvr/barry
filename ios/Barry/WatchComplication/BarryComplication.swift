@@ -26,7 +26,7 @@ struct BarryComplication: Widget {
                 .containerBackground(.clear, for: .widget)
         }
         .configurationDisplayName("Pressure Trend")
-        .description("3-hour barometric tendency — color deepens as pressure falls faster.")
+        .description("The 3-hour pressure trend. Color deepens as pressure falls faster.")
         .supportedFamilies([
             .accessoryCircular,
             .accessoryCorner,

@@ -143,17 +143,17 @@ struct SensorComparisonView: View {
 
     private func resultMessage(_ r: BarometerManager.ManualMeasurement) -> String {
         if r.rawHPa == nil {
-            return "Couldn't get a sensor reading — this needs a real device (not the simulator), held still for a moment."
+            return "Couldn't get a sensor reading. This needs a real device, held still for a moment."
         }
         guard let slp = r.slp else {
-            return "Measured, but Barry couldn't calibrate to the station yet — hold the phone still for a moment and try again."
+            return "Measured, but Barry couldn't calibrate to the station yet. Hold the phone still and try again."
         }
         let shown = String(format: unit == .hPa ? "%.0f" : "%.2f", unit.convert(slp))
         if r.hadMotion {
-            return "Logged \(shown) \(unit.label) while moving — shown on the chart but excluded from calibration."
+            return "Logged \(shown) \(unit.label) while moving. It's on the chart but left out of calibration."
         }
         if barometer.isProvisional {
-            return "Measured \(shown) \(unit.label) — approximate (GPS altitude) until Barry calibrates against the station."
+            return "Measured \(shown) \(unit.label). Approximate until Barry calibrates against the station."
         }
         return "Logged \(shown) \(unit.label)."
     }
@@ -225,7 +225,7 @@ struct SensorComparisonView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("No phone readings yet")
                 .font(.subheadline.weight(.medium))
-            Text("Once the phone barometer is calibrated and the device is still, Barry logs its own pressure here to compare against the station.")
+            Text("Once the phone barometer calibrates and the phone is still, Barry logs its own pressure here to compare against the station.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -270,7 +270,7 @@ struct SensorStationDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text("The phone's continuous calibrated trace (orange) against the station's hourly reports (blue). Divergence between them is the phone catching a change before the next report lands.")
+                Text("Your phone's readings (orange) against the station's hourly reports (blue). When they split apart, the phone is catching a change before the next report.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -301,28 +301,28 @@ struct SensorStationDetailView: View {
                 .font(.headline)
 
             if barometer.lastResetWasAltitude {
-                Label("Elevation changed — Barry recalibrates at the next station report.",
+                Label("Elevation changed. Barry recalibrates at the next station report.",
                       systemImage: "arrow.up.arrow.down")
                     .font(.caption)
                     .foregroundStyle(.orange)
             } else if let mins = minsSinceCalibration {
                 Text(calibrationStale
-                     ? "Last calibrated \(mins)m ago against \(combined.pressure.station) — aging, refreshes automatically at the next report."
+                     ? "Last calibrated \(mins)m ago against \(combined.pressure.station). It refreshes automatically at the next report."
                      : "Calibrated \(mins)m ago against \(combined.pressure.station).")
                     .font(.caption)
                     .foregroundStyle(calibrationStale ? Color.orange : Color.secondary)
             } else if barometer.isProvisional {
-                Text("Approximate — derived from GPS altitude (±1–2 hPa). Refines automatically at the first station report while the phone is still. Trends are already accurate.")
+                Text("Approximate, based on GPS altitude. It sharpens up at the first station report while the phone is still. Trends are already accurate.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                Text("Not calibrated yet — happens automatically once the phone is still and a station report arrives.")
+                Text("Not calibrated yet. This happens on its own once the phone is still and a station report arrives.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             if let drift = barometer.driftPerHour, abs(drift) >= 0.3 {
-                Text("Sensor drift ≈ \(String(format: "%.1f", abs(drift))) hPa/h — folded into the live value automatically.")
+                Text("Sensor drift is about \(String(format: "%.1f", abs(drift))) hPa/h. Barry folds it into the live value automatically.")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -331,7 +331,7 @@ struct SensorStationDetailView: View {
                 .font(.caption.weight(.medium))
                 .buttonStyle(.bordered)
 
-            Text("Calibration pins the phone's sensor to the station's sea-level pressure and maintains itself — you shouldn't need this button unless a reading looks clearly wrong.")
+            Text("Calibration pins the phone's sensor to the station and maintains itself. You shouldn't need this button unless a reading looks clearly wrong.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }

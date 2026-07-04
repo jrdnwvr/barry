@@ -24,7 +24,7 @@ struct BarryPhoneWidget: Widget {
             PhoneWidgetView(entry: entry)
         }
         .configurationDisplayName("Pressure Trend")
-        .description("3-hour barometric tendency and Barry's plain-language verdict.")
+        .description("The 3-hour pressure trend and Barry's verdict.")
         .supportedFamilies([
             .accessoryCircular,
             .accessoryInline,

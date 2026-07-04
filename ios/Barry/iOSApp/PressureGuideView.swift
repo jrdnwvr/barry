@@ -28,15 +28,15 @@ struct PressureGuideView: View {
 
     private let movements: [Movement] = [
         Movement(cls: .fallingFast, intensity: 1.0, title: "Falling fast",
-                 detail: "A sharp drop usually means a vigorous storm system is moving in quickly — expect thickening cloud, rain, and often strengthening winds. The steepest, deepest drops mark rapidly intensifying storms (an extreme case is called “bombogenesis” — roughly a 24 hPa fall in 24 hours, less at lower latitudes)."),
+                 detail: "A sharp drop usually means a storm system is moving in fast. Expect thickening cloud, rain, and often stronger wind. The steepest drops mark rapidly intensifying storms. The extreme case is called bombogenesis, roughly a 24 hPa fall in 24 hours (less at lower latitudes)."),
         Movement(cls: .fallingMod, intensity: 0.5, title: "Falling",
-                 detail: "Falling pressure signals an approaching low-pressure system or front. Weather tends to deteriorate: increasing cloud, with rain becoming more likely."),
+                 detail: "Falling pressure means a low or a front is headed your way. Expect more cloud and a better chance of rain."),
         Movement(cls: .steady, intensity: 0, title: "Steady",
-                 detail: "Little change expected in the near term — whatever it’s doing now is likely to continue for a while."),
+                 detail: "Little change expected soon. Whatever it's doing now will probably keep doing it for a while."),
         Movement(cls: .rising, intensity: 0, title: "Rising",
-                 detail: "Rising pressure means high pressure is building in. Expect improving, drier, more settled weather."),
+                 detail: "Rising pressure means high pressure is building in. Expect drier, more settled weather."),
         Movement(cls: .risingFast, intensity: 0, title: "Rising fast",
-                 detail: "A sharp rise often comes right after a cold front clears through: skies brighten, but the tight pressure gradient behind the front commonly brings gusty, strong winds for a time."),
+                 detail: "A sharp rise usually comes right after a cold front clears through. Skies brighten, but the wind behind the front is often strong and gusty for a while."),
     ]
 
     private struct Term: Identifiable {
@@ -49,17 +49,17 @@ struct PressureGuideView: View {
     // "front edge"). Definitions follow the NWS Weather Glossary (see Sources).
     private let terms: [Term] = [
         Term(name: "Front",
-             meaning: "A boundary between two air masses of different temperature. Its passage often brings a wind shift, more cloud, and rain — and it usually shows up as a pressure trough."),
+             meaning: "A boundary between two air masses of different temperature. When one passes you usually get a wind shift, more cloud, and rain. It shows up as a pressure trough."),
         Term(name: "Trough",
-             meaning: "An elongated area of relatively low pressure — where the curve bottoms out. Often marks a front and more unsettled weather. Barry pins the low as “trough,” and “past trough” once pressure is recovering."),
+             meaning: "A stretch of relatively low pressure, where the curve bottoms out. Often marks a front and unsettled weather. Barry pins the low as trough, then past trough once pressure is recovering."),
         Term(name: "Ridge",
-             meaning: "An elongated area of relatively high pressure — where the curve peaks. Generally fair, settling weather."),
+             meaning: "A stretch of relatively high pressure, where the curve peaks. Generally fair, settled weather."),
         Term(name: "Front edge",
-             meaning: "The sharp kink where a front’s pressure change begins — Barry flags it when the curve turns down abruptly."),
+             meaning: "The sharp kink where a front's pressure change starts. Barry flags it when the curve turns down abruptly."),
         Term(name: "Gust front",
-             meaning: "The leading edge of gusty winds pushed out ahead of a storm’s downdraft — a sudden burst of wind, often with a sharp pressure rise."),
+             meaning: "The leading edge of gusty wind pushed out ahead of a storm's downdraft. A sudden burst of wind, often with a sharp pressure rise."),
         Term(name: "Tendency",
-             meaning: "The direction and rate of the pressure change over the last ~3 hours — the signal Barry reads to say what’s coming."),
+             meaning: "How fast and which way the pressure has moved over the last 3 hours or so. This is the signal Barry reads."),
     ]
 
     private struct Source: Identifiable {
@@ -86,7 +86,7 @@ struct PressureGuideView: View {
         NavigationStack {
             List {
                 Section {
-                    Text("Barry watches how fast pressure is **changing** — its “tendency” over the last few hours — because that shift, more than the number itself, is what hints at the weather to come.")
+                    Text("Barry watches how fast the pressure is changing over the last few hours. That shift matters more than the number itself. It's what hints at the weather to come.")
                         .font(.subheadline)
                         .listRowSeparator(.hidden)
                 }
@@ -108,13 +108,13 @@ struct PressureGuideView: View {
                 }
 
                 Section("Why fast changes hint at wind") {
-                    Text("Wind is driven by how sharply pressure changes across distance. The same steep gradients that make pressure rise or fall **quickly** also tend to bring stronger, gustier winds — so a fast move in either direction is often a heads-up for wind, not just rain or clearing.")
+                    Text("Wind comes from pressure differences. The same steep gradients that make pressure move quickly also bring stronger, gustier wind. A fast move in either direction is a heads-up for wind, not just rain or clearing.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
                 Section("A big change isn't a guarantee") {
-                    Text("Pressure can move sharply without dramatic weather — dry fronts and troughs pass with little more than a wind shift, and some swings are just the atmosphere rebalancing. Read the trend **together with** the sky and the wind/rain forecast below the chart: if conditions already look threatening, the trend is your best clue to **timing and intensity**; if the forecast stays calm and dry, a big move may amount to nothing more than a breezy change.")
+                    Text("Pressure can move a lot without any dramatic weather. Dry fronts pass with little more than a wind shift, and some swings are just the atmosphere rebalancing. Read the trend along with the sky and the wind and rain forecast below the chart. If it already looks bad out, the trend is your best clue for timing and intensity. If the forecast stays calm and dry, a big move might just mean a breezy change.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -130,7 +130,7 @@ struct PressureGuideView: View {
                 }
 
                 Section {
-                    Text("These are general tendencies, not guarantees — local terrain, season, and the specific weather system all shape what actually happens. Treat the trend as a nudge, not a certainty.")
+                    Text("These are general tendencies, not guarantees. Terrain, season, and the specific system all shape what actually happens. Treat the trend as a nudge, not a certainty.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

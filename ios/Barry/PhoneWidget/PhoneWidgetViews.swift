@@ -119,7 +119,7 @@ struct PhoneWidgetView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Text(isStale ? "Stale — open Barry to refresh"
+            Text(isStale ? "Stale. Open Barry to refresh"
                          : "\(deltaShort) \(unit.label) · 3h")
                 .font(.caption2).monospacedDigit()
                 .foregroundStyle(isStale ? .orange : .secondary)

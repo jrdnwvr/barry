@@ -37,7 +37,7 @@ def _fc_wind(hour, precip, wind):
 def test_base_sentences():
     assert build_verdict("steady").startswith("Holding steady")
     assert build_verdict("rising_fast").startswith("Rising sharply")
-    assert "storm system likely" in build_verdict("falling_fast")
+    assert "Storm system likely" in build_verdict("falling_fast")
 
 
 def test_none_class_is_honest():
@@ -47,13 +47,13 @@ def test_none_class_is_honest():
 def test_falling_enriched_with_precip_time():
     forecast = [_fc(10, 10), _fc(11, 20), _fc(15, 55)]
     out = build_verdict("falling_mod", forecast)
-    assert "rain likely around 3 PM" in out
+    assert "Rain likely around 3 PM" in out
 
 
 def test_rising_not_enriched_even_with_precip():
     forecast = [_fc(15, 80)]
     out = build_verdict("rising", forecast)
-    assert "rain likely" not in out
+    assert "Rain likely" not in out
 
 
 def test_precip_peak_threshold():
@@ -98,7 +98,7 @@ def test_trough_passing_phrasing():
 def test_rapid_fall_uses_storm_phrasing():
     r = _reading("rapid_fall", trend="falling_fast")
     out = build_verdict("falling_fast", None, reading=r)
-    assert "storm system likely" in out
+    assert "Storm system likely" in out
     assert "Secure loose items" in out
 
 
@@ -106,7 +106,7 @@ def test_rapid_rise_warns_of_gusty_winds():
     r = _reading("rapid_rise", trend="rising_fast")
     out = build_verdict("rising_fast", None, reading=r)
     assert "rising fast" in out.lower()
-    assert "gusty winds" in out
+    assert "Gusty winds" in out
 
 
 def test_front_knee_phrasing():
@@ -132,7 +132,7 @@ def test_ridge_peak_distinguishes_observed_vs_forecast():
 def test_diurnal_only_defers_to_steady_base():
     r = _reading("diurnal_only", trend="steady")
     out = build_verdict("steady", None, reading=r)
-    assert out == "Holding steady — conditions stable."
+    assert out == "Holding steady. Conditions stable."
 
 
 # --- calm-forecast softening ------------------------------------------------
@@ -141,7 +141,7 @@ def test_diurnal_only_defers_to_steady_base():
 def test_falling_fast_softened_when_forecast_calm_and_dry():
     forecast = [_fc_wind(h, 5, 8.0) for h in range(10, 16)]
     out = build_verdict("falling_fast", forecast)
-    assert "storm system likely" not in out
+    assert "Storm system likely" not in out
     assert "calm and dry" in out
 
 
@@ -156,13 +156,13 @@ def test_rapid_fall_feature_also_softens():
 def test_no_softening_when_forecast_windy():
     forecast = [_fc_wind(h, 5, 35.0) for h in range(10, 16)]
     out = build_verdict("falling_fast", forecast)
-    assert "storm system likely" in out
+    assert "Storm system likely" in out
 
 
 def test_no_softening_when_rain_coming():
     forecast = [_fc_wind(10, 5, 8.0), _fc_wind(11, 20, 8.0), _fc_wind(15, 55, 8.0)]
     out = build_verdict("falling_fast", forecast)
-    assert "rain likely around 3 PM" in out
+    assert "Rain likely around 3 PM" in out
     assert "calm and dry" not in out
 
 
@@ -173,7 +173,7 @@ def test_no_softening_without_precip_data():
         for h in range(10, 16)
     ]
     out = build_verdict("falling_fast", forecast)
-    assert "storm system likely" in out
+    assert "Storm system likely" in out
 
 
 def test_timed_trough_feature_keeps_its_sentence_when_calm():
@@ -199,4 +199,4 @@ def test_feature_enrichment_still_layers_precip():
     forecast = [_fc(20, 35), _fc(21, 55)]
     out = build_verdict("falling_mod", forecast, reading=r)
     assert "forecast to bottom out" in out
-    assert "rain likely around 9 PM" in out
+    assert "Rain likely around 9 PM" in out

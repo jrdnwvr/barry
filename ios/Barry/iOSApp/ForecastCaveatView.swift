@@ -52,9 +52,9 @@ struct ForecastCaveatView: View {
             return "Dashed line is forecast."
         case .stale(let age):
             let hours = max(1, Int((age / 3600).rounded()))
-            return "Forecast source is down — dashed line is the last forecast, from ~\(hours)h ago."
+            return "Forecast source is down. The dashed line is the last forecast, from about \(hours)h ago."
         case .missing:
-            return "Forecast source temporarily unavailable — showing station data only. It returns automatically."
+            return "Forecast source is down right now, so this is station data only. It comes back on its own."
         }
     }
 }

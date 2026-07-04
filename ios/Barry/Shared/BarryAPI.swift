@@ -17,7 +17,7 @@ enum APIError: Error, LocalizedError {
         case .badURL: return "Bad request URL."
         case .http(let code): return "Server returned status \(code)."
         case .decoding: return "Couldn't read the server response."
-        case .transport: return "Network problem — check your connection."
+        case .transport: return "Network problem. Check your connection."
         }
     }
 }

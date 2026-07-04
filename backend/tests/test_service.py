@@ -33,7 +33,7 @@ async def test_combined_shape(service, upstream):
     # precip enrichment because we're in a falling situation.
     v = resp.verdict.lower()
     assert any(k in v for k in ("front", "trough", "falling", "drop", "bottom"))
-    assert "rain likely around" in resp.verdict
+    assert "Rain likely around" in resp.verdict
 
     # METAR-first wind: current wind comes from the newest METAR (10 kt / 230°,
     # gusting 18 kt), converted to km/h. Forecast hours carry model gusts.

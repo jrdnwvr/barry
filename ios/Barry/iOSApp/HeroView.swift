@@ -161,8 +161,8 @@ struct HeroView: View {
         let mag = String(format: unit == .hPa ? "%.1f" : "%.2f", abs(unit.convertDelta(t.deltaHPa)))
         var s = "sensor \(arrow) \(mag) \(unit.label) in last \(t.windowMinutes) min"
         if isSharperThanStation(t) {
-            s += t.deltaHPa < 0 ? " — falling faster than the station shows"
-                                : " — rising faster than the station shows"
+            s += t.deltaHPa < 0 ? ", falling faster than the station shows"
+                                : ", rising faster than the station shows"
         }
         return s
     }
@@ -186,7 +186,7 @@ struct HeroView: View {
         if r.caveats.contains("short_window") { bits.append("limited recent data") }
         if r.caveats.contains("sparse") { bits.append("data gaps") }
         if r.confidence < 0.5 && bits.isEmpty { bits.append("lower confidence than usual") }
-        return bits.isEmpty ? nil : "Read with care — " + bits.joined(separator: ", ") + "."
+        return bits.isEmpty ? nil : "Read with care: " + bits.joined(separator: ", ") + "."
     }
 }
 

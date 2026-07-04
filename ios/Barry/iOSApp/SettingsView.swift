@@ -50,7 +50,7 @@ struct SettingsView: View {
             Form {
                 Section {
                     Toggle("Live phone sensor", isOn: $phoneBarometerEnabled)
-                    Text("Supplements METAR reports with a calibrated local reading between updates. Uses motion gating and calibrates using historical METAR data.")
+                    Text("Uses your phone's barometer for live readings between station reports. It calibrates itself against the station and ignores readings from elevators and driving.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } header: {
@@ -59,7 +59,7 @@ struct SettingsView: View {
 
                 Section {
                     Toggle("Storm alerts", isOn: $stormAlertsEnabled)
-                    Text("Notifies you when pressure changes fast — a sharp drop (storm approaching) or a sharp rise (gust front / clearing).")
+                    Text("Sends a notification when pressure changes fast. A sharp drop usually means a storm, and a sharp rise can mean gusty wind. iOS decides when background checks run, so alerts won't be instant.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if notifDenied {

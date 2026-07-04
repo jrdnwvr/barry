@@ -17,12 +17,12 @@ from .interpreter import Reading
 from .models import ForecastHour
 
 BASE_VERDICTS = {
-    "falling_fast": "Sharp drop — storm system likely approaching. Secure loose items.",
-    "falling_mod": "Pressure falling steadily — unsettled weather likely in coming hours.",
-    "falling": "Slight fall — keep an eye out, nothing imminent.",
-    "steady": "Holding steady — conditions stable.",
-    "rising": "Rising and steady — clearing, fair conditions holding.",
-    "rising_fast": "Rising sharply — clearing, but gusty winds likely.",
+    "falling_fast": "Sharp drop. Storm system likely approaching. Secure loose items.",
+    "falling_mod": "Pressure falling steadily. Unsettled weather likely in the coming hours.",
+    "falling": "Slight fall. Keep an eye out, nothing imminent.",
+    "steady": "Holding steady. Conditions stable.",
+    "rising": "Rising and steady. Clearing, fair conditions holding.",
+    "rising_fast": "Rising sharply. Clearing, but gusty winds likely.",
 }
 
 # precip probability (%) above which we call out likely rain
@@ -41,13 +41,13 @@ CALM_WIND_MAX_KMH = 20.0  # km/h at/below which the window counts as calm
 # carry specific information (trough timing, front passage) are never replaced.
 CALM_SOFTENINGS = {
     "falling_fast": (
-        "Sharp drop, but the forecast stays calm and dry — this may pass with "
-        "little more than a wind shift. If the sky looks threatening, use the "
-        "trend for timing."
+        "Sharp drop, but the forecast stays calm and dry. This may pass with "
+        "little more than a wind shift. If the sky looks bad, use the trend "
+        "for timing."
     ),
     "falling_mod": (
-        "Pressure falling steadily, but the forecast stays calm and dry — "
-        "not every fall brings weather; watch the sky."
+        "Pressure falling steadily, but the forecast stays calm and dry. "
+        "Not every fall brings weather. Watch the sky."
     ),
 }
 
@@ -99,28 +99,28 @@ def _feature_sentence(reading: Reading, *, local_hour_offset: float) -> Optional
         if t is not None:
             time_str = _fmt_local_hour(t, local_hour_offset)
             lead = "forecast to bottom out" if forecast_derived else "dropping toward a trough"
-            return f"Pressure {lead} around {time_str} — a front looks likely, improving after."
-        return "Pressure dropping toward a low — a front looks likely."
+            return f"Pressure {lead} around {time_str}. A front looks likely, improving after."
+        return "Pressure dropping toward a low. A front looks likely."
 
     if f == "trough_passing":
-        return "Pressure at/near bottom — front passing now. Conditions worst right now."
+        return "Pressure at/near bottom, front passing now. Conditions worst right now."
 
     if f == "post_trough_recovery":
-        return "Pressure rising off a low — conditions improving."
+        return "Pressure rising off a low. Conditions improving."
 
     if f == "ridge_peak":
         if forecast_derived:
-            return "Pressure forecast to peak soon — fair conditions easing later."
-        return "Pressure at a ridge top — fair conditions starting to ease."
+            return "Pressure forecast to peak soon. Fair conditions easing later."
+        return "Pressure at a ridge top. Fair conditions starting to ease."
 
     if f == "front_knee":
-        return "Sharp turn down in pressure — a front edge just arrived."
+        return "Sharp turn down in pressure. A front edge just arrived."
 
     if f == "rapid_fall":
-        return "Pressure falling fast — storm system likely approaching. Secure loose items."
+        return "Pressure falling fast. Storm system likely approaching. Secure loose items."
 
     if f == "rapid_rise":
-        return "Pressure rising fast — gusty winds likely (gust front or strong clearing behind a front)."
+        return "Pressure rising fast. Gusty winds likely, from a gust front or strong clearing behind a front."
 
     return None
 
@@ -148,7 +148,7 @@ def build_verdict(
     if effective_class.startswith("falling") and forecast:
         peak = find_precip_peak(forecast)
         if peak is not None:
-            sentence += f" — rain likely around {_fmt_local_hour(peak.t, local_hour_offset)}."
+            sentence += f" Rain likely around {_fmt_local_hour(peak.t, local_hour_offset)}."
         elif forecast_stays_calm(forecast):
             # No rain coming and no meaningful wind: swap the generic alarm
             # sentence for the honest "big change, maybe no weather" version.

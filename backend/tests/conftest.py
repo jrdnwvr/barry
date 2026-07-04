@@ -82,6 +82,7 @@ class FakeUpstream:
         self.awc_calls = []
         self.om_calls = []
         self.awc_fail = False
+        self.om_fail = False
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         url = str(request.url)
@@ -97,6 +98,8 @@ class FakeUpstream:
             return httpx.Response(200, json=recs)
         if "open-meteo.com" in url:
             self.om_calls.append(request)
+            if self.om_fail:
+                return httpx.Response(503, text="down")
             return httpx.Response(200, json=sample_forecast())
         return httpx.Response(404)
 

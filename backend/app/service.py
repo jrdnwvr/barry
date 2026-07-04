@@ -32,6 +32,12 @@ from .verdict import build_verdict
 PRESSURE_TTL = 12 * 60.0  # METARs update ~hourly; 12 min keeps it fresh-ish & cheap
 FORECAST_TTL = 30 * 60.0  # forecasts move slowly; 30 min is plenty
 
+# Stale-if-error: when Open-Meteo is down, re-serve the last good forecast for up
+# to this long (flagged stale=True) — a 6-hour-old forecast beats no forecast.
+STALE_FORECAST_MAX_AGE = 12 * 3600.0
+# How long a stale answer is re-served before retrying the upstream.
+STALE_RETRY_TTL = 5 * 60.0
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -135,18 +141,32 @@ class PressureService:
     ) -> ForecastResponse:
         # round coords for a stable cache key — sub-0.1deg precision is noise here
         cache_key = f"forecast:{round(lat, 2)}:{round(lon, 2)}"
+        last_good_key = f"{cache_key}:lastgood"
         if use_cache:
             cached = await self.cache.get(cache_key)
             if cached is not None:
                 return cached
 
-        raw = await om.fetch_forecast(lat, lon, self._client, forecast_days=2)
+        try:
+            raw = await om.fetch_forecast(lat, lon, self._client, forecast_days=2)
+        except Exception:
+            # Stale-if-error: the upstream is down — re-serve the last good
+            # forecast (flagged) rather than dropping the whole enrichment layer.
+            # Cached briefly so a dead upstream isn't hammered on every request.
+            last_good = await self.cache.get(last_good_key)
+            if last_good is not None:
+                resp = last_good.model_copy(update={"stale": True})
+                await self.cache.set(cache_key, resp, ttl=STALE_RETRY_TTL)
+                return resp
+            raise
+
         resp = ForecastResponse(
             hourly=om.parse_forecast(raw),
             source="open-meteo",
             cachedAt=_now(),
         )
         await self.cache.set(cache_key, resp, ttl=FORECAST_TTL)
+        await self.cache.set(last_good_key, resp, ttl=STALE_FORECAST_MAX_AGE)
         return resp
 
     # ---- combined (primary client endpoint) ---------------------------------

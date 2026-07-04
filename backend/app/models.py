@@ -62,6 +62,9 @@ class ForecastResponse(BaseModel):
     hourly: List[ForecastHour] = Field(default_factory=list)
     source: str
     cachedAt: datetime
+    # True when the upstream fetch failed and this is the last good forecast being
+    # re-served (stale-if-error). Clients should say so rather than hide the loss.
+    stale: bool = False
 
 
 class ReadingOut(BaseModel):

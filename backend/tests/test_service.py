@@ -108,3 +108,36 @@ async def test_user_agent_is_set(service, upstream):
     await service.get_pressure("KLUK")
     ua = upstream.awc_calls[0].headers.get("user-agent")
     assert ua == "Barry/1.0 (jrdn@wvr.me)"
+
+
+# --- forecast stale-if-error -------------------------------------------------
+
+
+async def test_forecast_stale_served_when_upstream_dies(service, upstream):
+    # Prime the last-good store with a successful fetch.
+    fresh = await service.get_forecast(39.1, -84.5)
+    assert fresh.stale is False
+
+    # Upstream dies; bypass the fresh cache to force a refetch attempt.
+    upstream.om_fail = True
+    stale = await service.get_forecast(39.1, -84.5, use_cache=False)
+    assert stale.stale is True
+    assert len(stale.hourly) == len(fresh.hourly)
+    assert stale.source == "open-meteo"
+
+    # Combined keeps the forecast (flagged) instead of dropping it.
+    resp = await service.get_combined("KLUK", 39.1, -84.5)
+    assert resp.forecast is not None and resp.forecast.stale is True
+    assert resp.sources.forecast == "open-meteo"
+
+
+async def test_forecast_none_when_upstream_dies_cold(upstream, client):
+    # No last-good primed → combined degrades to no forecast, as before.
+    from app.cache import StationRegistry, TTLCache
+    from app.service import PressureService
+
+    cold = PressureService(client, cache=TTLCache(), registry=StationRegistry())
+    upstream.om_fail = True
+    resp = await cold.get_combined("KLUK", 39.1, -84.5)
+    assert resp.forecast is None
+    assert resp.sources.forecast is None

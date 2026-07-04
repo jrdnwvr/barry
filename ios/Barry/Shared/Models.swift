@@ -66,6 +66,9 @@ struct ForecastResponse: Codable, Hashable {
     let hourly: [ForecastHour]
     let source: String
     let cachedAt: Date
+    /// True when the backend re-served its last good forecast because the upstream
+    /// was down (stale-if-error). Optional: absent on old backends.
+    var stale: Bool?
 }
 
 struct Sources: Codable, Hashable {

@@ -114,7 +114,7 @@ struct ContentView: View {
                         }
                     }
 
-                    ForecastCaveatView()
+                    ForecastCaveatView(combined: combined, now: store.now)
                 }
 
                 // Secondary: wind + rain confirmation, always expanded.

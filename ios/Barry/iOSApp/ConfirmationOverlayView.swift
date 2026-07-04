@@ -48,6 +48,13 @@ struct ConfirmationOverlayView: View {
     private var windDirNow: Double? {
         metarWind?.winddir ?? (next6h.first ?? hours.first)?.winddir
     }
+    /// Gusts only display when they meaningfully exceed sustained (~3 kt) — below
+    /// that, "0 G 1 kts" is technically true and practically noise.
+    private static let gustDisplayMarginKmh = 5.5
+    /// Direction is meaningless in near-calm air (vane just drifts) — hide it
+    /// below ~2 kt so "0 kts · 360°" can't happen.
+    private static let dirDisplayMinKmh = 3.7
+
     /// Current gust: a METAR gust is inherently notable (stations only report one
     /// when peaks exceed the sustained wind meaningfully). A forecast-derived gust
     /// is model output, so it must clearly exceed sustained before we surface it.
@@ -66,7 +73,7 @@ struct ConfirmationOverlayView: View {
             s += " G \(windUnit.format(g))"
         }
         s += " \(windUnit.label)"
-        if let dir = windDirNow {
+        if let dir = windDirNow, windNowKmh >= Self.dirDisplayMinKmh {
             s += " · \(Int(dir.rounded()))°"
         }
         return s
@@ -291,11 +298,16 @@ struct ConfirmationOverlayView: View {
             Circle().fill(.teal).frame(width: 8, height: 8)
             Text(sel.date, format: .dateTime.weekday(.abbreviated).hour().minute())
                 .font(.caption).foregroundStyle(.secondary)
-            Text(sel.gustKmh.map { g in
-                    "\(windUnit.format(sel.speedKmh)) G \(windUnit.format(g)) \(windUnit.label)"
-                 } ?? "\(windUnit.format(sel.speedKmh)) \(windUnit.label)")
+            // G only when the gust meaningfully exceeds sustained; direction only
+            // when there's enough wind for it to mean anything.
+            Text({
+                if let g = sel.gustKmh, g >= sel.speedKmh + Self.gustDisplayMarginKmh {
+                    return "\(windUnit.format(sel.speedKmh)) G \(windUnit.format(g)) \(windUnit.label)"
+                }
+                return "\(windUnit.format(sel.speedKmh)) \(windUnit.label)"
+            }())
                 .font(.caption.weight(.semibold)).monospacedDigit()
-            if let dir = sel.dir {
+            if let dir = sel.dir, sel.speedKmh >= Self.dirDisplayMinKmh {
                 Text("\(Int(dir.rounded()))°")
                     .font(.caption).foregroundStyle(.secondary).monospacedDigit()
             }

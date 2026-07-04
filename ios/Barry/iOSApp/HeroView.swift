@@ -241,11 +241,17 @@ private struct StatusRow: View {
     /// fall back to METAR freshness.
     private var sensorStatus: (text: String, live: Bool)? {
         guard barometerEnabled else { return nil }
-        // Showing a recent local reading → surface its age (green dot when fresh),
-        // even while the device is moving.
+        // Showing a recent local reading → surface its trust tier + age, never the
+        // raw motion classifier (which would say "Paused" while a perfectly good
+        // carried-clean reading is on screen — a contradiction).
         if let localAt {
             let m = max(0, Int(now.timeIntervalSince(localAt) / 60))
-            return m == 0 ? ("Local · now", true) : ("Local · \(m)m ago", false)
+            if m == 0 {
+                return barometer.latestReadingIsCarried
+                    ? ("Local · carried", true)
+                    : ("Local · now", true)
+            }
+            return ("Local · \(m)m ago", false)
         }
         guard barometer.isAvailable else { return nil }
         switch barometer.motionState {

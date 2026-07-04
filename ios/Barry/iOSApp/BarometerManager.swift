@@ -425,6 +425,14 @@ final class BarometerManager: ObservableObject {
     /// Drives the "you're moving" warning before a manual reading.
     var isStationaryNow: Bool { gate.isStationary }
 
+    /// True when the newest buffered sample earned trust via the carried-clean
+    /// physics check rather than classifier stillness — the header says "carried"
+    /// instead of contradicting itself with the raw motion state.
+    var latestReadingIsCarried: Bool {
+        guard let last = buffer.samples.last else { return false }
+        return last.trusted && !last.stationary
+    }
+
     /// Calibrated + trusted SLP trace for the last ~60 min (drives the chart overlay).
     var phoneTrace: [(Date, Double)] { buffer.phoneTrace() }
 

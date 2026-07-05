@@ -212,7 +212,13 @@ struct PressureChartView: View {
         let points: [Plot]
     }
 
-    private var phoneSegments: [PhoneSegment] {
+    /// A recording run needs this much continuous span to read as a LINE; shorter
+    /// bursts (open the app for a minute, two points land) render as dots instead —
+    /// tiny two-point slivers look like broken glass scattered on the chart.
+    private static let phoneMinLineSpan: TimeInterval = 10 * 60
+
+    /// Continuous recording runs, split at gaps.
+    private var phoneRuns: [[Plot]] {
         var groups: [[Plot]] = []
         for p in visiblePhone {
             if let last = groups.last?.last,
@@ -222,15 +228,32 @@ struct PressureChartView: View {
                 groups.append([p])
             }
         }
-        // A lone point can't draw as a line; drop orphans.
-        return groups.enumerated()
-            .filter { $0.element.count >= 2 }
+        return groups
+    }
+
+    /// Runs long enough to draw as line segments.
+    private var phoneSegments: [PhoneSegment] {
+        phoneRuns.enumerated()
+            .filter { _, run in
+                guard run.count >= 3, let first = run.first, let last = run.last
+                else { return false }
+                return last.t.timeIntervalSince(first.t) >= Self.phoneMinLineSpan
+            }
             .map { PhoneSegment(id: $0.offset, points: $0.element) }
     }
 
+    /// Everything too short for a line — shown as discrete spot readings, matching
+    /// how station dots communicate "a measurement happened here".
+    private var phoneDots: [Plot] {
+        let lineIDs = Set(phoneSegments.map(\.id))
+        return phoneRuns.enumerated()
+            .filter { !lineIDs.contains($0.offset) }
+            .flatMap { $0.element }
+    }
+
     @ChartContentBuilder private var phoneContent: some ChartContent {
-        // Phone barometer local trace: calibrated readings as an orange line,
-        // clipped to the window like every other series and split at recording gaps.
+        // Phone barometer local trace: sustained runs as orange lines, brief bursts
+        // as orange dots. Clipped to the window like every other series.
         ForEach(phoneSegments) { seg in
             ForEach(seg.points) { p in
                 LineMark(x: .value("Time", p.t), y: .value("Pressure", p.value),
@@ -240,8 +263,13 @@ struct PressureChartView: View {
                     .interpolationMethod(.catmullRom)
             }
         }
-        // End dot only — the "local" text label lives in the legend row below,
-        // where it can't collide with the now-dot / forecast line at the seam.
+        ForEach(phoneDots) { p in
+            PointMark(x: .value("Time", p.t), y: .value("Pressure", p.value))
+                .foregroundStyle(.orange.opacity(0.85))
+                .symbolSize(16)
+        }
+        // End dot — the freshest local reading, slightly larger. The "local" text
+        // label lives in the legend row below.
         if let last = visiblePhone.last {
             PointMark(x: .value("Time", last.t), y: .value("Pressure", last.value))
                 .foregroundStyle(.orange)

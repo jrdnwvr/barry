@@ -77,14 +77,63 @@ struct RadarMapView: UIViewRepresentable {
         var overlays: [Int: RadarTileOverlay] = [:]
         var renderers: [Int: MKTileOverlayRenderer] = [:]
 
+        /// Hidden frames sit at a hair above zero instead of zero — MapKit still
+        /// draws them, so every frame's tiles load and cache up front. Kills the
+        /// blank pop-in on the first loop.
+        static let idleAlpha: CGFloat = 0.02
+        static let visibleAlpha: CGFloat = 0.75
+        private static let fadeDuration: CFTimeInterval = 0.3
+
+        private(set) var currentTime: Int = -1
+        private var displayLink: CADisplayLink?
+        private var fadeFrom: MKTileOverlayRenderer?
+        private var fadeTo: MKTileOverlayRenderer?
+        private var fadeStart: CFTimeInterval = 0
+
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
             if let tile = overlay as? RadarTileOverlay {
                 let r = MKTileOverlayRenderer(tileOverlay: tile)
-                r.alpha = 0
+                r.alpha = tile.frameTime == currentTime ? Self.visibleAlpha : Self.idleAlpha
                 renderers[tile.frameTime] = r
                 return r
             }
             return MKOverlayRenderer(overlay: overlay)
+        }
+
+        /// Crossfade to a new frame (~0.3 s) instead of hard-cutting — most of the
+        /// perceived Dark Sky smoothness for a fraction of frame interpolation.
+        func setCurrent(_ time: Int) {
+            guard time != currentTime else { return }
+            let old = renderers[currentTime]
+            currentTime = time
+            displayLink?.invalidate()
+            displayLink = nil
+            // Park everything that isn't part of this transition.
+            for (t, r) in renderers where t != time && r !== old {
+                r.alpha = Self.idleAlpha
+            }
+            guard let new = renderers[time] else {
+                old?.alpha = Self.idleAlpha
+                return
+            }
+            fadeFrom = old
+            fadeTo = new
+            fadeStart = CACurrentMediaTime()
+            let link = CADisplayLink(target: self, selector: #selector(stepFade))
+            link.add(to: .main, forMode: .common)
+            displayLink = link
+        }
+
+        @objc private func stepFade() {
+            let p = CGFloat(min(1, (CACurrentMediaTime() - fadeStart) / Self.fadeDuration))
+            fadeTo?.alpha = Self.idleAlpha + (Self.visibleAlpha - Self.idleAlpha) * p
+            fadeFrom?.alpha = Self.visibleAlpha - (Self.visibleAlpha - Self.idleAlpha) * p
+            if p >= 1 {
+                displayLink?.invalidate()
+                displayLink = nil
+                fadeFrom = nil
+                fadeTo = nil
+            }
         }
     }
 
@@ -129,10 +178,7 @@ struct RadarMapView: UIViewRepresentable {
             map.addOverlay(tile, level: .aboveRoads)
         }
         guard frames.indices.contains(index) else { return }
-        let current = frames[index].time
-        for (time, renderer) in context.coordinator.renderers {
-            renderer.alpha = (time == current) ? 0.75 : 0
-        }
+        context.coordinator.setCurrent(frames[index].time)
     }
 }
 
@@ -145,7 +191,8 @@ struct RadarView: View {
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var model = RadarModel()
-    private let ticker = Timer.publish(every: 0.7, on: .main, in: .common).autoconnect()
+    @State private var dwellTicks = 0
+    private let ticker = Timer.publish(every: 0.55, on: .main, in: .common).autoconnect()
 
     var body: some View {
         NavigationStack {
@@ -173,7 +220,16 @@ struct RadarView: View {
             .task { await model.load() }
             .onReceive(ticker) { _ in
                 guard model.playing, !model.frames.isEmpty else { return }
+                // Dwell at the end of the loop (the freshest picture) before
+                // restarting — the Dark Sky rhythm, and it reads far calmer.
+                if dwellTicks > 0 {
+                    dwellTicks -= 1
+                    return
+                }
                 model.index = (model.index + 1) % model.frames.count
+                if model.index == model.frames.count - 1 {
+                    dwellTicks = 3
+                }
             }
         }
     }

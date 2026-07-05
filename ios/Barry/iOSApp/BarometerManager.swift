@@ -439,14 +439,6 @@ final class BarometerManager: ObservableObject {
     /// Persisted calibrated SLP trace over the last ~48 h (drives the Task 3 overlay).
     var phoneHistoryTrace: [(Date, Double)] { history.trace() }
 
-    /// Persisted trusted trace clipped to the last 2 h — the hero chart's orange
-    /// "local" accent. Unlike `phoneTrace` (in-memory buffer, retroactively wiped
-    /// the moment motion is detected), this persists across movement, matching the
-    /// headline local reading: last *good* readings stay visible and only age out.
-    var recentLocalTrace: [(Date, Double)] {
-        let cutoff = Date().addingTimeInterval(-2 * 3600)
-        return history.trace().filter { $0.0 >= cutoff }
-    }
 
     /// Most recent trusted local SLP and when it was taken. Unlike `latestLocalSLP`
     /// (which is nil while moving), this persists across motion — so the UI can keep

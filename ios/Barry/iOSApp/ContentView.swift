@@ -99,9 +99,9 @@ struct ContentView: View {
                         combined: combined,
                         now: store.now,
                         unit: unit,
-                        // Persisted trace (not the motion-wiped live buffer) so the
-                        // local line survives picking the phone up, like the headline.
-                        phoneTrace: phoneBarometerEnabled ? barometer.recentLocalTrace : [],
+                        // Full persisted history — the chart clips to its window and
+                        // splits the line where recording gaps would fake a bridge.
+                        phoneTrace: phoneBarometerEnabled ? barometer.phoneHistoryTrace : [],
                         window: chartWindow
                     )
                     // Trigger calibration whenever a fresh combined response arrives.

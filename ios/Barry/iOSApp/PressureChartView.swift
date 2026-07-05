@@ -202,26 +202,50 @@ struct PressureChartView: View {
         }
     }
 
+    /// Recording gaps longer than this break the line — the history only grows
+    /// while the app runs, and drawing a straight bridge across an overnight hole
+    /// would fabricate readings that never happened.
+    private static let phoneGapSeconds: TimeInterval = 20 * 60
+
+    private struct PhoneSegment: Identifiable {
+        let id: Int
+        let points: [Plot]
+    }
+
+    private var phoneSegments: [PhoneSegment] {
+        var groups: [[Plot]] = []
+        for p in visiblePhone {
+            if let last = groups.last?.last,
+               p.t.timeIntervalSince(last.t) <= Self.phoneGapSeconds {
+                groups[groups.count - 1].append(p)
+            } else {
+                groups.append([p])
+            }
+        }
+        // A lone point can't draw as a line; drop orphans.
+        return groups.enumerated()
+            .filter { $0.element.count >= 2 }
+            .map { PhoneSegment(id: $0.offset, points: $0.element) }
+    }
+
     @ChartContentBuilder private var phoneContent: some ChartContent {
-        // Phone barometer local trace: recent calibrated readings as an orange line.
-        // (The old "divergence band" against a flat last-METAR baseline is gone —
-        // during a real pressure fall the flat baseline made the band balloon into
-        // a meaningless shape. The Δ readout + Sensor vs Station carry divergence.)
-        if !visiblePhone.isEmpty {
-            ForEach(visiblePhone) { p in
+        // Phone barometer local trace: calibrated readings as an orange line,
+        // clipped to the window like every other series and split at recording gaps.
+        ForEach(phoneSegments) { seg in
+            ForEach(seg.points) { p in
                 LineMark(x: .value("Time", p.t), y: .value("Pressure", p.value),
-                         series: .value("Series", "phone"))
+                         series: .value("Series", "phone-\(seg.id)"))
                     .foregroundStyle(.orange.opacity(0.9))
                     .lineStyle(StrokeStyle(lineWidth: 2))
                     .interpolationMethod(.catmullRom)
             }
-            // End dot only — the "local" text label lives in the legend row below,
-            // where it can't collide with the now-dot / forecast line at the seam.
-            if let last = visiblePhone.last {
-                PointMark(x: .value("Time", last.t), y: .value("Pressure", last.value))
-                    .foregroundStyle(.orange)
-                    .symbolSize(40)
-            }
+        }
+        // End dot only — the "local" text label lives in the legend row below,
+        // where it can't collide with the now-dot / forecast line at the seam.
+        if let last = visiblePhone.last {
+            PointMark(x: .value("Time", last.t), y: .value("Pressure", last.value))
+                .foregroundStyle(.orange)
+                .symbolSize(40)
         }
     }
 

@@ -89,9 +89,9 @@ final class RadarModel: ObservableObject {
         }
     }
 
-    /// One multi-point Open-Meteo call for a 5×4 grid across the region.
+    /// One multi-point Open-Meteo call for a 7×5 grid across the region.
     func fetchWind(region: MKCoordinateRegion) async {
-        let cols = 5, rows = 4
+        let cols = 7, rows = 5
         let inset = 0.12
         var lats: [Double] = [], lons: [Double] = []
         let latSpan = region.span.latitudeDelta * (1 - 2 * inset)
@@ -145,6 +145,68 @@ struct RadarMapView: UIViewRepresentable {
 
     final class RadarTileOverlay: MKTileOverlay {
         var frameTime = 0
+
+        /// RainViewer's deepest native zoom. Beyond it we fetch the z7 ancestor
+        /// tile, crop the requested quadrant, and upscale — MapKit's maximumZ
+        /// would simply stop rendering (the "radar disappears when I zoom" bug),
+        /// and progressively softer rain suits the Dark Sky look anyway.
+        static let maxNativeZ = 7
+        private static let parentCache: NSCache<NSString, NSData> = {
+            let c = NSCache<NSString, NSData>()
+            c.countLimit = 80
+            return c
+        }()
+
+        override func loadTile(at path: MKTileOverlayPath,
+                               result: @escaping (Data?, Error?) -> Void) {
+            guard path.z > Self.maxNativeZ else {
+                super.loadTile(at: path, result: result)
+                return
+            }
+            let factor = path.z - Self.maxNativeZ
+            let scale = 1 << factor
+            let parentPath = MKTileOverlayPath(x: path.x / scale, y: path.y / scale,
+                                               z: Self.maxNativeZ,
+                                               contentScaleFactor: path.contentScaleFactor)
+            let subX = path.x % scale
+            let subY = path.y % scale
+            fetchCached(url(forTilePath: parentPath)) { data in
+                guard let data, let cg = UIImage(data: data)?.cgImage else {
+                    result(nil, nil)
+                    return
+                }
+                let cropSide = Double(cg.width) / Double(scale)
+                let rect = CGRect(x: Double(subX) * cropSide, y: Double(subY) * cropSide,
+                                  width: cropSide, height: cropSide)
+                guard let cropped = cg.cropping(to: rect) else {
+                    result(nil, nil)
+                    return
+                }
+                let side = 512.0
+                let format = UIGraphicsImageRendererFormat()
+                format.scale = 1
+                let up = UIGraphicsImageRenderer(size: CGSize(width: side, height: side),
+                                                 format: format).image { _ in
+                    UIImage(cgImage: cropped).draw(in: CGRect(x: 0, y: 0,
+                                                              width: side, height: side))
+                }
+                result(up.pngData(), nil)
+            }
+        }
+
+        /// Parent-tile fetch with a small in-memory cache — 4^n child tiles share
+        /// one ancestor, so this collapses the request count while zoomed in.
+        private func fetchCached(_ url: URL, completion: @escaping (Data?) -> Void) {
+            let key = url.absoluteString as NSString
+            if let hit = Self.parentCache.object(forKey: key) {
+                completion(hit as Data)
+                return
+            }
+            URLSession.shared.dataTask(with: url) { data, _, _ in
+                if let data { Self.parentCache.setObject(data as NSData, forKey: key) }
+                completion(data)
+            }.resume()
+        }
     }
 
     final class WindArrowAnnotation: MKPointAnnotation {
@@ -272,10 +334,10 @@ struct RadarMapView: UIViewRepresentable {
         map.region = MKCoordinateRegion(
             center: center,
             span: MKCoordinateSpan(latitudeDelta: 3.2, longitudeDelta: 3.2))
-        // Radar detail tops out at tile z7 (upscaled beyond) — cap zoom-in so the
-        // rain layer never degrades into meaningless mush.
+        // Radar detail tops out at tile z7 (crop-upscaled beyond) — allow a closer
+        // look than before, but stop before the upscale turns to meaningless mush.
         map.cameraZoomRange = MKMapView.CameraZoomRange(
-            minCenterCoordinateDistance: 120_000)
+            minCenterCoordinateDistance: 60_000)
         let pin = MKPointAnnotation()
         pin.coordinate = center
         map.addAnnotation(pin)
@@ -284,10 +346,9 @@ struct RadarMapView: UIViewRepresentable {
 
     func updateUIView(_ map: MKMapView, context: Context) {
         // Lazily add an overlay per frame (RainViewer "Dark Sky" scheme = color 8;
-        // options 1_1 = smoothed + snow shown distinctly). RainViewer serves tiles
-        // up to z7 ONLY — clamp maximumZ so MapKit upscales z7 tiles instead of
-        // requesting z8+ and getting "Zoom Level Not Supported" error tiles. 512px
-        // tiles keep the upscale crisp.
+        // options 1_1 = smoothed + snow shown distinctly). Past RainViewer's native
+        // z7 the overlay itself crops + upscales ancestor tiles (see loadTile) —
+        // do NOT set maximumZ, which would stop rendering entirely past z7.
         for f in frames where context.coordinator.overlays[f.time] == nil {
             let template = host + f.path + "/512/{z}/{x}/{y}/8/1_1.png"
             let tile = RadarTileOverlay(urlTemplate: template)
@@ -295,7 +356,6 @@ struct RadarMapView: UIViewRepresentable {
             tile.canReplaceMapContent = false
             tile.tileSize = CGSize(width: 512, height: 512)
             tile.minimumZ = 1
-            tile.maximumZ = 7
             context.coordinator.overlays[f.time] = tile
             map.addOverlay(tile, level: .aboveRoads)
         }

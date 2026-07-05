@@ -202,10 +202,11 @@ struct PressureChartView: View {
         }
     }
 
-    /// Recording gaps longer than this break the line — the history only grows
-    /// while the app runs, and drawing a straight bridge across an overnight hole
-    /// would fabricate readings that never happened.
-    private static let phoneGapSeconds: TimeInterval = 20 * 60
+    /// Recording gaps longer than this break the line. Set to ~90 min: the station
+    /// line itself bridges hourly METARs, so local points at METAR-class density
+    /// (background refresh lands roughly hourly when iOS cooperates) deserve the
+    /// same treatment. Multi-hour holes still break honestly.
+    private static let phoneGapSeconds: TimeInterval = 90 * 60
 
     private struct PhoneSegment: Identifiable {
         let id: Int
@@ -215,7 +216,7 @@ struct PressureChartView: View {
     /// A recording run needs this much continuous span to read as a LINE; shorter
     /// bursts (open the app for a minute, two points land) render as dots instead —
     /// tiny two-point slivers look like broken glass scattered on the chart.
-    private static let phoneMinLineSpan: TimeInterval = 10 * 60
+    private static let phoneMinLineSpan: TimeInterval = 20 * 60
 
     /// Continuous recording runs, split at gaps.
     private var phoneRuns: [[Plot]] {
@@ -231,11 +232,13 @@ struct PressureChartView: View {
         return groups
     }
 
-    /// Runs long enough to draw as line segments.
+    /// Runs long enough to draw as line segments. Two points an hour apart are a
+    /// legitimate hour of trend (that's exactly what the station line does with
+    /// hourly METARs) — the span requirement is what kills sub-minute slivers.
     private var phoneSegments: [PhoneSegment] {
         phoneRuns.enumerated()
             .filter { _, run in
-                guard run.count >= 3, let first = run.first, let last = run.last
+                guard run.count >= 2, let first = run.first, let last = run.last
                 else { return false }
                 return last.t.timeIntervalSince(first.t) >= Self.phoneMinLineSpan
             }

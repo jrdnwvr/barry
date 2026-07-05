@@ -16,7 +16,10 @@ import Foundation
 
 enum BackgroundRefresh {
     static let taskID = "me.wvr.barry.refresh"
-    static let interval: TimeInterval = 30 * 60  // earliest, not guaranteed
+    // Earliest-begin floor, NOT a schedule — iOS decides the real cadence from
+    // usage/battery and typically grants far fewer slots than this. Asking early
+    // costs nothing and occasionally wins an extra slot.
+    static let interval: TimeInterval = 15 * 60
 
     /// Submit the next refresh request. Safe to call repeatedly (a duplicate just
     /// replaces the pending request). No-op on the Simulator / when disabled.

@@ -101,6 +101,10 @@ struct RadarMapView: UIViewRepresentable {
         map.region = MKCoordinateRegion(
             center: center,
             span: MKCoordinateSpan(latitudeDelta: 3.2, longitudeDelta: 3.2))
+        // Radar detail tops out at tile z7 (upscaled beyond) — cap zoom-in so the
+        // rain layer never degrades into meaningless mush.
+        map.cameraZoomRange = MKMapView.CameraZoomRange(
+            minCenterCoordinateDistance: 120_000)
         let pin = MKPointAnnotation()
         pin.coordinate = center
         map.addAnnotation(pin)
@@ -109,12 +113,18 @@ struct RadarMapView: UIViewRepresentable {
 
     func updateUIView(_ map: MKMapView, context: Context) {
         // Lazily add an overlay per frame (RainViewer "Dark Sky" scheme = color 8;
-        // options 1_1 = smoothed + snow shown distinctly).
+        // options 1_1 = smoothed + snow shown distinctly). RainViewer serves tiles
+        // up to z7 ONLY — clamp maximumZ so MapKit upscales z7 tiles instead of
+        // requesting z8+ and getting "Zoom Level Not Supported" error tiles. 512px
+        // tiles keep the upscale crisp.
         for f in frames where context.coordinator.overlays[f.time] == nil {
-            let template = host + f.path + "/256/{z}/{x}/{y}/8/1_1.png"
+            let template = host + f.path + "/512/{z}/{x}/{y}/8/1_1.png"
             let tile = RadarTileOverlay(urlTemplate: template)
             tile.frameTime = f.time
             tile.canReplaceMapContent = false
+            tile.tileSize = CGSize(width: 512, height: 512)
+            tile.minimumZ = 1
+            tile.maximumZ = 7
             context.coordinator.overlays[f.time] = tile
             map.addOverlay(tile, level: .aboveRoads)
         }

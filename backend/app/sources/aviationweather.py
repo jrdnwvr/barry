@@ -201,7 +201,13 @@ async def fetch_metars(
         timeout=15.0,
     )
     resp.raise_for_status()
-    data = resp.json()
+    # An unknown identifier gets an EMPTY BODY from AWC (not an empty JSON
+    # list) — .json() would raise and mask "no data" as a fetch failure,
+    # which broke the K-prefix retry in get_pressure.
+    try:
+        data = resp.json()
+    except ValueError:
+        data = []
     if not isinstance(data, list):
         data = []
     return parse_records(data)

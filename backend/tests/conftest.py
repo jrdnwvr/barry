@@ -100,6 +100,11 @@ class FakeUpstream:
                 # "LUK" or "I67" returns nothing; "KLUK"/"KI67" work).
                 if sid and sid.startswith("K"):
                     recs.extend(sample_metars(sid))
+            if not recs:
+                # Faithful to real AWC: unknown identifiers get an EMPTY BODY,
+                # not an empty JSON array — this exact quirk broke normalization
+                # in production while the tests passed.
+                return httpx.Response(200, text="")
             return httpx.Response(200, json=recs)
         if "open-meteo.com" in url:
             self.om_calls.append(request)

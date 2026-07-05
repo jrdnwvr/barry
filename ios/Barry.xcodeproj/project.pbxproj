@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		056F1A9083CFD0F35BE56B4B /* Interpreter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44083DF235ACE8084DC9A498 /* Interpreter.swift */; };
+		06E7445D9EF69D7CD6C141EE /* RadarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0EBA6519DD65A01DF98B527 /* RadarView.swift */; };
 		08AE6842CBAF80BC672E193D /* PressureUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D967187F3CE6292310A2937 /* PressureUnit.swift */; };
 		094EEF5E8D649C8E37BEB643 /* PressureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A60F6C6B6915B13C8CAD3A3 /* PressureStore.swift */; };
 		09EEB08561CA15D52D6E6036 /* WatchSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F0EF3938BA8F192FB71228 /* WatchSettingsView.swift */; };
@@ -196,6 +197,7 @@
 		B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureHistory.swift; sourceTree = "<group>"; };
 		B98E77604746429DE78EF9C4 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		BAFA9596978A2666CDFADAB4 /* RectangularComplications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RectangularComplications.swift; sourceTree = "<group>"; };
+		C0EBA6519DD65A01DF98B527 /* RadarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarView.swift; sourceTree = "<group>"; };
 		C1326419A7770149C91B0438 /* PhoneWidgetViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWidgetViews.swift; sourceTree = "<group>"; };
 		CD077DE63D0DE437229C43CC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CF51EF6C7C37D4CEE92CE308 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -333,6 +335,7 @@
 				B98E77604746429DE78EF9C4 /* OnboardingView.swift */,
 				778E430DEB72ECE6B1DB5CCA /* PressureChartView.swift */,
 				6978CE026B8EEE1A560877C0 /* PressureGuideView.swift */,
+				C0EBA6519DD65A01DF98B527 /* RadarView.swift */,
 				DA12AC45B8A41856114FD9A7 /* SensorComparisonView.swift */,
 				72812DF1800A9DF0CF5EF2C3 /* SettingsView.swift */,
 				E569F3B3B9FAB65C07970B1A /* StormAlerter.swift */,
@@ -589,6 +592,7 @@
 				77F617DE1799A58749B82524 /* PressureHistory.swift in Sources */,
 				094EEF5E8D649C8E37BEB643 /* PressureStore.swift in Sources */,
 				0F22D62C5D40785243A56CD0 /* PressureUnit.swift in Sources */,
+				06E7445D9EF69D7CD6C141EE /* RadarView.swift in Sources */,
 				8B662BF9297E88CBB93B370B /* SensorComparisonView.swift in Sources */,
 				8C6BCDDE909F4DDEBB5F16AA /* SettingsView.swift in Sources */,
 				4841725627A1F0AC607A52BE /* SharedSnapshot.swift in Sources */,

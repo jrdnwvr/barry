@@ -120,6 +120,13 @@ struct ContentView: View {
                 // Secondary: wind + rain confirmation, always expanded.
                 ConfirmationOverlayView(combined: combined, now: store.now)
 
+                // Radar: the sky itself, as corroboration for the trend. Sheet keeps
+                // the main screen a glance. Needs station coords to center on.
+                if let rlat = combined.pressure.lat, let rlon = combined.pressure.lon {
+                    RadarRow(lat: rlat, lon: rlon,
+                             stationName: combined.pressure.name ?? combined.pressure.station)
+                }
+
                 // Sensor vs Station: a compact entry row — the full comparison panel
                 // (windows, legend, Δ, Measure now) lives on its own screen so the
                 // default experience stays glance + verdict + chart.
@@ -156,6 +163,38 @@ struct ContentView: View {
         case .airport:
             store.station = homeStation.uppercased()
             await store.load(silent: silent)
+        }
+    }
+}
+
+private struct RadarRow: View {
+    let lat: Double
+    let lon: Double
+    let stationName: String
+    @State private var showRadar = false
+
+    var body: some View {
+        Button { showRadar = true } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.subheadline)
+                    .foregroundStyle(.blue)
+                Text("Radar")
+                    .font(.subheadline.weight(.medium))
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
+            .background(Color(.secondarySystemBackground),
+                        in: RoundedRectangle(cornerRadius: 12))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showRadar) {
+            RadarView(lat: lat, lon: lon, stationName: stationName)
         }
     }
 }

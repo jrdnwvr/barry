@@ -28,6 +28,8 @@ struct SettingsView: View {
     private var stormAlertsEnabled: Bool = false
 
     @State private var newICAO: String = ""
+    @State private var icaoError: String?
+    @State private var isValidatingICAO = false
     @State private var placeQuery: String = ""
     @State private var geocodeError: String?
     @State private var isGeocoding = false
@@ -112,9 +114,16 @@ struct SettingsView: View {
                             .textInputAutocapitalization(.characters)
                             .autocorrectionDisabled()
                             .onSubmit { addAirport() }
-                        Button("Add") { addAirport() }
-                            .buttonStyle(.bordered)
-                            .disabled(!icaoLooksValid)
+                        if isValidatingICAO {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Button("Add") { addAirport() }
+                                .buttonStyle(.bordered)
+                                .disabled(!icaoLooksValid)
+                        }
+                    }
+                    if let err = icaoError {
+                        Text(err).font(.caption).foregroundStyle(.orange)
                     }
 
                     HStack {
@@ -183,10 +192,28 @@ struct SettingsView: View {
     }
 
     private func addAirport() {
-        guard icaoLooksValid else { return }
+        guard icaoLooksValid, !isValidatingICAO else { return }
         let icao = newICAO.trimmingCharacters(in: .whitespaces).uppercased()
-        savedLocations.add(SavedLocation(kind: .airport(icao: icao)))
-        newICAO = ""
+        icaoError = nil
+        isValidatingICAO = true
+        Task {
+            defer { isValidatingICAO = false }
+            do {
+                // The backend normalizes the identifier (I67 -> KI67, CVG ->
+                // KCVG); save the canonical form it reports back.
+                let combined = try await BarryAPI().combined(station: icao, lat: nil, lon: nil)
+                if combined.pressure.series.isEmpty {
+                    icaoError = "\(icao) doesn't report weather. Try a nearby reporting airport, or add it as a place and Barry will use the nearest station."
+                    return
+                }
+                savedLocations.add(SavedLocation(kind: .airport(icao: combined.pressure.station)))
+                newICAO = ""
+            } catch {
+                // Can't reach the backend to check — add as typed rather than block.
+                savedLocations.add(SavedLocation(kind: .airport(icao: icao)))
+                newICAO = ""
+            }
+        }
     }
 
     private func geocode() {

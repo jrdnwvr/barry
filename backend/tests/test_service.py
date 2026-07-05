@@ -148,3 +148,22 @@ async def test_forecast_none_when_upstream_dies_cold(upstream, client):
     resp = await cold.get_combined("KLUK", 39.1, -84.5)
     assert resp.forecast is None
     assert resp.sources.forecast is None
+
+
+# --- ICAO prefix normalization ------------------------------------------------
+
+
+async def test_three_letter_identifier_retries_k_form(service, upstream):
+    # "LUK" doesn't report; the K form does. The response adopts the canonical id.
+    resp = await service.get_pressure("LUK")
+    assert resp.station == "KLUK"
+    assert len(resp.series) == 4
+    # Two upstream calls: the bare id (empty), then the K retry.
+    assert len(upstream.awc_calls) == 2
+
+
+async def test_alphanumeric_identifier_retries_k_form(service):
+    # I67-style fields (Cincinnati West) report as KI67.
+    resp = await service.get_pressure("I67")
+    assert resp.station == "KI67"
+    assert len(resp.series) == 4

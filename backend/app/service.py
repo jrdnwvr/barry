@@ -78,12 +78,23 @@ class PressureService:
         try:
             parsed_all = await awc.fetch_metars([station], self._client, hours=hours)
             parsed = parsed_all.get(station)
+            used_station = station
+            if parsed is None and len(station) == 3:
+                # US identifiers are commonly typed without the ICAO prefix
+                # (CVG -> KCVG) — and that includes alphanumeric fields
+                # (I67 -> KI67). Retry the K form and adopt it as canonical.
+                k_station = "K" + station
+                parsed_all = await awc.fetch_metars([k_station], self._client, hours=hours)
+                parsed = parsed_all.get(k_station)
+                if parsed is not None:
+                    used_station = k_station
+                    await self.registry.touch(used_station)
             if parsed is None:
                 raise LookupError(f"no METAR data for {station}")
             tendency = awc.build_tendency(parsed)
             resp = PressureResponse(
-                station=station,
-                name=parsed.get("name") or (stations.get(station) or {}).get("name"),
+                station=used_station,
+                name=parsed.get("name") or (stations.get(used_station) or {}).get("name"),
                 lat=parsed.get("lat"),
                 lon=parsed.get("lon"),
                 series=parsed["series"],

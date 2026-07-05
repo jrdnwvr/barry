@@ -84,6 +84,22 @@ struct ContentView: View {
         case .failed(let message):
             ErrorStateView(message: message) { Task { await reload() } }
                 .frame(maxWidth: .infinity, minHeight: 320)
+        case .loaded(let combined) where combined.pressure.series.isEmpty:
+            // The station exists as an identifier but nothing reports there —
+            // say so instead of rendering a screen of dashes.
+            VStack(spacing: 12) {
+                Image(systemName: "icloud.slash")
+                    .font(.largeTitle)
+                    .foregroundStyle(.secondary)
+                Text("\(store.station) isn't reporting weather")
+                    .font(.headline)
+                Text("This field may not have a weather station. Try a nearby reporting airport, or add this spot as a place in Settings and Barry will use the nearest station.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, minHeight: 320)
         case .loaded(let combined):
             VStack(alignment: .leading, spacing: 20) {
                 // The glance: station, live-aware current value, trend, verdict.

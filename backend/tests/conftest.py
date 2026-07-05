@@ -96,7 +96,9 @@ class FakeUpstream:
             ids = request.url.params.get("ids", "").split(",")
             recs = []
             for sid in ids:
-                if sid:
+                # Like real AWC: only K-prefixed identifiers report (typing
+                # "LUK" or "I67" returns nothing; "KLUK"/"KI67" work).
+                if sid and sid.startswith("K"):
                     recs.extend(sample_metars(sid))
             return httpx.Response(200, json=recs)
         if "open-meteo.com" in url:

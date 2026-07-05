@@ -21,6 +21,14 @@ struct RadarFrame: Equatable, Identifiable {
     var id: Int { time }
 }
 
+/// One wind-field sample: where, how hard, and from which direction.
+struct WindArrow: Equatable {
+    let lat: Double
+    let lon: Double
+    let speedKmh: Double
+    let fromDeg: Double
+}
+
 @MainActor
 final class RadarModel: ObservableObject {
     @Published var frames: [RadarFrame] = []
@@ -28,6 +36,15 @@ final class RadarModel: ObservableObject {
     @Published var index = 0
     @Published var playing = true
     @Published var failed = false
+    @Published var windArrows: [WindArrow] = []
+
+    /// Last region the map reported — used when the toggle flips on.
+    var lastRegion: MKCoordinateRegion?
+    private var windTask: Task<Void, Never>?
+
+    /// Arrows only render where the wind is worth drawing (~8 kt) — the Dark Sky
+    /// rule: calm areas stay clean.
+    static let minArrowKmh = 15.0
 
     /// Index of the most recent observed (non-forecast) frame.
     var nowIndex: Int {
@@ -57,6 +74,60 @@ final class RadarModel: ObservableObject {
             failed = true
         }
     }
+
+    // MARK: Wind field
+
+    /// Debounced reload — pans/zooms fire this; only the last one within ~0.7 s wins.
+    func scheduleWindReload(for region: MKCoordinateRegion, enabled: Bool) {
+        lastRegion = region
+        guard enabled else { return }
+        windTask?.cancel()
+        windTask = Task {
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            guard !Task.isCancelled else { return }
+            await fetchWind(region: region)
+        }
+    }
+
+    /// One multi-point Open-Meteo call for a 5×4 grid across the region.
+    func fetchWind(region: MKCoordinateRegion) async {
+        let cols = 5, rows = 4
+        let inset = 0.12
+        var lats: [Double] = [], lons: [Double] = []
+        let latSpan = region.span.latitudeDelta * (1 - 2 * inset)
+        let lonSpan = region.span.longitudeDelta * (1 - 2 * inset)
+        let lat0 = region.center.latitude - latSpan / 2
+        let lon0 = region.center.longitude - lonSpan / 2
+        for r in 0..<rows {
+            for c in 0..<cols {
+                lats.append(lat0 + latSpan * Double(r) / Double(rows - 1))
+                lons.append(lon0 + lonSpan * Double(c) / Double(cols - 1))
+            }
+        }
+        let latStr = lats.map { String(format: "%.3f", $0) }.joined(separator: ",")
+        let lonStr = lons.map { String(format: "%.3f", $0) }.joined(separator: ",")
+        guard let url = URL(string:
+            "https://api.open-meteo.com/v1/forecast?latitude=\(latStr)&longitude=\(lonStr)&current_weather=true")
+        else { return }
+
+        struct Point: Decodable {
+            struct CW: Decodable { let windspeed: Double; let winddirection: Double }
+            let latitude: Double
+            let longitude: Double
+            let current_weather: CW
+        }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let points = try JSONDecoder().decode([Point].self, from: data)
+            windArrows = points
+                .filter { $0.current_weather.windspeed >= Self.minArrowKmh }
+                .map { WindArrow(lat: $0.latitude, lon: $0.longitude,
+                                 speedKmh: $0.current_weather.windspeed,
+                                 fromDeg: $0.current_weather.winddirection) }
+        } catch {
+            // Wind layer is enrichment; fail quietly and keep whatever we had.
+        }
+    }
 }
 
 // MARK: - Map (UIKit bridge)
@@ -68,9 +139,17 @@ struct RadarMapView: UIViewRepresentable {
     let frames: [RadarFrame]
     let index: Int
     let center: CLLocationCoordinate2D
+    var windArrows: [WindArrow] = []
+    var showWind: Bool = false
+    var onRegionChange: ((MKCoordinateRegion) -> Void)? = nil
 
     final class RadarTileOverlay: MKTileOverlay {
         var frameTime = 0
+    }
+
+    final class WindArrowAnnotation: MKPointAnnotation {
+        var speedKmh: Double = 0
+        var fromDeg: Double = 0
     }
 
     final class Coordinator: NSObject, MKMapViewDelegate {
@@ -90,6 +169,10 @@ struct RadarMapView: UIViewRepresentable {
         private var fadeTo: MKTileOverlayRenderer?
         private var fadeStart: CFTimeInterval = 0
 
+        var onRegionChange: ((MKCoordinateRegion) -> Void)?
+        var shownArrows: [WindArrow] = []
+        var arrowAnnotations: [WindArrowAnnotation] = []
+
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
             if let tile = overlay as? RadarTileOverlay {
                 let r = MKTileOverlayRenderer(tileOverlay: tile)
@@ -98,6 +181,45 @@ struct RadarMapView: UIViewRepresentable {
                 return r
             }
             return MKOverlayRenderer(overlay: overlay)
+        }
+
+        func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+            onRegionChange?(mapView.region)
+        }
+
+        func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            guard let wind = annotation as? WindArrowAnnotation else { return nil }
+            let id = "windArrow"
+            let view = mapView.dequeueReusableAnnotationView(withIdentifier: id)
+                ?? MKAnnotationView(annotation: wind, reuseIdentifier: id)
+            view.annotation = wind
+            let cfg = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
+            view.image = UIImage(systemName: "arrow.up", withConfiguration: cfg)?
+                .withTintColor(.label, renderingMode: .alwaysOriginal)
+            // Wind FROM fromDeg blows TOWARD fromDeg+180 — point the arrow with the flow.
+            view.transform = CGAffineTransform(
+                rotationAngle: CGFloat((wind.fromDeg + 180) * .pi / 180))
+            // Stronger wind, more present arrow.
+            view.alpha = 0.45 + min(0.35, CGFloat(wind.speedKmh) / 80)
+            view.isEnabled = false
+            view.displayPriority = .defaultLow
+            return view
+        }
+
+        /// Sync arrow annotations only when the set actually changed — updateUIView
+        /// runs every animation tick and must not churn annotations.
+        func syncArrows(_ arrows: [WindArrow], on map: MKMapView) {
+            guard arrows != shownArrows else { return }
+            shownArrows = arrows
+            map.removeAnnotations(arrowAnnotations)
+            arrowAnnotations = arrows.map { a in
+                let ann = WindArrowAnnotation()
+                ann.coordinate = CLLocationCoordinate2D(latitude: a.lat, longitude: a.lon)
+                ann.speedKmh = a.speedKmh
+                ann.fromDeg = a.fromDeg
+                return ann
+            }
+            map.addAnnotations(arrowAnnotations)
         }
 
         /// Crossfade to a new frame (~0.3 s) instead of hard-cutting — most of the
@@ -177,6 +299,9 @@ struct RadarMapView: UIViewRepresentable {
             context.coordinator.overlays[f.time] = tile
             map.addOverlay(tile, level: .aboveRoads)
         }
+        context.coordinator.onRegionChange = onRegionChange
+        context.coordinator.syncArrows(showWind ? windArrows : [], on: map)
+
         guard frames.indices.contains(index) else { return }
         context.coordinator.setCurrent(frames[index].time)
     }
@@ -192,7 +317,14 @@ struct RadarView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var model = RadarModel()
     @State private var dwellTicks = 0
+    @AppStorage("radarWindArrows", store: AppConfig.sharedDefaults)
+    private var showWindArrows: Bool = true
     private let ticker = Timer.publish(every: 0.55, on: .main, in: .common).autoconnect()
+
+    private var initialRegion: MKCoordinateRegion {
+        MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+                           span: MKCoordinateSpan(latitudeDelta: 3.2, longitudeDelta: 3.2))
+    }
 
     var body: some View {
         NavigationStack {
@@ -217,7 +349,12 @@ struct RadarView: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .task { await model.load() }
+            .task {
+                await model.load()
+                if showWindArrows {
+                    await model.fetchWind(region: model.lastRegion ?? initialRegion)
+                }
+            }
             .onReceive(ticker) { _ in
                 guard model.playing, !model.frames.isEmpty else { return }
                 // Dwell at the end of the loop (the freshest picture) before
@@ -239,10 +376,26 @@ struct RadarView: View {
             RadarMapView(host: model.host,
                          frames: model.frames,
                          index: model.index,
-                         center: CLLocationCoordinate2D(latitude: lat, longitude: lon))
+                         center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+                         windArrows: model.windArrows,
+                         showWind: showWindArrows,
+                         onRegionChange: { region in
+                             model.scheduleWindReload(for: region, enabled: showWindArrows)
+                         })
                 .clipShape(RoundedRectangle(cornerRadius: 12))
 
             controls
+
+            Toggle(isOn: $showWindArrows) {
+                Label("Wind arrows", systemImage: "wind")
+                    .font(.subheadline)
+            }
+            .onChange(of: showWindArrows) { _, on in
+                if on {
+                    Task { await model.fetchWind(region: model.lastRegion ?? initialRegion) }
+                }
+            }
+
             legend
         }
         .padding(.horizontal)
@@ -295,7 +448,7 @@ struct RadarView: View {
                 swatch(Color(red: 0.94, green: 0.65, blue: 0.15), "Heavy")
                 Spacer()
             }
-            Text("\(stationName) marked. Forecast frames show in orange on the timeline. Radar tiles by RainViewer, data from NOAA NEXRAD.")
+            Text("\(stationName) marked. Arrows point with the wind and show above ~8 kts. Forecast frames show in orange on the timeline. Radar tiles by RainViewer, data from NOAA NEXRAD. Wind by Open-Meteo.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }

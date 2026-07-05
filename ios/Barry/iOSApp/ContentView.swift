@@ -204,6 +204,10 @@ private struct DataSourceFootnote: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("\(combined.pressure.name ?? combined.pressure.station) · \(combined.pressure.source)")
+            // CC-BY 4.0 requires visible credit for the forecast data.
+            if combined.sources?.forecast != nil {
+                Text("Forecast · Open-Meteo.com (CC-BY 4.0)")
+            }
             Text("Updated \(combined.pressure.cachedAt.formatted(date: .omitted, time: .shortened))")
         }
         .font(.caption2)

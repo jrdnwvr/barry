@@ -19,6 +19,10 @@ struct HeroView: View {
     @ObservedObject var barometer: BarometerManager
     let now: Date
     var barometerEnabled: Bool
+    /// Saved-locations switcher (the station row becomes a menu when 2+ exist).
+    var locations: [SavedLocation] = []
+    var selectedLocationID: UUID? = nil
+    var onSelectLocation: ((UUID) -> Void)? = nil
 
     @State private var showComparison = false
     @State private var showGuide = false
@@ -49,7 +53,9 @@ struct HeroView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             StatusRow(combined: combined, barometer: barometer, now: now,
-                      barometerEnabled: barometerEnabled, localAt: localReading?.at)
+                      barometerEnabled: barometerEnabled, localAt: localReading?.at,
+                      locations: locations, selectedLocationID: selectedLocationID,
+                      onSelectLocation: onSelectLocation)
 
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 if let v = displayValue {
@@ -200,17 +206,49 @@ private struct StatusRow: View {
     /// When a recent local reading is being shown, its timestamp — surfaced as an age
     /// so the header reflects "we're showing local" rather than the raw motion state.
     var localAt: Date?
+    var locations: [SavedLocation] = []
+    var selectedLocationID: UUID? = nil
+    var onSelectLocation: ((UUID) -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 6) {
+            if let onSelectLocation, locations.count > 1 {
+                Menu {
+                    ForEach(locations) { loc in
+                        Button {
+                            onSelectLocation(loc.id)
+                        } label: {
+                            if loc.id == selectedLocationID {
+                                Label(loc.title, systemImage: "checkmark")
+                            } else {
+                                Text(loc.title)
+                            }
+                        }
+                    }
+                } label: {
+                    stationLabel(chevron: true)
+                }
+            } else {
+                stationLabel(chevron: false)
+            }
+            Spacer(minLength: 8)
+            freshness
+        }
+    }
+
+    private func stationLabel(chevron: Bool) -> some View {
+        HStack(spacing: 5) {
             Image(systemName: "airplane").font(.caption)
             Text(stationText)
                 .font(.subheadline.weight(.medium))
                 .lineLimit(1)
-                .foregroundStyle(.secondary)
-            Spacer(minLength: 8)
-            freshness
+            if chevron {
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
         }
+        .foregroundStyle(.secondary)
     }
 
     private var stationText: String {

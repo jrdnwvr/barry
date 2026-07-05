@@ -23,6 +23,7 @@
 		20AD2A1B5CC1C7738EAEF8F5 /* StormAlerter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E569F3B3B9FAB65C07970B1A /* StormAlerter.swift */; };
 		25F2CA5D0A085C6A963656C0 /* TendencyProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A24A6845ECB66698D61771D /* TendencyProvider.swift */; };
 		2C56C28A6BD13F7F21CA306B /* BarryWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = F776D233FE3E44CDDD61C05B /* BarryWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		2D039F6DE65B45CABECF405F /* SavedLocations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */; };
 		2D0CD865C6748C6CBA5D63AB /* PressureUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D967187F3CE6292310A2937 /* PressureUnit.swift */; };
 		2FF2F39288A0E15C1D7C4E43 /* BarryComplication.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5B1CE5EDD6706AFE35F1B6D9 /* BarryComplication.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		31549614253BF1B636E51ED3 /* BarryComplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 726AB15B448612548C2CCCCD /* BarryComplication.swift */; };
@@ -67,6 +68,8 @@
 		8C7B2F5AFF63137EA0451EA1 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0094727B647701DDDCF17BD2 /* LocationManager.swift */; };
 		8F156D0C3F3371A2376F2394 /* BarometerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02CC4610E9A811E4A3554DCB /* BarometerManager.swift */; };
 		93B3BCD445531D00C4959583 /* PressureHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */; };
+		967511152A1EBB2D602F2B9A /* SavedLocations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */; };
+		971C47371255C41380413D3E /* SavedLocations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */; };
 		98A632AA5A2B036CFA27697A /* PressureGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6978CE026B8EEE1A560877C0 /* PressureGuideView.swift */; };
 		9F987BE952507B2A891ADC78 /* PressureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A60F6C6B6915B13C8CAD3A3 /* PressureStore.swift */; };
 		A11B605E76613C43AC5FE11E /* BarryAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */; };
@@ -80,6 +83,7 @@
 		D21F7D7C1B619DD998B3C235 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0094727B647701DDDCF17BD2 /* LocationManager.swift */; };
 		D3CCE6CB0DB066A238922179 /* BarryAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */; };
 		DACD1A75954EE1A27EDEC976 /* BarryApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B8FF4A39677C2C8F46B98F7 /* BarryApp.swift */; };
+		DE3B1D2A64D44211EFC29928 /* SavedLocations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */; };
 		E05FC95492D2378F98823D23 /* WindUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E3203C0CBC7B1D5F0A57759 /* WindUnit.swift */; };
 		E1DA0A2BA6D5DAE408366B62 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EB1F388C1A5FE3D18F1D62E /* ContentView.swift */; };
 		E1F631B6FE1E863E001704F2 /* SharedSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */; };
@@ -170,6 +174,7 @@
 		34019275BE3EADB1E1E1739B /* BarryPhoneWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BarryPhoneWidget.entitlements; sourceTree = "<group>"; };
 		42AF37A1FEB24BB66E9E0A34 /* ComplicationDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComplicationDial.swift; sourceTree = "<group>"; };
 		44083DF235ACE8084DC9A498 /* Interpreter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Interpreter.swift; sourceTree = "<group>"; };
+		4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedLocations.swift; sourceTree = "<group>"; };
 		4B8FF4A39677C2C8F46B98F7 /* BarryApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryApp.swift; sourceTree = "<group>"; };
 		4D967187F3CE6292310A2937 /* PressureUnit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureUnit.swift; sourceTree = "<group>"; };
 		4EB1F388C1A5FE3D18F1D62E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -253,6 +258,7 @@
 				B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */,
 				8A60F6C6B6915B13C8CAD3A3 /* PressureStore.swift */,
 				4D967187F3CE6292310A2937 /* PressureUnit.swift */,
+				4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */,
 				05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */,
 				2542DA2C850B2399B31A9069 /* Tendency.swift */,
 				1A24A6845ECB66698D61771D /* TendencyProvider.swift */,
@@ -542,6 +548,7 @@
 				A13AA88D91661ADCE95D6B34 /* PressureStore.swift in Sources */,
 				2D0CD865C6748C6CBA5D63AB /* PressureUnit.swift in Sources */,
 				7492FC46266CE19D8B710E51 /* RectangularComplications.swift in Sources */,
+				971C47371255C41380413D3E /* SavedLocations.swift in Sources */,
 				0A97A6AB092391F5F45D58FC /* SharedSnapshot.swift in Sources */,
 				62FB812E1EB219CC6E616BBC /* Tendency.swift in Sources */,
 				483CBC3B0160B52142C82C61 /* TendencyProvider.swift in Sources */,
@@ -563,6 +570,7 @@
 				0F4644054E93F1968564CD2B /* PressureHistory.swift in Sources */,
 				135B9F935421A07D8AEDE093 /* PressureStore.swift in Sources */,
 				59DA22C45F3ECB63E17189B1 /* PressureUnit.swift in Sources */,
+				967511152A1EBB2D602F2B9A /* SavedLocations.swift in Sources */,
 				81C789D5AD14654F306BDA4C /* SharedSnapshot.swift in Sources */,
 				57789B75BDC58D0AACC5CA36 /* Tendency.swift in Sources */,
 				25F2CA5D0A085C6A963656C0 /* TendencyProvider.swift in Sources */,
@@ -593,6 +601,7 @@
 				094EEF5E8D649C8E37BEB643 /* PressureStore.swift in Sources */,
 				0F22D62C5D40785243A56CD0 /* PressureUnit.swift in Sources */,
 				06E7445D9EF69D7CD6C141EE /* RadarView.swift in Sources */,
+				2D039F6DE65B45CABECF405F /* SavedLocations.swift in Sources */,
 				8B662BF9297E88CBB93B370B /* SensorComparisonView.swift in Sources */,
 				8C6BCDDE909F4DDEBB5F16AA /* SettingsView.swift in Sources */,
 				4841725627A1F0AC607A52BE /* SharedSnapshot.swift in Sources */,
@@ -616,6 +625,7 @@
 				B0DD843032BBA29B2C4097D0 /* PressureHistory.swift in Sources */,
 				9F987BE952507B2A891ADC78 /* PressureStore.swift in Sources */,
 				08AE6842CBAF80BC672E193D /* PressureUnit.swift in Sources */,
+				DE3B1D2A64D44211EFC29928 /* SavedLocations.swift in Sources */,
 				E1F631B6FE1E863E001704F2 /* SharedSnapshot.swift in Sources */,
 				62FE249CDA4A80409C304F3D /* Tendency.swift in Sources */,
 				A9923E0C299F9CDF05E02D70 /* TendencyProvider.swift in Sources */,

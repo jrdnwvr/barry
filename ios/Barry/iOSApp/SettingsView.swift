@@ -13,22 +13,13 @@ import UserNotifications
 
 struct SettingsView: View {
     @EnvironmentObject var store: PressureStore
+    @EnvironmentObject var savedLocations: SavedLocationsStore
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage("pressureUnit", store: AppConfig.sharedDefaults)
     private var unitRaw: String = PressureUnit.inHg.rawValue
     @AppStorage("windUnit", store: AppConfig.sharedDefaults)
     private var windUnitRaw: String = WindUnit.mph.rawValue
-    @AppStorage("locationMode", store: AppConfig.sharedDefaults)
-    private var locationModeRaw: String = LocationMode.device.rawValue
-    @AppStorage("homeStation", store: AppConfig.sharedDefaults)
-    private var homeStation: String = AppConfig.defaultStation
-    @AppStorage("placeLabel", store: AppConfig.sharedDefaults)
-    private var placeLabel: String = ""
-    @AppStorage("placeLat", store: AppConfig.sharedDefaults)
-    private var placeLat: Double = 0
-    @AppStorage("placeLon", store: AppConfig.sharedDefaults)
-    private var placeLon: Double = 0
 
     @EnvironmentObject var barometer: BarometerManager
     @AppStorage("phoneBarometerEnabled", store: AppConfig.sharedDefaults)
@@ -36,14 +27,11 @@ struct SettingsView: View {
     @AppStorage(StormAlerter.enabledKey, store: AppConfig.sharedDefaults)
     private var stormAlertsEnabled: Bool = false
 
+    @State private var newICAO: String = ""
     @State private var placeQuery: String = ""
     @State private var geocodeError: String?
     @State private var isGeocoding = false
     @State private var notifDenied = false
-
-    private var locationMode: LocationMode {
-        LocationMode(rawValue: locationModeRaw) ?? .device
-    }
 
     var body: some View {
         NavigationStack {
@@ -94,24 +82,63 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
 
-                Section("Where to read pressure") {
-                    Picker("Source", selection: $locationModeRaw) {
-                        ForEach(LocationMode.allCases) { mode in
-                            Text(mode.label).tag(mode.rawValue)
+                Section {
+                    ForEach(savedLocations.locations) { loc in
+                        Button {
+                            savedLocations.selectedID = loc.id
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(loc.title)
+                                        .foregroundStyle(.primary)
+                                    if let sub = loc.subtitle {
+                                        Text(sub)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer()
+                                if loc.id == savedLocations.selectedID {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(.blue)
+                                }
+                            }
                         }
                     }
-                    .pickerStyle(.segmented)
+                    .onDelete { savedLocations.remove(at: $0) }
 
-                    switch locationMode {
-                    case .device:
-                        Text("Barry will resolve the nearest reporting station from your current location each time you refresh.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    case .place:
-                        placeSection
-                    case .airport:
-                        airportSection
+                    HStack {
+                        TextField("Add airport (ICAO, e.g. KLUK)", text: $newICAO)
+                            .textInputAutocapitalization(.characters)
+                            .autocorrectionDisabled()
+                            .onSubmit { addAirport() }
+                        Button("Add") { addAirport() }
+                            .buttonStyle(.bordered)
+                            .disabled(!icaoLooksValid)
                     }
+
+                    HStack {
+                        TextField("Add a place (city or address)", text: $placeQuery)
+                            .textInputAutocapitalization(.words)
+                            .autocorrectionDisabled()
+                            .submitLabel(.search)
+                            .onSubmit { geocode() }
+                        Button("Search") { geocode() }
+                            .buttonStyle(.bordered)
+                            .disabled(placeQuery.trimmingCharacters(in: .whitespaces).isEmpty || isGeocoding)
+                    }
+                    if isGeocoding {
+                        ProgressView().controlSize(.small)
+                    }
+                    if let err = geocodeError {
+                        Text(err).font(.caption).foregroundStyle(.red)
+                    }
+
+                    Text("Tap to switch. Swipe to remove. My location stays pinned and is the only place the phone's own barometer applies.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("Locations")
                 }
 
                 // Dev-only helpers — compiled out of Release/TestFlight builds so
@@ -150,44 +177,16 @@ struct SettingsView: View {
         }
     }
 
-    @ViewBuilder
-    private var placeSection: some View {
-        if !placeLabel.isEmpty {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(placeLabel).font(.body)
-                Text("\(placeLat, specifier: "%.3f"), \(placeLon, specifier: "%.3f")")
-                    .font(.caption2).foregroundStyle(.secondary)
-            }
-        }
-        HStack {
-            TextField("City, address, or airport", text: $placeQuery)
-                .textInputAutocapitalization(.words)
-                .autocorrectionDisabled()
-                .submitLabel(.search)
-                .onSubmit { geocode() }
-            Button("Search") { geocode() }
-                .buttonStyle(.bordered)
-                .disabled(placeQuery.trimmingCharacters(in: .whitespaces).isEmpty || isGeocoding)
-        }
-        if isGeocoding {
-            ProgressView().controlSize(.small)
-        }
-        if let err = geocodeError {
-            Text(err).font(.caption).foregroundStyle(.red)
-        }
-        Text("Barry will look up the nearest reporting station near this point. The station data still comes from an airport, so it can be a few miles from your saved place.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
+    private var icaoLooksValid: Bool {
+        let s = newICAO.trimmingCharacters(in: .whitespaces)
+        return s.count >= 3 && s.count <= 4 && s.allSatisfy { $0.isLetter || $0.isNumber }
     }
 
-    @ViewBuilder
-    private var airportSection: some View {
-        TextField("ICAO (e.g. KLUK)", text: $homeStation)
-            .textInputAutocapitalization(.characters)
-            .autocorrectionDisabled()
-        Text("Use an exact ICAO code when you want a specific reporting station, regardless of where you are.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
+    private func addAirport() {
+        guard icaoLooksValid else { return }
+        let icao = newICAO.trimmingCharacters(in: .whitespaces).uppercased()
+        savedLocations.add(SavedLocation(kind: .airport(icao: icao)))
+        newICAO = ""
     }
 
     private func geocode() {
@@ -204,12 +203,13 @@ struct SettingsView: View {
                     geocodeError = "No match found."
                     return
                 }
-                placeLat = loc.coordinate.latitude
-                placeLon = loc.coordinate.longitude
                 let parts = [pm.locality, pm.administrativeArea, pm.country]
                     .compactMap { $0 }
-                let labelFromPlace = parts.isEmpty ? (pm.name ?? query) : parts.joined(separator: ", ")
-                placeLabel = labelFromPlace
+                let label = parts.isEmpty ? (pm.name ?? query) : parts.joined(separator: ", ")
+                savedLocations.add(SavedLocation(kind: .place(
+                    lat: loc.coordinate.latitude,
+                    lon: loc.coordinate.longitude,
+                    label: label)))
                 placeQuery = ""
                 isGeocoding = false
             } catch {
@@ -220,17 +220,7 @@ struct SettingsView: View {
     }
 
     private func applyAndDismiss() async {
-        switch locationMode {
-        case .device:
-            await store.resolveStationFromLocation()
-            await store.load()
-        case .place:
-            await store.resolveStation(lat: placeLat, lon: placeLon)
-            await store.load(lat: placeLat, lon: placeLon)
-        case .airport:
-            store.station = homeStation.uppercased()
-            await store.load()
-        }
+        // Selection changes reload via ContentView's onChange; Done just closes.
         dismiss()
     }
 }

@@ -9,16 +9,9 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var store: PressureStore
     @EnvironmentObject var barometer: BarometerManager
+    @StateObject private var savedLocations = SavedLocationsStore()
     @AppStorage("pressureUnit", store: AppConfig.sharedDefaults)
     private var unitRaw: String = PressureUnit.inHg.rawValue
-    @AppStorage("locationMode", store: AppConfig.sharedDefaults)
-    private var locationModeRaw: String = LocationMode.device.rawValue
-    @AppStorage("homeStation", store: AppConfig.sharedDefaults)
-    private var homeStation: String = AppConfig.defaultStation
-    @AppStorage("placeLat", store: AppConfig.sharedDefaults)
-    private var placeLat: Double = 0
-    @AppStorage("placeLon", store: AppConfig.sharedDefaults)
-    private var placeLon: Double = 0
     @AppStorage("phoneBarometerEnabled", store: AppConfig.sharedDefaults)
     private var phoneBarometerEnabled: Bool = false
     @AppStorage("chartWindow", store: AppConfig.sharedDefaults)
@@ -28,6 +21,12 @@ struct ContentView: View {
 
     private var unit: PressureUnit { PressureUnit(rawValue: unitRaw) ?? .inHg }
     private var chartWindow: ChartWindow { ChartWindow(rawValue: chartWindowRaw) ?? .hours6 }
+
+    /// The phone barometer only means anything where the phone physically is —
+    /// viewing a remote station must never show LOCAL readings or, worse, feed a
+    /// remote SLP into the calibration (which would corrupt the offset).
+    private var isPhysicalSelection: Bool { savedLocations.selected.isPhysical }
+    private var localSensorActive: Bool { phoneBarometerEnabled && isPhysicalSelection }
 
     var body: some View {
         NavigationStack {
@@ -45,6 +44,12 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showSettings) {
                 SettingsView()
+                    .environmentObject(savedLocations)
+            }
+            // Switching locations (from the hero menu or Settings) reloads for
+            // the new selection.
+            .onChange(of: savedLocations.selectedID) { _, _ in
+                Task { await loadForCurrentMode(silent: false) }
             }
             .refreshable { await reload() }
             .task { await initialLoad() }
@@ -82,8 +87,12 @@ struct ContentView: View {
         case .loaded(let combined):
             VStack(alignment: .leading, spacing: 20) {
                 // The glance: station, live-aware current value, trend, verdict.
+                // The station row doubles as the saved-locations switcher.
                 HeroView(combined: combined, unit: unit, barometer: barometer,
-                         now: store.now, barometerEnabled: phoneBarometerEnabled)
+                         now: store.now, barometerEnabled: localSensorActive,
+                         locations: savedLocations.locations,
+                         selectedLocationID: savedLocations.selectedID,
+                         onSelectLocation: { savedLocations.selectedID = $0 })
 
                 // The focused trend: window toggle + chart + the honest caveat.
                 VStack(alignment: .leading, spacing: 8) {
@@ -101,12 +110,16 @@ struct ContentView: View {
                         unit: unit,
                         // Full persisted history — the chart clips to its window and
                         // splits the line where recording gaps would fake a bridge.
-                        phoneTrace: phoneBarometerEnabled ? barometer.phoneHistoryTrace : [],
+                        // Local trace only at the physical location.
+                        phoneTrace: localSensorActive ? barometer.phoneHistoryTrace : [],
                         window: chartWindow
                     )
                     // Trigger calibration whenever a fresh combined response arrives.
-                    // The obs time makes it one calibration point per METAR report.
+                    // Physical location ONLY: a remote station's SLP fed into the
+                    // calibration would corrupt the offset (and trip the altitude-
+                    // jump reset). The obs time keeps it one point per METAR.
                     .onChange(of: combined) { _, newCombined in
+                        guard isPhysicalSelection else { return }
                         if let slp = newCombined.currentPressure {
                             barometer.attemptCalibration(
                                 metarSLP: slp,
@@ -129,8 +142,10 @@ struct ContentView: View {
 
                 // Sensor vs Station: a compact entry row — the full comparison panel
                 // (windows, legend, Δ, Measure now) lives on its own screen so the
-                // default experience stays glance + verdict + chart.
-                if phoneBarometerEnabled {
+                // default experience stays glance + verdict + chart. Physical
+                // location only: comparing the pocket barometer to a remote
+                // station is meaningless.
+                if localSensorActive {
                     SensorStationRow(
                         combined: combined,
                         now: store.now,
@@ -153,15 +168,15 @@ struct ContentView: View {
     private func reload() async { await loadForCurrentMode(silent: true) }
 
     private func loadForCurrentMode(silent: Bool = false) async {
-        switch LocationMode(rawValue: locationModeRaw) ?? .device {
-        case .device:
+        switch savedLocations.selected.kind {
+        case .currentLocation:
             await store.resolveStationFromLocation()
             await store.load(silent: silent)
-        case .place:
-            await store.resolveStation(lat: placeLat, lon: placeLon)
-            await store.load(lat: placeLat, lon: placeLon, silent: silent)
-        case .airport:
-            store.station = homeStation.uppercased()
+        case .place(let lat, let lon, _):
+            await store.resolveStation(lat: lat, lon: lon)
+            await store.load(lat: lat, lon: lon, silent: silent)
+        case .airport(let icao):
+            store.station = icao
             await store.load(silent: silent)
         }
     }

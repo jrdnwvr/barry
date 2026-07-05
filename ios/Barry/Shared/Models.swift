@@ -25,6 +25,11 @@ struct CurrentObs: Codable, Hashable {
     var windspeed: Double?
     var winddir: Double?
     var windgust: Double?
+    /// Aviation conditions from the same METAR (drives the METAR complication).
+    var visibilitySM: Double?
+    var ceilingFt: Int?
+    var ceilingCover: String?
+    var fltCat: String?
 }
 
 struct TendencyOut: Codable, Hashable {

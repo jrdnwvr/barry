@@ -53,6 +53,76 @@ def _wind_dir(value) -> Optional[float]:
         return None
 
 
+def _visibility_sm(value) -> Optional[float]:
+    """AWC visibility in statute miles. Usually numeric, but "10+" is common."""
+    if value is None:
+        return None
+    try:
+        return float(str(value).rstrip("+"))
+    except ValueError:
+        return None
+
+
+# Cloud covers that constitute a ceiling (aviation definition).
+_CEILING_COVERS = {"BKN", "OVC", "OVX"}
+
+
+def _ceiling(clouds) -> tuple[Optional[int], Optional[str]]:
+    """(base_ft, cover) of the lowest broken/overcast layer. When there's no
+    ceiling, falls back to the lowest reported layer (FEW/SCT with its base) or
+    a bare sky-clear cover so the client can still render something honest."""
+    if not isinstance(clouds, list) or not clouds:
+        return None, None
+    ceilings = [
+        (c.get("base"), c.get("cover"))
+        for c in clouds
+        if c.get("cover") in _CEILING_COVERS and c.get("base") is not None
+    ]
+    if ceilings:
+        base, cover = min(ceilings, key=lambda x: x[0])
+        return int(base), cover
+    lowest = min(
+        (c for c in clouds if c.get("base") is not None),
+        key=lambda c: c["base"],
+        default=None,
+    )
+    if lowest is not None:
+        return int(lowest["base"]), lowest.get("cover")
+    # No bases at all — typically CLR/SKC/CAVOK.
+    return None, clouds[0].get("cover")
+
+
+def _flight_category(vis_sm: Optional[float], ceiling_ft: Optional[int]) -> Optional[str]:
+    """Standard US flight-category rules, used only when AWC omits fltCat."""
+    if vis_sm is None and ceiling_ft is None:
+        return None
+    vis = vis_sm if vis_sm is not None else 99.0
+    ceil = ceiling_ft if ceiling_ft is not None else 99999
+    if vis < 1 or ceil < 500:
+        return "LIFR"
+    if vis < 3 or ceil < 1000:
+        return "IFR"
+    if vis <= 5 or ceil <= 3000:
+        return "MVFR"
+    return "VFR"
+
+
+def _current_obs(newest: dict) -> CurrentObs:
+    vis = _visibility_sm(newest.get("visib"))
+    ceiling_ft, ceiling_cover = _ceiling(newest.get("clouds"))
+    return CurrentObs(
+        slp=newest.get("slp"),
+        presTend=newest.get("presTend"),
+        windspeed=_wind_kmh(newest.get("wspd")),
+        winddir=_wind_dir(newest.get("wdir")),
+        windgust=_wind_kmh(newest.get("wgst")),
+        visibilitySM=vis,
+        ceilingFt=ceiling_ft,
+        ceilingCover=ceiling_cover,
+        fltCat=newest.get("fltCat") or _flight_category(vis, ceiling_ft),
+    )
+
+
 def parse_records(records: Sequence[dict]) -> Dict[str, dict]:
     """Group raw METAR records by station id into a normalized intermediate form.
 
@@ -85,6 +155,9 @@ def parse_records(records: Sequence[dict]) -> Dict[str, dict]:
                     "wspd": r.get("wspd"),
                     "wdir": r.get("wdir"),
                     "wgst": r.get("wgst"),
+                    "visib": r.get("visib"),
+                    "clouds": r.get("clouds"),
+                    "fltCat": r.get("fltCat"),
                 }
             )
         if not points:
@@ -98,15 +171,9 @@ def parse_records(records: Sequence[dict]) -> Dict[str, dict]:
             "series": [
                 SeriesPoint(t=p["t"], slp=p["slp"], altim=p["altim"]) for p in points
             ],
-            # Wind from the newest METAR — a real measurement, so the client can
-            # prefer it over the model forecast for "now" (METAR-first policy).
-            "current": CurrentObs(
-                slp=newest.get("slp"),
-                presTend=newest.get("presTend"),
-                windspeed=_wind_kmh(newest.get("wspd")),
-                winddir=_wind_dir(newest.get("wdir")),
-                windgust=_wind_kmh(newest.get("wgst")),
-            ),
+            # Wind + aviation conditions from the newest METAR — real measurements,
+            # so the client can prefer them over the model for "now" (METAR-first).
+            "current": _current_obs(newest),
             "presTend": newest.get("presTend"),
             "_raw_points": points,
         }

@@ -52,6 +52,7 @@
 		63129BEFD89CFA743A98860E /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918B4D14CC966B0E820FC1AC /* Models.swift */; };
 		6341C06F45343F3FAAAE7353 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918B4D14CC966B0E820FC1AC /* Models.swift */; };
 		73C115787B3F6EB1F3D44776 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918B4D14CC966B0E820FC1AC /* Models.swift */; };
+		7492FC46266CE19D8B710E51 /* RectangularComplications.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAFA9596978A2666CDFADAB4 /* RectangularComplications.swift */; };
 		772708512B575F16B6A02B14 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0094727B647701DDDCF17BD2 /* LocationManager.swift */; };
 		77A46CEAE1569CD88532A37F /* BarometerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C00F07F019E06DA06E95BD0 /* BarometerTests.swift */; };
 		77F617DE1799A58749B82524 /* PressureHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */; };
@@ -194,6 +195,7 @@
 		A59F4AD2D2CF0AC8FB31B534 /* ConfirmationOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmationOverlayView.swift; sourceTree = "<group>"; };
 		B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureHistory.swift; sourceTree = "<group>"; };
 		B98E77604746429DE78EF9C4 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		BAFA9596978A2666CDFADAB4 /* RectangularComplications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RectangularComplications.swift; sourceTree = "<group>"; };
 		C1326419A7770149C91B0438 /* PhoneWidgetViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWidgetViews.swift; sourceTree = "<group>"; };
 		CD077DE63D0DE437229C43CC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CF51EF6C7C37D4CEE92CE308 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -225,6 +227,7 @@
 				42AF37A1FEB24BB66E9E0A34 /* ComplicationDial.swift */,
 				68D08500DD9FA42C666DFF25 /* ComplicationViews.swift */,
 				95423D24AF145867D59E1434 /* Info.plist */,
+				BAFA9596978A2666CDFADAB4 /* RectangularComplications.swift */,
 			);
 			path = WatchComplication;
 			sourceTree = "<group>";
@@ -535,6 +538,7 @@
 				93B3BCD445531D00C4959583 /* PressureHistory.swift in Sources */,
 				A13AA88D91661ADCE95D6B34 /* PressureStore.swift in Sources */,
 				2D0CD865C6748C6CBA5D63AB /* PressureUnit.swift in Sources */,
+				7492FC46266CE19D8B710E51 /* RectangularComplications.swift in Sources */,
 				0A97A6AB092391F5F45D58FC /* SharedSnapshot.swift in Sources */,
 				62FB812E1EB219CC6E616BBC /* Tendency.swift in Sources */,
 				483CBC3B0160B52142C82C61 /* TendencyProvider.swift in Sources */,

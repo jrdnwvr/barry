@@ -14,6 +14,8 @@ struct BarryComplicationBundle: WidgetBundle {
     var body: some Widget {
         BarryComplication()
         BarryDialComplication()
+        BarryGraphComplication()
+        BarryMetarComplication()
     }
 }
 
@@ -27,11 +29,11 @@ struct BarryComplication: Widget {
         }
         .configurationDisplayName("Pressure Trend")
         .description("The 3-hour pressure trend. Color deepens as pressure falls faster.")
+        // Rectangular belongs to the dedicated Graph / METAR widgets now.
         .supportedFamilies([
             .accessoryCircular,
             .accessoryCorner,
             .accessoryInline,
-            .accessoryRectangular,
         ])
     }
 }

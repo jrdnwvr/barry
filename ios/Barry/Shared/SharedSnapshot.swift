@@ -8,6 +8,13 @@
 
 import Foundation
 
+/// One point of the complication sparkline (compact on purpose — the whole
+/// snapshot lives in the App Group defaults).
+struct SparkPoint: Codable, Hashable {
+    let t: Date
+    let p: Double  // hPa
+}
+
 struct TendencySnapshot: Codable, Hashable {
     let station: String
     let stationName: String?
@@ -24,6 +31,19 @@ struct TendencySnapshot: Codable, Hashable {
     let verdict: String
     let updatedAt: Date
 
+    // Optional extras (absent in snapshots written by older builds — all decode
+    // to nil). Wind + aviation conditions feed the METAR complication; the spark
+    // series feeds the Graph complication.
+    var windKmh: Double? = nil
+    var windDirDeg: Double? = nil
+    var windGustKmh: Double? = nil
+    var visibilitySM: Double? = nil
+    var ceilingFt: Int? = nil
+    var ceilingCover: String? = nil
+    var fltCat: String? = nil
+    /// Observed pressure, last ~12 h, at most one point per hour.
+    var spark: [SparkPoint]? = nil
+
     init(from combined: CombinedResponse, updatedAt: Date = Date()) {
         let t = combined.tendency
         self.station = combined.pressure.station
@@ -36,6 +56,22 @@ struct TendencySnapshot: Codable, Hashable {
         self.expectedDelta3h = combined.expectedDelta3h(after: updatedAt)
         self.verdict = combined.verdict
         self.updatedAt = updatedAt
+
+        let cur = combined.pressure.current
+        self.windKmh = cur.windspeed
+        self.windDirDeg = cur.winddir
+        self.windGustKmh = cur.windgust
+        self.visibilitySM = cur.visibilitySM
+        self.ceilingFt = cur.ceilingFt
+        self.ceilingCover = cur.ceilingCover
+        self.fltCat = cur.fltCat
+
+        let cutoff = updatedAt.addingTimeInterval(-12 * 3600)
+        self.spark = combined.observedSeries
+            .filter { $0.t >= cutoff }
+            .compactMap { p in p.pressure.map { SparkPoint(t: p.t, p: $0) } }
+            .suffix(14)
+            .map { $0 }
     }
 }
 

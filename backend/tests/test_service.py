@@ -42,6 +42,13 @@ async def test_combined_shape(service, upstream):
     assert resp.pressure.current.windgust == pytest.approx(33.3, abs=0.1)
     assert resp.forecast.hourly[0].windgust == pytest.approx(14.0)
 
+    # Aviation conditions from the METAR: visibility "10+" -> 10.0 SM, the
+    # ceiling is the lowest BKN/OVC layer, and fltCat passes through.
+    assert resp.pressure.current.visibilitySM == 10.0
+    assert resp.pressure.current.ceilingFt == 4500
+    assert resp.pressure.current.ceilingCover == "BKN"
+    assert resp.pressure.current.fltCat == "VFR"
+
 
 async def test_combined_serializes_class_alias(service):
     resp = await service.get_combined("KLUK", 39.1, -84.5)

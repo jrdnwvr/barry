@@ -27,6 +27,12 @@ class CurrentObs(BaseModel):
     windspeed: Optional[float] = None
     winddir: Optional[float] = None
     windgust: Optional[float] = None
+    # Aviation conditions from the same METAR (drives the watch METAR complication).
+    visibilitySM: Optional[float] = None   # statute miles ("10+" parses to 10.0)
+    ceilingFt: Optional[int] = None        # lowest broken/overcast layer base
+    ceilingCover: Optional[str] = None     # cover of that layer (BKN/OVC), or the
+                                           # lowest layer / CLR when no ceiling
+    fltCat: Optional[str] = None           # VFR / MVFR / IFR / LIFR
 
 
 class TendencyOut(BaseModel):

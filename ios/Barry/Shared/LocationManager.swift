@@ -28,14 +28,29 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         manager.requestWhenInUseAuthorization()
     }
 
-    /// Request a single location fix. Returns nil if denied/unavailable.
-    func requestLocation() async -> CLLocation? {
+    /// Request a single location fix. Returns nil if denied/unavailable, and
+    /// after `timeout` seconds if no fix arrives — a slow first fix (Wi-Fi-only
+    /// iPads, permission dialog pending) must never hang the app's initial load.
+    func requestLocation(timeout: TimeInterval = 8) async -> CLLocation? {
         if authorization == .notDetermined {
             requestAuthorization()
         }
+        // A second caller supersedes the first — resume the old continuation
+        // (with the best we have) instead of leaking it, which would hang that
+        // caller's task forever.
+        continuation?.resume(returning: lastLocation)
+        continuation = nil
+
         return await withCheckedContinuation { cont in
             self.continuation = cont
             manager.requestLocation()
+            DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
+                Task { @MainActor [weak self] in
+                    guard let self, self.continuation != nil else { return }
+                    self.continuation?.resume(returning: self.lastLocation)
+                    self.continuation = nil
+                }
+            }
         }
     }
 

@@ -52,6 +52,10 @@ struct OnboardingView: View {
                 .padding(.horizontal, 28)
                 .padding(.bottom, 12)
         }
+        // On iPad, full-bleed cards read stretched and the buttons get comically
+        // wide — cap the flow to a phone-ish column, centered.
+        .frame(maxWidth: 560)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Pages

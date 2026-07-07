@@ -9,6 +9,7 @@
 //  Tiles come straight from RainViewer (device → tile CDN; the Barry backend stays
 //  out of the image business). Attribution required and shown in the footer.
 
+import Combine
 import SwiftUI
 import MapKit
 
@@ -369,12 +370,36 @@ struct RadarMapView: UIViewRepresentable {
 
 // MARK: - Sheet
 
+/// Sheet wrapper around RadarPanel (the compact-width presentation). On iPad the
+/// dashboard embeds RadarPanel directly, no navigation chrome.
 struct RadarView: View {
     let lat: Double
     let lon: Double
     let stationName: String
 
     @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            RadarPanel(lat: lat, lon: lon, stationName: stationName)
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+                .navigationTitle("Radar")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
+                }
+        }
+    }
+}
+
+struct RadarPanel: View {
+    let lat: Double
+    let lon: Double
+    let stationName: String
+
     @StateObject private var model = RadarModel()
     @State private var dwellTicks = 0
     @AppStorage("radarWindArrows", store: AppConfig.sharedDefaults)
@@ -387,46 +412,39 @@ struct RadarView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if model.failed {
-                    VStack(spacing: 10) {
-                        Text("Couldn't load radar. Check your connection.")
-                            .foregroundStyle(.secondary)
-                        Button("Try again") { Task { await model.load() } }
-                            .buttonStyle(.bordered)
-                    }
-                } else if model.frames.isEmpty {
-                    ProgressView("Loading radar…")
-                } else {
-                    content
+        Group {
+            if model.failed {
+                VStack(spacing: 10) {
+                    Text("Couldn't load radar. Check your connection.")
+                        .foregroundStyle(.secondary)
+                    Button("Try again") { Task { await model.load() } }
+                        .buttonStyle(.bordered)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if model.frames.isEmpty {
+                ProgressView("Loading radar…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                content
             }
-            .navigationTitle("Radar")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
+        }
+        .task {
+            await model.load()
+            if showWindArrows {
+                await model.fetchWind(region: model.lastRegion ?? initialRegion)
             }
-            .task {
-                await model.load()
-                if showWindArrows {
-                    await model.fetchWind(region: model.lastRegion ?? initialRegion)
-                }
+        }
+        .onReceive(ticker) { _ in
+            guard model.playing, !model.frames.isEmpty else { return }
+            // Dwell at the end of the loop (the freshest picture) before
+            // restarting — the Dark Sky rhythm, and it reads far calmer.
+            if dwellTicks > 0 {
+                dwellTicks -= 1
+                return
             }
-            .onReceive(ticker) { _ in
-                guard model.playing, !model.frames.isEmpty else { return }
-                // Dwell at the end of the loop (the freshest picture) before
-                // restarting — the Dark Sky rhythm, and it reads far calmer.
-                if dwellTicks > 0 {
-                    dwellTicks -= 1
-                    return
-                }
-                model.index = (model.index + 1) % model.frames.count
-                if model.index == model.frames.count - 1 {
-                    dwellTicks = 3
-                }
+            model.index = (model.index + 1) % model.frames.count
+            if model.index == model.frames.count - 1 {
+                dwellTicks = 3
             }
         }
     }
@@ -458,8 +476,6 @@ struct RadarView: View {
 
             legend
         }
-        .padding(.horizontal)
-        .padding(.bottom, 8)
     }
 
     private var controls: some View {

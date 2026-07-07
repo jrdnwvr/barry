@@ -17,6 +17,7 @@ struct ContentView: View {
     @AppStorage("chartWindow", store: AppConfig.sharedDefaults)
     private var chartWindowRaw: String = ChartWindow.hours6.rawValue
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var hSizeClass
     @State private var showSettings = false
 
     private var unit: PressureUnit { PressureUnit(rawValue: unitRaw) ?? .inHg }
@@ -30,11 +31,9 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                content
-                    .padding(.horizontal)
-            }
+            rootContent
             .navigationTitle("Barry")
+            .navigationBarTitleDisplayMode(hSizeClass == .regular ? .inline : .automatic)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showSettings = true } label: {
@@ -51,7 +50,6 @@ struct ContentView: View {
             .onChange(of: savedLocations.selectedID) { _, _ in
                 Task { await loadForCurrentMode(silent: false) }
             }
-            .refreshable { await reload() }
             .task { await initialLoad() }
             // Keep the reading live while the app is open. Keyed on scenePhase so the
             // loop only runs while frontmost — it stops the moment the app is dimmed
@@ -72,6 +70,24 @@ struct ContentView: View {
                     Task { await reload() }
                 }
             }
+        }
+    }
+
+    /// Regular width (iPad full screen / large Split View) gets the kneeboard
+    /// dashboard — everything visible at once, no navigation. Compact width
+    /// (iPhone, iPad slide-over) keeps the scrolling glance layout.
+    @ViewBuilder
+    private var rootContent: some View {
+        if hSizeClass == .regular,
+           case .loaded(let combined) = store.state,
+           !combined.pressure.series.isEmpty {
+            dashboard(combined)
+        } else {
+            ScrollView {
+                content
+                    .padding(.horizontal)
+            }
+            .refreshable { await reload() }
         }
     }
 
@@ -111,40 +127,7 @@ struct ContentView: View {
                          onSelectLocation: { savedLocations.selectedID = $0 })
 
                 // The focused trend: window toggle + chart + the honest caveat.
-                VStack(alignment: .leading, spacing: 8) {
-                    Picker("Window", selection: $chartWindowRaw) {
-                        ForEach(ChartWindow.allCases) { w in
-                            Text(w.label).tag(w.rawValue)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .accessibilityLabel("Chart time window")
-
-                    PressureChartView(
-                        combined: combined,
-                        now: store.now,
-                        unit: unit,
-                        // Full persisted history — the chart clips to its window and
-                        // splits the line where recording gaps would fake a bridge.
-                        // Local trace only at the physical location.
-                        phoneTrace: localSensorActive ? barometer.phoneHistoryTrace : [],
-                        window: chartWindow
-                    )
-                    // Trigger calibration whenever a fresh combined response arrives.
-                    // Physical location ONLY: a remote station's SLP fed into the
-                    // calibration would corrupt the offset (and trip the altitude-
-                    // jump reset). The obs time keeps it one point per METAR.
-                    .onChange(of: combined) { _, newCombined in
-                        guard isPhysicalSelection else { return }
-                        if let slp = newCombined.currentPressure {
-                            barometer.attemptCalibration(
-                                metarSLP: slp,
-                                observedAt: newCombined.observedSeries.last?.t)
-                        }
-                    }
-
-                    ForecastCaveatView(combined: combined, now: store.now)
-                }
+                trendSection(combined)
 
                 // Secondary: wind + rain confirmation, always expanded.
                 ConfirmationOverlayView(combined: combined, now: store.now)
@@ -176,6 +159,91 @@ struct ContentView: View {
         }
     }
 
+    /// Window picker + chart + caveat — shared by the phone layout and the iPad
+    /// dashboard, including the calibration trigger.
+    private func trendSection(_ combined: CombinedResponse) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("Window", selection: $chartWindowRaw) {
+                ForEach(ChartWindow.allCases) { w in
+                    Text(w.label).tag(w.rawValue)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityLabel("Chart time window")
+
+            PressureChartView(
+                combined: combined,
+                now: store.now,
+                unit: unit,
+                // Full persisted history — the chart clips to its window and
+                // splits the line where recording gaps would fake a bridge.
+                // Local trace only at the physical location.
+                phoneTrace: localSensorActive ? barometer.phoneHistoryTrace : [],
+                window: chartWindow
+            )
+            // Trigger calibration whenever a fresh combined response arrives.
+            // Physical location ONLY: a remote station's SLP fed into the
+            // calibration would corrupt the offset (and trip the altitude-
+            // jump reset). The obs time keeps it one point per METAR.
+            .onChange(of: combined) { _, newCombined in
+                guard isPhysicalSelection else { return }
+                if let slp = newCombined.currentPressure {
+                    barometer.attemptCalibration(
+                        metarSLP: slp,
+                        observedAt: newCombined.observedSeries.last?.t)
+                }
+            }
+
+            ForecastCaveatView(combined: combined, now: store.now)
+        }
+    }
+
+    /// The iPad kneeboard dashboard: METAR strip across the top, the glance rail
+    /// on the left, and the chart + live radar filling the rest. Everything at
+    /// once — the pilot use case inverts "glance then drill in".
+    private func dashboard(_ combined: CombinedResponse) -> some View {
+        VStack(spacing: 12) {
+            MetarStrip(combined: combined)
+
+            HStack(alignment: .top, spacing: 16) {
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 20) {
+                        HeroView(combined: combined, unit: unit, barometer: barometer,
+                                 now: store.now, barometerEnabled: localSensorActive,
+                                 locations: savedLocations.locations,
+                                 selectedLocationID: savedLocations.selectedID,
+                                 onSelectLocation: { savedLocations.selectedID = $0 })
+
+                        ConfirmationOverlayView(combined: combined, now: store.now)
+
+                        if localSensorActive {
+                            SensorStationRow(combined: combined, now: store.now,
+                                             unit: unit, barometer: barometer)
+                        }
+
+                        DataSourceFootnote(combined: combined)
+                    }
+                }
+                .frame(width: 340)
+                .refreshable { await reload() }
+
+                VStack(spacing: 12) {
+                    trendSection(combined)
+
+                    if let rlat = combined.pressure.lat, let rlon = combined.pressure.lon {
+                        RadarPanel(lat: rlat, lon: rlon,
+                                   stationName: combined.pressure.name ?? combined.pressure.station)
+                            .frame(maxHeight: .infinity)
+                    } else {
+                        Spacer()
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding()
+    }
+
     private func initialLoad() async {
         if store.combined != nil { return }
         await loadForCurrentMode()
@@ -194,6 +262,79 @@ struct ContentView: View {
         case .airport(let icao):
             store.station = icao
             await store.load(silent: silent)
+        }
+    }
+}
+
+/// The kneeboard's top line: station + flight category + raw METAR conditions
+/// ("KLUK VFR · 27011G18KT 10SM BKN045") in mono — the watch METAR complication's
+/// language, promoted to the top of the iPad dashboard.
+private struct MetarStrip: View {
+    let combined: CombinedResponse
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(combined.pressure.station)
+                .foregroundStyle(.secondary)
+            if let cat = combined.pressure.current.fltCat {
+                Text(cat)
+                    .fontWeight(.bold)
+                    .foregroundStyle(fltCatColor(cat))
+            }
+            if !conditions.isEmpty {
+                Text(conditions)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            Spacer()
+            Text("Updated \(combined.pressure.cachedAt.formatted(date: .omitted, time: .shortened))")
+                .foregroundStyle(.tertiary)
+        }
+        .font(.system(size: 13, design: .monospaced))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color(.secondarySystemBackground),
+                    in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    /// "27011G18KT 10SM BKN045" — wind, visibility, ceiling in METAR notation.
+    private var conditions: String {
+        let cur = combined.pressure.current
+        var parts: [String] = []
+        if let kmh = cur.windspeed {
+            let kt = Int((kmh / 1.852).rounded())
+            if kt == 0 {
+                parts.append("00000KT")
+            } else {
+                let dir = cur.winddir.map {
+                    String(format: "%03d", Int($0.rounded()) == 0 ? 360 : Int($0.rounded()))
+                } ?? "VRB"
+                var w = dir + String(format: "%02d", kt)
+                if let g = cur.windgust { w += "G\(Int((g / 1.852).rounded()))" }
+                parts.append(w + "KT")
+            }
+        }
+        if let v = cur.visibilitySM {
+            parts.append(v >= 10 ? "10SM"
+                : (v == v.rounded() ? "\(Int(v))SM" : String(format: "%.1fSM", v)))
+        }
+        if let ft = cur.ceilingFt {
+            parts.append("\(cur.ceilingCover ?? "CIG")\(String(format: "%03d", ft / 100))")
+        } else if let cover = cur.ceilingCover {
+            parts.append(cover)
+        }
+        return parts.joined(separator: " ")
+    }
+
+    /// Standard aviation flight-category colors.
+    private func fltCatColor(_ cat: String) -> Color {
+        switch cat {
+        case "VFR":  return Color(red: 0.13, green: 0.62, blue: 0.28)
+        case "MVFR": return Color(red: 0.20, green: 0.48, blue: 0.85)
+        case "IFR":  return Color(red: 0.85, green: 0.22, blue: 0.18)
+        case "LIFR": return Color(red: 0.72, green: 0.20, blue: 0.70)
+        default:     return .secondary
         }
     }
 }

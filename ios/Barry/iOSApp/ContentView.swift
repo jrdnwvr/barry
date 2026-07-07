@@ -19,6 +19,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var hSizeClass
     @State private var showSettings = false
+    @State private var showRadarFullScreen = false
 
     private var unit: PressureUnit { PressureUnit(rawValue: unitRaw) ?? .inHg }
     private var chartWindow: ChartWindow { ChartWindow(rawValue: chartWindowRaw) ?? .hours6 }
@@ -232,8 +233,13 @@ struct ContentView: View {
 
                     if let rlat = combined.pressure.lat, let rlon = combined.pressure.lon {
                         RadarPanel(lat: rlat, lon: rlon,
-                                   stationName: combined.pressure.name ?? combined.pressure.station)
+                                   stationName: combined.pressure.name ?? combined.pressure.station,
+                                   onExpand: { showRadarFullScreen = true })
                             .frame(maxHeight: .infinity)
+                            .fullScreenCover(isPresented: $showRadarFullScreen) {
+                                RadarView(lat: rlat, lon: rlon,
+                                          stationName: combined.pressure.name ?? combined.pressure.station)
+                            }
                     } else {
                         Spacer()
                     }

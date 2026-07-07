@@ -399,6 +399,9 @@ struct RadarPanel: View {
     let lat: Double
     let lon: Double
     let stationName: String
+    /// When set, an expand button overlays the map (dashboard embeds use it to
+    /// pop the radar to full screen).
+    var onExpand: (() -> Void)? = nil
 
     @StateObject private var model = RadarModel()
     @State private var dwellTicks = 0
@@ -461,6 +464,19 @@ struct RadarPanel: View {
                              model.scheduleWindReload(for: region, enabled: showWindArrows)
                          })
                 .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(alignment: .topTrailing) {
+                    if let onExpand {
+                        Button(action: onExpand) {
+                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                .font(.system(size: 14, weight: .semibold))
+                                .padding(9)
+                                .background(.thinMaterial, in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(10)
+                        .accessibilityLabel("Expand radar")
+                    }
+                }
 
             controls
 

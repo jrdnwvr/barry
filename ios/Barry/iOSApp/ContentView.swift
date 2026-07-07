@@ -279,29 +279,32 @@ private struct MetarStrip: View {
     let combined: CombinedResponse
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text(combined.pressure.station)
-                .foregroundStyle(.secondary)
-            if let cat = combined.pressure.current.fltCat {
-                Text(cat)
-                    .fontWeight(.bold)
-                    .foregroundStyle(fltCatColor(cat))
+        // Plain text hierarchy + hairline rule — no container chrome. Mono is
+        // reserved for the raw METAR cluster (it's code-like content); everything
+        // else is standard system type.
+        VStack(spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(combined.pressure.station)
+                    .font(.subheadline.weight(.semibold))
+                if let cat = combined.pressure.current.fltCat {
+                    Text(cat)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(fltCatColor(cat))
+                }
+                if !conditions.isEmpty {
+                    Text(conditions)
+                        .font(.subheadline.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                Spacer()
+                Text("Updated \(combined.pressure.cachedAt.formatted(date: .omitted, time: .shortened))")
+                    .font(.footnote)
+                    .foregroundStyle(.tertiary)
             }
-            if !conditions.isEmpty {
-                Text(conditions)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            Spacer()
-            Text("Updated \(combined.pressure.cachedAt.formatted(date: .omitted, time: .shortened))")
-                .foregroundStyle(.tertiary)
+            Divider()
         }
-        .font(.system(size: 13, design: .monospaced))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color(.secondarySystemBackground),
-                    in: RoundedRectangle(cornerRadius: 10))
     }
 
     /// "27011G18KT 10SM BKN045" — wind, visibility, ceiling in METAR notation.

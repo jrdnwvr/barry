@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		02B98906DA8C9F1F36EA4FA9 /* RangeAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EBD287C6CB46A536198173F /* RangeAnalysis.swift */; };
 		056F1A9083CFD0F35BE56B4B /* Interpreter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44083DF235ACE8084DC9A498 /* Interpreter.swift */; };
 		06E7445D9EF69D7CD6C141EE /* RadarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0EBA6519DD65A01DF98B527 /* RadarView.swift */; };
 		08AE6842CBAF80BC672E193D /* PressureUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D967187F3CE6292310A2937 /* PressureUnit.swift */; };
@@ -25,6 +26,8 @@
 		2C56C28A6BD13F7F21CA306B /* BarryWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = F776D233FE3E44CDDD61C05B /* BarryWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2D039F6DE65B45CABECF405F /* SavedLocations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */; };
 		2D0CD865C6748C6CBA5D63AB /* PressureUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D967187F3CE6292310A2937 /* PressureUnit.swift */; };
+		2D8B5E2682CB6128237923B4 /* RangeAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EBD287C6CB46A536198173F /* RangeAnalysis.swift */; };
+		2FC7F63C72023A1812F99D63 /* RangeAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EBD287C6CB46A536198173F /* RangeAnalysis.swift */; };
 		2FF2F39288A0E15C1D7C4E43 /* BarryComplication.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5B1CE5EDD6706AFE35F1B6D9 /* BarryComplication.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		31549614253BF1B636E51ED3 /* BarryComplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 726AB15B448612548C2CCCCD /* BarryComplication.swift */; };
 		31C975A1344ECEECC2458169 /* PhoneWidgetViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1326419A7770149C91B0438 /* PhoneWidgetViews.swift */; };
@@ -60,6 +63,7 @@
 		77F617DE1799A58749B82524 /* PressureHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */; };
 		7917511FB9F6E4E7614296AA /* Tendency.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2542DA2C850B2399B31A9069 /* Tendency.swift */; };
 		7963C9EE857F1FDCB704CF89 /* Interpreter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44083DF235ACE8084DC9A498 /* Interpreter.swift */; };
+		7D0122F48329169FE2A913E7 /* RangeAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EBD287C6CB46A536198173F /* RangeAnalysis.swift */; };
 		811727C7296B6B80F9E3F81C /* BarryPhoneWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 830E6CE85533F8C3169A8E97 /* BarryPhoneWidget.swift */; };
 		81C789D5AD14654F306BDA4C /* SharedSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */; };
 		83F986D9DDC3CCBE8FA83873 /* PressureChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778E430DEB72ECE6B1DB5CCA /* PressureChartView.swift */; };
@@ -178,6 +182,7 @@
 		4B8FF4A39677C2C8F46B98F7 /* BarryApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryApp.swift; sourceTree = "<group>"; };
 		4D967187F3CE6292310A2937 /* PressureUnit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureUnit.swift; sourceTree = "<group>"; };
 		4EB1F388C1A5FE3D18F1D62E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		4EBD287C6CB46A536198173F /* RangeAnalysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RangeAnalysis.swift; sourceTree = "<group>"; };
 		5B1CE5EDD6706AFE35F1B6D9 /* BarryComplication.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = BarryComplication.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		5C59EF4878E06062DC20D1D7 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		68D08500DD9FA42C666DFF25 /* ComplicationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComplicationViews.swift; sourceTree = "<group>"; };
@@ -258,6 +263,7 @@
 				B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */,
 				8A60F6C6B6915B13C8CAD3A3 /* PressureStore.swift */,
 				4D967187F3CE6292310A2937 /* PressureUnit.swift */,
+				4EBD287C6CB46A536198173F /* RangeAnalysis.swift */,
 				4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */,
 				05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */,
 				2542DA2C850B2399B31A9069 /* Tendency.swift */,
@@ -547,6 +553,7 @@
 				93B3BCD445531D00C4959583 /* PressureHistory.swift in Sources */,
 				A13AA88D91661ADCE95D6B34 /* PressureStore.swift in Sources */,
 				2D0CD865C6748C6CBA5D63AB /* PressureUnit.swift in Sources */,
+				7D0122F48329169FE2A913E7 /* RangeAnalysis.swift in Sources */,
 				7492FC46266CE19D8B710E51 /* RectangularComplications.swift in Sources */,
 				971C47371255C41380413D3E /* SavedLocations.swift in Sources */,
 				0A97A6AB092391F5F45D58FC /* SharedSnapshot.swift in Sources */,
@@ -570,6 +577,7 @@
 				0F4644054E93F1968564CD2B /* PressureHistory.swift in Sources */,
 				135B9F935421A07D8AEDE093 /* PressureStore.swift in Sources */,
 				59DA22C45F3ECB63E17189B1 /* PressureUnit.swift in Sources */,
+				2D8B5E2682CB6128237923B4 /* RangeAnalysis.swift in Sources */,
 				967511152A1EBB2D602F2B9A /* SavedLocations.swift in Sources */,
 				81C789D5AD14654F306BDA4C /* SharedSnapshot.swift in Sources */,
 				57789B75BDC58D0AACC5CA36 /* Tendency.swift in Sources */,
@@ -601,6 +609,7 @@
 				094EEF5E8D649C8E37BEB643 /* PressureStore.swift in Sources */,
 				0F22D62C5D40785243A56CD0 /* PressureUnit.swift in Sources */,
 				06E7445D9EF69D7CD6C141EE /* RadarView.swift in Sources */,
+				2FC7F63C72023A1812F99D63 /* RangeAnalysis.swift in Sources */,
 				2D039F6DE65B45CABECF405F /* SavedLocations.swift in Sources */,
 				8B662BF9297E88CBB93B370B /* SensorComparisonView.swift in Sources */,
 				8C6BCDDE909F4DDEBB5F16AA /* SettingsView.swift in Sources */,
@@ -625,6 +634,7 @@
 				B0DD843032BBA29B2C4097D0 /* PressureHistory.swift in Sources */,
 				9F987BE952507B2A891ADC78 /* PressureStore.swift in Sources */,
 				08AE6842CBAF80BC672E193D /* PressureUnit.swift in Sources */,
+				02B98906DA8C9F1F36EA4FA9 /* RangeAnalysis.swift in Sources */,
 				DE3B1D2A64D44211EFC29928 /* SavedLocations.swift in Sources */,
 				E1F631B6FE1E863E001704F2 /* SharedSnapshot.swift in Sources */,
 				62FE249CDA4A80409C304F3D /* Tendency.swift in Sources */,

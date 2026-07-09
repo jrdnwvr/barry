@@ -325,6 +325,59 @@ struct BarometerTests {
         #expect(b.averageStationPressure(around: t.addingTimeInterval(-7200)) != nil)
     }
 
+    // MARK: - Range analysis (drag-select a chart window)
+
+    private func series(hours: Int, stepMin: Double = 60,
+                        f: (Double) -> Double) -> [(Date, Double)] {
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        let n = Int(Double(hours) * 60 / stepMin)
+        return (0...n).map { i in
+            let h = Double(i) * stepMin / 60
+            return (t0.addingTimeInterval(h * 3600), f(h))
+        }
+    }
+
+    @Test func tideDayReadsAsBreathing() {
+        // ±1.2 hPa semidiurnal wave, no net change, over 24 h.
+        let pts = series(hours: 24) { 1015 + 1.2 * sin($0 / 12 * 2 * .pi) }
+        let a = RangeAnalysis.analyze(points: pts, forecastStartsAt: nil)
+        #expect(a?.title == "The atmosphere breathing")
+        #expect(abs(a?.netHPa ?? 9) < 0.3)
+    }
+
+    @Test func flatDayReadsAsCalm() {
+        let pts = series(hours: 20) { 1018 + 0.2 * sin($0) }
+        let a = RangeAnalysis.analyze(points: pts, forecastStartsAt: nil)
+        #expect(a?.title == "Dead calm")
+    }
+
+    @Test func vShapeReadsAsTrough() {
+        // Fall 4 hPa to an interior low, then recover.
+        let pts = series(hours: 12) { h in 1015 - 4 * exp(-pow((h - 6) / 2.2, 2)) }
+        let a = RangeAnalysis.analyze(points: pts, forecastStartsAt: nil)
+        #expect(a?.title == "A trough passed")
+    }
+
+    @Test func sustainedDropReadsAsFall() {
+        let pts = series(hours: 6) { 1015 - 0.6 * $0 }  // −3.6 over 6 h (−1.8/3h)
+        let a = RangeAnalysis.analyze(points: pts, forecastStartsAt: nil)
+        #expect(a?.title == "A steady fall")
+        #expect((a?.steepest3hHPa ?? 0) < 0)
+    }
+
+    @Test func tinyWindowIsHonestlyShort() {
+        let pts = series(hours: 1, stepMin: 30) { 1015 - $0 }
+        let a = RangeAnalysis.analyze(points: pts, forecastStartsAt: nil)
+        #expect(a?.title == "Too short to read")
+    }
+
+    @Test func forecastPortionIsFlagged() {
+        let pts = series(hours: 10) { 1015 - 0.4 * $0 }
+        let boundary = pts[4].0  // "now" sits inside the window
+        let a = RangeAnalysis.analyze(points: pts, forecastStartsAt: boundary)
+        #expect(a?.includesForecast == true)
+    }
+
     // MARK: - Carried-clean physics gating (trusting data while classifier says moving)
 
     @Test func carriedFlatPressureIsClean() {

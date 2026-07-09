@@ -34,6 +34,9 @@ struct PressureChartView: View {
 
     /// The point the user last tapped on the chart — shown in the readout below.
     @State private var selected: SelectionPoint?
+    /// A dragged time range + its analysis — shown as a card below the chart.
+    @State private var rangeSelection: ClosedRange<Date>?
+    @State private var rangeAnalysis: RangeAnalysis?
 
     private struct Plot: Identifiable {
         let id = UUID()
@@ -344,6 +347,19 @@ struct PressureChartView: View {
                 .foregroundStyle(sel.observed ? Color.blue : Color.blue.opacity(0.5))
                 .symbolSize(70)
         }
+
+        // Drag-selected range: shaded band with edge rules, Screen Time style.
+        if let r = rangeSelection {
+            RectangleMark(xStart: .value("Start", r.lowerBound),
+                          xEnd: .value("End", r.upperBound))
+                .foregroundStyle(.blue.opacity(0.08))
+            RuleMark(x: .value("Start", r.lowerBound))
+                .foregroundStyle(.blue.opacity(0.4))
+                .lineStyle(StrokeStyle(lineWidth: 1))
+            RuleMark(x: .value("End", r.upperBound))
+                .foregroundStyle(.blue.opacity(0.4))
+                .lineStyle(StrokeStyle(lineWidth: 1))
+        }
     }
 
     // Chart marks are split into @ChartContentBuilder pieces above — as one big
@@ -378,12 +394,50 @@ struct PressureChartView: View {
                 Rectangle().fill(.clear).contentShape(Rectangle())
                     .gesture(
                         SpatialTapGesture().onEnded { value in
+                            rangeSelection = nil
+                            rangeAnalysis = nil
                             selectAt(location: value.location, proxy: proxy, geo: geo)
                         }
                     )
+                    // Horizontal drag paints an analysis range; the minimum
+                    // distance keeps vertical page scrolling working.
+                    .gesture(
+                        DragGesture(minimumDistance: 12)
+                            .onChanged { g in
+                                guard let plotFrame = proxy.plotFrame else { return }
+                                let x0 = g.startLocation.x - geo[plotFrame].origin.x
+                                let x1 = g.location.x - geo[plotFrame].origin.x
+                                guard let d0: Date = proxy.value(atX: x0),
+                                      let d1: Date = proxy.value(atX: x1) else { return }
+                                selected = nil
+                                rangeSelection = min(d0, d1)...max(d0, d1)
+                            }
+                            .onEnded { _ in finalizeRange() }
+                    )
             }
         }
-        .onChange(of: combined) { _, _ in selected = nil }
+        .onChange(of: combined) { _, _ in
+            selected = nil
+            rangeSelection = nil
+            rangeAnalysis = nil
+        }
+    }
+
+    /// Analyze the finished drag over the real (raw hPa) series in range.
+    private func finalizeRange() {
+        guard let r = rangeSelection else { return }
+        let obsEnd = observed.last?.t ?? .distantPast
+        let pts = (observed + forecast.filter { $0.t > obsEnd })
+            .filter { r.contains($0.t) }
+            .map { ($0.t, $0.raw) }
+        guard pts.count >= 2,
+              let analysis = RangeAnalysis.analyze(points: pts, forecastStartsAt: now)
+        else {
+            rangeSelection = nil
+            rangeAnalysis = nil
+            return
+        }
+        rangeAnalysis = analysis
     }
 
     // MARK: - Tap-to-read
@@ -401,7 +455,9 @@ struct PressureChartView: View {
     }
 
     @ViewBuilder private var readout: some View {
-        if let sel = selected {
+        if let a = rangeAnalysis {
+            analysisCard(a)
+        } else if let sel = selected {
             HStack(spacing: 8) {
                 Circle()
                     .fill(sel.observed ? Color.blue : Color.blue.opacity(0.5))
@@ -425,6 +481,47 @@ struct PressureChartView: View {
         }
     }
 
+    /// The drag-selection analysis card: what this stretch of the curve means,
+    /// in plain language, with the numbers underneath.
+    private func analysisCard(_ a: RangeAnalysis) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(a.title)
+                    .font(.subheadline.weight(.semibold))
+                Text("\(a.start.formatted(date: .omitted, time: .shortened)) – \(a.end.formatted(date: .omitted, time: .shortened))")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                Spacer()
+                Button {
+                    rangeSelection = nil
+                    rangeAnalysis = nil
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tertiary)
+                .accessibilityLabel("Clear selection")
+            }
+            Text(a.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 14) {
+                Text("Net \(unit.formatDelta(a.netHPa))")
+                Text("Swing \(String(format: unit == .hPa ? "%.1f" : "%.2f", unit.convertDelta(a.spreadHPa))) \(unit.label)")
+                Text("Steepest \(unit.formatDelta(a.steepest3hHPa))/3h")
+            }
+            .font(.caption2)
+            .monospacedDigit()
+            .foregroundStyle(.secondary)
+            if a.includesForecast {
+                Text("Part of this window is forecast, not observation.")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+            }
+        }
+    }
+
     /// Compact key for the line coloring: a blue ramp where deeper blue = a faster
     /// change (steeper rise or fall). Doubles as the tap-to-read hint.
     private var slopeLegend: some View {
@@ -435,7 +532,7 @@ struct PressureChartView: View {
                 legendSwatch(colors: [.orange, .orange], label: "local")
             }
             Spacer()
-            Text("tap to read")
+            Text("tap or drag to read")
                 .font(.caption2).foregroundStyle(.tertiary)
         }
     }

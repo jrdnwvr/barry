@@ -431,7 +431,8 @@ struct PressureChartView: View {
             .filter { r.contains($0.t) }
             .map { ($0.t, $0.raw) }
         guard pts.count >= 2,
-              let analysis = RangeAnalysis.analyze(points: pts, forecastStartsAt: now)
+              let analysis = RangeAnalysis.analyze(points: pts, forecastStartsAt: now,
+                                                   unit: unit)
         else {
             rangeSelection = nil
             rangeAnalysis = nil

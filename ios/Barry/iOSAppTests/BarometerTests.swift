@@ -340,42 +340,56 @@ struct BarometerTests {
     @Test func tideDayReadsAsBreathing() {
         // ±1.2 hPa semidiurnal wave, no net change, over 24 h.
         let pts = series(hours: 24) { 1015 + 1.2 * sin($0 / 12 * 2 * .pi) }
-        let a = RangeAnalysis.analyze(points: pts, forecastStartsAt: nil)
+        let a = RangeAnalysis.analyze(points: pts, forecastStartsAt: nil, unit: .hPa)
         #expect(a?.title == "The atmosphere breathing")
         #expect(abs(a?.netHPa ?? 9) < 0.3)
     }
 
     @Test func flatDayReadsAsCalm() {
         let pts = series(hours: 20) { 1018 + 0.2 * sin($0) }
-        let a = RangeAnalysis.analyze(points: pts, forecastStartsAt: nil)
+        let a = RangeAnalysis.analyze(points: pts, forecastStartsAt: nil, unit: .hPa)
         #expect(a?.title == "Dead calm")
     }
 
     @Test func vShapeReadsAsTrough() {
         // Fall 4 hPa to an interior low, then recover.
         let pts = series(hours: 12) { h in 1015 - 4 * exp(-pow((h - 6) / 2.2, 2)) }
-        let a = RangeAnalysis.analyze(points: pts, forecastStartsAt: nil)
+        let a = RangeAnalysis.analyze(points: pts, forecastStartsAt: nil, unit: .hPa)
         #expect(a?.title == "A trough passed")
     }
 
     @Test func sustainedDropReadsAsFall() {
         let pts = series(hours: 6) { 1015 - 0.6 * $0 }  // −3.6 over 6 h (−1.8/3h)
-        let a = RangeAnalysis.analyze(points: pts, forecastStartsAt: nil)
+        let a = RangeAnalysis.analyze(points: pts, forecastStartsAt: nil, unit: .hPa)
         #expect(a?.title == "A steady fall")
         #expect((a?.steepest3hHPa ?? 0) < 0)
     }
 
     @Test func tinyWindowIsHonestlyShort() {
         let pts = series(hours: 1, stepMin: 30) { 1015 - $0 }
-        let a = RangeAnalysis.analyze(points: pts, forecastStartsAt: nil)
+        let a = RangeAnalysis.analyze(points: pts, forecastStartsAt: nil, unit: .hPa)
         #expect(a?.title == "Too short to read")
     }
 
     @Test func forecastPortionIsFlagged() {
         let pts = series(hours: 10) { 1015 - 0.4 * $0 }
         let boundary = pts[4].0  // "now" sits inside the window
-        let a = RangeAnalysis.analyze(points: pts, forecastStartsAt: boundary)
+        let a = RangeAnalysis.analyze(points: pts, forecastStartsAt: boundary, unit: .hPa)
         #expect(a?.includesForecast == true)
+    }
+
+    @Test func tidePlusFrontKeepsBothStories() {
+        // 18 h of clean tide, then a 3 hPa fall over the last 6 h — the failure
+        // case that motivated segmentation: the fall must headline, but the tide
+        // must still be reported instead of vanishing into the aggregate.
+        let pts = series(hours: 24, stepMin: 30) { h in
+            let tide = 1.2 * sin(h / 12 * 2 * .pi)
+            let front = h > 18 ? -0.5 * (h - 18) : 0
+            return 1016 + tide + front
+        }
+        let a = RangeAnalysis.analyze(points: pts, forecastStartsAt: nil, unit: .hPa)
+        #expect(a?.title == "Quiet, then a fall", "got \(a?.title ?? "nil")")
+        #expect(a?.detail.contains("tide") == true, "tide must still be mentioned")
     }
 
     // MARK: - Carried-clean physics gating (trusting data while classifier says moving)

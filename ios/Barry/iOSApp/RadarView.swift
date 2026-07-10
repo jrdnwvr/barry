@@ -30,6 +30,13 @@ struct WindArrow: Equatable {
     let fromDeg: Double
 }
 
+/// One boundary-layer-top sample (meters AGL, from the model).
+struct BLPoint: Equatable {
+    let lat: Double
+    let lon: Double
+    let meters: Double
+}
+
 @MainActor
 final class RadarModel: ObservableObject {
     @Published var frames: [RadarFrame] = []
@@ -38,10 +45,12 @@ final class RadarModel: ObservableObject {
     @Published var playing = true
     @Published var failed = false
     @Published var windArrows: [WindArrow] = []
+    @Published var blPoints: [BLPoint] = []
 
-    /// Last region the map reported — used when the toggle flips on.
+    /// Last region the map reported — used when a toggle flips on.
     var lastRegion: MKCoordinateRegion?
     private var windTask: Task<Void, Never>?
+    private var blTask: Task<Void, Never>?
 
     /// Arrows only render where the wind is worth drawing (~8 kt) — the Dark Sky
     /// rule: calm areas stay clean.
@@ -76,22 +85,32 @@ final class RadarModel: ObservableObject {
         }
     }
 
-    // MARK: Wind field
+    // MARK: Field overlays (wind arrows, boundary layer top)
 
     /// Debounced reload — pans/zooms fire this; only the last one within ~0.7 s wins.
-    func scheduleWindReload(for region: MKCoordinateRegion, enabled: Bool) {
+    func scheduleFieldReload(for region: MKCoordinateRegion, wind: Bool, boundaryLayer: Bool) {
         lastRegion = region
-        guard enabled else { return }
-        windTask?.cancel()
-        windTask = Task {
-            try? await Task.sleep(nanoseconds: 700_000_000)
-            guard !Task.isCancelled else { return }
-            await fetchWind(region: region)
+        if wind {
+            windTask?.cancel()
+            windTask = Task {
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                guard !Task.isCancelled else { return }
+                await fetchWind(region: region)
+            }
+        }
+        if boundaryLayer {
+            blTask?.cancel()
+            blTask = Task {
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                guard !Task.isCancelled else { return }
+                await fetchBoundaryLayer(region: region)
+            }
         }
     }
 
-    /// One multi-point Open-Meteo call for a 7×5 grid across the region.
-    func fetchWind(region: MKCoordinateRegion) async {
+    /// The shared 7×5 sample grid across a region (comma-joined for Open-Meteo's
+    /// multi-point API).
+    private func gridQuery(for region: MKCoordinateRegion) -> (lat: String, lon: String) {
         let cols = 7, rows = 5
         let inset = 0.12
         var lats: [Double] = [], lons: [Double] = []
@@ -105,10 +124,15 @@ final class RadarModel: ObservableObject {
                 lons.append(lon0 + lonSpan * Double(c) / Double(cols - 1))
             }
         }
-        let latStr = lats.map { String(format: "%.3f", $0) }.joined(separator: ",")
-        let lonStr = lons.map { String(format: "%.3f", $0) }.joined(separator: ",")
+        return (lats.map { String(format: "%.3f", $0) }.joined(separator: ","),
+                lons.map { String(format: "%.3f", $0) }.joined(separator: ","))
+    }
+
+    /// One multi-point Open-Meteo call for the wind grid.
+    func fetchWind(region: MKCoordinateRegion) async {
+        let grid = gridQuery(for: region)
         guard let url = URL(string:
-            "https://api.open-meteo.com/v1/forecast?latitude=\(latStr)&longitude=\(lonStr)&current_weather=true")
+            "https://api.open-meteo.com/v1/forecast?latitude=\(grid.lat)&longitude=\(grid.lon)&current_weather=true")
         else { return }
 
         struct Point: Decodable {
@@ -129,6 +153,43 @@ final class RadarModel: ObservableObject {
             // Wind layer is enrichment; fail quietly and keep whatever we had.
         }
     }
+
+    /// Boundary layer top for the same grid — Open-Meteo hourly, current hour.
+    func fetchBoundaryLayer(region: MKCoordinateRegion) async {
+        let grid = gridQuery(for: region)
+        guard let url = URL(string:
+            "https://api.open-meteo.com/v1/forecast?latitude=\(grid.lat)&longitude=\(grid.lon)&hourly=boundary_layer_height&forecast_days=1&timezone=UTC")
+        else { return }
+
+        struct Point: Decodable {
+            struct Hourly: Decodable {
+                let time: [String]
+                let boundary_layer_height: [Double?]
+            }
+            let latitude: Double
+            let longitude: Double
+            let hourly: Hourly
+        }
+        // Match the current UTC hour against the hourly time axis.
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd'T'HH"
+        fmt.timeZone = TimeZone(identifier: "UTC")
+        let hourPrefix = fmt.string(from: Date())
+
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let points = try JSONDecoder().decode([Point].self, from: data)
+            blPoints = points.compactMap { p in
+                guard let idx = p.hourly.time.firstIndex(where: { $0.hasPrefix(hourPrefix) }),
+                      idx < p.hourly.boundary_layer_height.count,
+                      let m = p.hourly.boundary_layer_height[idx]
+                else { return nil }
+                return BLPoint(lat: p.latitude, lon: p.longitude, meters: m)
+            }
+        } catch {
+            // Enrichment; fail quietly.
+        }
+    }
 }
 
 // MARK: - Map (UIKit bridge)
@@ -142,6 +203,8 @@ struct RadarMapView: UIViewRepresentable {
     let center: CLLocationCoordinate2D
     var windArrows: [WindArrow] = []
     var showWind: Bool = false
+    var blPoints: [BLPoint] = []
+    var showBL: Bool = false
     var onRegionChange: ((MKCoordinateRegion) -> Void)? = nil
 
     final class RadarTileOverlay: MKTileOverlay {
@@ -215,6 +278,43 @@ struct RadarMapView: UIViewRepresentable {
         var fromDeg: Double = 0
     }
 
+    final class BLAnnotation: MKPointAnnotation {
+        var meters: Double = 0
+    }
+
+    /// A small readable height pill ("5.6k") for boundary-layer-top samples.
+    final class BLLabelView: MKAnnotationView {
+        private let label = UILabel()
+
+        override init(annotation: MKAnnotation?, reuseIdentifier: String?) {
+            super.init(annotation: annotation, reuseIdentifier: reuseIdentifier)
+            label.font = .monospacedDigitSystemFont(ofSize: 10, weight: .semibold)
+            label.textColor = .label
+            label.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.72)
+            label.textAlignment = .center
+            label.layer.cornerRadius = 4
+            label.layer.masksToBounds = true
+            addSubview(label)
+            isEnabled = false
+            displayPriority = .defaultLow
+            // Sit below the wind arrow when both layers are on.
+            centerOffset = CGPoint(x: 0, y: 14)
+        }
+
+        required init?(coder: NSCoder) { fatalError("unused") }
+
+        func set(feet: Double) {
+            label.text = feet >= 1000
+                ? String(format: " %.1fk ", feet / 1000)
+                : " \(Int((feet / 100).rounded()) * 100) "
+            label.sizeToFit()
+            label.frame.size.height += 3
+            label.frame.size.width += 2
+            bounds = label.bounds
+            label.frame = bounds
+        }
+    }
+
     final class Coordinator: NSObject, MKMapViewDelegate {
         var overlays: [Int: RadarTileOverlay] = [:]
         var renderers: [Int: MKTileOverlayRenderer] = [:]
@@ -235,6 +335,8 @@ struct RadarMapView: UIViewRepresentable {
         var onRegionChange: ((MKCoordinateRegion) -> Void)?
         var shownArrows: [WindArrow] = []
         var arrowAnnotations: [WindArrowAnnotation] = []
+        var shownBL: [BLPoint] = []
+        var blAnnotations: [BLAnnotation] = []
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
             if let tile = overlay as? RadarTileOverlay {
@@ -251,6 +353,14 @@ struct RadarMapView: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            if let bl = annotation as? BLAnnotation {
+                let id = "blLabel"
+                let view = (mapView.dequeueReusableAnnotationView(withIdentifier: id) as? BLLabelView)
+                    ?? BLLabelView(annotation: bl, reuseIdentifier: id)
+                view.annotation = bl
+                view.set(feet: bl.meters * 3.281)
+                return view
+            }
             guard let wind = annotation as? WindArrowAnnotation else { return nil }
             let id = "windArrow"
             let view = mapView.dequeueReusableAnnotationView(withIdentifier: id)
@@ -283,6 +393,20 @@ struct RadarMapView: UIViewRepresentable {
                 return ann
             }
             map.addAnnotations(arrowAnnotations)
+        }
+
+        /// Same equality-guarded sync for the boundary-layer labels.
+        func syncBL(_ points: [BLPoint], on map: MKMapView) {
+            guard points != shownBL else { return }
+            shownBL = points
+            map.removeAnnotations(blAnnotations)
+            blAnnotations = points.map { p in
+                let ann = BLAnnotation()
+                ann.coordinate = CLLocationCoordinate2D(latitude: p.lat, longitude: p.lon)
+                ann.meters = p.meters
+                return ann
+            }
+            map.addAnnotations(blAnnotations)
         }
 
         /// Crossfade to a new frame (~0.3 s) instead of hard-cutting — most of the
@@ -362,6 +486,7 @@ struct RadarMapView: UIViewRepresentable {
         }
         context.coordinator.onRegionChange = onRegionChange
         context.coordinator.syncArrows(showWind ? windArrows : [], on: map)
+        context.coordinator.syncBL(showBL ? blPoints : [], on: map)
 
         guard frames.indices.contains(index) else { return }
         context.coordinator.setCurrent(frames[index].time)
@@ -407,6 +532,8 @@ struct RadarPanel: View {
     @State private var dwellTicks = 0
     @AppStorage("radarWindArrows", store: AppConfig.sharedDefaults)
     private var showWindArrows: Bool = true
+    @AppStorage("radarBoundaryLayer", store: AppConfig.sharedDefaults)
+    private var showBoundaryLayer: Bool = false
     private let ticker = Timer.publish(every: 0.55, on: .main, in: .common).autoconnect()
 
     private var initialRegion: MKCoordinateRegion {
@@ -436,6 +563,9 @@ struct RadarPanel: View {
             if showWindArrows {
                 await model.fetchWind(region: model.lastRegion ?? initialRegion)
             }
+            if showBoundaryLayer {
+                await model.fetchBoundaryLayer(region: model.lastRegion ?? initialRegion)
+            }
         }
         .onReceive(ticker) { _ in
             guard model.playing, !model.frames.isEmpty else { return }
@@ -460,8 +590,12 @@ struct RadarPanel: View {
                          center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
                          windArrows: model.windArrows,
                          showWind: showWindArrows,
+                         blPoints: model.blPoints,
+                         showBL: showBoundaryLayer,
                          onRegionChange: { region in
-                             model.scheduleWindReload(for: region, enabled: showWindArrows)
+                             model.scheduleFieldReload(for: region,
+                                                       wind: showWindArrows,
+                                                       boundaryLayer: showBoundaryLayer)
                          })
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(alignment: .topTrailing) {
@@ -488,6 +622,22 @@ struct RadarPanel: View {
                 if on {
                     Task { await model.fetchWind(region: model.lastRegion ?? initialRegion) }
                 }
+            }
+
+            Toggle(isOn: $showBoundaryLayer) {
+                Label("Boundary layer top", systemImage: "cloud.fog")
+                    .font(.subheadline)
+            }
+            .onChange(of: showBoundaryLayer) { _, on in
+                if on {
+                    Task { await model.fetchBoundaryLayer(region: model.lastRegion ?? initialRegion) }
+                }
+            }
+            if showBoundaryLayer {
+                Text("Model boundary layer top in feet above ground. Bumpy, hazy air mixes below it, smoother air above. Thermals top out near it.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             legend
@@ -540,7 +690,7 @@ struct RadarPanel: View {
                 swatch(Color(red: 0.94, green: 0.65, blue: 0.15), "Heavy")
                 Spacer()
             }
-            Text("\(stationName) marked. Arrows point with the wind and show above ~8 kts. Forecast frames show in orange on the timeline. Radar tiles by RainViewer, data from NOAA NEXRAD. Wind by Open-Meteo.")
+            Text("\(stationName) marked. Arrows point with the wind and show above ~8 kts. Forecast frames show in orange on the timeline. Radar tiles by RainViewer, data from NOAA NEXRAD. Wind and boundary layer by Open-Meteo.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }

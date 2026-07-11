@@ -27,3 +27,4 @@ ios/Barry.xcodeproj/project.xcworkspace/xcuserdata/
 
 # Art / design source files (not needed for the build)
 art/
+backend/backtest/data/

@@ -81,6 +81,37 @@ struct Sources: Codable, Hashable {
     let forecast: String?
 }
 
+// MARK: - Front watch (regional tendency field)
+
+/// One surrounding station's own 3h tendency — a dot on the front-watch compass.
+struct FrontStation: Codable, Hashable, Identifiable {
+    let id: String
+    let bearingDeg: Double
+    let distanceKm: Double
+    let tendency3h: Double
+}
+
+/// The `/front` payload. Direction comes from real station reports around the
+/// user; timing (`eta`) comes from the model trough. Status "none" means a quiet
+/// field — render nothing at all.
+struct FrontResponse: Codable, Hashable {
+    let station: String
+    let status: String   // none | forecast | approaching | passing | passed
+    var headline: String?
+    var detail: String?
+    var bearingDeg: Double?
+    var cardinal: String?
+    var eta: Date?
+    var maxFall3h: Double?
+    var ownDelta3h: Double?
+    var gradient: Double?
+    var coherence: Double?
+    var stations: [FrontStation] = []
+    let cachedAt: Date
+
+    var isActive: Bool { status != "none" }
+}
+
 struct CombinedResponse: Codable, Hashable {
     let pressure: PressureResponse
     let forecast: ForecastResponse?

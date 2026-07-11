@@ -168,6 +168,13 @@ struct SettingsView: View {
                             AppConfig.sharedDefaults.set(false, forKey: "hasOnboarded")
                             dismiss()
                         }
+                        Button("Show sample front watch") {
+                            store.loadSampleFront()
+                            dismiss()
+                        }
+                        Button("Clear sample front watch") {
+                            store.clearSampleFront()
+                        }
                         Text("Fills history with METAR data for UI testing.")
                             .font(.caption)
                             .foregroundStyle(.secondary)

@@ -48,6 +48,19 @@ struct BarryAPI {
         return try await get(comps?.url)
     }
 
+    /// Front watch — regional pressure-tendency field around the station.
+    /// Called after `combined` so the backend's caches are warm; a failure just
+    /// means no banner, never a blocked screen.
+    func front(station: String, lat: Double?, lon: Double?) async throws -> FrontResponse {
+        var comps = URLComponents(url: baseURL.appendingPathComponent("front"),
+                                  resolvingAgainstBaseURL: false)
+        var items = [URLQueryItem(name: "station", value: station)]
+        if let lat { items.append(URLQueryItem(name: "lat", value: String(lat))) }
+        if let lon { items.append(URLQueryItem(name: "lon", value: String(lon))) }
+        comps?.queryItems = items
+        return try await get(comps?.url)
+    }
+
     /// Location → nearest known station (brief Phase 3 resolution helper).
     func nearestStation(lat: Double, lon: Double) async throws -> NearestStation {
         var comps = URLComponents(url: baseURL.appendingPathComponent("stations/nearest"),

@@ -51,7 +51,44 @@ def sample_metars(sid="KLUK", *, with_pres_tend=True):
     return recs
 
 
-def sample_forecast():
+def sample_bbox_metars(pattern):
+    """A ring of 8 stations ~100 km around KLUK with a linear tendency field.
+
+    Each station reports altimeter only (exercises the SLP-fallback path), two
+    obs 3h apart. Patterns:
+      west_falls  d(x) = -1.0 + 0.015x -> -2.5 hPa/3h at the west station,
+                  +0.5 at the east one (gradient 1.5 hPa/3h per 100 km, east-up:
+                  the classic "front to the west" signature)
+      east_falls  mirrored (falls to the east — the "it moved through" field)
+      flat        incoherent +/-0.1 wobble -> no call
+    """
+    end = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    base = int((end - timedelta(hours=3)).timestamp())
+    origin_lat, origin_lon = 39.103, -84.419
+    recs = []
+    import math
+    for i, bearing in enumerate(range(0, 360, 45)):
+        dist = 100.0
+        x = dist * math.sin(math.radians(bearing))  # km east
+        y = dist * math.cos(math.radians(bearing))  # km north
+        lat = origin_lat + y / 111.32
+        lon = origin_lon + x / (111.32 * math.cos(math.radians(origin_lat)))
+        if pattern == "west_falls":
+            d = -1.0 + 0.015 * x
+        elif pattern == "east_falls":
+            d = -1.0 - 0.015 * x
+        else:  # flat
+            d = 0.1 if i % 2 == 0 else -0.1
+        sid = f"KR{i}A"
+        for t, altim in ((base, 1015.0), (base + 3 * 3600, 1015.0 + d)):
+            rec = _metar_record(sid, t, None, altim=altim, name=f"Ring {i}")
+            rec["lat"] = round(lat, 4)
+            rec["lon"] = round(lon, 4)
+            recs.append(rec)
+    return recs
+
+
+def sample_forecast(trough=False):
     # Forecast hours follow the latest observed sample (sample_metars ends at
     # `now` rounded to the hour). Open-Meteo's "time" field is ISO without TZ
     # in the local timezone of the request — the parser treats it as UTC, which
@@ -62,12 +99,19 @@ def sample_forecast():
         for i in range(12)
     ]
     n = len(times)
+    if trough:
+        # A genuine pressure trough at hour 5 (fall gentle enough not to trip the
+        # interpreter's rapid_fall shortcut, which would preempt approaching_trough).
+        pressures = [1009.4 - 0.5 * i if i <= 5 else 1006.9 + 0.8 * (i - 5)
+                     for i in range(n)]
+    else:
+        # Continue the observed fall (ends ~1009.6) so the merged series the
+        # interpreter sees has no boundary kink; -0.3 hPa/h matches the curve.
+        pressures = [1009.4 - 0.3 * i for i in range(n)]
     return {
         "hourly": {
             "time": times,
-            # Continue the observed fall (ends ~1009.6) so the merged series the
-            # interpreter sees has no boundary kink; -0.3 hPa/h matches the curve.
-            "pressure_msl": [1009.4 - 0.3 * i for i in range(n)],
+            "pressure_msl": pressures,
             "surface_pressure": [1008.0 - 0.3 * i for i in range(n)],
             "windspeed_10m": [8.0 + 1.5 * i for i in range(n)],
             "winddirection_10m": [210 for _ in range(n)],
@@ -86,6 +130,11 @@ class FakeUpstream:
         self.om_calls = []
         self.awc_fail = False
         self.om_fail = False
+        # Front-watch knobs: what a bbox query returns ("west_falls" /
+        # "east_falls" / "flat" / None = empty body) and whether the forecast
+        # curve contains a real trough (drives the interpreter's ETA).
+        self.bbox_pattern = None
+        self.om_trough = False
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         url = str(request.url)
@@ -93,6 +142,10 @@ class FakeUpstream:
             self.awc_calls.append(request)
             if self.awc_fail:
                 return httpx.Response(503, text="blocked")
+            if request.url.params.get("bbox"):
+                if self.bbox_pattern is None:
+                    return httpx.Response(200, text="")
+                return httpx.Response(200, json=sample_bbox_metars(self.bbox_pattern))
             ids = request.url.params.get("ids", "").split(",")
             recs = []
             for sid in ids:
@@ -110,7 +163,7 @@ class FakeUpstream:
             self.om_calls.append(request)
             if self.om_fail:
                 return httpx.Response(503, text="down")
-            return httpx.Response(200, json=sample_forecast())
+            return httpx.Response(200, json=sample_forecast(trough=self.om_trough))
         return httpx.Response(404)
 
 

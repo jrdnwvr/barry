@@ -127,6 +127,10 @@ struct ContentView: View {
                          selectedLocationID: savedLocations.selectedID,
                          onSelectLocation: { savedLocations.selectedID = $0 })
 
+                // Front watch: absent on quiet days, one row when the regional
+                // field shows a pattern. Everything deeper lives in its sheet.
+                frontBanner(combined)
+
                 // The focused trend: window toggle + chart + the honest caveat.
                 trendSection(combined)
 
@@ -157,6 +161,17 @@ struct ContentView: View {
                 DataSourceFootnote(combined: combined)
             }
             .padding(.vertical)
+        }
+    }
+
+    /// The front-watch banner, shared by both layouts. Guarded three ways: the
+    /// analysis must exist, must have something to say, and must belong to the
+    /// station on screen (a stale result from the previous selection stays hidden
+    /// while the new one loads).
+    @ViewBuilder
+    private func frontBanner(_ combined: CombinedResponse) -> some View {
+        if let f = store.front, f.isActive, f.station == combined.pressure.station {
+            FrontBanner(front: f)
         }
     }
 
@@ -214,6 +229,8 @@ struct ContentView: View {
                                  locations: savedLocations.locations,
                                  selectedLocationID: savedLocations.selectedID,
                                  onSelectLocation: { savedLocations.selectedID = $0 })
+
+                        frontBanner(combined)
 
                         ConfirmationOverlayView(combined: combined, now: store.now)
 

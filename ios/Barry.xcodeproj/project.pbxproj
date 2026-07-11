@@ -66,6 +66,7 @@
 		7D0122F48329169FE2A913E7 /* RangeAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EBD287C6CB46A536198173F /* RangeAnalysis.swift */; };
 		811727C7296B6B80F9E3F81C /* BarryPhoneWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 830E6CE85533F8C3169A8E97 /* BarryPhoneWidget.swift */; };
 		81C789D5AD14654F306BDA4C /* SharedSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */; };
+		83C8C470DA68480C043EF623 /* FrontWatchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FE1451AAFD8A470C4CB228A /* FrontWatchView.swift */; };
 		83F986D9DDC3CCBE8FA83873 /* PressureChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778E430DEB72ECE6B1DB5CCA /* PressureChartView.swift */; };
 		8B662BF9297E88CBB93B370B /* SensorComparisonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA12AC45B8A41856114FD9A7 /* SensorComparisonView.swift */; };
 		8C6BCDDE909F4DDEBB5F16AA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72812DF1800A9DF0CF5EF2C3 /* SettingsView.swift */; };
@@ -187,6 +188,7 @@
 		5C59EF4878E06062DC20D1D7 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		68D08500DD9FA42C666DFF25 /* ComplicationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComplicationViews.swift; sourceTree = "<group>"; };
 		6978CE026B8EEE1A560877C0 /* PressureGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureGuideView.swift; sourceTree = "<group>"; };
+		6FE1451AAFD8A470C4CB228A /* FrontWatchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontWatchView.swift; sourceTree = "<group>"; };
 		711E43480463B0F36F74E35A /* Barry.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Barry.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7124BFCE70A82D184062809B /* BarryComplication.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BarryComplication.entitlements; sourceTree = "<group>"; };
 		726AB15B448612548C2CCCCD /* BarryComplication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryComplication.swift; sourceTree = "<group>"; };
@@ -342,6 +344,7 @@
 				A59F4AD2D2CF0AC8FB31B534 /* ConfirmationOverlayView.swift */,
 				4EB1F388C1A5FE3D18F1D62E /* ContentView.swift */,
 				031482E889A2274CBD689E88 /* ForecastCaveatView.swift */,
+				6FE1451AAFD8A470C4CB228A /* FrontWatchView.swift */,
 				01599505777741EA095092C0 /* HeroView.swift */,
 				F4C5676D3E1E52D59CDFED12 /* Info.plist */,
 				B98E77604746429DE78EF9C4 /* OnboardingView.swift */,
@@ -598,6 +601,7 @@
 				3FD01657A6175EE55DF94D91 /* ConfirmationOverlayView.swift in Sources */,
 				E1DA0A2BA6D5DAE408366B62 /* ContentView.swift in Sources */,
 				17B2F3F6A33ED2C6DB766640 /* ForecastCaveatView.swift in Sources */,
+				83C8C470DA68480C043EF623 /* FrontWatchView.swift in Sources */,
 				4ED2D56EC1DA59D7FBBD779D /* HeroView.swift in Sources */,
 				3BE203844E7BC24AC1600A7B /* Interpreter.swift in Sources */,
 				8C7B2F5AFF63137EA0451EA1 /* LocationManager.swift in Sources */,

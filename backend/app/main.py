@@ -89,6 +89,19 @@ async def get_combined(
     return resp.model_dump(mode="json", by_alias=True)
 
 
+@app.get("/front")
+async def get_front(
+    station: str = Query(...),
+    lat: Optional[float] = Query(None, ge=-90, le=90),
+    lon: Optional[float] = Query(None, ge=-180, le=180),
+):
+    """Front watch: regional pressure-tendency field + direction + model ETA.
+    Clients call this after /combined; a "none" status means render nothing."""
+    service = get_service()
+    resp = await service.get_front(station, lat, lon)
+    return resp.model_dump(mode="json", by_alias=True)
+
+
 @app.get("/stations/nearest")
 async def nearest_station(
     lat: float = Query(..., ge=-90, le=90),

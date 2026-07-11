@@ -15,6 +15,7 @@ thing to check.
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Sequence
 
@@ -194,6 +195,35 @@ async def fetch_metars(
         "format": "json",
         "hours": str(hours),
     }
+    return await _fetch_parse(params, client)
+
+
+# Half-height of the front-watch box in degrees of latitude (~155 km); the
+# longitude half-width is scaled by cos(lat) so the box stays square-ish in km.
+BBOX_HALF_LAT_DEG = 1.4
+
+
+async def fetch_metars_bbox(
+    lat: float,
+    lon: float,
+    client: httpx.AsyncClient,
+    *,
+    hours: int = 4,
+    half_lat_deg: float = BBOX_HALF_LAT_DEG,
+) -> Dict[str, dict]:
+    """Fetch + parse every reporting station in a box around a point — the
+    regional tendency field for the front watch, in ONE call. AWC's bbox form
+    is minLat,minLon,maxLat,maxLon."""
+    half_lon = half_lat_deg / max(0.2, math.cos(math.radians(lat)))
+    params = {
+        "bbox": f"{lat - half_lat_deg},{lon - half_lon},{lat + half_lat_deg},{lon + half_lon}",
+        "format": "json",
+        "hours": str(hours),
+    }
+    return await _fetch_parse(params, client)
+
+
+async def _fetch_parse(params: dict, client: httpx.AsyncClient) -> Dict[str, dict]:
     resp = await client.get(
         BASE_URL,
         params=params,

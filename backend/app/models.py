@@ -86,6 +86,34 @@ class ReadingOut(BaseModel):
     caveats: List[str] = Field(default_factory=list)
 
 
+class FrontStationOut(BaseModel):
+    """One surrounding station's own 3h tendency — a dot on the client compass."""
+
+    id: str
+    bearingDeg: float
+    distanceKm: float
+    tendency3h: float
+
+
+class FrontResponse(BaseModel):
+    """Front watch (regional isallobaric analysis, see front.py). status "none"
+    means a quiet field — the client renders nothing at all."""
+
+    station: str
+    status: str = "none"  # none | forecast | approaching | passing | passed
+    headline: Optional[str] = None
+    detail: Optional[str] = None
+    bearingDeg: Optional[float] = None    # compass bearing of the falls, from the user
+    cardinal: Optional[str] = None        # "west" — the word used in the copy
+    eta: Optional[datetime] = None        # model trough time (interpreter featureTime)
+    maxFall3h: Optional[float] = None
+    ownDelta3h: Optional[float] = None
+    gradient: Optional[float] = None      # hPa/3h per 100 km
+    coherence: Optional[float] = None     # plane-fit R²
+    stations: List[FrontStationOut] = Field(default_factory=list)
+    cachedAt: datetime
+
+
 class Sources(BaseModel):
     """Where each half of the curve actually came from. Surfaces a graceful
     degradation (e.g. observed via Open-Meteo when AWC is blocked)."""

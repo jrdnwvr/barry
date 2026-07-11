@@ -11,6 +11,7 @@ from typing import Optional
 
 import httpx
 
+from . import front as front_mod
 from . import stations
 from .cache import StationRegistry, TTLCache
 from .interpreter import Sample, interpret
@@ -18,6 +19,7 @@ from .models import (
     CombinedResponse,
     CurrentObs,
     ForecastResponse,
+    FrontResponse,
     PressureResponse,
     ReadingOut,
     SeriesPoint,
@@ -31,6 +33,8 @@ from .verdict import build_verdict
 
 PRESSURE_TTL = 12 * 60.0  # METARs update ~hourly; 12 min keeps it fresh-ish & cheap
 FORECAST_TTL = 30 * 60.0  # forecasts move slowly; 30 min is plenty
+FRONT_TTL = 15 * 60.0     # regional bbox fetch is the priciest call; ring METARs
+                          # are hourly anyway, so 15 min loses nothing
 
 # Stale-if-error: when Open-Meteo is down, re-serve the last good forecast for up
 # to this long (flagged stale=True) — a 6-hour-old forecast beats no forecast.
@@ -178,6 +182,55 @@ class PressureService:
         )
         await self.cache.set(cache_key, resp, ttl=FORECAST_TTL)
         await self.cache.set(last_good_key, resp, ttl=STALE_FORECAST_MAX_AGE)
+        return resp
+
+    # ---- front watch ---------------------------------------------------------
+
+    async def get_front(
+        self,
+        station: str,
+        lat: Optional[float] = None,
+        lon: Optional[float] = None,
+    ) -> FrontResponse:
+        """Regional isallobaric analysis around the station (see front.py).
+
+        Designed to be called AFTER /combined so the pressure + forecast caches
+        are warm — the only genuinely new upstream cost is the bbox METAR fetch.
+        """
+        pressure = await self.get_pressure(station)
+        f_lat = lat if lat is not None else pressure.lat
+        f_lon = lon if lon is not None else pressure.lon
+        now = _now()
+        if f_lat is None or f_lon is None:
+            return FrontResponse(station=pressure.station, status="none", cachedAt=now)
+
+        cache_key = f"front:{pressure.station}:{round(f_lat, 1)}:{round(f_lon, 1)}"
+        cached = await self.cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        forecast: Optional[ForecastResponse] = None
+        try:
+            forecast = await self.get_forecast(f_lat, f_lon)
+        except Exception:
+            pass  # timing degrades to None; direction can still be called
+        reading, _ = _run_interpreter(pressure, forecast)
+
+        try:
+            parsed = await awc.fetch_metars_bbox(f_lat, f_lon, self._client, hours=4)
+        except Exception:
+            parsed = {}  # no regional field -> at most a "forecast" status
+
+        ring = front_mod.ring_stations(
+            parsed, origin_lat=f_lat, origin_lon=f_lon,
+            exclude=pressure.station, now=now,
+        )
+        own = pressure.tendency.delta3h if pressure.tendency else None
+        resp = front_mod.analyze(
+            station=pressure.station, ring=ring, own_delta3h=own,
+            reading=reading, now=now,
+        )
+        await self.cache.set(cache_key, resp, ttl=FRONT_TTL)
         return resp
 
     # ---- combined (primary client endpoint) ---------------------------------

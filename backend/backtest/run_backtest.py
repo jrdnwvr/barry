@@ -47,8 +47,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from app import front  # noqa: E402  (production code under test)
 from app.interpreter import tide  # noqa: E402
 
-DATA_DIR = Path(__file__).parent / "data"
-CENTER_ID = "LUK"
+DATA_ROOT = Path(__file__).parent / "data"
 INHG_TO_HPA = 33.8639
 
 # Ground-truth trough definition (hindsight, de-tided hPa)
@@ -72,11 +71,11 @@ class Ob:
 # ---- data loading ------------------------------------------------------------
 
 
-def load_station(sid: str) -> Tuple[List[Ob], List[Optional[float]]]:
+def load_station(data_dir: Path, sid: str) -> Tuple[List[Ob], List[Optional[float]]]:
     obs: List[Ob] = []
     winds: List[Optional[float]] = []
     seen = set()
-    with open(DATA_DIR / f"{sid}.csv") as f:
+    with open(data_dir / f"{sid}.csv") as f:
         for row in csv.DictReader(f):
             try:
                 t = datetime.strptime(row["valid"], "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
@@ -113,7 +112,7 @@ class HourStats:
     deltas: List[Tuple[float, float, float]]  # ring (x_km, y_km, delta3h)
 
 
-def field_stats(stations: dict, series: dict, times_idx: dict,
+def field_stats(center: str, stations: dict, series: dict, times_idx: dict,
                 hours: List[datetime]) -> List[HourStats]:
     out: List[HourStats] = []
     for T in hours:
@@ -131,7 +130,7 @@ def field_stats(stations: dict, series: dict, times_idx: dict,
             d = front._delta3h(window, T)
             if d is None:
                 continue
-            if sid == CENTER_ID:
+            if sid == center:
                 own = d
                 continue
             if meta["dist_km"] > front.MAX_RING_KM:
@@ -310,7 +309,7 @@ def wind_shift(t: datetime, wind_at: dict) -> Optional[float]:
 # ---- direction ground truth ----------------------------------------------------
 
 
-def propagation_bearing(trough_t: datetime, stations: dict,
+def propagation_bearing(center: str, trough_t: datetime, stations: dict,
                         hourly: dict) -> Optional[float]:
     """'Coming from' bearing of a trough, from per-station arrival times.
 
@@ -321,7 +320,7 @@ def propagation_bearing(trough_t: datetime, stations: dict,
     """
     pts = []
     for sid, meta in stations.items():
-        if sid == CENTER_ID:
+        if sid == center:
             continue
         grid, p = hourly[sid]
         i0 = bisect.bisect_left(grid, trough_t - timedelta(hours=10))
@@ -451,21 +450,26 @@ def own_signal(hours: List[HourStats], fall_max: float) -> List[bool]:
 # ---- main ----------------------------------------------------------------------
 
 
-def main() -> None:
-    stations = json.loads((DATA_DIR / "stations.json").read_text())
-    cos_lat = math.cos(math.radians(stations[CENTER_ID]["lat"]))
-    clat, clon = stations[CENTER_ID]["lat"], stations[CENTER_ID]["lon"]
+def main(region: str) -> dict:
+    data_dir = DATA_ROOT / region
+    meta_all = json.loads((data_dir / "stations.json").read_text())
+    center = meta_all["center"]
+    label = meta_all.get("label", region)
+    stations = meta_all["stations"]
+    print(f"########## {region}: {label} ##########")
+    cos_lat = math.cos(math.radians(stations[center]["lat"]))
+    clat, clon = stations[center]["lat"], stations[center]["lon"]
     for sid, meta in stations.items():
         meta["dx"] = (meta["lon"] - clon) * front.KM_PER_DEG_LAT * cos_lat
         meta["dy"] = (meta["lat"] - clat) * front.KM_PER_DEG_LAT
 
     series, winds_raw = {}, {}
     for sid in list(stations):
-        path = DATA_DIR / f"{sid}.csv"
+        path = data_dir / f"{sid}.csv"
         if not path.exists():
             del stations[sid]
             continue
-        obs, winds = load_station(sid)
+        obs, winds = load_station(data_dir, sid)
         if len(obs) < 4000:  # a station that's mostly missing would skew the ring
             print(f"  dropping {sid}: only {len(obs)} obs")
             del stations[sid]
@@ -484,13 +488,13 @@ def main() -> None:
         t += timedelta(hours=1)
 
     print(f"replaying {len(hours)} hours: {hours[0]:%Y-%m-%d} .. {hours[-1]:%Y-%m-%d}")
-    stats = field_stats(stations, series, times_idx, hours)
+    stats = field_stats(center, stations, series, times_idx, hours)
 
     # ground truth at the center
-    center_obs = series[CENTER_ID]
+    center_obs = series[center]
     grid, p = hourly_series(center_obs, clon, hours[0], hours[-1])
     wind_at = {o.t.replace(minute=0, second=0): w
-               for o, w in zip(center_obs, winds_raw[CENTER_ID]) if w is not None}
+               for o, w in zip(center_obs, winds_raw[center]) if w is not None}
     troughs = find_troughs(grid, p, wind_at)
     # A looser trough set for the false-alarm autopsy: weather that was real
     # but didn't clear the scoring bar.
@@ -513,16 +517,20 @@ def main() -> None:
     def run(label, **kw):
         return evaluate(label, stats, gate_signal(stats, **kw), troughs, shallow)
 
-    # v1.1 production gate: own fall required, coherence out of detection
-    # (coh_min=0.0 still requires a plane fit to exist, matching analyze()).
-    prod = run("v1.1 production g.5 f-1.0 own-.3",
+    # Shipped production gate, read live from front.py so this row always
+    # reflects what the server actually runs (coh_min=0.0 still requires a
+    # plane fit to exist, matching analyze()).
+    prod = run(f"SHIPPED g{front.MIN_GRADIENT} f{front.MIN_FALL} own{front.OWN_FALL_MAX}",
                grad_min=front.MIN_GRADIENT, coh_min=0.0,
                fall_min=front.MIN_FALL, own_fall_max=front.OWN_FALL_MAX)
-    v1 = run("v1 (shipped first) g.5 c.3 f-1.0",
-             grad_min=front.MIN_GRADIENT, coh_min=0.3, fall_min=front.MIN_FALL)
+    v11 = run("v1.1 (g.5 f-1.0 own-.3)",
+              grad_min=0.5, coh_min=0.0, fall_min=-1.0, own_fall_max=-0.3)
+    v1 = run("v1 (g.5 c.3 f-1.0, no own gate)",
+             grad_min=0.5, coh_min=0.3, fall_min=-1.0)
 
     print("=== production vs single-station baselines ===")
     print(fmt(prod))
+    print(fmt(v11))
     print(fmt(v1))
     for fm in (-0.5, -1.0, -1.5):
         b = evaluate(f"baseline own<={fm}", stats, own_signal(stats, fm),
@@ -539,12 +547,14 @@ def main() -> None:
                   fall_min=-1.0, persist_h=2, own_fall_max=-0.3)))
     print()
 
-    print("=== candidate v1.1 gate: own falling, coherence out of detection ===")
-    for own_max in (-0.3, -0.5, -0.8):
-        print(fmt(run(f"g0.5 f-1.0 own<={own_max} coh0",
-                      grad_min=0.5, coh_min=0.0, fall_min=-1.0,
-                      own_fall_max=own_max)))
-    print()
+    print("=== candidate gates (own falling required, coherence out) ===")
+    for g in (0.3, 0.4, 0.5):
+        for f in (-1.0, -1.5):
+            for own_max in (-0.3, -0.5):
+                print(fmt(run(f"g{g} f{f} own<={own_max}",
+                              grad_min=g, coh_min=0.0, fall_min=f,
+                              own_fall_max=own_max)))
+        print()
 
     print("=== threshold sweep (gradient x coherence x min-fall) ===")
     for g in (0.3, 0.5, 0.8):
@@ -569,7 +579,7 @@ def main() -> None:
     stats_by_t = {h.t: h for h in stats}
     first_errs, last_errs, cent_first, cent_last = [], [], [], []
     for tr in prod["hit_troughs"]:
-        truth = propagation_bearing(tr.t, stations, hourly_all)
+        truth = propagation_bearing(center, tr.t, stations, hourly_all)
         if truth is None:
             continue
         fires = [tr.t - timedelta(hours=k) for k in range(1, HIT_WINDOW_H + 1)]
@@ -603,7 +613,7 @@ def main() -> None:
     # This picks the v1.1 switching rule from data instead of taste.
     samples = []  # (k, grad_err, track_err, own, cent_dist, coh, min_fall, g_brg, t_brg, truth)
     for tr in prod["hit_troughs"]:
-        truth = propagation_bearing(tr.t, stations, hourly_all)
+        truth = propagation_bearing(center, tr.t, stations, hourly_all)
         if truth is None:
             continue
         for k in range(1, HIT_WINDOW_H + 1):
@@ -639,14 +649,32 @@ def main() -> None:
         errs = [e for e in stated if e is not None]
         if not errs:
             print(f"  {name}: never states a direction")
-            return
+            return None
         harm = sum(1 for e in errs if e > 90)
         print(f"  {name:<38} median {statistics.median(errs):3.0f} deg  "
               f"within45 {sum(1 for e in errs if e <= 45)}/{len(errs)}  "
               f"harmful(>90) {harm}/{len(errs)}  "
               f"stated {len(errs)}/{len(samples)}")
+        return {"median": statistics.median(errs), "n": len(errs),
+                "harm": harm / len(errs), "total": len(samples),
+                "within90": sum(1 for e in errs if e <= 90) / len(errs)}
+
+    def shipped_rule(s):
+        """EXACTLY the direction logic analyze() ships: track first, gradient
+        only while the fit clears MIN_COHERENCE, silence otherwise."""
+        if s[2] is not None:
+            return s[2]
+        if s[1] is not None and s[5] is not None and s[5] >= front.MIN_COHERENCE:
+            return s[1]
+        return None
 
     print("=== switching rules (median over the same samples) ===")
+    shipped_dir = eval_rule("SHIPPED: track, coherent-grad, silent", shipped_rule)
+    for floor in (0.5, 0.6, 0.7):
+        eval_rule(f"track, grad only if coh>={floor}",
+                  lambda s, fl=floor: (s[2] if s[2] is not None
+                                       else (s[1] if (s[1] is not None and s[5] is not None
+                                                      and s[5] >= fl) else None)))
     eval_rule("always gradient", lambda s: s[1])
     eval_rule("always track (else silent)", lambda s: s[2])
     eval_rule("track if avail else gradient", lambda s: s[2] if s[2] is not None else s[1])
@@ -736,7 +764,32 @@ def main() -> None:
         kind = "frontal" if tr.frontal else "       "
         print(f"  {mark} {tr.t:%Y-%m-%d %H:%M}Z  fall {tr.depth:>4.1f}  "
               f"rise {tr.rise:>4.1f}  shift {shift:>6} {kind}")
+    print()
+
+    base15 = evaluate("baseline own<=-1.5", stats, own_signal(stats, -1.5),
+                      troughs, shallow)
+    return {"region": region, "label": label, "prod": prod, "base15": base15,
+            "dir": shipped_dir, "troughs": len(troughs),
+            "frontal": sum(1 for tr in troughs if tr.frontal)}
 
 
 if __name__ == "__main__":
-    main()
+    regions = sys.argv[1:] or ["LUK"]
+    summaries = [main(r) for r in regions]
+    if len(summaries) > 1:
+        print(f"\n================ CROSS-REGION SUMMARY (shipped: g{front.MIN_GRADIENT} "
+              f"f{front.MIN_FALL} own{front.OWN_FALL_MAX}) ================")
+        for s in summaries:
+            p = s["prod"]
+            d = s["dir"]
+            lead = f"{p['lead_med']:.0f}h" if p["lead_med"] is not None else " —"
+            dirs = (f"dir med {d['median']:3.0f} deg, harm {d['harm']:.0%}, "
+                    f"stated {d['n']}/{d['total']}" if d else "dir: no scoreable events")
+            print(f"  {s['region']}  troughs {s['troughs']:>3} ({s['frontal']:>2} frontal) | "
+                  f"POD {p['pod']:.0%}  frontal {p['frontal_pod']:.0%}  "
+                  f"FAR {p['far']:.0%}  lead {lead}  duty {p['duty']:.1%} | {dirs}")
+        print("\n  baseline own<=-1.5 for comparison:")
+        for s in summaries:
+            b = s["base15"]
+            print(f"  {s['region']}  POD {b['pod']:.0%}  frontal {b['frontal_pod']:.0%}  "
+                  f"FAR {b['far']:.0%}  duty {b['duty']:.1%}")

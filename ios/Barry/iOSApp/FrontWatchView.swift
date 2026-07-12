@@ -140,7 +140,7 @@ struct FrontDetailView: View {
                         legend
                     }
 
-                    Text("Direction comes from real pressure reports at the stations shown, each dot colored by its own last 3 hours. It's good to about a quadrant, so treat it as roughly. Timing comes from the model, and fronts often arrive sharper and a little earlier than the model draws them. In a year of replay testing around Cincinnati, about six in ten of these calls led to a real pressure dip within a day. A heads up, not a promise.")
+                    Text("Direction comes from real pressure reports at the stations shown, each dot colored by its own last 3 hours. It's good to about a quadrant, so treat it as roughly, and it's least reliable around fast-moving storm outflows. Timing comes from the model, and fronts often arrive sharper and a little earlier than the model draws them. In a year of replay testing across five US climates, about six in ten of these calls led to a real pressure dip within a day. A heads up, not a promise.")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)

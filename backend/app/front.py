@@ -46,10 +46,15 @@ from .models import FrontResponse, FrontStationOut
 MIN_RING_STATIONS = 5     # fewer reporting stations than this -> no spatial call
 MAX_RING_KM = 240.0       # ignore stations beyond this (different weather regime)
 MIN_COHERENCE = 0.30      # plane-fit R² floor for a GRADIENT direction claim only
-MIN_GRADIENT = 0.5        # hPa/3h per 100 km — weaker than this isn't a pattern
-MIN_FALL = -1.0           # somebody in the ring must actually be falling this hard
-OWN_FALL_MAX = -0.3       # "approaching" requires the center itself falling: kept
-                          # every backtested frontal hit while trimming FAR + duty
+MIN_GRADIENT = 0.3        # hPa/3h per 100 km. 0.5 missed a quarter of southern-
+                          # plains frontal troughs (sharp mesoscale patterns fit
+                          # to a weak plane over 240 km); 0.3 catches them and
+                          # held up in all five backtest climates
+MIN_FALL = -1.5           # somebody in the ring must actually be falling this
+                          # hard (was -1.0; the deeper bar buys back the FAR and
+                          # duty that the lower gradient threshold would cost)
+OWN_FALL_MAX = -0.5       # "approaching" requires the center itself falling —
+                          # detection stays the hero's job, the ring explains it
 RISING_BEHIND = 0.5       # own delta at/above this + falls downstream = "passed"
 MAX_COMPASS_STATIONS = 24 # payload cap for the client's compass view
 

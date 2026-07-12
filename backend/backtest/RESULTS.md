@@ -109,6 +109,58 @@ patterns like this brought a real pressure dip within a day").
 Policy, encoded in front.py's docstring: front statuses never feed
 notifications — banner-grade evidence only.
 
+## Multi-region validation and v1.2
+
+Four regions were added, picked to stress the assumptions, not flatter them:
+FTW (southern plains drylines/convection), BFI (Puget Sound — marine systems
+off an ocean with no stations, so the ring is one-sided), FCM (upper-Midwest
+frontal parade), DVT (Sonoran desert heat lows + monsoon). Same year, same
+method, ~30 stations each. Run: `run_backtest.py LUK FTW BFI FCM DVT`.
+
+Surprises, both directions:
+- **Phoenix did NOT false-alarm-explode.** The predicted heat-low failure mode
+  produced the LOWEST FAR of all five regions (28-35%) — desert falls that
+  clear the gates mostly precede real (monsoon/outflow) troughs.
+- **Seattle's one-sided ring works.** 88-100% frontal POD, and the ring
+  genuinely beats the single-station baseline there (which manages only 76%
+  frontal) — the one region where the spatial field adds detection skill.
+- **Fort Worth broke the v1.1 gradient gate**: sharp mesoscale troughs fit to
+  a weak plane over 240 km, so MIN_GRADIENT 0.5 missed a quarter of frontal
+  events the single-station baseline caught.
+
+**v1.2 (shipped):** MIN_GRADIENT 0.5 -> 0.3, MIN_FALL -1.0 -> -1.5 (the deeper
+required fall buys back the FAR/duty the lower gradient bar would cost),
+OWN_FALL_MAX -0.3 -> -0.5. Chosen from a 12-cell grid over all five regions:
+
+| region | frontal POD v1.1 -> v1.2 | FAR | duty | lead |
+|---|---|---|---|---|
+| LUK | 91% -> **97%** | 45 -> 49% | 10.0 -> 14.7% | 9 -> 10 h |
+| FTW | 76% -> **91%** | 54 -> 47% | 8.5 -> 13.4% | 8 h |
+| BFI | 88% -> **100%** | 43 -> 43% | 11.1 -> 16.4% | 9 h |
+| FCM | 85% -> **89%** | 55 -> 55% | 16.9 -> 19.1% | 10 h |
+| DVT | 81% -> **98%** | 28 -> 35% | 8.9 -> 17.0% | 6 -> 8 h |
+
+Mean frontal POD 84% -> 95% at flat FAR; the cost is duty (banner up ~15% of
+hours in an active year vs ~11%) — acceptable for a passive banner that only
+ever appears while the hero already shows falling, and still never wired to
+notifications.
+
+**Direction, per region (shipped rule):** median 50-86 deg, statements more
+than a quadrant wrong 31-48%. It is climate-dependent: solid where systems are
+synoptic and translate cleanly (FCM 50 deg, BFI 60 deg, LUK 70 deg), weak
+where the weather is mesoscale/convective (FTW 81 deg, DVT 86 deg) — though in
+those regions the ground-truth propagation fit is itself noisiest, so the true
+errors are likely somewhat better than measured. Raising the gradient
+fallback's coherence floor was tested (0.5/0.6/0.7): it trims harm ~2-4 points
+but drops a fifth of statements and leaves the weak regions weak, so it was
+NOT adopted. The client copy hedges direction as "roughly" and notes it is
+least reliable around storm outflows.
+
+Selection caveat: v1.2's constants were picked on the same five region-years
+they are evaluated on. The grid is coarse (12 cells) and the winner won nearly
+everywhere, so gross overfitting is unlikely, but a held-out year is the next
+rigor step if these numbers ever need defending.
+
 ## Limits of this backtest
 
 One region (Ohio Valley), one year, one center station. Ground truth is

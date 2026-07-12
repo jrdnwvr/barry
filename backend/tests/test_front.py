@@ -205,9 +205,16 @@ def test_garbage_delta_discarded():
 
 
 @pytest.mark.asyncio
-async def test_get_front_end_to_end(client, upstream):
+async def test_get_front_end_to_end(client, upstream, monkeypatch):
+    # This test pins the OBSERVATIONAL path (bbox -> two-epoch ring -> track ->
+    # direction). The interpreter is pinned out because the fixtures ride the
+    # real wall clock: its de-tide phase can legitimately read the merged curve
+    # as trough_passing/rapid_fall depending on the hour, which made this flaky
+    # three different ways. Interpreter behavior has its own tests.
+    import app.service as service_mod
+
+    monkeypatch.setattr(service_mod, "_run_interpreter", lambda p, f: (None, 0.0))
     upstream.bbox_pattern = "west_falls"
-    upstream.om_trough = True
     service = PressureService(client)
     resp = await service.get_front("KLUK", 39.103, -84.419)
     assert resp.status == "approaching"
@@ -216,10 +223,6 @@ async def test_get_front_end_to_end(client, upstream):
     assert resp.cardinal == "west"
     assert len(resp.stations) == 8
     assert resp.station == "KLUK"
-    # eta deliberately not asserted: the fixtures ride the real wall clock, so
-    # the interpreter's de-tide phase can legitimately label the merged curve
-    # rapid_fall instead of approaching_trough at some hours of the day. The
-    # eta plumb-through is pinned at unit level instead.
 
 
 @pytest.mark.asyncio

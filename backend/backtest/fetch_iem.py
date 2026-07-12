@@ -19,6 +19,10 @@ watch's assumptions, not to flatter them:
 
 Usage:  .venv/bin/python backtest/fetch_iem.py FTW BFI FCM DVT
         (no args = all regions; cached stations are skipped)
+
+        --year 2024 fetches the Jul 2024 - Jun 2025 window into data/<KEY>-2024
+        instead — the held-out year, downloaded only AFTER thresholds were
+        frozen so it can validate them without having tuned them.
 """
 
 from __future__ import annotations
@@ -46,8 +50,7 @@ REGIONS = {
 
 MAX_KM = 240.0               # mirror front.MAX_RING_KM
 MAX_STATIONS = 30            # production caps the ring at 24; spares for gaps
-START = (2025, 7, 1)
-END = (2026, 7, 1)
+DEFAULT_YEAR = 2025          # window runs Jul <year> - Jun <year+1>
 SLEEP_S = 8.0                # IEM 429s burst traffic; be genuinely polite
 
 DATA_ROOT = Path(__file__).parent / "data"
@@ -60,10 +63,11 @@ def dist_km(lat0: float, lon0: float, lat: float, lon: float) -> float:
     return math.hypot(dx, dy)
 
 
-def pick_stations(client: httpx.Client, center_id: str, networks: list) -> dict:
+def pick_stations(client: httpx.Client, center_id: str, networks: list,
+                  start: tuple) -> dict:
     """Nearest archived stations within the ring; center coords come from the
     network listing so nothing is hand-typed."""
-    start_iso = f"{START[0]}-{START[1]:02d}-{START[2]:02d}"
+    start_iso = f"{start[0]}-{start[1]:02d}-{start[2]:02d}"
     all_feats: dict[str, dict] = {}
     for net in networks:
         resp = client.get(f"https://mesonet.agron.iastate.edu/geojson/network/{net}.geojson")
@@ -90,12 +94,12 @@ def pick_stations(client: httpx.Client, center_id: str, networks: list) -> dict:
     return picked
 
 
-def fetch_station(client: httpx.Client, sid: str) -> str:
+def fetch_station(client: httpx.Client, sid: str, start: tuple, end: tuple) -> str:
     params = {
         "station": sid,
         "data": ["alti", "mslp", "drct"],
-        "year1": START[0], "month1": START[1], "day1": START[2],
-        "year2": END[0], "month2": END[1], "day2": END[2],
+        "year1": start[0], "month1": start[1], "day1": start[2],
+        "year2": end[0], "month2": end[1], "day2": end[2],
         "tz": "Etc/UTC", "format": "onlycomma",
         "latlon": "yes", "missing": "empty", "trace": "empty",
         # 3 = routine hourly METAR, 4 = specials — same mix the live feed sees.
@@ -112,21 +116,24 @@ def fetch_station(client: httpx.Client, sid: str) -> str:
     raise RuntimeError("unreachable")
 
 
-def fetch_region(client: httpx.Client, key: str) -> None:
+def fetch_region(client: httpx.Client, key: str, year: int) -> None:
     cfg = REGIONS[key]
-    out_dir = DATA_ROOT / key
+    start, end = (year, 7, 1), (year + 1, 7, 1)
+    dirname = key if year == DEFAULT_YEAR else f"{key}-{year}"
+    out_dir = DATA_ROOT / dirname
     out_dir.mkdir(parents=True, exist_ok=True)
-    stations = pick_stations(client, key, cfg["networks"])
+    stations = pick_stations(client, key, cfg["networks"], start)
+    label = cfg["label"] + (f" [{year}-{year + 1}]" if year != DEFAULT_YEAR else "")
     (out_dir / "stations.json").write_text(json.dumps(
-        {"center": key, "label": cfg["label"], "stations": stations}, indent=2))
-    print(f"[{key}] {cfg['label']}: {len(stations)} stations")
+        {"center": key, "label": label, "stations": stations}, indent=2))
+    print(f"[{dirname}] {label}: {len(stations)} stations")
     for i, sid in enumerate(stations):
         out = out_dir / f"{sid}.csv"
         if out.exists() and out.stat().st_size > 1000:
             print(f"  [{i+1}/{len(stations)}] {sid} cached")
             continue
         try:
-            text = fetch_station(client, sid)
+            text = fetch_station(client, sid, start, end)
         except Exception as e:  # noqa: BLE001 — a lost station shouldn't kill the run
             print(f"  [{i+1}/{len(stations)}] {sid} FAILED: {e}", file=sys.stderr)
             continue
@@ -136,11 +143,17 @@ def fetch_region(client: httpx.Client, key: str) -> None:
 
 
 def main() -> None:
-    keys = sys.argv[1:] or list(REGIONS)
+    args = sys.argv[1:]
+    year = DEFAULT_YEAR
+    if "--year" in args:
+        i = args.index("--year")
+        year = int(args[i + 1])
+        del args[i:i + 2]
+    keys = args or list(REGIONS)
     with httpx.Client(headers={"User-Agent": "Barry backtest (jrdn@wvr.me)"},
                       timeout=60.0) as client:
         for key in keys:
-            fetch_region(client, key)
+            fetch_region(client, key, year)
     print("done")
 
 

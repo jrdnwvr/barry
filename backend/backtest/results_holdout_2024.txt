@@ -1,0 +1,1477 @@
+########## LUK-2024: Cincinnati OH — Midwest frontal (tuning region) [2024-2025] ##########
+30 stations loaded
+replaying 8754 hours: 2024-07-01 .. 2025-06-30
+165 ground-truth troughs (40 with a frontal wind shift); 221 at the shallow bar
+
+=== production vs single-station baselines ===
+SHIPPED g0.3 f-1.5 own-0.5         | POD 133/165 = 81%  frontal 37/40 = 92%  FAR 195/395 = 49% (shallow 38)  lead 10.0h  duty 15.6%
+v1.1 (g.5 f-1.0 own-.3)            | POD 107/165 = 65%  frontal 35/40 = 88%  FAR 164/365 = 45% (shallow 25)  lead 10.0h  duty 11.0%
+v1 (g.5 c.3 f-1.0, no own gate)    | POD 112/165 = 68%  frontal 36/40 = 90%  FAR 184/392 = 47% (shallow 26)  lead 10.0h  duty 12.3%
+baseline own<=-0.5                 | POD 164/165 = 99%  frontal 39/40 = 98%  FAR 315/528 = 60% (shallow 63)  lead 11.0h  duty 35.6%
+baseline own<=-1.0                 | POD 162/165 = 98%  frontal 39/40 = 98%  FAR 224/424 = 53% (shallow 46)  lead 10.0h  duty 24.0%
+baseline own<=-1.5                 | POD 150/165 = 91%  frontal 37/40 = 92%  FAR 159/343 = 46% (shallow 35)  lead 10.0h  duty 15.7%
+
+=== refinements on production gate ===
+  +persist 2h                      | POD  58/165 = 35%  frontal 24/40 = 60%  FAR  46/127 = 36% (shallow 8)  lead 7.0h  duty 3.6%
+  +own falling (<= -0.3)           | POD 107/165 = 65%  frontal 35/40 = 88%  FAR 160/366 = 44% (shallow 23)  lead 10.0h  duty 10.4%
+  +persist 2h +own falling         | POD  52/165 = 32%  frontal 21/40 = 52%  FAR  33/101 = 33% (shallow 6)  lead 7.0h  duty 2.8%
+
+=== candidate gates (own falling required, coherence out) ===
+g0.3 f-1.0 own<=-0.3               | POD 145/165 = 88%  frontal 38/40 = 95%  FAR 280/512 = 55% (shallow 53)  lead 10.0h  duty 21.2%
+g0.3 f-1.0 own<=-0.5               | POD 144/165 = 87%  frontal 38/40 = 95%  FAR 259/489 = 53% (shallow 50)  lead 10.0h  duty 19.5%
+g0.3 f-1.5 own<=-0.3               | POD 133/165 = 81%  frontal 37/40 = 92%  FAR 200/401 = 50% (shallow 38)  lead 10.0h  duty 16.2%
+g0.3 f-1.5 own<=-0.5               | POD 133/165 = 81%  frontal 37/40 = 92%  FAR 195/395 = 49% (shallow 38)  lead 10.0h  duty 15.6%
+
+g0.4 f-1.0 own<=-0.3               | POD 128/165 = 78%  frontal 38/40 = 95%  FAR 239/469 = 51% (shallow 40)  lead 10.0h  duty 15.4%
+g0.4 f-1.0 own<=-0.5               | POD 126/165 = 76%  frontal 38/40 = 95%  FAR 216/441 = 49% (shallow 38)  lead 10.0h  duty 14.1%
+g0.4 f-1.5 own<=-0.3               | POD 116/165 = 70%  frontal 37/40 = 92%  FAR 175/374 = 47% (shallow 29)  lead 10.0h  duty 12.4%
+g0.4 f-1.5 own<=-0.5               | POD 116/165 = 70%  frontal 37/40 = 92%  FAR 171/370 = 46% (shallow 29)  lead 10.0h  duty 12.0%
+
+g0.5 f-1.0 own<=-0.3               | POD 107/165 = 65%  frontal 35/40 = 88%  FAR 164/365 = 45% (shallow 25)  lead 10.0h  duty 11.0%
+g0.5 f-1.0 own<=-0.5               | POD 105/165 = 64%  frontal 35/40 = 88%  FAR 153/352 = 43% (shallow 23)  lead 10.0h  duty 10.1%
+g0.5 f-1.5 own<=-0.3               | POD  96/165 = 58%  frontal 33/40 = 82%  FAR 130/310 = 42% (shallow 18)  lead 9.0h  duty 9.4%
+g0.5 f-1.5 own<=-0.5               | POD  95/165 = 58%  frontal 33/40 = 82%  FAR 124/303 = 41% (shallow 17)  lead 9.0h  duty 9.0%
+
+=== threshold sweep (gradient x coherence x min-fall) ===
+g0.3 c0.2 f-1.0                    | POD 148/165 = 90%  frontal 39/40 = 98%  FAR 305/542 = 56% (shallow 58)  lead 11.0h  duty 23.4%
+g0.3 c0.2 f-1.5                    | POD 133/165 = 81%  frontal 37/40 = 92%  FAR 208/416 = 50% (shallow 40)  lead 10.0h  duty 16.3%
+g0.3 c0.3 f-1.0                    | POD 148/165 = 90%  frontal 39/40 = 98%  FAR 309/568 = 54% (shallow 59)  lead 10.0h  duty 21.5%
+g0.3 c0.3 f-1.5                    | POD 132/165 = 80%  frontal 37/40 = 92%  FAR 209/428 = 49% (shallow 39)  lead 10.0h  duty 14.9%
+g0.3 c0.45 f-1.0                   | POD 139/165 = 84%  frontal 38/40 = 95%  FAR 302/564 = 54% (shallow 49)  lead 10.0h  duty 16.3%
+g0.3 c0.45 f-1.5                   | POD 120/165 = 73%  frontal 34/40 = 85%  FAR 201/416 = 48% (shallow 31)  lead 9.0h  duty 11.1%
+
+g0.5 c0.2 f-1.0                    | POD 112/165 = 68%  frontal 36/40 = 90%  FAR 183/387 = 47% (shallow 27)  lead 10.0h  duty 12.9%
+g0.5 c0.2 f-1.5                    | POD  97/165 = 59%  frontal 33/40 = 82%  FAR 136/320 = 42% (shallow 18)  lead 10.0h  duty 10.1%
+g0.5 c0.3 f-1.0                    | POD 112/165 = 68%  frontal 36/40 = 90%  FAR 184/392 = 47% (shallow 26)  lead 10.0h  duty 12.3%
+g0.5 c0.3 f-1.5                    | POD  97/165 = 59%  frontal 33/40 = 82%  FAR 138/325 = 42% (shallow 18)  lead 10.0h  duty 9.6%
+g0.5 c0.45 f-1.0                   | POD 109/165 = 66%  frontal 35/40 = 88%  FAR 187/394 = 47% (shallow 26)  lead 9.0h  duty 10.5%
+g0.5 c0.45 f-1.5                   | POD  93/165 = 56%  frontal 32/40 = 80%  FAR 139/318 = 44% (shallow 16)  lead 9.0h  duty 8.0%
+
+g0.8 c0.2 f-1.0                    | POD  67/165 = 41%  frontal 25/40 = 62%  FAR  80/208 = 38% (shallow 12)  lead 8.0h  duty 5.5%
+g0.8 c0.2 f-1.5                    | POD  61/165 = 37%  frontal 23/40 = 57%  FAR  65/176 = 37% (shallow 9)  lead 8.0h  duty 4.6%
+g0.8 c0.3 f-1.0                    | POD  67/165 = 41%  frontal 25/40 = 62%  FAR  80/207 = 39% (shallow 12)  lead 8.0h  duty 5.3%
+g0.8 c0.3 f-1.5                    | POD  61/165 = 37%  frontal 23/40 = 57%  FAR  65/175 = 37% (shallow 9)  lead 8.0h  duty 4.5%
+g0.8 c0.45 f-1.0                   | POD  65/165 = 39%  frontal 24/40 = 60%  FAR  82/206 = 40% (shallow 12)  lead 8.0h  duty 4.8%
+g0.8 c0.45 f-1.5                   | POD  58/165 = 35%  frontal 22/40 = 55%  FAR  67/174 = 39% (shallow 9)  lead 8.0h  duty 4.0%
+
+=== sweep with persist 2h + own falling ===
+g0.3 c0.3 f-1.0 +p2 +own           | POD  84/165 = 51%  frontal 28/40 = 70%  FAR  93/220 = 42% (shallow 16)  lead 7.5h  duty 6.2%
+g0.3 c0.3 f-1.5 +p2 +own           | POD  68/165 = 41%  frontal 27/40 = 68%  FAR  67/166 = 40% (shallow 6)  lead 7.0h  duty 4.6%
+g0.5 c0.3 f-1.0 +p2 +own           | POD  52/165 = 32%  frontal 21/40 = 52%  FAR  33/101 = 33% (shallow 6)  lead 7.0h  duty 2.8%
+g0.5 c0.3 f-1.5 +p2 +own           | POD  43/165 = 26%  frontal 20/40 = 50%  FAR  25/81  = 31% (shallow 4)  lead 7.0h  duty 2.4%
+g0.8 c0.3 f-1.0 +p2 +own           | POD  18/165 = 11%  frontal  8/40 = 20%  FAR  16/38  = 42% (shallow 2)  lead 7.0h  duty 0.9%
+g0.8 c0.3 f-1.5 +p2 +own           | POD  17/165 = 10%  frontal  8/40 = 20%  FAR  14/35  = 40% (shallow 2)  lead 7.0h  duty 0.8%
+
+=== direction (production hits with a scoreable propagation fit) ===
+  gradient @ first fire: median error 52 deg, within 45 deg 27/61, within 90 deg 41/61
+  gradient @ last fire: median error 130 deg, within 45 deg 8/61, within 90 deg 18/61
+  centroid-track @ first fire: median error 85 deg, within 45 deg 5/22, within 90 deg 12/22
+  centroid-track @ last fire: median error 52 deg, within 45 deg 19/42, within 90 deg 31/42
+
+=== estimator error by lead time (all pre-trough approaching hours) ===
+   1-3 h out: gradient 122 deg (n=85)   track  53 deg (n=59)
+   4-6 h out: gradient 110 deg (n=104)   track  60 deg (n=68)
+   7-12h out: gradient  56 deg (n=191)   track  84 deg (n=94)
+
+=== switching rules (median over the same samples) ===
+  SHIPPED: track, coherent-grad, silent  median  73 deg  within45 129/364  harmful(>90) 141/364  stated 364/380
+  track, grad only if coh>=0.5           median  72 deg  within45 108/295  harmful(>90) 109/295  stated 295/380
+  track, grad only if coh>=0.6           median  67 deg  within45 99/264  harmful(>90) 91/264  stated 264/380
+  track, grad only if coh>=0.7           median  65 deg  within45 97/252  harmful(>90) 82/252  stated 252/380
+  always gradient                        median  85 deg  within45 107/380  harmful(>90) 180/380  stated 380/380
+  always track (else silent)             median  72 deg  within45 80/221  harmful(>90) 76/221  stated 221/380
+  track if avail else gradient           median  73 deg  within45 135/380  harmful(>90) 147/380  stated 380/380
+  own<=-1.0: track|silent, else gradient median  73 deg  within45 83/234  harmful(>90) 86/234  stated 234/380
+  own<=-1.25: track|silent, else gradient median  73 deg  within45 91/249  harmful(>90) 88/249  stated 249/380
+  own<=-1.5: track|silent, else gradient median  75 deg  within45 91/261  harmful(>90) 96/261  stated 261/380
+  centroid<=60km: track|silent, else grad median  72 deg  within45 78/232  harmful(>90) 83/232  stated 232/380
+  centroid<=80km: track|silent, else grad median  72 deg  within45 79/222  harmful(>90) 77/222  stated 222/380
+  centroid<=120km: track|silent, else grad median  72 deg  within45 80/221  harmful(>90) 76/221  stated 221/380
+  coh<0.35: track|silent, else gradient  median  81 deg  within45 102/349  harmful(>90) 153/349  stated 349/380
+  coh<0.45: track|silent, else gradient  median  82 deg  within45 96/316  harmful(>90) 137/316  stated 316/380
+  coh<0.6: track|silent, else gradient   median  75 deg  within45 87/264  harmful(>90) 105/264  stated 264/380
+  coh<0.35: track|GRAD fallback          median  80 deg  within45 113/380  harmful(>90) 166/380  stated 380/380
+  coh<0.45: track|GRAD fallback          median  81 deg  within45 118/380  harmful(>90) 165/380  stated 380/380
+  coh<0.6: track|GRAD fallback           median  78 deg  within45 123/380  harmful(>90) 161/380  stated 380/380
+  agree<=60: blend, disagree: silent     median  77 deg  within45 67/188  harmful(>90) 79/188  stated 188/380
+  agree<=90: blend, disagree: silent     median  70 deg  within45 78/208  harmful(>90) 80/208  stated 208/380
+  agree: blend, disagree: coh picks      median  81 deg  within45 119/380  harmful(>90) 166/380  stated 380/380
+
+=== observational ETA (fall-centroid closing speed, all pre-trough fires) ===
+  n=37  median signed error -5.8 h  median |error| 5.8 h  within 3 h: 9/37
+
+=== ground-truth troughs (production run) ===
+  HIT  2024-07-02 04:00Z  fall  3.7  rise  1.7  shift     —         
+  HIT  2024-07-03 02:00Z  fall  4.8  rise  2.0  shift  33deg        
+  HIT  2024-07-05 02:00Z  fall  4.3  rise  2.5  shift  11deg        
+  HIT  2024-07-05 23:00Z  fall  2.3  rise  3.6  shift   8deg        
+  HIT  2024-07-10 03:00Z  fall  9.3  rise  1.8  shift  78deg frontal
+  HIT  2024-07-14 03:00Z  fall  2.2  rise  2.0  shift   0deg        
+  HIT  2024-07-14 18:00Z  fall  3.6  rise  2.8  shift  72deg frontal
+  HIT  2024-07-15 04:00Z  fall  6.1  rise  1.9  shift     —         
+  HIT  2024-07-16 02:00Z  fall  4.1  rise  2.5  shift  30deg        
+  HIT  2024-07-16 15:00Z  fall  2.1  rise  3.1  shift  28deg        
+  HIT  2024-07-17 05:00Z  fall  2.1  rise  2.5  shift     —         
+  MISS 2024-07-20 04:00Z  fall  2.2  rise  2.1  shift     —         
+  HIT  2024-07-22 04:00Z  fall  2.6  rise  1.9  shift  27deg        
+  MISS 2024-07-22 23:00Z  fall  2.7  rise  1.9  shift     —         
+  MISS 2024-07-27 02:00Z  fall  2.9  rise  2.6  shift     —         
+  MISS 2024-07-28 02:00Z  fall  2.8  rise  2.6  shift     —         
+  MISS 2024-07-28 16:00Z  fall  2.8  rise  1.4  shift     —         
+  HIT  2024-07-29 03:00Z  fall  3.4  rise  1.3  shift   8deg        
+  HIT  2024-07-30 04:00Z  fall  5.1  rise  2.2  shift  25deg        
+  HIT  2024-08-06 05:00Z  fall  2.4  rise  1.3  shift     —         
+  HIT  2024-08-07 02:00Z  fall  5.0  rise  2.5  shift 170deg frontal
+  HIT  2024-08-15 04:00Z  fall  2.0  rise  1.9  shift     —         
+  HIT  2024-08-17 23:00Z  fall  3.9  rise  1.9  shift  45deg frontal
+  MISS 2024-08-23 03:00Z  fall  2.2  rise  3.6  shift     —         
+  MISS 2024-08-24 03:00Z  fall  2.8  rise  3.0  shift     —         
+  HIT  2024-08-25 03:00Z  fall  3.2  rise  4.0  shift     —         
+  MISS 2024-08-26 02:00Z  fall  2.8  rise  2.8  shift     —         
+  HIT  2024-08-27 04:00Z  fall  2.7  rise  1.8  shift     —         
+  HIT  2024-08-28 00:00Z  fall  3.4  rise  1.9  shift     —         
+  HIT  2024-08-28 19:00Z  fall  2.2  rise  2.0  shift     —         
+  HIT  2024-08-30 03:00Z  fall  2.3  rise  2.0  shift     —         
+  HIT  2024-09-04 02:00Z  fall  2.6  rise  3.0  shift     —         
+  MISS 2024-09-05 03:00Z  fall  2.1  rise  1.8  shift     —         
+  HIT  2024-09-06 20:00Z  fall  5.0  rise  3.1  shift 103deg frontal
+  HIT  2024-09-10 02:00Z  fall  2.8  rise  2.4  shift     —         
+  MISS 2024-09-11 03:00Z  fall  2.9  rise  2.6  shift     —         
+  HIT  2024-09-12 04:00Z  fall  2.8  rise  2.8  shift     —         
+  MISS 2024-09-16 02:00Z  fall  2.2  rise  3.3  shift     —         
+  MISS 2024-09-17 04:00Z  fall  2.3  rise  1.7  shift     —         
+  HIT  2024-09-18 05:00Z  fall  2.8  rise  1.6  shift     —         
+  HIT  2024-09-19 03:00Z  fall  2.9  rise  3.0  shift     —         
+  MISS 2024-09-20 03:00Z  fall  3.2  rise  3.2  shift     —         
+  HIT  2024-09-23 04:00Z  fall  2.1  rise  3.3  shift  23deg        
+  HIT  2024-09-24 05:00Z  fall  2.7  rise  1.3  shift     —         
+  HIT  2024-09-27 20:00Z  fall 15.6  rise  9.5  shift  73deg frontal
+  HIT  2024-10-06 22:00Z  fall  5.7  rise  4.2  shift  20deg        
+  MISS 2024-10-08 03:00Z  fall  2.4  rise  2.7  shift     —         
+  MISS 2024-10-12 05:00Z  fall  3.8  rise  1.4  shift     —         
+  HIT  2024-10-13 17:00Z  fall  4.5  rise  3.0  shift  42deg frontal
+  MISS 2024-10-15 04:00Z  fall  2.7  rise  2.0  shift  85deg frontal
+  MISS 2024-10-20 04:00Z  fall  3.2  rise  1.8  shift     —         
+  MISS 2024-10-21 05:00Z  fall  3.7  rise  2.6  shift     —         
+  HIT  2024-10-22 04:00Z  fall  3.5  rise  1.7  shift     —         
+  HIT  2024-10-25 05:00Z  fall  2.4  rise  1.8  shift     —         
+  HIT  2024-10-25 17:00Z  fall  3.4  rise  3.6  shift  63deg frontal
+  HIT  2024-10-28 04:00Z  fall  3.5  rise  2.0  shift     —         
+  HIT  2024-10-29 04:00Z  fall  4.4  rise  3.1  shift     —         
+  MISS 2024-11-04 05:00Z  fall  4.0  rise  2.8  shift  29deg        
+  HIT  2024-11-05 05:00Z  fall  3.2  rise  1.9  shift   8deg        
+  MISS 2024-11-06 04:00Z  fall  4.3  rise  4.2  shift  10deg        
+  HIT  2024-11-11 03:00Z  fall  3.5  rise  4.0  shift  93deg frontal
+  HIT  2024-11-14 16:00Z  fall  4.8  rise  4.2  shift   2deg        
+  HIT  2024-11-17 04:00Z  fall  3.7  rise  1.6  shift     —         
+  HIT  2024-11-18 05:00Z  fall  2.1  rise  1.9  shift     —         
+  HIT  2024-11-19 18:00Z  fall  4.0  rise  1.5  shift   8deg        
+  HIT  2024-11-21 12:00Z  fall  5.7  rise  4.1  shift  23deg        
+  HIT  2024-11-22 04:00Z  fall  3.8  rise  6.1  shift 128deg frontal
+  HIT  2024-11-25 18:00Z  fall  3.4  rise  1.4  shift   2deg        
+  HIT  2024-11-26 01:00Z  fall  2.2  rise 10.1  shift 102deg frontal
+  HIT  2024-11-28 05:00Z  fall  8.3  rise  6.7  shift  62deg frontal
+  HIT  2024-12-01 04:00Z  fall  3.3  rise  1.8  shift  35deg        
+  HIT  2024-12-05 04:00Z  fall  9.0  rise 16.3  shift  68deg frontal
+  HIT  2024-12-07 04:00Z  fall  4.4  rise  1.7  shift   8deg        
+  HIT  2024-12-08 05:00Z  fall  9.0  rise  1.7  shift   8deg        
+  HIT  2024-12-09 12:00Z  fall  5.7  rise  4.4  shift  22deg        
+  HIT  2024-12-10 17:00Z  fall  4.5  rise  2.8  shift  34deg        
+  HIT  2024-12-16 21:00Z  fall  7.5  rise  5.0  shift  20deg        
+  HIT  2024-12-18 15:00Z  fall  5.7  rise  6.9  shift  22deg        
+  HIT  2024-12-20 14:00Z  fall  7.4  rise  8.6  shift  88deg frontal
+  HIT  2024-12-24 03:00Z  fall  5.2  rise  3.6  shift  15deg        
+  HIT  2024-12-26 04:00Z  fall  2.3  rise  2.8  shift   5deg        
+  HIT  2024-12-28 04:00Z  fall  4.1  rise  4.7  shift  18deg        
+  HIT  2024-12-29 19:00Z  fall 15.3  rise 11.3  shift  65deg frontal
+  HIT  2024-12-31 14:00Z  fall 13.1  rise  8.0  shift  50deg frontal
+  HIT  2025-01-03 12:00Z  fall  4.4  rise  4.8  shift  42deg frontal
+  HIT  2025-01-05 04:00Z  fall  2.5  rise  1.7  shift  74deg frontal
+  HIT  2025-01-06 08:00Z  fall 11.9  rise  2.0  shift  10deg        
+  MISS 2025-01-08 04:00Z  fall  2.0  rise  1.3  shift  30deg        
+  MISS 2025-01-09 03:00Z  fall  3.1  rise  3.8  shift  20deg        
+  HIT  2025-01-11 06:00Z  fall 10.8  rise  4.3  shift  42deg frontal
+  HIT  2025-01-12 19:00Z  fall  3.2  rise  1.3  shift  25deg        
+  MISS 2025-01-14 18:00Z  fall  6.0  rise  9.2  shift 100deg frontal
+  HIT  2025-01-16 17:00Z  fall 10.8  rise  5.9  shift  35deg        
+  HIT  2025-01-18 05:00Z  fall  9.9  rise  1.8  shift   3deg        
+  HIT  2025-01-18 14:00Z  fall  2.9  rise  7.4  shift  87deg frontal
+  MISS 2025-01-21 17:00Z  fall  3.3  rise  2.8  shift  36deg        
+  HIT  2025-01-23 14:00Z  fall  2.5  rise  2.9  shift 158deg frontal
+  HIT  2025-01-26 03:00Z  fall  2.4  rise  4.1  shift     —         
+  HIT  2025-01-28 04:00Z  fall  8.5  rise  1.4  shift  18deg        
+  HIT  2025-01-29 04:00Z  fall  7.3  rise  4.1  shift  18deg        
+  HIT  2025-01-31 16:00Z  fall  7.2  rise  4.5  shift  34deg        
+  HIT  2025-02-02 19:00Z  fall  6.9  rise  1.3  shift  95deg frontal
+  HIT  2025-02-04 00:00Z  fall  6.5  rise  7.8  shift   2deg        
+  HIT  2025-02-06 11:00Z  fall  9.8  rise  4.6  shift  74deg frontal
+  HIT  2025-02-08 21:00Z  fall 13.6  rise  9.7  shift  93deg frontal
+  HIT  2025-02-13 04:00Z  fall  9.0  rise 14.1  shift     —         
+  HIT  2025-02-16 10:00Z  fall 13.5  rise 13.0  shift  75deg frontal
+  HIT  2025-02-20 05:00Z  fall  4.2  rise  2.8  shift  32deg        
+  HIT  2025-02-25 05:00Z  fall  5.1  rise  1.5  shift     —         
+  HIT  2025-02-27 03:00Z  fall  6.2  rise  3.6  shift  33deg        
+  HIT  2025-03-01 03:00Z  fall 10.9  rise  9.5  shift  92deg frontal
+  HIT  2025-03-03 03:00Z  fall  2.1  rise  1.7  shift     —         
+  HIT  2025-03-05 16:00Z  fall  8.2  rise 10.5  shift  28deg        
+  HIT  2025-03-08 03:00Z  fall  8.7  rise  9.1  shift     —         
+  HIT  2025-03-10 04:00Z  fall  4.2  rise  1.6  shift     —         
+  MISS 2025-03-11 04:00Z  fall  4.1  rise  1.3  shift     —         
+  HIT  2025-03-11 19:00Z  fall  3.6  rise  1.4  shift   7deg        
+  HIT  2025-03-12 19:00Z  fall  4.0  rise  1.5  shift  17deg        
+  HIT  2025-03-15 06:00Z  fall  7.0  rise  1.2  shift   2deg        
+  HIT  2025-03-16 08:00Z  fall  9.2  rise  7.0  shift  82deg frontal
+  HIT  2025-03-20 02:00Z  fall  9.6  rise  5.2  shift  45deg frontal
+  HIT  2025-03-22 07:00Z  fall  7.5  rise  5.0  shift  55deg frontal
+  HIT  2025-03-24 02:00Z  fall 10.5  rise  5.3  shift     —         
+  HIT  2025-03-24 17:00Z  fall  3.1  rise  4.1  shift  45deg frontal
+  HIT  2025-03-29 04:00Z  fall  2.9  rise  2.9  shift   5deg        
+  HIT  2025-03-31 05:00Z  fall  5.0  rise  3.8  shift   5deg        
+  HIT  2025-04-02 17:00Z  fall  9.5  rise  1.6  shift  12deg        
+  HIT  2025-04-03 02:00Z  fall  3.7  rise  8.4  shift  29deg        
+  HIT  2025-04-05 06:00Z  fall  9.0  rise  1.9  shift  50deg frontal
+  HIT  2025-04-07 20:00Z  fall  4.1  rise  4.9  shift  50deg frontal
+  HIT  2025-04-10 17:00Z  fall  2.5  rise  1.5  shift  72deg frontal
+  HIT  2025-04-13 02:00Z  fall  3.3  rise  3.1  shift     —         
+  HIT  2025-04-14 15:00Z  fall  2.9  rise  2.2  shift  29deg        
+  HIT  2025-04-18 23:00Z  fall  3.2  rise  2.9  shift   2deg        
+  HIT  2025-04-21 16:00Z  fall  2.1  rise  3.4  shift  35deg        
+  HIT  2025-04-23 01:00Z  fall  2.4  rise  3.2  shift     —         
+  HIT  2025-04-24 02:00Z  fall  3.1  rise  2.3  shift     —         
+  HIT  2025-04-26 03:00Z  fall  5.3  rise  8.2  shift  58deg frontal
+  MISS 2025-04-28 04:00Z  fall  3.8  rise  1.7  shift     —         
+  HIT  2025-04-29 05:00Z  fall  4.7  rise  2.1  shift     —         
+  HIT  2025-04-29 16:00Z  fall  2.6  rise  1.3  shift  10deg        
+  HIT  2025-05-01 16:00Z  fall  4.9  rise  1.4  shift  22deg        
+  HIT  2025-05-02 20:00Z  fall  2.1  rise  1.2  shift  20deg        
+  HIT  2025-05-08 03:00Z  fall  2.6  rise  2.2  shift     —         
+  HIT  2025-05-16 03:00Z  fall  2.5  rise  5.3  shift  35deg        
+  HIT  2025-05-17 04:00Z  fall  5.2  rise  3.3  shift  27deg        
+  HIT  2025-05-20 05:00Z  fall  2.8  rise  1.5  shift  20deg        
+  HIT  2025-05-21 03:00Z  fall  7.4  rise  2.1  shift 152deg frontal
+  HIT  2025-05-26 04:00Z  fall  2.4  rise  3.2  shift  12deg        
+  HIT  2025-05-28 05:00Z  fall  2.9  rise  1.3  shift  20deg        
+  HIT  2025-05-31 05:00Z  fall  4.0  rise  1.4  shift  22deg        
+  HIT  2025-06-04 02:00Z  fall  4.1  rise  4.6  shift     —         
+  HIT  2025-06-08 15:00Z  fall  3.2  rise  4.3  shift     —         
+  MISS 2025-06-12 01:00Z  fall  2.2  rise  2.5  shift     —         
+  MISS 2025-06-13 04:00Z  fall  2.6  rise  1.6  shift     —         
+  HIT  2025-06-14 03:00Z  fall  3.0  rise  2.6  shift  17deg        
+  MISS 2025-06-17 03:00Z  fall  3.3  rise  2.0  shift 159deg frontal
+  HIT  2025-06-18 04:00Z  fall  2.2  rise  3.0  shift     —         
+  HIT  2025-06-19 02:00Z  fall  2.9  rise  1.9  shift   3deg        
+  MISS 2025-06-22 01:00Z  fall  2.6  rise  4.5  shift  22deg        
+  MISS 2025-06-24 02:00Z  fall  3.0  rise  4.4  shift     —         
+  MISS 2025-06-25 03:00Z  fall  2.1  rise  2.3  shift     —         
+  HIT  2025-06-26 03:00Z  fall  3.4  rise  1.4  shift  43deg frontal
+  HIT  2025-06-26 19:00Z  fall  3.1  rise  1.5  shift 164deg frontal
+  HIT  2025-06-30 03:00Z  fall  3.8  rise  1.8  shift     —         
+
+########## FTW-2024: Fort Worth TX — southern plains, drylines [2024-2025] ##########
+  dropping GLE: only 836 obs
+29 stations loaded
+replaying 8754 hours: 2024-07-01 .. 2025-06-30
+197 ground-truth troughs (47 with a frontal wind shift); 248 at the shallow bar
+
+=== production vs single-station baselines ===
+SHIPPED g0.3 f-1.5 own-0.5         | POD 165/197 = 84%  frontal 46/47 = 98%  FAR 218/453 = 48% (shallow 41)  lead 8.0h  duty 14.3%
+v1.1 (g.5 f-1.0 own-.3)            | POD 109/197 = 55%  frontal 37/47 = 79%  FAR 187/363 = 52% (shallow 31)  lead 9.0h  duty 9.7%
+v1 (g.5 c.3 f-1.0, no own gate)    | POD 107/197 = 54%  frontal 37/47 = 79%  FAR 209/394 = 53% (shallow 36)  lead 8.0h  duty 10.3%
+baseline own<=-0.5                 | POD 197/197 = 100%  frontal 47/47 = 100%  FAR 318/570 = 56% (shallow 63)  lead 9.0h  duty 35.6%
+baseline own<=-1.0                 | POD 195/197 = 99%  frontal 47/47 = 100%  FAR 226/465 = 49% (shallow 50)  lead 9.0h  duty 25.4%
+baseline own<=-1.5                 | POD 193/197 = 98%  frontal 47/47 = 100%  FAR 176/397 = 44% (shallow 46)  lead 8.0h  duty 17.9%
+
+=== refinements on production gate ===
+  +persist 2h                      | POD  34/197 = 17%  frontal 13/47 = 28%  FAR  51/102 = 50% (shallow 9)  lead 6.0h  duty 2.3%
+  +own falling (<= -0.3)           | POD 104/197 = 53%  frontal 36/47 = 77%  FAR 183/356 = 51% (shallow 32)  lead 8.0h  duty 8.8%
+  +persist 2h +own falling         | POD  29/197 = 15%  frontal 11/47 = 23%  FAR  40/82  = 49% (shallow 7)  lead 6.0h  duty 1.8%
+
+=== candidate gates (own falling required, coherence out) ===
+g0.3 f-1.0 own<=-0.3               | POD 175/197 = 89%  frontal 46/47 = 98%  FAR 301/585 = 51% (shallow 55)  lead 9.0h  duty 19.2%
+g0.3 f-1.0 own<=-0.5               | POD 174/197 = 88%  frontal 46/47 = 98%  FAR 278/558 = 50% (shallow 51)  lead 9.0h  duty 17.6%
+g0.3 f-1.5 own<=-0.3               | POD 165/197 = 84%  frontal 46/47 = 98%  FAR 222/461 = 48% (shallow 42)  lead 8.0h  duty 14.8%
+g0.3 f-1.5 own<=-0.5               | POD 165/197 = 84%  frontal 46/47 = 98%  FAR 218/453 = 48% (shallow 41)  lead 8.0h  duty 14.3%
+
+g0.4 f-1.0 own<=-0.3               | POD 136/197 = 69%  frontal 42/47 = 89%  FAR 241/457 = 53% (shallow 38)  lead 8.5h  duty 13.4%
+g0.4 f-1.0 own<=-0.5               | POD 134/197 = 68%  frontal 42/47 = 89%  FAR 219/432 = 51% (shallow 36)  lead 8.0h  duty 12.2%
+g0.4 f-1.5 own<=-0.3               | POD 131/197 = 66%  frontal 41/47 = 87%  FAR 187/379 = 49% (shallow 34)  lead 8.0h  duty 10.8%
+g0.4 f-1.5 own<=-0.5               | POD 130/197 = 66%  frontal 41/47 = 87%  FAR 180/367 = 49% (shallow 32)  lead 8.0h  duty 10.4%
+
+g0.5 f-1.0 own<=-0.3               | POD 109/197 = 55%  frontal 37/47 = 79%  FAR 187/363 = 52% (shallow 31)  lead 9.0h  duty 9.7%
+g0.5 f-1.0 own<=-0.5               | POD 106/197 = 54%  frontal 36/47 = 77%  FAR 165/337 = 49% (shallow 29)  lead 8.0h  duty 8.8%
+g0.5 f-1.5 own<=-0.3               | POD 103/197 = 52%  frontal 35/47 = 74%  FAR 141/304 = 46% (shallow 27)  lead 8.0h  duty 8.0%
+g0.5 f-1.5 own<=-0.5               | POD 101/197 = 51%  frontal 34/47 = 72%  FAR 136/292 = 47% (shallow 26)  lead 8.0h  duty 7.7%
+
+=== threshold sweep (gradient x coherence x min-fall) ===
+g0.3 c0.2 f-1.0                    | POD 173/197 = 88%  frontal 46/47 = 98%  FAR 324/616 = 53% (shallow 62)  lead 9.0h  duty 20.6%
+g0.3 c0.2 f-1.5                    | POD 163/197 = 83%  frontal 46/47 = 98%  FAR 224/462 = 48% (shallow 44)  lead 8.0h  duty 14.6%
+g0.3 c0.3 f-1.0                    | POD 169/197 = 86%  frontal 46/47 = 98%  FAR 328/616 = 53% (shallow 56)  lead 9.0h  duty 18.0%
+g0.3 c0.3 f-1.5                    | POD 158/197 = 80%  frontal 46/47 = 98%  FAR 221/459 = 48% (shallow 40)  lead 8.0h  duty 12.6%
+g0.3 c0.45 f-1.0                   | POD 150/197 = 76%  frontal 43/47 = 91%  FAR 284/533 = 53% (shallow 56)  lead 8.0h  duty 12.3%
+g0.3 c0.45 f-1.5                   | POD 136/197 = 69%  frontal 40/47 = 85%  FAR 181/389 = 47% (shallow 39)  lead 7.5h  duty 8.8%
+
+g0.5 c0.2 f-1.0                    | POD 108/197 = 55%  frontal 37/47 = 79%  FAR 211/397 = 53% (shallow 38)  lead 9.0h  duty 11.1%
+g0.5 c0.2 f-1.5                    | POD 102/197 = 52%  frontal 35/47 = 74%  FAR 148/312 = 47% (shallow 30)  lead 8.0h  duty 8.5%
+g0.5 c0.3 f-1.0                    | POD 107/197 = 54%  frontal 37/47 = 79%  FAR 209/394 = 53% (shallow 36)  lead 8.0h  duty 10.3%
+g0.5 c0.3 f-1.5                    | POD 101/197 = 51%  frontal 35/47 = 74%  FAR 145/311 = 47% (shallow 29)  lead 8.0h  duty 7.8%
+g0.5 c0.45 f-1.0                   | POD  98/197 = 50%  frontal 36/47 = 77%  FAR 201/372 = 54% (shallow 40)  lead 8.0h  duty 8.2%
+g0.5 c0.45 f-1.5                   | POD  91/197 = 46%  frontal 33/47 = 70%  FAR 137/289 = 47% (shallow 32)  lead 8.0h  duty 6.3%
+
+g0.8 c0.2 f-1.0                    | POD  59/197 = 30%  frontal 26/47 = 55%  FAR 102/204 = 50% (shallow 27)  lead 8.0h  duty 4.7%
+g0.8 c0.2 f-1.5                    | POD  57/197 = 29%  frontal 25/47 = 53%  FAR  75/169 = 44% (shallow 20)  lead 8.0h  duty 3.9%
+g0.8 c0.3 f-1.0                    | POD  55/197 = 28%  frontal 25/47 = 53%  FAR  99/195 = 51% (shallow 25)  lead 7.0h  duty 4.4%
+g0.8 c0.3 f-1.5                    | POD  54/197 = 27%  frontal 25/47 = 53%  FAR  73/163 = 45% (shallow 19)  lead 7.0h  duty 3.7%
+g0.8 c0.45 f-1.0                   | POD  53/197 = 27%  frontal 25/47 = 53%  FAR  94/181 = 52% (shallow 27)  lead 7.0h  duty 3.7%
+g0.8 c0.45 f-1.5                   | POD  52/197 = 26%  frontal 25/47 = 53%  FAR  67/151 = 44% (shallow 21)  lead 7.0h  duty 3.2%
+
+=== sweep with persist 2h + own falling ===
+g0.3 c0.3 f-1.0 +p2 +own           | POD  52/197 = 26%  frontal 20/47 = 43%  FAR  87/159 = 55% (shallow 18)  lead 6.5h  duty 3.9%
+g0.3 c0.3 f-1.5 +p2 +own           | POD  48/197 = 24%  frontal 20/47 = 43%  FAR  63/124 = 51% (shallow 16)  lead 6.0h  duty 2.9%
+g0.5 c0.3 f-1.0 +p2 +own           | POD  29/197 = 15%  frontal 11/47 = 23%  FAR  40/82  = 49% (shallow 7)  lead 6.0h  duty 1.8%
+g0.5 c0.3 f-1.5 +p2 +own           | POD  26/197 = 13%  frontal 10/47 = 21%  FAR  33/70  = 47% (shallow 7)  lead 5.5h  duty 1.5%
+g0.8 c0.3 f-1.0 +p2 +own           | POD   9/197 = 5%  frontal  4/47 = 9%  FAR  14/26  = 54% (shallow 3)  lead 4.0h  duty 0.5%
+g0.8 c0.3 f-1.5 +p2 +own           | POD   9/197 = 5%  frontal  4/47 = 9%  FAR  13/25  = 52% (shallow 3)  lead 3.0h  duty 0.4%
+
+=== direction (production hits with a scoreable propagation fit) ===
+  gradient @ first fire: median error 109 deg, within 45 deg 9/37, within 90 deg 15/37
+  gradient @ last fire: median error 124 deg, within 45 deg 8/37, within 90 deg 10/37
+  centroid-track @ first fire: median error 82 deg, within 45 deg 3/7, within 90 deg 5/7
+  centroid-track @ last fire: median error 39 deg, within 45 deg 7/13, within 90 deg 10/13
+
+=== estimator error by lead time (all pre-trough approaching hours) ===
+   1-3 h out: gradient 133 deg (n=40)   track  41 deg (n=23)
+   4-6 h out: gradient  88 deg (n=37)   track  97 deg (n=19)
+   7-12h out: gradient  98 deg (n=75)   track  55 deg (n=23)
+
+=== switching rules (median over the same samples) ===
+  SHIPPED: track, coherent-grad, silent  median  81 deg  within45 50/142  harmful(>90) 64/142  stated 142/152
+  track, grad only if coh>=0.5           median  75 deg  within45 43/110  harmful(>90) 46/110  stated 110/152
+  track, grad only if coh>=0.6           median  74 deg  within45 37/95  harmful(>90) 40/95  stated 95/152
+  track, grad only if coh>=0.7           median  63 deg  within45 31/76  harmful(>90) 30/76  stated 76/152
+  always gradient                        median 116 deg  within45 37/152  harmful(>90) 88/152  stated 152/152
+  always track (else silent)             median  63 deg  within45 28/65  harmful(>90) 25/65  stated 65/152
+  track if avail else gradient           median  83 deg  within45 51/152  harmful(>90) 71/152  stated 152/152
+  own<=-1.0: track|silent, else gradient median  88 deg  within45 27/71  harmful(>90) 34/71  stated 71/152
+  own<=-1.25: track|silent, else gradient median 107 deg  within45 29/78  harmful(>90) 42/78  stated 78/152
+  own<=-1.5: track|silent, else gradient median 110 deg  within45 26/83  harmful(>90) 49/83  stated 83/152
+  centroid<=60km: track|silent, else grad median  59 deg  within45 29/66  harmful(>90) 26/66  stated 66/152
+  centroid<=80km: track|silent, else grad median  63 deg  within45 28/65  harmful(>90) 25/65  stated 65/152
+  centroid<=120km: track|silent, else grad median  63 deg  within45 28/65  harmful(>90) 25/65  stated 65/152
+  coh<0.35: track|silent, else gradient  median 116 deg  within45 38/133  harmful(>90) 74/133  stated 133/152
+  coh<0.45: track|silent, else gradient  median  90 deg  within45 40/120  harmful(>90) 59/120  stated 120/152
+  coh<0.6: track|silent, else gradient   median  74 deg  within45 36/95  harmful(>90) 41/95  stated 95/152
+  coh<0.35: track|GRAD fallback          median 113 deg  within45 41/152  harmful(>90) 84/152  stated 152/152
+  coh<0.45: track|GRAD fallback          median  98 deg  within45 46/152  harmful(>90) 78/152  stated 152/152
+  coh<0.6: track|GRAD fallback           median  82 deg  within45 50/152  harmful(>90) 72/152  stated 152/152
+  agree<=60: blend, disagree: silent     median  98 deg  within45 24/91  harmful(>90) 48/91  stated 91/152
+  agree<=90: blend, disagree: silent     median 106 deg  within45 24/96  harmful(>90) 53/96  stated 96/152
+  agree: blend, disagree: coh picks      median  98 deg  within45 46/152  harmful(>90) 78/152  stated 152/152
+
+=== observational ETA (fall-centroid closing speed, all pre-trough fires) ===
+  n=10  median signed error -6.1 h  median |error| 6.1 h  within 3 h: 3/10
+
+=== ground-truth troughs (production run) ===
+  HIT  2024-07-02 04:00Z  fall  4.4  rise  1.9  shift  10deg        
+  HIT  2024-07-03 02:00Z  fall  3.2  rise  3.7  shift  10deg        
+  MISS 2024-07-04 03:00Z  fall  3.0  rise  3.1  shift   2deg        
+  HIT  2024-07-05 01:00Z  fall  4.2  rise  3.8  shift  20deg        
+  HIT  2024-07-06 01:00Z  fall  2.7  rise  2.8  shift  74deg frontal
+  HIT  2024-07-08 01:00Z  fall  3.2  rise  3.7  shift  64deg frontal
+  HIT  2024-07-09 02:00Z  fall  3.4  rise  4.9  shift  42deg frontal
+  HIT  2024-07-11 01:00Z  fall  2.1  rise  2.3  shift  40deg        
+  HIT  2024-07-12 03:00Z  fall  2.0  rise  3.3  shift  17deg        
+  HIT  2024-07-14 03:00Z  fall  2.2  rise  2.2  shift  18deg        
+  MISS 2024-07-15 03:00Z  fall  4.7  rise  2.2  shift  15deg        
+  HIT  2024-07-16 03:00Z  fall  5.3  rise  3.2  shift  10deg        
+  HIT  2024-07-17 04:00Z  fall  2.7  rise  5.0  shift  22deg        
+  HIT  2024-07-19 00:00Z  fall  2.4  rise  2.5  shift   1deg        
+  HIT  2024-07-20 02:00Z  fall  3.7  rise  3.1  shift  77deg frontal
+  HIT  2024-07-21 02:00Z  fall  3.0  rise  3.2  shift  20deg        
+  HIT  2024-07-26 03:00Z  fall  3.2  rise  2.1  shift  32deg        
+  HIT  2024-07-27 03:00Z  fall  4.2  rise  2.4  shift  13deg        
+  HIT  2024-07-28 01:00Z  fall  3.4  rise  3.3  shift  18deg        
+  MISS 2024-07-29 03:00Z  fall  3.6  rise  4.0  shift   8deg        
+  MISS 2024-07-30 04:00Z  fall  3.0  rise  3.6  shift  10deg        
+  HIT  2024-07-31 03:00Z  fall  3.6  rise  3.6  shift  15deg        
+  MISS 2024-08-02 02:00Z  fall  2.0  rise  3.0  shift  10deg        
+  HIT  2024-08-03 03:00Z  fall  4.1  rise  4.0  shift  72deg frontal
+  HIT  2024-08-04 02:00Z  fall  4.4  rise  2.7  shift  40deg frontal
+  MISS 2024-08-06 03:00Z  fall  2.5  rise  3.2  shift  62deg frontal
+  HIT  2024-08-07 03:00Z  fall  3.9  rise  1.5  shift  72deg frontal
+  HIT  2024-08-08 04:00Z  fall  3.6  rise  2.9  shift  38deg        
+  HIT  2024-08-11 02:00Z  fall  4.1  rise  1.6  shift  58deg frontal
+  HIT  2024-08-12 01:00Z  fall  4.0  rise  1.7  shift  32deg        
+  MISS 2024-08-13 03:00Z  fall  2.7  rise  3.3  shift  10deg        
+  HIT  2024-08-14 03:00Z  fall  2.8  rise  3.4  shift  10deg        
+  MISS 2024-08-15 03:00Z  fall  3.2  rise  2.8  shift  18deg        
+  MISS 2024-08-16 01:00Z  fall  3.1  rise  2.8  shift   8deg        
+  MISS 2024-08-17 01:00Z  fall  2.9  rise  2.3  shift  10deg        
+  HIT  2024-08-18 02:00Z  fall  2.3  rise  2.8  shift   0deg        
+  HIT  2024-08-19 02:00Z  fall  2.9  rise  3.0  shift   2deg        
+  MISS 2024-08-20 04:00Z  fall  2.8  rise  4.0  shift  18deg        
+  HIT  2024-08-21 02:00Z  fall  3.1  rise  4.2  shift   5deg        
+  HIT  2024-08-22 02:00Z  fall  3.4  rise  2.9  shift   2deg        
+  HIT  2024-08-23 02:00Z  fall  3.3  rise  3.7  shift  28deg        
+  HIT  2024-08-25 01:00Z  fall  2.4  rise  2.4  shift   5deg        
+  HIT  2024-08-26 02:00Z  fall  2.0  rise  2.6  shift  13deg        
+  HIT  2024-08-27 03:00Z  fall  2.6  rise  2.4  shift  92deg frontal
+  HIT  2024-08-28 03:00Z  fall  2.4  rise  2.2  shift  14deg        
+  HIT  2024-08-29 00:00Z  fall  3.7  rise  1.6  shift   2deg        
+  HIT  2024-08-30 03:00Z  fall  2.5  rise  2.8  shift  37deg        
+  HIT  2024-08-31 01:00Z  fall  2.3  rise  1.8  shift     —         
+  HIT  2024-09-01 00:00Z  fall  3.6  rise  1.6  shift  55deg frontal
+  HIT  2024-09-06 04:00Z  fall  2.8  rise  2.0  shift  22deg        
+  HIT  2024-09-08 02:00Z  fall  2.4  rise  2.8  shift   2deg        
+  HIT  2024-09-09 02:00Z  fall  3.4  rise  3.1  shift  47deg frontal
+  HIT  2024-09-11 04:00Z  fall  4.5  rise  1.7  shift     —         
+  HIT  2024-09-12 02:00Z  fall  3.3  rise  2.0  shift   5deg        
+  HIT  2024-09-13 02:00Z  fall  2.1  rise  2.7  shift     —         
+  HIT  2024-09-14 04:00Z  fall  3.0  rise  2.9  shift  30deg        
+  HIT  2024-09-18 03:00Z  fall  3.8  rise  1.8  shift  15deg        
+  MISS 2024-09-19 01:00Z  fall  3.3  rise  2.7  shift  22deg        
+  MISS 2024-09-20 02:00Z  fall  3.5  rise  3.1  shift  10deg        
+  MISS 2024-09-21 02:00Z  fall  2.7  rise  3.0  shift  12deg        
+  MISS 2024-09-22 02:00Z  fall  2.7  rise  3.1  shift  20deg        
+  HIT  2024-09-23 01:00Z  fall  2.8  rise  4.4  shift 160deg frontal
+  HIT  2024-09-24 04:00Z  fall  3.2  rise  2.2  shift     —         
+  HIT  2024-09-25 05:00Z  fall  3.6  rise  4.7  shift  88deg frontal
+  HIT  2024-09-27 04:00Z  fall  4.3  rise  1.5  shift     —         
+  HIT  2024-09-30 04:00Z  fall  2.6  rise  2.2  shift     —         
+  HIT  2024-10-03 05:00Z  fall  4.4  rise  1.5  shift  32deg        
+  MISS 2024-10-06 04:00Z  fall  3.5  rise  3.1  shift     —         
+  HIT  2024-10-08 04:00Z  fall  3.7  rise  2.4  shift   8deg        
+  MISS 2024-10-09 03:00Z  fall  2.0  rise  3.1  shift  25deg        
+  HIT  2024-10-10 04:00Z  fall  2.4  rise  3.6  shift  10deg        
+  HIT  2024-10-12 05:00Z  fall  2.6  rise  1.3  shift   8deg        
+  HIT  2024-10-13 05:00Z  fall  3.9  rise  2.6  shift   7deg        
+  HIT  2024-10-15 20:00Z  fall  3.6  rise  6.6  shift  75deg frontal
+  HIT  2024-10-17 06:00Z  fall  4.1  rise  1.2  shift  15deg        
+  MISS 2024-10-18 05:00Z  fall  4.3  rise  2.8  shift   8deg        
+  HIT  2024-10-22 05:00Z  fall  4.6  rise  2.5  shift   2deg        
+  MISS 2024-10-23 04:00Z  fall  2.0  rise  2.8  shift   0deg        
+  MISS 2024-10-24 23:00Z  fall  3.9  rise  1.4  shift  15deg        
+  HIT  2024-10-28 06:00Z  fall  4.4  rise  1.6  shift  30deg        
+  HIT  2024-10-29 05:00Z  fall  3.9  rise  2.4  shift  12deg        
+  HIT  2024-10-30 02:00Z  fall  3.0  rise  2.3  shift   8deg        
+  HIT  2024-10-31 05:00Z  fall  2.0  rise  7.9  shift 110deg frontal
+  HIT  2024-11-04 04:00Z  fall  4.3  rise  1.8  shift  12deg        
+  HIT  2024-11-08 05:00Z  fall  3.7  rise  1.5  shift   5deg        
+  HIT  2024-11-08 20:00Z  fall  3.8  rise  4.0  shift 170deg frontal
+  HIT  2024-11-10 03:00Z  fall  3.1  rise  2.0  shift 162deg frontal
+  HIT  2024-11-12 04:00Z  fall  3.0  rise  1.9  shift     —         
+  HIT  2024-11-15 05:00Z  fall  3.8  rise  2.1  shift     —         
+  HIT  2024-11-17 04:00Z  fall  3.4  rise  2.0  shift  15deg        
+  HIT  2024-11-18 13:00Z  fall  9.9  rise  3.2  shift  80deg frontal
+  HIT  2024-11-22 04:00Z  fall  2.9  rise  2.0  shift   4deg        
+  HIT  2024-11-25 04:00Z  fall  2.1  rise  4.8  shift  10deg        
+  HIT  2024-11-27 19:00Z  fall  6.9  rise 10.4  shift  55deg frontal
+  HIT  2024-12-01 01:00Z  fall  3.6  rise  2.8  shift     —         
+  HIT  2024-12-04 22:00Z  fall  4.6  rise  1.7  shift     —         
+  HIT  2024-12-09 19:00Z  fall  2.8  rise  6.2  shift 102deg frontal
+  HIT  2024-12-14 05:00Z  fall  3.7  rise  1.8  shift  38deg        
+  HIT  2024-12-16 03:00Z  fall  4.7  rise  2.5  shift  18deg        
+  HIT  2024-12-18 03:00Z  fall  3.2  rise  8.3  shift  40deg frontal
+  HIT  2024-12-19 20:00Z  fall  5.8  rise  3.3  shift 156deg frontal
+  HIT  2024-12-21 05:00Z  fall  4.3  rise  2.9  shift  17deg        
+  HIT  2024-12-23 06:00Z  fall  3.8  rise  1.4  shift  15deg        
+  HIT  2024-12-24 03:00Z  fall  2.8  rise  2.4  shift  28deg        
+  HIT  2024-12-26 05:00Z  fall  2.7  rise  1.2  shift  47deg frontal
+  HIT  2024-12-26 20:00Z  fall  6.6  rise  1.9  shift  43deg frontal
+  HIT  2024-12-28 19:00Z  fall  2.6  rise  5.2  shift   2deg        
+  HIT  2024-12-30 19:00Z  fall  6.6  rise  6.2  shift  70deg frontal
+  HIT  2025-01-02 21:00Z  fall  3.9  rise  2.6  shift  34deg        
+  HIT  2025-01-05 08:00Z  fall  8.2  rise  8.2  shift  44deg frontal
+  HIT  2025-01-07 04:00Z  fall  2.0  rise  3.8  shift  25deg        
+  HIT  2025-01-10 06:00Z  fall  4.1  rise  2.5  shift  25deg        
+  HIT  2025-01-12 05:00Z  fall  5.7  rise  3.6  shift  15deg        
+  HIT  2025-01-18 04:00Z  fall  8.2  rise 11.8  shift 108deg frontal
+  HIT  2025-01-20 05:00Z  fall  3.5  rise  2.7  shift     —         
+  HIT  2025-01-22 20:00Z  fall  8.3  rise  4.7  shift 101deg frontal
+  HIT  2025-01-25 05:00Z  fall  8.0  rise  1.4  shift   8deg        
+  HIT  2025-02-02 05:00Z  fall  6.4  rise  1.6  shift  25deg        
+  HIT  2025-02-03 04:00Z  fall  3.2  rise  2.4  shift  25deg        
+  HIT  2025-02-03 21:00Z  fall  2.1  rise  2.4  shift  38deg        
+  HIT  2025-02-06 04:00Z  fall  7.1  rise  2.6  shift  12deg        
+  HIT  2025-02-08 11:00Z  fall  2.7  rise  1.4  shift  12deg        
+  HIT  2025-02-11 06:00Z  fall  7.2  rise  1.5  shift  98deg frontal
+  HIT  2025-02-12 09:00Z  fall  7.6  rise  3.8  shift  65deg frontal
+  HIT  2025-02-15 20:00Z  fall  7.2  rise 11.9  shift 106deg frontal
+  HIT  2025-02-18 05:00Z  fall  8.3  rise  1.6  shift  20deg        
+  HIT  2025-02-21 04:00Z  fall  4.3  rise  3.6  shift   0deg        
+  HIT  2025-02-24 04:00Z  fall  4.1  rise  1.6  shift  65deg frontal
+  HIT  2025-02-25 04:00Z  fall  3.8  rise  1.4  shift   0deg        
+  MISS 2025-03-01 05:00Z  fall  4.9  rise  3.0  shift     —         
+  HIT  2025-03-02 23:00Z  fall  5.9  rise  2.0  shift  46deg frontal
+  HIT  2025-03-04 09:00Z  fall 11.3  rise  2.3  shift  82deg frontal
+  HIT  2025-03-04 18:00Z  fall  4.7  rise 10.6  shift  27deg        
+  HIT  2025-03-12 04:00Z  fall  4.6  rise  1.5  shift  22deg        
+  HIT  2025-03-14 23:00Z  fall  2.0  rise  1.4  shift  18deg        
+  HIT  2025-03-15 16:00Z  fall  2.1  rise  7.4  shift  13deg        
+  HIT  2025-03-19 03:00Z  fall  8.4  rise  8.3  shift  32deg        
+  HIT  2025-03-22 01:00Z  fall  6.2  rise  3.2  shift 165deg frontal
+  HIT  2025-03-23 04:00Z  fall  8.0  rise  2.2  shift  18deg        
+  HIT  2025-03-25 04:00Z  fall  3.2  rise  3.7  shift  49deg frontal
+  HIT  2025-03-26 01:00Z  fall  2.3  rise  4.0  shift   8deg        
+  HIT  2025-03-27 04:00Z  fall  4.3  rise  1.8  shift  10deg        
+  MISS 2025-03-30 02:00Z  fall  4.9  rise  3.0  shift   5deg        
+  HIT  2025-04-02 04:00Z  fall  9.0  rise  1.6  shift  18deg        
+  HIT  2025-04-09 22:00Z  fall  3.6  rise  1.4  shift  12deg        
+  MISS 2025-04-14 02:00Z  fall  2.4  rise  2.6  shift  15deg        
+  HIT  2025-04-18 03:00Z  fall  3.2  rise  2.3  shift   5deg        
+  HIT  2025-04-20 05:00Z  fall  3.9  rise  3.9  shift  38deg        
+  HIT  2025-04-20 15:00Z  fall  3.4  rise  4.0  shift  91deg frontal
+  MISS 2025-04-23 01:00Z  fall  4.1  rise  3.7  shift  27deg        
+  HIT  2025-04-24 01:00Z  fall  2.9  rise  1.9  shift   2deg        
+  HIT  2025-04-25 02:00Z  fall  3.2  rise  3.5  shift   0deg        
+  HIT  2025-04-26 02:00Z  fall  2.8  rise  1.6  shift  40deg        
+  HIT  2025-04-27 04:00Z  fall  2.6  rise  2.3  shift  35deg        
+  MISS 2025-04-28 16:00Z  fall  2.2  rise  1.8  shift   1deg        
+  HIT  2025-04-30 03:00Z  fall  3.6  rise  1.7  shift     —         
+  HIT  2025-05-02 02:00Z  fall  5.0  rise  3.5  shift     —         
+  HIT  2025-05-04 03:00Z  fall  2.6  rise  1.4  shift     —         
+  MISS 2025-05-05 04:00Z  fall  4.0  rise  2.3  shift  15deg        
+  HIT  2025-05-06 17:00Z  fall  4.5  rise  3.3  shift  90deg frontal
+  HIT  2025-05-14 05:00Z  fall  4.2  rise  2.7  shift  28deg        
+  HIT  2025-05-18 06:00Z  fall  2.4  rise  1.3  shift  13deg        
+  HIT  2025-05-20 01:00Z  fall  5.2  rise  6.5  shift  22deg        
+  HIT  2025-05-22 01:00Z  fall  2.7  rise  1.9  shift  22deg        
+  HIT  2025-05-23 05:00Z  fall  3.6  rise  3.6  shift 132deg frontal
+  HIT  2025-05-24 03:00Z  fall  4.1  rise  2.1  shift   8deg        
+  HIT  2025-05-25 02:00Z  fall  2.7  rise  4.7  shift   0deg        
+  HIT  2025-05-26 04:00Z  fall  3.0  rise  6.4  shift  87deg frontal
+  HIT  2025-05-26 13:00Z  fall  3.3  rise  2.5  shift  71deg frontal
+  HIT  2025-05-27 04:00Z  fall  2.7  rise  4.3  shift  25deg        
+  HIT  2025-05-29 02:00Z  fall  4.0  rise  2.8  shift  10deg        
+  HIT  2025-05-30 02:00Z  fall  2.6  rise  3.7  shift   6deg        
+  HIT  2025-05-31 02:00Z  fall  3.4  rise  2.4  shift  20deg        
+  HIT  2025-06-01 22:00Z  fall  2.4  rise  1.4  shift   3deg        
+  HIT  2025-06-03 04:00Z  fall  2.1  rise  2.6  shift  18deg        
+  HIT  2025-06-04 02:00Z  fall  4.7  rise  7.2  shift  87deg frontal
+  HIT  2025-06-07 02:00Z  fall  3.0  rise  1.7  shift  10deg        
+  HIT  2025-06-08 02:00Z  fall  3.1  rise  2.4  shift   2deg        
+  HIT  2025-06-09 02:00Z  fall  4.8  rise  6.6  shift 162deg frontal
+  HIT  2025-06-09 09:00Z  fall  4.2  rise  3.2  shift 142deg frontal
+  HIT  2025-06-09 16:00Z  fall  2.2  rise  1.8  shift  46deg frontal
+  HIT  2025-06-11 02:00Z  fall  2.3  rise  2.2  shift  31deg        
+  HIT  2025-06-13 03:00Z  fall  2.7  rise  3.7  shift  12deg        
+  HIT  2025-06-14 03:00Z  fall  2.1  rise  4.1  shift  22deg        
+  HIT  2025-06-15 21:00Z  fall  5.7  rise  1.6  shift  43deg frontal
+  HIT  2025-06-17 06:00Z  fall  3.9  rise  2.1  shift  10deg        
+  HIT  2025-06-18 03:00Z  fall  4.4  rise  5.6  shift   2deg        
+  MISS 2025-06-20 04:00Z  fall  2.6  rise  2.1  shift  28deg        
+  MISS 2025-06-21 03:00Z  fall  4.0  rise  3.1  shift  15deg        
+  MISS 2025-06-22 02:00Z  fall  2.5  rise  4.2  shift   0deg        
+  MISS 2025-06-23 02:00Z  fall  2.4  rise  4.0  shift   5deg        
+  MISS 2025-06-25 02:00Z  fall  2.9  rise  2.2  shift  18deg        
+  HIT  2025-06-26 04:00Z  fall  3.8  rise  2.1  shift  25deg        
+  HIT  2025-06-27 03:00Z  fall  3.1  rise  2.8  shift  10deg        
+  HIT  2025-06-28 03:00Z  fall  2.2  rise  2.6  shift  25deg        
+  MISS 2025-06-29 02:00Z  fall  3.2  rise  2.9  shift   2deg        
+  HIT  2025-06-30 03:00Z  fall  2.7  rise  3.5  shift   0deg        
+
+########## BFI-2024: Seattle WA — marine, one-sided ring (ocean west) [2024-2025] ##########
+  dropping OKH: only 0 obs
+  dropping TDO: only 0 obs
+28 stations loaded
+replaying 8754 hours: 2024-07-01 .. 2025-06-30
+191 ground-truth troughs (33 with a frontal wind shift); 269 at the shallow bar
+
+=== production vs single-station baselines ===
+SHIPPED g0.3 f-1.5 own-0.5         | POD 164/191 = 86%  frontal 31/33 = 94%  FAR 137/355 = 39% (shallow 30)  lead 10.0h  duty 17.5%
+v1.1 (g.5 f-1.0 own-.3)            | POD 128/191 = 67%  frontal 26/33 = 79%  FAR 127/329 = 39% (shallow 25)  lead 10.0h  duty 13.2%
+v1 (g.5 c.3 f-1.0, no own gate)    | POD 134/191 = 70%  frontal 26/33 = 79%  FAR 164/389 = 42% (shallow 40)  lead 10.0h  duty 16.0%
+baseline own<=-0.5                 | POD 185/191 = 97%  frontal 33/33 = 100%  FAR 197/397 = 50% (shallow 53)  lead 11.0h  duty 33.6%
+baseline own<=-1.0                 | POD 173/191 = 91%  frontal 31/33 = 94%  FAR 131/330 = 40% (shallow 36)  lead 10.0h  duty 21.5%
+baseline own<=-1.5                 | POD 138/191 = 72%  frontal 24/33 = 73%  FAR  60/217 = 28% (shallow 13)  lead 9.0h  duty 12.0%
+
+=== refinements on production gate ===
+  +persist 2h                      | POD  77/191 = 40%  frontal 20/33 = 61%  FAR  81/196 = 41% (shallow 17)  lead 9.0h  duty 7.5%
+  +own falling (<= -0.3)           | POD 128/191 = 67%  frontal 26/33 = 79%  FAR 127/335 = 38% (shallow 25)  lead 10.0h  duty 13.0%
+  +persist 2h +own falling         | POD  69/191 = 36%  frontal 19/33 = 58%  FAR  57/153 = 37% (shallow 9)  lead 9.0h  duty 5.8%
+
+=== candidate gates (own falling required, coherence out) ===
+g0.3 f-1.0 own<=-0.3               | POD 182/191 = 95%  frontal 32/33 = 97%  FAR 200/470 = 43% (shallow 56)  lead 10.0h  duty 23.8%
+g0.3 f-1.0 own<=-0.5               | POD 179/191 = 94%  frontal 32/33 = 97%  FAR 175/436 = 40% (shallow 51)  lead 10.0h  duty 21.3%
+g0.3 f-1.5 own<=-0.3               | POD 168/191 = 88%  frontal 31/33 = 94%  FAR 145/369 = 39% (shallow 29)  lead 10.0h  duty 18.7%
+g0.3 f-1.5 own<=-0.5               | POD 164/191 = 86%  frontal 31/33 = 94%  FAR 137/355 = 39% (shallow 30)  lead 10.0h  duty 17.5%
+
+g0.4 f-1.0 own<=-0.3               | POD 158/191 = 83%  frontal 28/33 = 85%  FAR 169/425 = 40% (shallow 42)  lead 10.0h  duty 18.1%
+g0.4 f-1.0 own<=-0.5               | POD 151/191 = 79%  frontal 27/33 = 82%  FAR 150/391 = 38% (shallow 38)  lead 10.0h  duty 16.2%
+g0.4 f-1.5 own<=-0.3               | POD 138/191 = 72%  frontal 25/33 = 76%  FAR 131/344 = 38% (shallow 24)  lead 10.0h  duty 15.0%
+g0.4 f-1.5 own<=-0.5               | POD 134/191 = 70%  frontal 25/33 = 76%  FAR 123/329 = 37% (shallow 25)  lead 10.0h  duty 14.0%
+
+g0.5 f-1.0 own<=-0.3               | POD 128/191 = 67%  frontal 26/33 = 79%  FAR 127/329 = 39% (shallow 25)  lead 10.0h  duty 13.2%
+g0.5 f-1.0 own<=-0.5               | POD 123/191 = 64%  frontal 26/33 = 79%  FAR 113/305 = 37% (shallow 22)  lead 10.0h  duty 11.8%
+g0.5 f-1.5 own<=-0.3               | POD 112/191 = 59%  frontal 24/33 = 73%  FAR 109/284 = 38% (shallow 16)  lead 10.0h  duty 11.5%
+g0.5 f-1.5 own<=-0.5               | POD 110/191 = 58%  frontal 24/33 = 73%  FAR  99/270 = 37% (shallow 15)  lead 10.0h  duty 10.6%
+
+=== threshold sweep (gradient x coherence x min-fall) ===
+g0.3 c0.2 f-1.0                    | POD 187/191 = 98%  frontal 33/33 = 100%  FAR 245/528 = 46% (shallow 68)  lead 11.0h  duty 28.2%
+g0.3 c0.2 f-1.5                    | POD 171/191 = 90%  frontal 31/33 = 94%  FAR 160/393 = 41% (shallow 35)  lead 10.0h  duty 20.2%
+g0.3 c0.3 f-1.0                    | POD 184/191 = 96%  frontal 33/33 = 100%  FAR 243/538 = 45% (shallow 67)  lead 11.0h  duty 27.0%
+g0.3 c0.3 f-1.5                    | POD 169/191 = 88%  frontal 31/33 = 94%  FAR 158/401 = 39% (shallow 34)  lead 10.0h  duty 19.2%
+g0.3 c0.45 f-1.0                   | POD 177/191 = 93%  frontal 31/33 = 94%  FAR 232/546 = 42% (shallow 58)  lead 10.0h  duty 22.3%
+g0.3 c0.45 f-1.5                   | POD 156/191 = 82%  frontal 28/33 = 85%  FAR 147/393 = 37% (shallow 30)  lead 10.0h  duty 16.0%
+
+g0.5 c0.2 f-1.0                    | POD 135/191 = 71%  frontal 26/33 = 79%  FAR 164/385 = 43% (shallow 40)  lead 10.0h  duty 16.1%
+g0.5 c0.2 f-1.5                    | POD 117/191 = 61%  frontal 24/33 = 73%  FAR 123/303 = 41% (shallow 22)  lead 10.0h  duty 12.9%
+g0.5 c0.3 f-1.0                    | POD 134/191 = 70%  frontal 26/33 = 79%  FAR 164/389 = 42% (shallow 40)  lead 10.0h  duty 16.0%
+g0.5 c0.3 f-1.5                    | POD 117/191 = 61%  frontal 24/33 = 73%  FAR 123/307 = 40% (shallow 22)  lead 10.0h  duty 12.8%
+g0.5 c0.45 f-1.0                   | POD 133/191 = 70%  frontal 26/33 = 79%  FAR 167/395 = 42% (shallow 36)  lead 10.0h  duty 14.9%
+g0.5 c0.45 f-1.5                   | POD 116/191 = 61%  frontal 24/33 = 73%  FAR 125/310 = 40% (shallow 19)  lead 10.0h  duty 11.9%
+
+g0.8 c0.2 f-1.0                    | POD  61/191 = 32%  frontal 16/33 = 48%  FAR  63/166 = 38% (shallow 8)  lead 8.0h  duty 5.6%
+g0.8 c0.2 f-1.5                    | POD  55/191 = 29%  frontal 16/33 = 48%  FAR  52/146 = 36% (shallow 6)  lead 9.0h  duty 5.1%
+g0.8 c0.3 f-1.0                    | POD  61/191 = 32%  frontal 16/33 = 48%  FAR  63/166 = 38% (shallow 8)  lead 8.0h  duty 5.5%
+g0.8 c0.3 f-1.5                    | POD  55/191 = 29%  frontal 16/33 = 48%  FAR  52/146 = 36% (shallow 6)  lead 9.0h  duty 5.1%
+g0.8 c0.45 f-1.0                   | POD  61/191 = 32%  frontal 16/33 = 48%  FAR  65/166 = 39% (shallow 8)  lead 8.0h  duty 5.4%
+g0.8 c0.45 f-1.5                   | POD  55/191 = 29%  frontal 16/33 = 48%  FAR  54/146 = 37% (shallow 6)  lead 9.0h  duty 4.9%
+
+=== sweep with persist 2h + own falling ===
+g0.3 c0.3 f-1.0 +p2 +own           | POD 131/191 = 69%  frontal 26/33 = 79%  FAR  98/267 = 37% (shallow 26)  lead 9.0h  duty 11.2%
+g0.3 c0.3 f-1.5 +p2 +own           | POD 113/191 = 59%  frontal 23/33 = 70%  FAR  78/222 = 35% (shallow 17)  lead 8.0h  duty 8.6%
+g0.5 c0.3 f-1.0 +p2 +own           | POD  69/191 = 36%  frontal 19/33 = 58%  FAR  57/153 = 37% (shallow 9)  lead 9.0h  duty 5.8%
+g0.5 c0.3 f-1.5 +p2 +own           | POD  67/191 = 35%  frontal 19/33 = 58%  FAR  50/138 = 36% (shallow 8)  lead 9.0h  duty 5.1%
+g0.8 c0.3 f-1.0 +p2 +own           | POD  32/191 = 17%  frontal  9/33 = 27%  FAR  16/55  = 29% (shallow 2)  lead 7.5h  duty 1.5%
+g0.8 c0.3 f-1.5 +p2 +own           | POD  30/191 = 16%  frontal  8/33 = 24%  FAR  16/53  = 30% (shallow 2)  lead 7.5h  duty 1.5%
+
+=== direction (production hits with a scoreable propagation fit) ===
+  gradient @ first fire: median error 52 deg, within 45 deg 26/56, within 90 deg 41/56
+  gradient @ last fire: median error 106 deg, within 45 deg 9/56, within 90 deg 22/56
+  centroid-track @ first fire: median error 94 deg, within 45 deg 6/21, within 90 deg 10/21
+  centroid-track @ last fire: median error 41 deg, within 45 deg 24/46, within 90 deg 36/46
+
+=== estimator error by lead time (all pre-trough approaching hours) ===
+   1-3 h out: gradient 106 deg (n=80)   track  56 deg (n=63)
+   4-6 h out: gradient  56 deg (n=91)   track  74 deg (n=58)
+   7-12h out: gradient  34 deg (n=163)   track  74 deg (n=79)
+
+=== switching rules (median over the same samples) ===
+  SHIPPED: track, coherent-grad, silent  median  55 deg  within45 140/328  harmful(>90) 94/328  stated 328/334
+  track, grad only if coh>=0.5           median  56 deg  within45 126/297  harmful(>90) 84/297  stated 297/334
+  track, grad only if coh>=0.6           median  56 deg  within45 116/278  harmful(>90) 80/278  stated 278/334
+  track, grad only if coh>=0.7           median  59 deg  within45 100/254  harmful(>90) 79/254  stated 254/334
+  always gradient                        median  54 deg  within45 151/334  harmful(>90) 111/334  stated 334/334
+  always track (else silent)             median  71 deg  within45 64/200  harmful(>90) 67/200  stated 200/334
+  track if avail else gradient           median  56 deg  within45 142/334  harmful(>90) 97/334  stated 334/334
+  own<=-1.0: track|silent, else gradient median  73 deg  within45 62/215  harmful(>90) 78/215  stated 215/334
+  own<=-1.25: track|silent, else gradient median  76 deg  within45 60/232  harmful(>90) 91/232  stated 232/334
+  own<=-1.5: track|silent, else gradient median  76 deg  within45 64/242  harmful(>90) 97/242  stated 242/334
+  centroid<=60km: track|silent, else grad median  68 deg  within45 64/206  harmful(>90) 67/206  stated 206/334
+  centroid<=80km: track|silent, else grad median  66 deg  within45 65/203  harmful(>90) 65/203  stated 203/334
+  centroid<=120km: track|silent, else grad median  71 deg  within45 64/200  harmful(>90) 67/200  stated 200/334
+  coh<0.35: track|silent, else gradient  median  51 deg  within45 150/321  harmful(>90) 97/321  stated 321/334
+  coh<0.45: track|silent, else gradient  median  49 deg  within45 148/313  harmful(>90) 92/313  stated 313/334
+  coh<0.6: track|silent, else gradient   median  47 deg  within45 135/278  harmful(>90) 72/278  stated 278/334
+  coh<0.35: track|GRAD fallback          median  52 deg  within45 154/334  harmful(>90) 103/334  stated 334/334
+  coh<0.45: track|GRAD fallback          median  49 deg  within45 158/334  harmful(>90) 100/334  stated 334/334
+  coh<0.6: track|GRAD fallback           median  48 deg  within45 161/334  harmful(>90) 89/334  stated 334/334
+  agree<=60: blend, disagree: silent     median  36 deg  within45 104/181  harmful(>90) 40/181  stated 181/334
+  agree<=90: blend, disagree: silent     median  36 deg  within45 117/199  harmful(>90) 43/199  stated 199/334
+  agree: blend, disagree: coh picks      median  50 deg  within45 156/334  harmful(>90) 100/334  stated 334/334
+
+=== observational ETA (fall-centroid closing speed, all pre-trough fires) ===
+  n=64  median signed error -5.7 h  median |error| 5.7 h  within 3 h: 10/64
+
+=== ground-truth troughs (production run) ===
+  HIT  2024-07-04 05:00Z  fall  2.4  rise  3.2  shift     —         
+  MISS 2024-07-05 05:00Z  fall  3.3  rise  2.6  shift     —         
+  HIT  2024-07-06 07:00Z  fall  4.6  rise  1.3  shift     —         
+  MISS 2024-07-07 05:00Z  fall  3.2  rise  3.1  shift     —         
+  HIT  2024-07-08 05:00Z  fall  2.4  rise  3.0  shift  10deg        
+  MISS 2024-07-09 06:00Z  fall  2.7  rise  2.4  shift     —         
+  HIT  2024-07-10 04:00Z  fall  2.2  rise  6.4  shift     —         
+  HIT  2024-07-12 05:00Z  fall  2.7  rise  3.4  shift     —         
+  HIT  2024-07-13 05:00Z  fall  3.7  rise  3.1  shift  13deg        
+  HIT  2024-07-14 05:00Z  fall  2.3  rise  3.8  shift     —         
+  HIT  2024-07-16 06:00Z  fall  4.2  rise  2.0  shift     —         
+  MISS 2024-07-17 06:00Z  fall  4.1  rise  4.6  shift  28deg        
+  MISS 2024-07-17 17:00Z  fall  2.1  rise  2.2  shift     —         
+  MISS 2024-07-20 05:00Z  fall  2.4  rise  2.4  shift     —         
+  HIT  2024-07-21 05:00Z  fall  4.4  rise  3.4  shift     —         
+  HIT  2024-07-22 05:00Z  fall  2.1  rise  3.4  shift     —         
+  HIT  2024-07-24 05:00Z  fall  4.1  rise  2.9  shift     —         
+  HIT  2024-07-27 06:00Z  fall  5.9  rise  1.7  shift     —         
+  HIT  2024-07-28 05:00Z  fall  2.2  rise  4.7  shift  69deg frontal
+  MISS 2024-07-29 06:00Z  fall  2.4  rise  1.4  shift  23deg        
+  HIT  2024-08-04 06:00Z  fall  4.9  rise  2.9  shift     —         
+  MISS 2024-08-05 05:00Z  fall  2.3  rise  5.1  shift  72deg frontal
+  MISS 2024-08-07 05:00Z  fall  2.3  rise  2.9  shift     —         
+  HIT  2024-08-08 06:00Z  fall  5.2  rise  1.8  shift  27deg        
+  HIT  2024-08-09 05:00Z  fall  3.0  rise  3.0  shift   7deg        
+  HIT  2024-08-11 04:00Z  fall  2.6  rise  3.4  shift  13deg        
+  HIT  2024-08-12 06:00Z  fall  3.1  rise  2.1  shift   4deg        
+  HIT  2024-08-16 07:00Z  fall  2.1  rise  1.2  shift     —         
+  HIT  2024-08-18 02:00Z  fall  6.3  rise  6.2  shift 178deg frontal
+  MISS 2024-08-21 07:00Z  fall  2.7  rise  1.8  shift  19deg        
+  HIT  2024-08-22 07:00Z  fall  4.5  rise  1.2  shift     —         
+  HIT  2024-08-23 06:00Z  fall  3.8  rise  1.4  shift  60deg frontal
+  HIT  2024-08-23 17:00Z  fall  2.8  rise  3.9  shift  95deg frontal
+  HIT  2024-08-26 07:00Z  fall  2.7  rise  1.6  shift     —         
+  HIT  2024-08-27 06:00Z  fall  3.4  rise  4.3  shift  70deg frontal
+  HIT  2024-08-29 06:00Z  fall  3.4  rise  1.6  shift     —         
+  HIT  2024-08-30 06:00Z  fall  2.8  rise  2.3  shift     —         
+  HIT  2024-09-01 06:00Z  fall  3.8  rise  2.6  shift     —         
+  HIT  2024-09-02 02:00Z  fall  3.0  rise  3.6  shift 132deg frontal
+  HIT  2024-09-04 05:00Z  fall  2.1  rise  2.4  shift     —         
+  HIT  2024-09-06 06:00Z  fall  3.7  rise  2.4  shift     —         
+  HIT  2024-09-07 05:00Z  fall  3.2  rise  2.1  shift     —         
+  HIT  2024-09-08 06:00Z  fall  2.7  rise  3.5  shift     —         
+  MISS 2024-09-10 07:00Z  fall  3.0  rise  1.7  shift  20deg        
+  HIT  2024-09-11 17:00Z  fall  2.4  rise  2.6  shift     —         
+  HIT  2024-09-14 07:00Z  fall  3.9  rise  1.2  shift  28deg        
+  HIT  2024-09-17 07:00Z  fall  4.1  rise  1.7  shift   2deg        
+  HIT  2024-09-22 06:00Z  fall  2.5  rise  1.2  shift     —         
+  MISS 2024-09-22 18:00Z  fall  2.2  rise  1.3  shift 180deg frontal
+  HIT  2024-09-25 07:00Z  fall  6.2  rise  3.8  shift     —         
+  HIT  2024-09-25 16:00Z  fall  3.0  rise  4.0  shift  24deg        
+  HIT  2024-09-27 01:00Z  fall  4.3  rise  4.5  shift   1deg        
+  HIT  2024-09-28 20:00Z  fall  4.7  rise  2.4  shift  92deg frontal
+  HIT  2024-10-01 18:00Z  fall  4.7  rise  2.3  shift 172deg frontal
+  HIT  2024-10-04 08:00Z  fall  8.3  rise  2.1  shift     —         
+  HIT  2024-10-06 07:00Z  fall  4.8  rise  1.6  shift     —         
+  HIT  2024-10-08 06:00Z  fall  6.3  rise  3.8  shift     —         
+  HIT  2024-10-11 07:00Z  fall  5.4  rise  1.4  shift     —         
+  HIT  2024-10-14 06:00Z  fall  4.4  rise  2.8  shift     —         
+  MISS 2024-10-17 07:00Z  fall  2.3  rise  3.0  shift   6deg        
+  HIT  2024-10-19 06:00Z  fall  3.5  rise  2.3  shift  18deg        
+  HIT  2024-10-20 21:00Z  fall  5.7  rise  3.5  shift  21deg        
+  HIT  2024-10-23 06:00Z  fall  2.3  rise  1.3  shift     —         
+  HIT  2024-10-26 06:00Z  fall  6.0  rise  8.3  shift  20deg        
+  HIT  2024-10-27 09:00Z  fall  9.4  rise  4.8  shift  36deg        
+  HIT  2024-10-30 18:00Z  fall  8.0  rise  4.1  shift  19deg        
+  HIT  2024-11-01 19:00Z  fall  5.9  rise  3.1  shift  13deg        
+  HIT  2024-11-04 19:00Z  fall 11.7  rise  7.9  shift  60deg frontal
+  HIT  2024-11-07 07:00Z  fall  4.1  rise  1.2  shift     —         
+  HIT  2024-11-08 06:00Z  fall  2.9  rise  1.3  shift  15deg        
+  HIT  2024-11-09 18:00Z  fall  2.4  rise  2.2  shift  32deg        
+  HIT  2024-11-11 10:00Z  fall 11.2  rise  3.4  shift  24deg        
+  HIT  2024-11-13 18:00Z  fall  5.9  rise  3.2  shift  13deg        
+  HIT  2024-11-17 19:00Z  fall  2.6  rise  3.5  shift   9deg        
+  MISS 2024-11-19 06:00Z  fall  2.7  rise  2.2  shift   5deg        
+  HIT  2024-11-20 07:00Z  fall 15.3  rise  9.2  shift   5deg        
+  HIT  2024-11-22 16:00Z  fall 12.5  rise  4.9  shift     —         
+  MISS 2024-11-25 08:00Z  fall  2.2  rise  2.1  shift     —         
+  HIT  2024-11-29 06:00Z  fall  3.0  rise  3.6  shift   8deg        
+  MISS 2024-11-30 06:00Z  fall  2.5  rise  2.5  shift     —         
+  HIT  2024-11-30 17:00Z  fall  2.3  rise  1.7  shift   2deg        
+  HIT  2024-12-01 06:00Z  fall  2.4  rise  1.8  shift     —         
+  HIT  2024-12-05 03:00Z  fall  2.8  rise  3.1  shift   2deg        
+  HIT  2024-12-07 17:00Z  fall  2.8  rise  3.9  shift   3deg        
+  MISS 2024-12-10 06:00Z  fall  2.3  rise  1.3  shift     —         
+  HIT  2024-12-12 16:00Z  fall  2.0  rise  2.4  shift     —         
+  HIT  2024-12-13 06:00Z  fall  2.4  rise  1.7  shift  10deg        
+  HIT  2024-12-16 16:00Z  fall  7.2  rise  2.1  shift  55deg frontal
+  HIT  2024-12-18 08:00Z  fall  7.8  rise 10.4  shift  18deg        
+  HIT  2024-12-19 22:00Z  fall  7.9  rise  1.6  shift 167deg frontal
+  HIT  2024-12-20 19:00Z  fall  4.2  rise  4.4  shift     —         
+  HIT  2024-12-21 14:00Z  fall 11.3  rise  8.7  shift     —         
+  HIT  2024-12-22 23:00Z  fall  8.7  rise  3.8  shift  20deg        
+  HIT  2024-12-24 06:00Z  fall 15.9  rise  7.2  shift  55deg frontal
+  HIT  2024-12-26 13:00Z  fall 17.5  rise 15.1  shift  58deg frontal
+  HIT  2024-12-27 13:00Z  fall  6.8  rise  5.3  shift     —         
+  HIT  2024-12-28 07:00Z  fall  5.8  rise  3.2  shift  42deg frontal
+  HIT  2024-12-29 16:00Z  fall  5.6  rise  9.5  shift     —         
+  HIT  2025-01-01 08:00Z  fall  7.0  rise  2.2  shift  50deg frontal
+  MISS 2025-01-02 20:00Z  fall  2.6  rise  1.6  shift  35deg        
+  HIT  2025-01-03 18:00Z  fall  8.9  rise  4.2  shift 152deg frontal
+  HIT  2025-01-05 05:00Z  fall  3.1  rise  6.7  shift  10deg        
+  HIT  2025-01-08 06:00Z  fall  5.5  rise  4.6  shift   0deg        
+  HIT  2025-01-10 16:00Z  fall  4.2  rise  5.9  shift  65deg frontal
+  HIT  2025-01-12 07:00Z  fall  2.3  rise  1.3  shift     —         
+  MISS 2025-01-12 17:00Z  fall  2.3  rise  3.2  shift     —         
+  HIT  2025-01-13 18:00Z  fall  2.9  rise  1.6  shift 147deg frontal
+  MISS 2025-01-14 06:00Z  fall  2.7  rise  3.0  shift  35deg        
+  HIT  2025-01-16 06:00Z  fall  6.1  rise  1.4  shift  17deg        
+  HIT  2025-01-19 07:00Z  fall  3.4  rise  2.3  shift     —         
+  HIT  2025-01-21 06:00Z  fall  5.8  rise  4.0  shift     —         
+  HIT  2025-01-24 06:00Z  fall  4.9  rise  2.6  shift     —         
+  HIT  2025-01-28 06:00Z  fall  3.4  rise  1.3  shift     —         
+  HIT  2025-01-29 06:00Z  fall  3.5  rise  1.6  shift     —         
+  HIT  2025-01-31 22:00Z  fall  8.4  rise  5.6  shift   6deg        
+  HIT  2025-02-02 18:00Z  fall  3.2  rise  2.5  shift  20deg        
+  HIT  2025-02-04 05:00Z  fall  3.1  rise  3.7  shift   0deg        
+  HIT  2025-02-05 06:00Z  fall  3.5  rise  5.4  shift     —         
+  HIT  2025-02-07 07:00Z  fall  4.1  rise  5.0  shift  12deg        
+  HIT  2025-02-10 06:00Z  fall  2.1  rise  2.0  shift     —         
+  HIT  2025-02-13 18:00Z  fall 10.6  rise  2.4  shift     —         
+  HIT  2025-02-17 06:00Z  fall  2.8  rise  2.7  shift  23deg        
+  HIT  2025-02-19 16:00Z  fall  7.6  rise  8.2  shift  38deg        
+  HIT  2025-02-22 06:00Z  fall  3.3  rise  2.3  shift     —         
+  HIT  2025-02-23 06:00Z  fall  5.1  rise  2.5  shift   9deg        
+  HIT  2025-02-24 00:00Z  fall  3.9  rise  9.7  shift  18deg        
+  HIT  2025-02-25 06:00Z  fall  7.6  rise  7.3  shift  10deg        
+  HIT  2025-02-27 03:00Z  fall  4.8  rise  3.9  shift     —         
+  HIT  2025-03-01 08:00Z  fall  5.9  rise  1.4  shift     —         
+  HIT  2025-03-04 19:00Z  fall  4.0  rise  4.0  shift  15deg        
+  HIT  2025-03-06 06:00Z  fall  4.6  rise  3.2  shift     —         
+  HIT  2025-03-08 07:00Z  fall  2.9  rise  1.7  shift  15deg        
+  HIT  2025-03-09 19:00Z  fall  5.1  rise  2.7  shift  45deg frontal
+  HIT  2025-03-13 06:00Z  fall  4.9  rise  6.4  shift     —         
+  HIT  2025-03-15 07:00Z  fall  2.9  rise  4.7  shift     —         
+  HIT  2025-03-16 08:00Z  fall  5.9  rise  2.5  shift     —         
+  HIT  2025-03-20 04:00Z  fall  9.0  rise  5.2  shift   5deg        
+  HIT  2025-03-21 07:00Z  fall  6.5  rise  3.4  shift  18deg        
+  HIT  2025-03-22 03:00Z  fall  3.9  rise  7.8  shift   7deg        
+  HIT  2025-03-23 19:00Z  fall  4.7  rise  1.5  shift  27deg        
+  HIT  2025-03-27 02:00Z  fall  7.8  rise  6.0  shift 149deg frontal
+  HIT  2025-03-28 06:00Z  fall  3.0  rise  4.7  shift  25deg        
+  HIT  2025-03-31 04:00Z  fall  8.9  rise  5.9  shift  47deg frontal
+  HIT  2025-04-05 06:00Z  fall  2.6  rise  2.0  shift     —         
+  HIT  2025-04-06 06:00Z  fall  3.9  rise  2.3  shift  16deg        
+  HIT  2025-04-07 19:00Z  fall  3.1  rise  4.0  shift  54deg frontal
+  HIT  2025-04-08 18:00Z  fall  3.9  rise  6.5  shift  45deg frontal
+  HIT  2025-04-10 19:00Z  fall  6.6  rise  7.9  shift  25deg        
+  HIT  2025-04-12 06:00Z  fall  3.0  rise  3.4  shift     —         
+  HIT  2025-04-15 04:00Z  fall  4.2  rise  2.8  shift     —         
+  HIT  2025-04-16 06:00Z  fall  2.5  rise  2.2  shift     —         
+  HIT  2025-04-18 05:00Z  fall  2.2  rise  3.4  shift     —         
+  HIT  2025-04-19 04:00Z  fall  4.4  rise  5.0  shift     —         
+  HIT  2025-04-21 04:00Z  fall  2.7  rise  3.5  shift 105deg frontal
+  HIT  2025-04-23 06:00Z  fall  3.0  rise  2.0  shift     —         
+  HIT  2025-04-24 06:00Z  fall  3.5  rise  2.0  shift     —         
+  HIT  2025-04-25 05:00Z  fall  4.3  rise  2.0  shift   9deg        
+  HIT  2025-04-26 05:00Z  fall  3.4  rise  5.0  shift     —         
+  HIT  2025-05-01 07:00Z  fall  3.6  rise  1.2  shift     —         
+  HIT  2025-05-02 06:00Z  fall  6.3  rise  3.4  shift 160deg frontal
+  HIT  2025-05-06 06:00Z  fall  4.7  rise  1.4  shift     —         
+  HIT  2025-05-07 06:00Z  fall  6.2  rise  4.4  shift     —         
+  HIT  2025-05-09 06:00Z  fall  3.7  rise  1.9  shift     —         
+  MISS 2025-05-10 18:00Z  fall  2.3  rise  1.7  shift     —         
+  HIT  2025-05-11 19:00Z  fall  5.0  rise  1.2  shift  32deg        
+  HIT  2025-05-12 07:00Z  fall  2.0  rise  2.0  shift     —         
+  MISS 2025-05-15 18:00Z  fall  2.5  rise  1.9  shift  20deg        
+  MISS 2025-05-16 07:00Z  fall  2.9  rise  1.3  shift  12deg        
+  HIT  2025-05-19 17:00Z  fall  4.8  rise  4.8  shift  55deg frontal
+  HIT  2025-05-22 07:00Z  fall  6.5  rise  2.2  shift     —         
+  HIT  2025-05-25 05:00Z  fall  3.9  rise  3.8  shift     —         
+  HIT  2025-05-28 19:00Z  fall  3.3  rise  2.0  shift     —         
+  HIT  2025-05-31 06:00Z  fall  5.8  rise  1.7  shift     —         
+  HIT  2025-06-03 05:00Z  fall  2.4  rise  3.1  shift     —         
+  HIT  2025-06-04 05:00Z  fall  4.8  rise  2.7  shift     —         
+  HIT  2025-06-05 06:00Z  fall  2.5  rise  3.1  shift  40deg frontal
+  MISS 2025-06-06 06:00Z  fall  2.1  rise  1.7  shift     —         
+  HIT  2025-06-08 05:00Z  fall  2.1  rise  2.3  shift     —         
+  HIT  2025-06-09 05:00Z  fall  3.3  rise  2.9  shift     —         
+  HIT  2025-06-10 05:00Z  fall  2.7  rise  4.3  shift     —         
+  HIT  2025-06-11 05:00Z  fall  2.9  rise  5.5  shift 100deg frontal
+  HIT  2025-06-13 05:00Z  fall  3.2  rise  3.8  shift 115deg frontal
+  HIT  2025-06-16 06:00Z  fall  4.7  rise  2.7  shift     —         
+  HIT  2025-06-18 05:00Z  fall  3.4  rise  2.5  shift   4deg        
+  HIT  2025-06-20 06:00Z  fall  5.1  rise  1.7  shift 147deg frontal
+  HIT  2025-06-20 19:00Z  fall  3.2  rise  2.3  shift  63deg frontal
+  MISS 2025-06-23 07:00Z  fall  2.1  rise  1.3  shift  10deg        
+  HIT  2025-06-24 07:00Z  fall  2.9  rise  1.6  shift     —         
+  MISS 2025-06-26 19:00Z  fall  2.6  rise  1.2  shift  25deg        
+  MISS 2025-06-27 06:00Z  fall  2.3  rise  3.3  shift  10deg        
+  HIT  2025-06-30 06:00Z  fall  4.9  rise  1.5  shift     —         
+
+########## FCM-2024: Minneapolis MN — northern frontal, dense field [2024-2025] ##########
+30 stations loaded
+replaying 8754 hours: 2024-07-01 .. 2025-06-30
+162 ground-truth troughs (64 with a frontal wind shift); 226 at the shallow bar
+
+=== production vs single-station baselines ===
+SHIPPED g0.3 f-1.5 own-0.5         | POD 138/162 = 85%  frontal 62/64 = 97%  FAR 194/393 = 49% (shallow 26)  lead 10.0h  duty 18.7%
+v1.1 (g.5 f-1.0 own-.3)            | POD 115/162 = 71%  frontal 58/64 = 91%  FAR 213/432 = 49% (shallow 38)  lead 10.0h  duty 15.3%
+v1 (g.5 c.3 f-1.0, no own gate)    | POD 119/162 = 73%  frontal 58/64 = 91%  FAR 234/467 = 50% (shallow 45)  lead 11.0h  duty 16.8%
+baseline own<=-0.5                 | POD 162/162 = 100%  frontal 64/64 = 100%  FAR 251/443 = 57% (shallow 56)  lead 11.0h  duty 36.9%
+baseline own<=-1.0                 | POD 155/162 = 96%  frontal 63/64 = 98%  FAR 215/402 = 53% (shallow 42)  lead 11.0h  duty 24.8%
+baseline own<=-1.5                 | POD 128/162 = 79%  frontal 58/64 = 91%  FAR 137/289 = 47% (shallow 19)  lead 10.0h  duty 15.3%
+
+=== refinements on production gate ===
+  +persist 2h                      | POD  69/162 = 43%  frontal 38/64 = 59%  FAR  84/197 = 43% (shallow 11)  lead 8.0h  duty 5.9%
+  +own falling (<= -0.3)           | POD 115/162 = 71%  frontal 58/64 = 91%  FAR 212/433 = 49% (shallow 37)  lead 10.0h  duty 14.5%
+  +persist 2h +own falling         | POD  64/162 = 40%  frontal 34/64 = 53%  FAR  65/164 = 40% (shallow 9)  lead 8.0h  duty 4.9%
+
+=== candidate gates (own falling required, coherence out) ===
+g0.3 f-1.0 own<=-0.3               | POD 148/162 = 91%  frontal 63/64 = 98%  FAR 269/504 = 53% (shallow 55)  lead 11.0h  duty 25.7%
+g0.3 f-1.0 own<=-0.5               | POD 148/162 = 91%  frontal 63/64 = 98%  FAR 254/491 = 52% (shallow 47)  lead 11.0h  duty 23.4%
+g0.3 f-1.5 own<=-0.3               | POD 138/162 = 85%  frontal 62/64 = 97%  FAR 197/398 = 49% (shallow 28)  lead 10.0h  duty 19.2%
+g0.3 f-1.5 own<=-0.5               | POD 138/162 = 85%  frontal 62/64 = 97%  FAR 194/393 = 49% (shallow 26)  lead 10.0h  duty 18.7%
+
+g0.4 f-1.0 own<=-0.3               | POD 127/162 = 78%  frontal 60/64 = 94%  FAR 257/488 = 53% (shallow 52)  lead 11.0h  duty 19.7%
+g0.4 f-1.0 own<=-0.5               | POD 127/162 = 78%  frontal 60/64 = 94%  FAR 234/462 = 51% (shallow 40)  lead 10.0h  duty 17.9%
+g0.4 f-1.5 own<=-0.3               | POD 118/162 = 73%  frontal 58/64 = 91%  FAR 186/383 = 49% (shallow 25)  lead 10.0h  duty 15.5%
+g0.4 f-1.5 own<=-0.5               | POD 118/162 = 73%  frontal 58/64 = 91%  FAR 183/378 = 48% (shallow 23)  lead 10.0h  duty 15.0%
+
+g0.5 f-1.0 own<=-0.3               | POD 115/162 = 71%  frontal 58/64 = 91%  FAR 213/432 = 49% (shallow 38)  lead 10.0h  duty 15.3%
+g0.5 f-1.0 own<=-0.5               | POD 113/162 = 70%  frontal 58/64 = 91%  FAR 191/402 = 48% (shallow 27)  lead 10.0h  duty 13.8%
+g0.5 f-1.5 own<=-0.3               | POD 108/162 = 67%  frontal 56/64 = 88%  FAR 164/349 = 47% (shallow 21)  lead 10.0h  duty 12.5%
+g0.5 f-1.5 own<=-0.5               | POD 107/162 = 66%  frontal 56/64 = 88%  FAR 160/342 = 47% (shallow 19)  lead 10.0h  duty 12.0%
+
+=== threshold sweep (gradient x coherence x min-fall) ===
+g0.3 c0.2 f-1.0                    | POD 150/162 = 93%  frontal 63/64 = 98%  FAR 281/526 = 53% (shallow 59)  lead 11.0h  duty 27.7%
+g0.3 c0.2 f-1.5                    | POD 139/162 = 86%  frontal 62/64 = 97%  FAR 195/406 = 48% (shallow 28)  lead 10.0h  duty 19.2%
+g0.3 c0.3 f-1.0                    | POD 148/162 = 91%  frontal 63/64 = 98%  FAR 292/553 = 53% (shallow 59)  lead 11.0h  duty 25.6%
+g0.3 c0.3 f-1.5                    | POD 139/162 = 86%  frontal 62/64 = 97%  FAR 201/420 = 48% (shallow 27)  lead 10.0h  duty 17.7%
+g0.3 c0.45 f-1.0                   | POD 144/162 = 89%  frontal 62/64 = 97%  FAR 289/563 = 51% (shallow 54)  lead 10.0h  duty 20.2%
+g0.3 c0.45 f-1.5                   | POD 130/162 = 80%  frontal 59/64 = 92%  FAR 199/421 = 47% (shallow 22)  lead 10.0h  duty 14.0%
+
+g0.5 c0.2 f-1.0                    | POD 119/162 = 73%  frontal 58/64 = 91%  FAR 231/463 = 50% (shallow 44)  lead 11.0h  duty 17.3%
+g0.5 c0.2 f-1.5                    | POD 108/162 = 67%  frontal 56/64 = 88%  FAR 164/357 = 46% (shallow 20)  lead 10.0h  duty 13.0%
+g0.5 c0.3 f-1.0                    | POD 119/162 = 73%  frontal 58/64 = 91%  FAR 234/467 = 50% (shallow 45)  lead 11.0h  duty 16.8%
+g0.5 c0.3 f-1.5                    | POD 108/162 = 67%  frontal 56/64 = 88%  FAR 168/362 = 46% (shallow 21)  lead 10.0h  duty 12.5%
+g0.5 c0.45 f-1.0                   | POD 119/162 = 73%  frontal 58/64 = 91%  FAR 231/465 = 50% (shallow 42)  lead 10.0h  duty 15.1%
+g0.5 c0.45 f-1.5                   | POD 107/162 = 66%  frontal 56/64 = 88%  FAR 160/352 = 45% (shallow 18)  lead 10.0h  duty 11.1%
+
+g0.8 c0.2 f-1.0                    | POD  87/162 = 54%  frontal 45/64 = 70%  FAR 116/284 = 41% (shallow 19)  lead 9.0h  duty 8.2%
+g0.8 c0.2 f-1.5                    | POD  83/162 = 51%  frontal 43/64 = 67%  FAR  84/234 = 36% (shallow 14)  lead 9.0h  duty 6.7%
+g0.8 c0.3 f-1.0                    | POD  87/162 = 54%  frontal 45/64 = 70%  FAR 117/287 = 41% (shallow 19)  lead 9.0h  duty 8.0%
+g0.8 c0.3 f-1.5                    | POD  83/162 = 51%  frontal 43/64 = 67%  FAR  85/237 = 36% (shallow 14)  lead 9.0h  duty 6.5%
+g0.8 c0.45 f-1.0                   | POD  86/162 = 53%  frontal 44/64 = 69%  FAR 116/284 = 41% (shallow 18)  lead 9.0h  duty 7.3%
+g0.8 c0.45 f-1.5                   | POD  82/162 = 51%  frontal 42/64 = 66%  FAR  82/232 = 35% (shallow 11)  lead 9.0h  duty 5.9%
+
+=== sweep with persist 2h + own falling ===
+g0.3 c0.3 f-1.0 +p2 +own           | POD  93/162 = 57%  frontal 44/64 = 69%  FAR 142/283 = 50% (shallow 20)  lead 9.0h  duty 9.5%
+g0.3 c0.3 f-1.5 +p2 +own           | POD  81/162 = 50%  frontal 40/64 = 62%  FAR  88/215 = 41% (shallow 9)  lead 9.0h  duty 7.0%
+g0.5 c0.3 f-1.0 +p2 +own           | POD  64/162 = 40%  frontal 34/64 = 53%  FAR  65/164 = 40% (shallow 9)  lead 8.0h  duty 4.9%
+g0.5 c0.3 f-1.5 +p2 +own           | POD  60/162 = 37%  frontal 32/64 = 50%  FAR  47/140 = 34% (shallow 6)  lead 8.0h  duty 4.2%
+g0.8 c0.3 f-1.0 +p2 +own           | POD  38/162 = 23%  frontal 17/64 = 27%  FAR  20/70  = 29% (shallow 3)  lead 6.0h  duty 1.7%
+g0.8 c0.3 f-1.5 +p2 +own           | POD  37/162 = 23%  frontal 17/64 = 27%  FAR  19/68  = 28% (shallow 3)  lead 6.0h  duty 1.6%
+
+=== direction (production hits with a scoreable propagation fit) ===
+  gradient @ first fire: median error 50 deg, within 45 deg 33/71, within 90 deg 48/71
+  gradient @ last fire: median error 131 deg, within 45 deg 10/71, within 90 deg 18/71
+  centroid-track @ first fire: median error 113 deg, within 45 deg 6/25, within 90 deg 12/25
+  centroid-track @ last fire: median error 48 deg, within 45 deg 20/46, within 90 deg 33/46
+
+=== estimator error by lead time (all pre-trough approaching hours) ===
+   1-3 h out: gradient 136 deg (n=99)   track  45 deg (n=65)
+   4-6 h out: gradient 114 deg (n=114)   track  43 deg (n=56)
+   7-12h out: gradient  61 deg (n=228)   track  68 deg (n=86)
+
+=== switching rules (median over the same samples) ===
+  SHIPPED: track, coherent-grad, silent  median  63 deg  within45 156/399  harmful(>90) 158/399  stated 399/441
+  track, grad only if coh>=0.5           median  55 deg  within45 139/332  harmful(>90) 114/332  stated 332/441
+  track, grad only if coh>=0.6           median  53 deg  within45 131/300  harmful(>90) 99/300  stated 300/441
+  track, grad only if coh>=0.7           median  52 deg  within45 119/268  harmful(>90) 84/268  stated 268/441
+  always gradient                        median  97 deg  within45 125/441  harmful(>90) 234/441  stated 441/441
+  always track (else silent)             median  51 deg  within45 93/207  harmful(>90) 61/207  stated 207/441
+  track if avail else gradient           median  67 deg  within45 166/441  harmful(>90) 179/441  stated 441/441
+  own<=-1.0: track|silent, else gradient median  51 deg  within45 102/223  harmful(>90) 68/223  stated 223/441
+  own<=-1.25: track|silent, else gradient median  55 deg  within45 103/242  harmful(>90) 85/242  stated 242/441
+  own<=-1.5: track|silent, else gradient median  60 deg  within45 100/251  harmful(>90) 94/251  stated 251/441
+  centroid<=60km: track|silent, else grad median  50 deg  within45 96/211  harmful(>90) 60/211  stated 211/441
+  centroid<=80km: track|silent, else grad median  51 deg  within45 93/207  harmful(>90) 61/207  stated 207/441
+  centroid<=120km: track|silent, else grad median  51 deg  within45 93/207  harmful(>90) 61/207  stated 207/441
+  coh<0.35: track|silent, else gradient  median  97 deg  within45 112/385  harmful(>90) 204/385  stated 385/441
+  coh<0.45: track|silent, else gradient  median  91 deg  within45 110/351  harmful(>90) 180/351  stated 351/441
+  coh<0.6: track|silent, else gradient   median  86 deg  within45 98/300  harmful(>90) 146/300  stated 300/441
+  coh<0.35: track|GRAD fallback          median 100 deg  within45 123/441  harmful(>90) 236/441  stated 441/441
+  coh<0.45: track|GRAD fallback          median  97 deg  within45 130/441  harmful(>90) 234/441  stated 441/441
+  coh<0.6: track|GRAD fallback           median  93 deg  within45 133/441  harmful(>90) 226/441  stated 441/441
+  agree<=60: blend, disagree: silent     median  86 deg  within45 90/263  harmful(>90) 127/263  stated 263/441
+  agree<=90: blend, disagree: silent     median  84 deg  within45 97/280  harmful(>90) 132/280  stated 280/441
+  agree: blend, disagree: coh picks      median  97 deg  within45 135/441  harmful(>90) 236/441  stated 441/441
+
+=== observational ETA (fall-centroid closing speed, all pre-trough fires) ===
+  n=22  median signed error -4.7 h  median |error| 4.7 h  within 3 h: 8/22
+
+=== ground-truth troughs (production run) ===
+  HIT  2024-07-04 17:00Z  fall  2.8  rise  2.4  shift  43deg frontal
+  HIT  2024-07-05 05:00Z  fall  4.6  rise  2.1  shift  25deg        
+  HIT  2024-07-07 03:00Z  fall  2.8  rise  1.4  shift  12deg        
+  MISS 2024-07-10 04:00Z  fall  2.9  rise  2.5  shift  20deg        
+  MISS 2024-07-12 04:00Z  fall  2.3  rise  2.6  shift  48deg frontal
+  HIT  2024-07-14 06:00Z  fall  4.5  rise  2.1  shift  97deg frontal
+  HIT  2024-07-14 17:00Z  fall  2.3  rise  1.6  shift  77deg frontal
+  HIT  2024-07-15 18:00Z  fall  4.7  rise  1.5  shift  85deg frontal
+  MISS 2024-07-19 05:00Z  fall  3.6  rise  2.2  shift     —         
+  HIT  2024-07-20 05:00Z  fall  2.1  rise  2.8  shift  22deg        
+  HIT  2024-07-23 04:00Z  fall  2.5  rise  3.0  shift     —         
+  HIT  2024-07-26 04:00Z  fall  3.6  rise  1.3  shift   2deg        
+  HIT  2024-07-27 04:00Z  fall  3.5  rise  1.6  shift  15deg        
+  MISS 2024-07-28 03:00Z  fall  2.8  rise  2.2  shift   5deg        
+  HIT  2024-07-29 01:00Z  fall  2.8  rise  1.6  shift 170deg frontal
+  HIT  2024-07-30 18:00Z  fall  2.1  rise  1.8  shift  74deg frontal
+  HIT  2024-08-01 02:00Z  fall  3.0  rise  3.6  shift  75deg frontal
+  HIT  2024-08-04 01:00Z  fall  6.4  rise  2.6  shift  52deg frontal
+  HIT  2024-08-05 18:00Z  fall  2.1  rise  1.6  shift  32deg        
+  HIT  2024-08-07 04:00Z  fall  4.0  rise  1.5  shift     —         
+  HIT  2024-08-08 05:00Z  fall  3.7  rise  4.0  shift 133deg frontal
+  MISS 2024-08-11 03:00Z  fall  2.2  rise  2.8  shift  12deg        
+  MISS 2024-08-12 03:00Z  fall  2.4  rise  3.3  shift     —         
+  MISS 2024-08-13 03:00Z  fall  2.0  rise  2.8  shift     —         
+  MISS 2024-08-14 03:00Z  fall  2.2  rise  1.8  shift  12deg        
+  HIT  2024-08-14 17:00Z  fall  3.7  rise  1.6  shift  42deg frontal
+  HIT  2024-08-15 16:00Z  fall  4.6  rise  1.4  shift  41deg frontal
+  HIT  2024-08-22 04:00Z  fall  3.4  rise  2.1  shift  18deg        
+  HIT  2024-08-22 16:00Z  fall  2.2  rise  1.4  shift  18deg        
+  HIT  2024-08-23 04:00Z  fall  4.0  rise  2.4  shift  28deg        
+  HIT  2024-08-25 05:00Z  fall  2.9  rise  1.8  shift  10deg        
+  MISS 2024-08-25 17:00Z  fall  2.2  rise  1.4  shift  20deg        
+  HIT  2024-08-27 17:00Z  fall  2.3  rise  2.9  shift  12deg        
+  HIT  2024-08-29 23:00Z  fall  5.0  rise  2.5  shift  27deg        
+  MISS 2024-08-31 04:00Z  fall  2.0  rise  2.5  shift   2deg        
+  HIT  2024-09-01 01:00Z  fall  5.3  rise  8.7  shift  95deg frontal
+  HIT  2024-09-03 05:00Z  fall  4.5  rise  1.9  shift  30deg        
+  HIT  2024-09-04 05:00Z  fall  2.5  rise  2.2  shift  18deg        
+  MISS 2024-09-05 04:00Z  fall  2.4  rise  3.0  shift  52deg frontal
+  HIT  2024-09-09 03:00Z  fall  3.2  rise  3.2  shift  12deg        
+  HIT  2024-09-10 17:00Z  fall  4.3  rise  1.9  shift   5deg        
+  HIT  2024-09-17 04:00Z  fall  3.0  rise  1.5  shift   8deg        
+  HIT  2024-09-18 04:00Z  fall  2.5  rise  1.6  shift   0deg        
+  HIT  2024-09-20 00:00Z  fall  3.1  rise  3.3  shift  10deg        
+  HIT  2024-09-27 03:00Z  fall  2.9  rise  2.6  shift   3deg        
+  HIT  2024-09-30 20:00Z  fall  5.8  rise  9.2  shift 115deg frontal
+  HIT  2024-10-02 20:00Z  fall 10.4  rise  5.2  shift  18deg        
+  HIT  2024-10-05 20:00Z  fall 13.3  rise  4.0  shift 112deg frontal
+  HIT  2024-10-08 04:00Z  fall  4.0  rise  1.8  shift  35deg        
+  HIT  2024-10-09 04:00Z  fall  2.5  rise  2.9  shift   2deg        
+  MISS 2024-10-11 05:00Z  fall  3.5  rise  1.6  shift  30deg        
+  HIT  2024-10-13 09:00Z  fall  4.6  rise  4.8  shift 115deg frontal
+  MISS 2024-10-14 21:00Z  fall  2.7  rise  1.8  shift   7deg        
+  MISS 2024-10-16 05:00Z  fall  2.3  rise  2.0  shift     —         
+  HIT  2024-10-17 20:00Z  fall  5.2  rise  1.2  shift  10deg        
+  HIT  2024-10-21 04:00Z  fall  3.4  rise  1.5  shift   6deg        
+  HIT  2024-10-22 19:00Z  fall  4.9  rise  5.6  shift  42deg frontal
+  HIT  2024-10-24 21:00Z  fall  6.6  rise  2.0  shift 110deg frontal
+  HIT  2024-10-29 05:00Z  fall  3.5  rise  1.6  shift  40deg frontal
+  HIT  2024-10-31 15:00Z  fall  7.3  rise 14.0  shift  28deg        
+  HIT  2024-11-02 05:00Z  fall  2.9  rise  1.4  shift     —         
+  HIT  2024-11-05 19:00Z  fall  3.9  rise  5.2  shift  33deg        
+  HIT  2024-11-08 05:00Z  fall  4.0  rise  3.1  shift   2deg        
+  HIT  2024-11-10 15:00Z  fall  5.0  rise  3.5  shift  91deg frontal
+  HIT  2024-11-14 05:00Z  fall  2.5  rise  3.7  shift 121deg frontal
+  HIT  2024-11-17 04:00Z  fall  3.9  rise  4.5  shift  52deg frontal
+  HIT  2024-11-19 11:00Z  fall 16.0  rise 11.8  shift  88deg frontal
+  HIT  2024-11-23 05:00Z  fall  3.6  rise  2.0  shift  16deg        
+  HIT  2024-11-24 19:00Z  fall  3.4  rise  3.4  shift  12deg        
+  HIT  2024-11-30 04:00Z  fall  2.1  rise  3.2  shift   5deg        
+  MISS 2024-12-03 06:00Z  fall  3.1  rise  1.3  shift  19deg        
+  HIT  2024-12-04 15:00Z  fall  7.1  rise 13.4  shift  57deg frontal
+  HIT  2024-12-07 20:00Z  fall 11.4  rise  1.6  shift  27deg        
+  HIT  2024-12-09 03:00Z  fall  8.5  rise  7.4  shift 120deg frontal
+  HIT  2024-12-11 06:00Z  fall  3.6  rise  3.7  shift  88deg frontal
+  HIT  2024-12-16 17:00Z  fall  2.9  rise  7.2  shift  43deg frontal
+  HIT  2024-12-19 17:00Z  fall 11.5  rise  7.6  shift  40deg frontal
+  HIT  2024-12-23 06:00Z  fall  4.1  rise  3.8  shift  64deg frontal
+  HIT  2024-12-26 04:00Z  fall  3.0  rise  1.5  shift   5deg        
+  HIT  2024-12-28 05:00Z  fall  4.9  rise  6.2  shift  55deg frontal
+  HIT  2024-12-30 05:00Z  fall  2.3  rise  2.1  shift  12deg        
+  MISS 2025-01-05 04:00Z  fall  2.2  rise  2.2  shift   0deg        
+  HIT  2025-01-09 18:00Z  fall  2.6  rise  1.9  shift 138deg frontal
+  HIT  2025-01-11 05:00Z  fall  4.3  rise  1.3  shift  32deg        
+  HIT  2025-01-12 06:00Z  fall  5.9  rise  5.1  shift  96deg frontal
+  HIT  2025-01-16 05:00Z  fall 11.3  rise  4.3  shift  53deg frontal
+  HIT  2025-01-17 15:00Z  fall 11.8  rise  8.1  shift  70deg frontal
+  HIT  2025-01-22 11:00Z  fall 10.8  rise  1.7  shift  32deg        
+  HIT  2025-01-25 03:00Z  fall  4.5  rise  2.7  shift  15deg        
+  HIT  2025-01-27 17:00Z  fall 12.1  rise  4.2  shift  28deg        
+  HIT  2025-01-28 18:00Z  fall 13.2  rise  4.7  shift  40deg frontal
+  HIT  2025-01-30 16:00Z  fall  5.9  rise  2.2  shift   3deg        
+  HIT  2025-02-06 06:00Z  fall 13.6  rise  4.1  shift  95deg frontal
+  HIT  2025-02-08 14:00Z  fall  5.0  rise  5.8  shift  30deg        
+  HIT  2025-02-13 04:00Z  fall  3.3  rise  5.8  shift   8deg        
+  HIT  2025-02-15 02:00Z  fall  9.7  rise  1.3  shift  50deg frontal
+  MISS 2025-02-20 04:00Z  fall  4.7  rise  2.5  shift  15deg        
+  MISS 2025-02-21 06:00Z  fall  2.0  rise  1.3  shift  14deg        
+  HIT  2025-02-24 07:00Z  fall  9.6  rise  3.5  shift  58deg frontal
+  HIT  2025-02-26 05:00Z  fall  4.1  rise  2.6  shift  29deg        
+  HIT  2025-02-28 15:00Z  fall 11.4  rise 13.4  shift  40deg frontal
+  HIT  2025-03-05 06:00Z  fall  3.8  rise  2.8  shift   2deg        
+  HIT  2025-03-08 17:00Z  fall  3.5  rise  1.8  shift  49deg frontal
+  HIT  2025-03-11 02:00Z  fall  5.2  rise 13.4  shift  80deg frontal
+  HIT  2025-03-15 07:00Z  fall  7.6  rise  3.8  shift  98deg frontal
+  HIT  2025-03-17 19:00Z  fall  9.2  rise  3.8  shift  35deg        
+  HIT  2025-03-18 20:00Z  fall  3.5  rise  1.6  shift  10deg        
+  HIT  2025-03-19 17:00Z  fall  2.9  rise  5.7  shift  20deg        
+  HIT  2025-03-21 15:00Z  fall  8.9  rise  7.6  shift  83deg frontal
+  HIT  2025-03-23 15:00Z  fall 10.8  rise  8.3  shift  91deg frontal
+  HIT  2025-03-28 20:00Z  fall  9.6  rise  6.0  shift 112deg frontal
+  HIT  2025-04-02 18:00Z  fall 15.1  rise  4.7  shift  15deg        
+  HIT  2025-04-05 02:00Z  fall  2.6  rise  2.9  shift   8deg        
+  HIT  2025-04-07 03:00Z  fall  7.4  rise  9.3  shift  62deg frontal
+  HIT  2025-04-09 16:00Z  fall  3.1  rise  1.4  shift  24deg        
+  HIT  2025-04-13 18:00Z  fall  4.4  rise  2.2  shift  37deg        
+  HIT  2025-04-18 00:00Z  fall  6.3  rise  5.2  shift 100deg frontal
+  HIT  2025-04-21 07:00Z  fall 11.2  rise  2.4  shift  38deg        
+  HIT  2025-04-22 16:00Z  fall  2.7  rise  3.0  shift  59deg frontal
+  MISS 2025-04-25 05:00Z  fall  2.9  rise  2.3  shift   2deg        
+  HIT  2025-04-27 06:00Z  fall  5.5  rise  1.2  shift  27deg        
+  HIT  2025-04-28 22:00Z  fall 12.5  rise  7.8  shift  60deg frontal
+  HIT  2025-05-01 17:00Z  fall  3.8  rise  1.6  shift     —         
+  HIT  2025-05-04 04:00Z  fall  2.8  rise  2.8  shift  23deg        
+  MISS 2025-05-05 03:00Z  fall  2.8  rise  5.1  shift  10deg        
+  HIT  2025-05-06 02:00Z  fall  3.1  rise  3.4  shift  51deg frontal
+  HIT  2025-05-09 05:00Z  fall  2.2  rise  2.0  shift     —         
+  HIT  2025-05-09 22:00Z  fall  4.5  rise  3.1  shift  49deg frontal
+  HIT  2025-05-12 04:00Z  fall  4.5  rise  2.5  shift  15deg        
+  HIT  2025-05-13 04:00Z  fall  5.5  rise  1.7  shift   5deg        
+  HIT  2025-05-14 03:00Z  fall  3.6  rise  2.1  shift   1deg        
+  HIT  2025-05-15 20:00Z  fall  9.1  rise  5.6  shift 105deg frontal
+  HIT  2025-05-16 16:00Z  fall  4.2  rise  3.2  shift  18deg        
+  HIT  2025-05-19 03:00Z  fall  2.4  rise  3.0  shift   8deg        
+  HIT  2025-05-20 16:00Z  fall  7.3  rise  3.1  shift   5deg        
+  HIT  2025-05-23 04:00Z  fall  2.7  rise  4.2  shift 133deg frontal
+  HIT  2025-05-27 05:00Z  fall  2.8  rise  2.6  shift  13deg        
+  HIT  2025-05-28 05:00Z  fall  3.5  rise  1.3  shift  18deg        
+  MISS 2025-05-29 04:00Z  fall  2.8  rise  1.7  shift  32deg        
+  MISS 2025-05-31 05:00Z  fall  3.7  rise  1.3  shift  20deg        
+  MISS 2025-05-31 17:00Z  fall  2.1  rise  1.7  shift  26deg        
+  HIT  2025-06-02 03:00Z  fall  2.8  rise  1.9  shift  60deg frontal
+  HIT  2025-06-02 22:00Z  fall  7.3  rise  2.5  shift  73deg frontal
+  HIT  2025-06-06 02:00Z  fall  2.7  rise  1.8  shift   2deg        
+  HIT  2025-06-08 06:00Z  fall  5.3  rise  2.3  shift 105deg frontal
+  HIT  2025-06-08 18:00Z  fall  3.5  rise  2.4  shift  15deg        
+  HIT  2025-06-09 05:00Z  fall  3.1  rise  2.2  shift  18deg        
+  HIT  2025-06-11 02:00Z  fall  4.2  rise  6.8  shift 163deg frontal
+  HIT  2025-06-12 17:00Z  fall  3.1  rise  2.6  shift  10deg        
+  HIT  2025-06-13 04:00Z  fall  3.2  rise  1.9  shift  27deg        
+  MISS 2025-06-14 03:00Z  fall  2.1  rise  2.7  shift  22deg        
+  HIT  2025-06-17 04:00Z  fall  5.0  rise  3.8  shift  38deg        
+  HIT  2025-06-18 04:00Z  fall  2.4  rise  2.8  shift  85deg frontal
+  HIT  2025-06-20 05:00Z  fall  4.3  rise  2.8  shift  32deg        
+  HIT  2025-06-21 06:00Z  fall  7.6  rise  3.1  shift  56deg frontal
+  HIT  2025-06-21 17:00Z  fall  3.2  rise  2.5  shift  15deg        
+  HIT  2025-06-26 00:00Z  fall  6.7  rise  2.5  shift  28deg        
+  HIT  2025-06-27 03:00Z  fall  5.2  rise  4.7  shift  59deg frontal
+  HIT  2025-06-28 19:00Z  fall  4.0  rise  1.8  shift  21deg        
+  HIT  2025-06-29 03:00Z  fall  3.5  rise  3.8  shift  92deg frontal
+  HIT  2025-06-29 16:00Z  fall  2.7  rise  1.9  shift 113deg frontal
+  HIT  2025-06-30 03:00Z  fall  2.1  rise  2.7  shift 103deg frontal
+
+########## DVT-2024: Phoenix AZ — desert heat lows, monsoon [2024-2025] ##########
+  dropping GBN: only 0 obs
+29 stations loaded
+replaying 8754 hours: 2024-07-01 .. 2025-06-30
+224 ground-truth troughs (97 with a frontal wind shift); 248 at the shallow bar
+
+=== production vs single-station baselines ===
+SHIPPED g0.3 f-1.5 own-0.5         | POD 219/224 = 98%  frontal 95/97 = 98%  FAR 175/462 = 38% (shallow 29)  lead 8.0h  duty 17.0%
+v1.1 (g.5 f-1.0 own-.3)            | POD 171/224 = 76%  frontal 76/97 = 78%  FAR 130/349 = 37% (shallow 20)  lead 5.0h  duty 10.5%
+v1 (g.5 c.3 f-1.0, no own gate)    | POD 167/224 = 75%  frontal 75/97 = 77%  FAR 178/414 = 43% (shallow 26)  lead 5.0h  duty 11.7%
+baseline own<=-0.5                 | POD 224/224 = 100%  frontal 97/97 = 100%  FAR 208/471 = 44% (shallow 30)  lead 9.0h  duty 31.0%
+baseline own<=-1.0                 | POD 224/224 = 100%  frontal 97/97 = 100%  FAR 163/408 = 40% (shallow 27)  lead 8.0h  duty 23.4%
+baseline own<=-1.5                 | POD 222/224 = 99%  frontal 96/97 = 99%  FAR 124/354 = 35% (shallow 25)  lead 8.0h  duty 17.6%
+
+=== refinements on production gate ===
+  +persist 2h                      | POD  82/224 = 37%  frontal 37/97 = 38%  FAR  55/149 = 37% (shallow 6)  lead 3.0h  duty 3.7%
+  +own falling (<= -0.3)           | POD 162/224 = 72%  frontal 73/97 = 75%  FAR 115/314 = 37% (shallow 20)  lead 5.0h  duty 8.9%
+  +persist 2h +own falling         | POD  79/224 = 35%  frontal 36/97 = 37%  FAR  38/121 = 31% (shallow 5)  lead 3.0h  duty 2.8%
+
+=== candidate gates (own falling required, coherence out) ===
+g0.3 f-1.0 own<=-0.3               | POD 221/224 = 99%  frontal 96/97 = 99%  FAR 202/514 = 39% (shallow 31)  lead 8.0h  duty 20.7%
+g0.3 f-1.0 own<=-0.5               | POD 219/224 = 98%  frontal 95/97 = 98%  FAR 184/483 = 38% (shallow 30)  lead 8.0h  duty 19.0%
+g0.3 f-1.5 own<=-0.3               | POD 220/224 = 98%  frontal 96/97 = 99%  FAR 189/488 = 39% (shallow 31)  lead 8.0h  duty 18.1%
+g0.3 f-1.5 own<=-0.5               | POD 219/224 = 98%  frontal 95/97 = 98%  FAR 175/462 = 38% (shallow 29)  lead 8.0h  duty 17.0%
+
+g0.4 f-1.0 own<=-0.3               | POD 202/224 = 90%  frontal 85/97 = 88%  FAR 178/447 = 40% (shallow 28)  lead 6.0h  duty 14.8%
+g0.4 f-1.0 own<=-0.5               | POD 202/224 = 90%  frontal 85/97 = 88%  FAR 157/419 = 37% (shallow 25)  lead 6.0h  duty 13.6%
+g0.4 f-1.5 own<=-0.3               | POD 197/224 = 88%  frontal 85/97 = 88%  FAR 160/418 = 38% (shallow 26)  lead 6.0h  duty 13.0%
+g0.4 f-1.5 own<=-0.5               | POD 196/224 = 88%  frontal 85/97 = 88%  FAR 145/397 = 37% (shallow 24)  lead 6.0h  duty 12.2%
+
+g0.5 f-1.0 own<=-0.3               | POD 171/224 = 76%  frontal 76/97 = 78%  FAR 130/349 = 37% (shallow 20)  lead 5.0h  duty 10.5%
+g0.5 f-1.0 own<=-0.5               | POD 166/224 = 74%  frontal 74/97 = 76%  FAR 113/318 = 36% (shallow 18)  lead 5.0h  duty 9.6%
+g0.5 f-1.5 own<=-0.3               | POD 163/224 = 73%  frontal 74/97 = 76%  FAR 118/325 = 36% (shallow 16)  lead 6.0h  duty 9.2%
+g0.5 f-1.5 own<=-0.5               | POD 161/224 = 72%  frontal 73/97 = 75%  FAR 105/302 = 35% (shallow 15)  lead 6.0h  duty 8.5%
+
+=== threshold sweep (gradient x coherence x min-fall) ===
+g0.3 c0.2 f-1.0                    | POD 222/224 = 99%  frontal 96/97 = 99%  FAR 293/651 = 45% (shallow 36)  lead 8.0h  duty 24.9%
+g0.3 c0.2 f-1.5                    | POD 220/224 = 98%  frontal 96/97 = 99%  FAR 242/574 = 42% (shallow 29)  lead 8.0h  duty 20.1%
+g0.3 c0.3 f-1.0                    | POD 211/224 = 94%  frontal 91/97 = 94%  FAR 263/576 = 46% (shallow 30)  lead 6.0h  duty 19.4%
+g0.3 c0.3 f-1.5                    | POD 206/224 = 92%  frontal 88/97 = 91%  FAR 207/499 = 41% (shallow 24)  lead 6.0h  duty 15.7%
+g0.3 c0.45 f-1.0                   | POD 175/224 = 78%  frontal 74/97 = 76%  FAR 176/420 = 42% (shallow 15)  lead 6.0h  duty 11.6%
+g0.3 c0.45 f-1.5                   | POD 166/224 = 74%  frontal 72/97 = 74%  FAR 136/353 = 39% (shallow 13)  lead 6.0h  duty 9.4%
+
+g0.5 c0.2 f-1.0                    | POD 176/224 = 79%  frontal 76/97 = 78%  FAR 200/459 = 44% (shallow 27)  lead 5.0h  duty 13.5%
+g0.5 c0.2 f-1.5                    | POD 166/224 = 74%  frontal 73/97 = 75%  FAR 171/405 = 42% (shallow 21)  lead 6.0h  duty 11.3%
+g0.5 c0.3 f-1.0                    | POD 167/224 = 75%  frontal 75/97 = 77%  FAR 178/414 = 43% (shallow 26)  lead 5.0h  duty 11.7%
+g0.5 c0.3 f-1.5                    | POD 157/224 = 70%  frontal 71/97 = 73%  FAR 150/363 = 41% (shallow 20)  lead 5.0h  duty 9.8%
+g0.5 c0.45 f-1.0                   | POD 136/224 = 61%  frontal 60/97 = 62%  FAR 125/311 = 40% (shallow 13)  lead 5.0h  duty 8.0%
+g0.5 c0.45 f-1.5                   | POD 127/224 = 57%  frontal 57/97 = 59%  FAR 101/266 = 38% (shallow 11)  lead 5.0h  duty 6.6%
+
+g0.8 c0.2 f-1.0                    | POD  66/224 = 29%  frontal 38/97 = 39%  FAR  63/159 = 40% (shallow 8)  lead 4.0h  duty 3.7%
+g0.8 c0.2 f-1.5                    | POD  64/224 = 29%  frontal 38/97 = 39%  FAR  55/141 = 39% (shallow 8)  lead 4.0h  duty 3.4%
+g0.8 c0.3 f-1.0                    | POD  63/224 = 28%  frontal 37/97 = 38%  FAR  61/152 = 40% (shallow 8)  lead 4.0h  duty 3.6%
+g0.8 c0.3 f-1.5                    | POD  61/224 = 27%  frontal 37/97 = 38%  FAR  54/135 = 40% (shallow 8)  lead 4.0h  duty 3.2%
+g0.8 c0.45 f-1.0                   | POD  54/224 = 24%  frontal 29/97 = 30%  FAR  52/132 = 39% (shallow 6)  lead 4.0h  duty 3.0%
+g0.8 c0.45 f-1.5                   | POD  51/224 = 23%  frontal 28/97 = 29%  FAR  45/115 = 39% (shallow 6)  lead 4.0h  duty 2.6%
+
+=== sweep with persist 2h + own falling ===
+g0.3 c0.3 f-1.0 +p2 +own           | POD 137/224 = 61%  frontal 58/97 = 60%  FAR  57/201 = 28% (shallow 8)  lead 4.0h  duty 5.2%
+g0.3 c0.3 f-1.5 +p2 +own           | POD 119/224 = 53%  frontal 52/97 = 54%  FAR  48/174 = 28% (shallow 7)  lead 4.0h  duty 4.2%
+g0.5 c0.3 f-1.0 +p2 +own           | POD  79/224 = 35%  frontal 36/97 = 37%  FAR  38/121 = 31% (shallow 5)  lead 3.0h  duty 2.8%
+g0.5 c0.3 f-1.5 +p2 +own           | POD  66/224 = 29%  frontal 30/97 = 31%  FAR  33/103 = 32% (shallow 5)  lead 3.0h  duty 2.2%
+g0.8 c0.3 f-1.0 +p2 +own           | POD  17/224 = 8%  frontal 10/97 = 10%  FAR  12/31  = 39% (shallow 2)  lead 2.0h  duty 0.5%
+g0.8 c0.3 f-1.5 +p2 +own           | POD  16/224 = 7%  frontal  9/97 = 9%  FAR  11/29  = 38% (shallow 2)  lead 2.5h  duty 0.5%
+
+=== direction (production hits with a scoreable propagation fit) ===
+  gradient @ first fire: median error 102 deg, within 45 deg 15/46, within 90 deg 22/46
+  gradient @ last fire: median error 126 deg, within 45 deg 10/46, within 90 deg 18/46
+  centroid-track @ first fire: median error 76 deg, within 45 deg 4/13, within 90 deg 7/13
+  centroid-track @ last fire: median error 78 deg, within 45 deg 15/40, within 90 deg 23/40
+
+=== estimator error by lead time (all pre-trough approaching hours) ===
+   1-3 h out: gradient 156 deg (n=51)   track  49 deg (n=42)
+   4-6 h out: gradient 102 deg (n=92)   track  83 deg (n=61)
+   7-12h out: gradient  89 deg (n=80)   track 138 deg (n=34)
+
+=== switching rules (median over the same samples) ===
+  SHIPPED: track, coherent-grad, silent  median  91 deg  within45 61/191  harmful(>90) 97/191  stated 191/223
+  track, grad only if coh>=0.5           median  94 deg  within45 49/164  harmful(>90) 86/164  stated 164/223
+  track, grad only if coh>=0.6           median  89 deg  within45 47/150  harmful(>90) 75/150  stated 150/223
+  track, grad only if coh>=0.7           median  86 deg  within45 46/142  harmful(>90) 68/142  stated 142/223
+  always gradient                        median 116 deg  within45 63/223  harmful(>90) 131/223  stated 223/223
+  always track (else silent)             median  82 deg  within45 46/137  harmful(>90) 63/137  stated 137/223
+  track if avail else gradient           median  97 deg  within45 64/223  harmful(>90) 118/223  stated 223/223
+  own<=-1.0: track|silent, else gradient median  84 deg  within45 51/152  harmful(>90) 72/152  stated 152/223
+  own<=-1.25: track|silent, else gradient median  76 deg  within45 56/161  harmful(>90) 73/161  stated 161/223
+  own<=-1.5: track|silent, else gradient median  89 deg  within45 54/168  harmful(>90) 84/168  stated 168/223
+  centroid<=60km: track|silent, else grad median 119 deg  within45 44/190  harmful(>90) 117/190  stated 190/223
+  centroid<=80km: track|silent, else grad median  91 deg  within45 48/157  harmful(>90) 81/157  stated 157/223
+  centroid<=120km: track|silent, else grad median  86 deg  within45 45/139  harmful(>90) 67/139  stated 139/223
+  coh<0.35: track|silent, else gradient  median 128 deg  within45 53/180  harmful(>90) 109/180  stated 180/223
+  coh<0.45: track|silent, else gradient  median 128 deg  within45 48/167  harmful(>90) 104/167  stated 167/223
+  coh<0.6: track|silent, else gradient   median 120 deg  within45 40/150  harmful(>90) 88/150  stated 150/223
+  coh<0.35: track|GRAD fallback          median 125 deg  within45 59/223  harmful(>90) 137/223  stated 223/223
+  coh<0.45: track|GRAD fallback          median 123 deg  within45 60/223  harmful(>90) 136/223  stated 223/223
+  coh<0.6: track|GRAD fallback           median 115 deg  within45 57/223  harmful(>90) 131/223  stated 223/223
+  agree<=60: blend, disagree: silent     median 126 deg  within45 18/90  harmful(>90) 59/90  stated 90/223
+  agree<=90: blend, disagree: silent     median 127 deg  within45 21/101  harmful(>90) 66/101  stated 101/223
+  agree: blend, disagree: coh picks      median 125 deg  within45 60/223  harmful(>90) 136/223  stated 223/223
+
+=== observational ETA (fall-centroid closing speed, all pre-trough fires) ===
+  n=118  median signed error -2.0 h  median |error| 2.4 h  within 3 h: 76/118
+
+=== ground-truth troughs (production run) ===
+  HIT  2024-07-02 04:00Z  fall  5.8  rise  3.4  shift  88deg frontal
+  HIT  2024-07-03 03:00Z  fall  4.8  rise  6.0  shift  78deg frontal
+  HIT  2024-07-04 03:00Z  fall  4.6  rise  6.3  shift  10deg        
+  HIT  2024-07-05 04:00Z  fall  7.0  rise  3.6  shift  13deg        
+  HIT  2024-07-06 03:00Z  fall  5.3  rise  6.6  shift 167deg frontal
+  HIT  2024-07-07 04:00Z  fall  5.2  rise  5.2  shift  13deg        
+  HIT  2024-07-08 04:00Z  fall  6.5  rise  3.7  shift   8deg        
+  HIT  2024-07-09 04:00Z  fall  4.5  rise  6.0  shift  22deg        
+  HIT  2024-07-10 03:00Z  fall  4.0  rise  5.8  shift  27deg        
+  HIT  2024-07-11 04:00Z  fall  5.6  rise  6.9  shift  40deg        
+  HIT  2024-07-12 02:00Z  fall  5.9  rise  5.1  shift     —         
+  HIT  2024-07-13 04:00Z  fall  4.2  rise  5.2  shift 101deg frontal
+  HIT  2024-07-14 04:00Z  fall  2.8  rise  6.7  shift  14deg        
+  HIT  2024-07-15 02:00Z  fall  5.6  rise  4.4  shift  84deg frontal
+  HIT  2024-07-16 02:00Z  fall  7.7  rise  4.0  shift 147deg frontal
+  HIT  2024-07-17 03:00Z  fall  6.1  rise  5.5  shift 145deg frontal
+  HIT  2024-07-18 02:00Z  fall  4.3  rise  3.1  shift  21deg        
+  HIT  2024-07-19 02:00Z  fall  3.6  rise  3.8  shift  14deg        
+  HIT  2024-07-20 02:00Z  fall  5.4  rise  3.2  shift 123deg frontal
+  HIT  2024-07-21 02:00Z  fall  4.4  rise  4.8  shift  92deg frontal
+  HIT  2024-07-21 21:00Z  fall  2.4  rise  3.6  shift 160deg frontal
+  HIT  2024-07-22 05:00Z  fall  4.0  rise  3.2  shift  21deg        
+  HIT  2024-07-23 03:00Z  fall  5.8  rise  5.3  shift 110deg frontal
+  HIT  2024-07-24 03:00Z  fall  2.8  rise  5.4  shift  20deg        
+  HIT  2024-07-25 01:00Z  fall  3.4  rise  3.9  shift  76deg frontal
+  HIT  2024-07-26 02:00Z  fall  5.0  rise  4.4  shift 138deg frontal
+  HIT  2024-07-28 02:00Z  fall  4.7  rise  4.6  shift  14deg        
+  HIT  2024-07-29 02:00Z  fall  2.0  rise  4.3  shift  73deg frontal
+  HIT  2024-07-30 05:00Z  fall  4.0  rise  4.5  shift  39deg        
+  HIT  2024-07-31 02:00Z  fall  4.1  rise  2.4  shift  36deg        
+  HIT  2024-08-03 03:00Z  fall  5.2  rise  2.7  shift     —         
+  HIT  2024-08-04 02:00Z  fall  6.1  rise  3.2  shift  62deg frontal
+  HIT  2024-08-05 01:00Z  fall  3.9  rise  4.6  shift 154deg frontal
+  HIT  2024-08-06 04:00Z  fall  4.4  rise  4.7  shift   8deg        
+  HIT  2024-08-07 02:00Z  fall  3.5  rise  8.6  shift  12deg        
+  HIT  2024-08-08 05:00Z  fall  5.5  rise  2.7  shift   8deg        
+  HIT  2024-08-08 23:00Z  fall  4.8  rise  3.3  shift 138deg frontal
+  HIT  2024-08-10 03:00Z  fall  4.4  rise  3.8  shift 114deg frontal
+  HIT  2024-08-12 02:00Z  fall  5.0  rise  2.7  shift  11deg        
+  HIT  2024-08-13 04:00Z  fall  5.5  rise  4.1  shift  50deg frontal
+  HIT  2024-08-14 04:00Z  fall  3.3  rise  5.0  shift   0deg        
+  HIT  2024-08-15 04:00Z  fall  4.2  rise  3.1  shift     —         
+  HIT  2024-08-16 05:00Z  fall  3.7  rise  5.0  shift     —         
+  HIT  2024-08-17 05:00Z  fall  4.5  rise  4.5  shift  55deg frontal
+  HIT  2024-08-18 03:00Z  fall  4.8  rise 11.6  shift   8deg        
+  HIT  2024-08-19 03:00Z  fall  3.3  rise  2.0  shift 110deg frontal
+  HIT  2024-08-20 05:00Z  fall  4.0  rise  4.1  shift 152deg frontal
+  HIT  2024-08-21 02:00Z  fall  4.5  rise  6.4  shift   1deg        
+  HIT  2024-08-22 03:00Z  fall  4.3  rise  1.7  shift  45deg frontal
+  HIT  2024-08-23 00:00Z  fall  4.0  rise  1.4  shift 100deg frontal
+  HIT  2024-08-24 01:00Z  fall  3.0  rise  4.3  shift  98deg frontal
+  HIT  2024-08-28 05:00Z  fall  3.0  rise  4.0  shift  27deg        
+  HIT  2024-08-29 05:00Z  fall  2.5  rise  3.5  shift     —         
+  HIT  2024-08-30 02:00Z  fall  2.8  rise  2.4  shift 118deg frontal
+  HIT  2024-08-31 23:00Z  fall  3.6  rise  1.3  shift     —         
+  HIT  2024-09-02 03:00Z  fall  3.0  rise  4.2  shift  16deg        
+  HIT  2024-09-03 03:00Z  fall  4.9  rise  4.7  shift  83deg frontal
+  HIT  2024-09-04 04:00Z  fall  4.8  rise  4.7  shift 156deg frontal
+  HIT  2024-09-05 04:00Z  fall  4.0  rise  3.8  shift 178deg frontal
+  HIT  2024-09-06 04:00Z  fall  4.3  rise  5.2  shift 166deg frontal
+  HIT  2024-09-07 05:00Z  fall  4.1  rise  4.6  shift     —         
+  HIT  2024-09-08 05:00Z  fall  3.7  rise  3.1  shift  69deg frontal
+  HIT  2024-09-09 02:00Z  fall  4.2  rise  4.6  shift  67deg frontal
+  HIT  2024-09-10 06:00Z  fall  3.4  rise  2.7  shift  36deg        
+  MISS 2024-09-11 06:00Z  fall  5.2  rise  2.4  shift     —         
+  HIT  2024-09-12 05:00Z  fall  4.8  rise  3.1  shift 106deg frontal
+  HIT  2024-09-13 02:00Z  fall  2.3  rise  5.3  shift   0deg        
+  HIT  2024-09-16 03:00Z  fall  4.9  rise  4.0  shift  20deg        
+  HIT  2024-09-17 01:00Z  fall  3.3  rise  3.5  shift  12deg        
+  HIT  2024-09-19 05:00Z  fall  2.6  rise  4.1  shift     —         
+  HIT  2024-09-20 04:00Z  fall  4.7  rise  3.4  shift 172deg frontal
+  HIT  2024-09-21 03:00Z  fall  3.1  rise  3.1  shift   0deg        
+  HIT  2024-09-23 03:00Z  fall  4.4  rise  2.0  shift 160deg frontal
+  HIT  2024-09-25 05:00Z  fall  2.5  rise  2.6  shift   8deg        
+  HIT  2024-09-26 05:00Z  fall  3.9  rise  4.7  shift  45deg frontal
+  HIT  2024-09-27 05:00Z  fall  2.3  rise  2.8  shift  79deg frontal
+  HIT  2024-09-28 05:00Z  fall  2.9  rise  3.8  shift  69deg frontal
+  HIT  2024-09-29 04:00Z  fall  2.2  rise  4.5  shift  22deg        
+  HIT  2024-09-30 04:00Z  fall  3.6  rise  4.8  shift     —         
+  HIT  2024-10-01 03:00Z  fall  2.5  rise  2.7  shift     —         
+  HIT  2024-10-02 04:00Z  fall  2.3  rise  3.5  shift  23deg        
+  MISS 2024-10-03 05:00Z  fall  5.1  rise  2.4  shift 173deg frontal
+  HIT  2024-10-04 03:00Z  fall  2.4  rise  4.8  shift 166deg frontal
+  HIT  2024-10-05 04:00Z  fall  2.0  rise  4.1  shift 125deg frontal
+  HIT  2024-10-06 06:00Z  fall  3.3  rise  3.0  shift  18deg        
+  HIT  2024-10-07 03:00Z  fall  3.5  rise  2.1  shift 156deg frontal
+  HIT  2024-10-08 05:00Z  fall  4.3  rise  3.0  shift     —         
+  HIT  2024-10-18 05:00Z  fall  4.7  rise  2.2  shift  38deg        
+  HIT  2024-10-22 06:00Z  fall  3.2  rise  2.5  shift     —         
+  HIT  2024-10-23 05:00Z  fall  2.9  rise  3.0  shift     —         
+  HIT  2024-11-03 20:00Z  fall  3.4  rise  2.3  shift 133deg frontal
+  HIT  2024-11-06 05:00Z  fall  7.1  rise  2.3  shift     —         
+  HIT  2024-11-09 07:00Z  fall  3.4  rise  1.4  shift   1deg        
+  HIT  2024-11-10 05:00Z  fall  2.9  rise  3.2  shift  17deg        
+  HIT  2024-11-12 06:00Z  fall  3.7  rise  2.4  shift     —         
+  HIT  2024-11-17 21:00Z  fall  2.4  rise  1.7  shift  11deg        
+  HIT  2024-11-19 05:00Z  fall  2.7  rise  4.7  shift  45deg frontal
+  HIT  2024-11-21 06:00Z  fall  2.0  rise  1.7  shift  10deg        
+  HIT  2024-11-23 06:00Z  fall  3.6  rise  1.3  shift   2deg        
+  HIT  2024-11-24 01:00Z  fall  2.7  rise  1.3  shift 145deg frontal
+  HIT  2024-11-30 05:00Z  fall  2.3  rise  2.9  shift  47deg frontal
+  HIT  2024-12-02 05:00Z  fall  2.0  rise  2.4  shift     —         
+  HIT  2024-12-03 06:00Z  fall  2.6  rise  1.6  shift  14deg        
+  HIT  2024-12-05 05:00Z  fall  2.2  rise  1.9  shift     —         
+  HIT  2024-12-06 05:00Z  fall  2.4  rise  2.6  shift   2deg        
+  HIT  2024-12-08 05:00Z  fall  2.4  rise  1.7  shift  30deg        
+  HIT  2024-12-09 05:00Z  fall  3.0  rise  2.4  shift   7deg        
+  HIT  2024-12-17 05:00Z  fall  2.8  rise  2.0  shift   7deg        
+  HIT  2024-12-19 06:00Z  fall  3.0  rise  2.4  shift  35deg        
+  HIT  2024-12-21 05:00Z  fall  2.6  rise  2.3  shift   8deg        
+  HIT  2024-12-22 05:00Z  fall  2.6  rise  1.6  shift     —         
+  HIT  2024-12-25 05:00Z  fall  6.5  rise  1.8  shift  75deg frontal
+  HIT  2024-12-27 21:00Z  fall  2.3  rise  2.0  shift     —         
+  HIT  2025-01-04 05:00Z  fall  3.7  rise  1.2  shift     —         
+  HIT  2025-01-07 21:00Z  fall  4.2  rise  2.0  shift  12deg        
+  HIT  2025-01-09 21:00Z  fall  2.8  rise  7.3  shift 114deg frontal
+  HIT  2025-01-12 06:00Z  fall  5.0  rise  2.9  shift     —         
+  HIT  2025-01-15 02:00Z  fall  3.2  rise  1.9  shift     —         
+  HIT  2025-01-17 05:00Z  fall  4.1  rise  3.7  shift  23deg        
+  HIT  2025-01-20 05:00Z  fall  6.9  rise  2.3  shift  90deg frontal
+  HIT  2025-01-23 00:00Z  fall  3.2  rise  3.3  shift 175deg frontal
+  HIT  2025-01-25 06:00Z  fall  9.2  rise  1.5  shift     —         
+  HIT  2025-01-27 05:00Z  fall  2.9  rise  2.4  shift     —         
+  HIT  2025-02-02 05:00Z  fall  2.7  rise  2.4  shift  30deg        
+  HIT  2025-02-04 04:00Z  fall  4.9  rise  1.9  shift   5deg        
+  HIT  2025-02-06 07:00Z  fall  3.7  rise  1.7  shift  20deg        
+  HIT  2025-02-08 06:00Z  fall  3.3  rise  1.4  shift     —         
+  HIT  2025-02-15 03:00Z  fall  3.3  rise  5.3  shift     —         
+  HIT  2025-02-17 06:00Z  fall  6.5  rise  1.3  shift  43deg frontal
+  HIT  2025-02-18 05:00Z  fall  2.6  rise  1.7  shift 113deg frontal
+  HIT  2025-02-21 02:00Z  fall  2.3  rise  3.6  shift 173deg frontal
+  HIT  2025-02-25 06:00Z  fall  5.2  rise  1.2  shift  70deg frontal
+  HIT  2025-02-26 05:00Z  fall  4.9  rise  2.8  shift     —         
+  HIT  2025-02-28 05:00Z  fall  4.9  rise  2.9  shift  11deg        
+  HIT  2025-03-01 21:00Z  fall  5.4  rise  4.7  shift  72deg frontal
+  HIT  2025-03-03 07:00Z  fall  8.0  rise  3.9  shift  23deg        
+  HIT  2025-03-06 13:00Z  fall  2.7  rise  1.6  shift  10deg        
+  HIT  2025-03-11 05:00Z  fall  5.1  rise  2.7  shift     —         
+  HIT  2025-03-13 21:00Z  fall  7.8  rise  4.2  shift  80deg frontal
+  HIT  2025-03-15 08:00Z  fall  4.7  rise  3.5  shift  40deg frontal
+  HIT  2025-03-18 06:00Z  fall  3.2  rise  5.7  shift   9deg        
+  HIT  2025-03-21 05:00Z  fall  5.6  rise  2.7  shift 167deg frontal
+  MISS 2025-03-22 05:00Z  fall  3.5  rise  1.7  shift     —         
+  HIT  2025-03-23 04:00Z  fall  3.9  rise  3.1  shift 170deg frontal
+  HIT  2025-03-25 03:00Z  fall  3.6  rise  1.4  shift 146deg frontal
+  HIT  2025-03-26 06:00Z  fall  4.4  rise  2.5  shift   7deg        
+  HIT  2025-03-28 04:00Z  fall  5.0  rise  3.0  shift  17deg        
+  HIT  2025-03-29 04:00Z  fall  3.1  rise  1.8  shift  42deg frontal
+  HIT  2025-04-02 06:00Z  fall  2.7  rise  1.6  shift  54deg frontal
+  HIT  2025-04-07 04:00Z  fall  5.6  rise  2.6  shift 127deg frontal
+  HIT  2025-04-08 05:00Z  fall  4.2  rise  2.1  shift 177deg frontal
+  HIT  2025-04-09 03:00Z  fall  3.0  rise  3.4  shift 168deg frontal
+  HIT  2025-04-11 05:00Z  fall  4.0  rise  1.4  shift 178deg frontal
+  HIT  2025-04-12 05:00Z  fall  5.2  rise  2.4  shift     —         
+  HIT  2025-04-13 04:00Z  fall  3.9  rise  2.0  shift 172deg frontal
+  HIT  2025-04-15 05:00Z  fall  2.4  rise  3.7  shift  20deg        
+  HIT  2025-04-16 03:00Z  fall  6.4  rise  3.4  shift  23deg        
+  HIT  2025-04-17 02:00Z  fall  5.8  rise  4.9  shift  10deg        
+  HIT  2025-04-18 05:00Z  fall  3.9  rise  3.7  shift  50deg frontal
+  HIT  2025-04-21 06:00Z  fall  4.8  rise  1.4  shift  35deg        
+  HIT  2025-04-22 04:00Z  fall  4.7  rise  2.7  shift     —         
+  HIT  2025-04-23 04:00Z  fall  4.2  rise  3.3  shift  10deg        
+  HIT  2025-04-24 03:00Z  fall  2.8  rise  4.5  shift  18deg        
+  HIT  2025-04-25 04:00Z  fall  3.8  rise  3.5  shift 120deg frontal
+  HIT  2025-04-26 04:00Z  fall  3.7  rise  3.1  shift   6deg        
+  HIT  2025-04-29 05:00Z  fall  2.2  rise  1.8  shift 172deg frontal
+  HIT  2025-04-30 01:00Z  fall  2.6  rise  2.5  shift 172deg frontal
+  HIT  2025-05-01 05:00Z  fall  4.2  rise  3.0  shift     —         
+  HIT  2025-05-02 04:00Z  fall  4.0  rise  3.5  shift   3deg        
+  HIT  2025-05-03 04:00Z  fall  3.1  rise  3.3  shift 140deg frontal
+  HIT  2025-05-04 04:00Z  fall  6.7  rise  1.2  shift  65deg frontal
+  HIT  2025-05-04 18:00Z  fall  2.5  rise  1.9  shift  53deg frontal
+  HIT  2025-05-09 03:00Z  fall  4.1  rise  2.9  shift 165deg frontal
+  HIT  2025-05-10 03:00Z  fall  5.3  rise  4.8  shift 126deg frontal
+  HIT  2025-05-11 04:00Z  fall  4.2  rise  2.9  shift  55deg frontal
+  HIT  2025-05-12 05:00Z  fall  5.7  rise  2.6  shift  15deg        
+  HIT  2025-05-13 04:00Z  fall  2.0  rise  3.6  shift  12deg        
+  HIT  2025-05-14 04:00Z  fall  2.1  rise  3.5  shift   6deg        
+  HIT  2025-05-15 04:00Z  fall  2.4  rise  2.7  shift  96deg frontal
+  HIT  2025-05-16 04:00Z  fall  2.7  rise  2.6  shift     —         
+  HIT  2025-05-17 04:00Z  fall  3.4  rise  3.9  shift     —         
+  HIT  2025-05-18 05:00Z  fall  4.9  rise  4.8  shift   0deg        
+  HIT  2025-05-19 03:00Z  fall  3.1  rise  4.3  shift     —         
+  HIT  2025-05-20 02:00Z  fall  3.6  rise  5.3  shift  63deg frontal
+  HIT  2025-05-21 04:00Z  fall  4.3  rise  3.2  shift 175deg frontal
+  HIT  2025-05-22 04:00Z  fall  3.1  rise  2.6  shift 174deg frontal
+  HIT  2025-05-23 03:00Z  fall  3.2  rise  3.0  shift  19deg        
+  HIT  2025-05-24 03:00Z  fall  4.1  rise  4.4  shift   5deg        
+  HIT  2025-05-25 04:00Z  fall  2.6  rise  4.0  shift     —         
+  HIT  2025-05-26 04:00Z  fall  2.8  rise  3.4  shift 159deg frontal
+  HIT  2025-05-27 04:00Z  fall  3.2  rise  4.2  shift     —         
+  HIT  2025-05-28 03:00Z  fall  2.9  rise  3.3  shift 148deg frontal
+  HIT  2025-05-29 04:00Z  fall  4.2  rise  4.8  shift  50deg frontal
+  HIT  2025-05-31 04:00Z  fall  5.4  rise  5.4  shift   0deg        
+  HIT  2025-06-01 05:00Z  fall  7.1  rise  4.4  shift  32deg        
+  HIT  2025-06-02 05:00Z  fall  2.4  rise  3.4  shift 177deg frontal
+  HIT  2025-06-03 05:00Z  fall  2.1  rise  2.1  shift 175deg frontal
+  HIT  2025-06-04 03:00Z  fall  5.9  rise  3.5  shift   8deg        
+  HIT  2025-06-05 04:00Z  fall  2.3  rise  3.6  shift  46deg frontal
+  HIT  2025-06-06 05:00Z  fall  2.8  rise  4.1  shift   1deg        
+  HIT  2025-06-07 03:00Z  fall  2.9  rise  3.9  shift  12deg        
+  HIT  2025-06-08 04:00Z  fall  3.4  rise  2.5  shift 145deg frontal
+  HIT  2025-06-09 04:00Z  fall  4.4  rise  3.6  shift 110deg frontal
+  HIT  2025-06-10 03:00Z  fall  3.4  rise  5.8  shift   8deg        
+  HIT  2025-06-11 03:00Z  fall  4.8  rise  3.6  shift  20deg        
+  HIT  2025-06-12 04:00Z  fall  4.7  rise  3.3  shift  23deg        
+  HIT  2025-06-13 04:00Z  fall  3.8  rise  5.1  shift  87deg frontal
+  HIT  2025-06-14 04:00Z  fall  3.0  rise  5.0  shift  25deg        
+  HIT  2025-06-15 04:00Z  fall  3.5  rise  2.9  shift 140deg frontal
+  HIT  2025-06-16 04:00Z  fall  3.0  rise  3.6  shift     —         
+  HIT  2025-06-17 04:00Z  fall  4.5  rise  2.7  shift  73deg frontal
+  HIT  2025-06-18 04:00Z  fall  3.1  rise  4.1  shift     —         
+  MISS 2025-06-19 04:00Z  fall  3.0  rise  3.2  shift 147deg frontal
+  HIT  2025-06-20 04:00Z  fall  5.0  rise  4.8  shift 142deg frontal
+  HIT  2025-06-21 03:00Z  fall  3.9  rise  5.3  shift  18deg        
+  MISS 2025-06-22 02:00Z  fall  5.0  rise  5.7  shift  18deg        
+  HIT  2025-06-23 04:00Z  fall  2.1  rise  5.1  shift  10deg        
+  HIT  2025-06-24 03:00Z  fall  5.6  rise  5.8  shift  12deg        
+  HIT  2025-06-25 03:00Z  fall  4.3  rise  4.7  shift  16deg        
+  HIT  2025-06-26 04:00Z  fall  4.2  rise  4.1  shift 150deg frontal
+  HIT  2025-06-27 04:00Z  fall  4.5  rise  3.9  shift     —         
+  HIT  2025-06-28 04:00Z  fall  2.8  rise  4.3  shift     —         
+  HIT  2025-06-29 04:00Z  fall  5.2  rise  3.5  shift  52deg frontal
+  HIT  2025-06-30 04:00Z  fall  5.8  rise  3.2  shift  72deg frontal
+
+
+================ CROSS-REGION SUMMARY (shipped: g0.3 f-1.5 own-0.5) ================
+  LUK-2024  troughs 165 (40 frontal) | POD 81%  frontal 92%  FAR 49%  lead 10h  duty 15.6% | dir med  73 deg, harm 39%, stated 364/380
+  FTW-2024  troughs 197 (47 frontal) | POD 84%  frontal 98%  FAR 48%  lead 8h  duty 14.3% | dir med  81 deg, harm 45%, stated 142/152
+  BFI-2024  troughs 191 (33 frontal) | POD 86%  frontal 94%  FAR 39%  lead 10h  duty 17.5% | dir med  55 deg, harm 29%, stated 328/334
+  FCM-2024  troughs 162 (64 frontal) | POD 85%  frontal 97%  FAR 49%  lead 10h  duty 18.7% | dir med  63 deg, harm 40%, stated 399/441
+  DVT-2024  troughs 224 (97 frontal) | POD 98%  frontal 98%  FAR 38%  lead 8h  duty 17.0% | dir med  91 deg, harm 51%, stated 191/223
+
+  baseline own<=-1.5 for comparison:
+  LUK-2024  POD 91%  frontal 92%  FAR 46%  duty 15.7%
+  FTW-2024  POD 98%  frontal 100%  FAR 44%  duty 17.9%
+  BFI-2024  POD 72%  frontal 73%  FAR 28%  duty 12.0%
+  FCM-2024  POD 79%  frontal 91%  FAR 47%  duty 15.3%
+  DVT-2024  POD 99%  frontal 99%  FAR 35%  duty 17.6%

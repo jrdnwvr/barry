@@ -156,10 +156,29 @@ but drops a fifth of statements and leaves the weak regions weak, so it was
 NOT adopted. The client copy hedges direction as "roughly" and notes it is
 least reliable around storm outflows.
 
-Selection caveat: v1.2's constants were picked on the same five region-years
-they are evaluated on. The grid is coarse (12 cells) and the winner won nearly
-everywhere, so gross overfitting is unlikely, but a held-out year is the next
-rigor step if these numbers ever need defending.
+## Held-out year: v1.2 confirmed
+
+Jul 2024 - Jun 2025 for all five regions, downloaded AFTER the v1.2 constants
+were frozen and given exactly one shot (`fetch_iem.py --year 2024`, then
+`run_backtest.py LUK-2024 ...`; raw output in `results_holdout_2024.txt`):
+
+| region | frontal POD | FAR | lead | duty | direction med / harm |
+|---|---|---|---|---|---|
+| LUK-2024 | 92% | 49% | 10 h | 15.6% | 73 deg / 39% |
+| FTW-2024 | 98% | 48% | 8 h | 14.3% | 81 deg / 45% |
+| BFI-2024 | 94% | 39% | 10 h | 17.5% | 55 deg / 29% |
+| FCM-2024 | 97% | 49% | 10 h | 18.7% | 63 deg / 40% |
+| DVT-2024 | 98% | 38% | 8 h | 17.0% | 91 deg / 51% |
+
+Mean frontal POD **96%** out-of-sample (in-sample was 95%), FAR and duty in
+the same bands, leads unchanged. The tuning did not overfit. The direction
+pattern also reproduces: solid in synoptic climates (Seattle 55 deg), weak
+around convection (Phoenix 91 deg, harm 51%) — confirming that the copy's
+"roughly" hedge and the storm-outflow caveat are load-bearing, and that the
+"six of ten" odds line holds out-of-sample too. Seattle's ring again beats
+the single-station baseline outright (94% vs 73% frontal).
+
+No constants were changed in response to this run — that is the point of it.
 
 ## Limits of this backtest
 

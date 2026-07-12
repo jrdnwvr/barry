@@ -513,12 +513,17 @@ def main() -> None:
     def run(label, **kw):
         return evaluate(label, stats, gate_signal(stats, **kw), troughs, shallow)
 
-    prod = run("production g.5 c.3 f-1.0",
-               grad_min=front.MIN_GRADIENT, coh_min=front.MIN_COHERENCE,
-               fall_min=front.MIN_FALL)
+    # v1.1 production gate: own fall required, coherence out of detection
+    # (coh_min=0.0 still requires a plane fit to exist, matching analyze()).
+    prod = run("v1.1 production g.5 f-1.0 own-.3",
+               grad_min=front.MIN_GRADIENT, coh_min=0.0,
+               fall_min=front.MIN_FALL, own_fall_max=front.OWN_FALL_MAX)
+    v1 = run("v1 (shipped first) g.5 c.3 f-1.0",
+             grad_min=front.MIN_GRADIENT, coh_min=0.3, fall_min=front.MIN_FALL)
 
     print("=== production vs single-station baselines ===")
     print(fmt(prod))
+    print(fmt(v1))
     for fm in (-0.5, -1.0, -1.5):
         b = evaluate(f"baseline own<={fm}", stats, own_signal(stats, fm),
                      troughs, shallow)
@@ -532,6 +537,13 @@ def main() -> None:
                   fall_min=-1.0, own_fall_max=-0.3)))
     print(fmt(run("  +persist 2h +own falling", grad_min=0.5, coh_min=0.3,
                   fall_min=-1.0, persist_h=2, own_fall_max=-0.3)))
+    print()
+
+    print("=== candidate v1.1 gate: own falling, coherence out of detection ===")
+    for own_max in (-0.3, -0.5, -0.8):
+        print(fmt(run(f"g0.5 f-1.0 own<={own_max} coh0",
+                      grad_min=0.5, coh_min=0.0, fall_min=-1.0,
+                      own_fall_max=own_max)))
     print()
 
     print("=== threshold sweep (gradient x coherence x min-fall) ===")
@@ -584,6 +596,106 @@ def main() -> None:
             print(f"  {name}: median error {statistics.median(errs):.0f} deg, "
                   f"within 45 deg {sum(1 for e in errs if e <= 45)}/{len(errs)}, "
                   f"within 90 deg {sum(1 for e in errs if e <= 90)}/{len(errs)}")
+    print()
+
+    # --- regime experiment: every approaching hour before every hit trough,
+    # both estimators scored against the same truth, binned by lead time.
+    # This picks the v1.1 switching rule from data instead of taste.
+    samples = []  # (k, grad_err, track_err, own, cent_dist, coh, min_fall, g_brg, t_brg, truth)
+    for tr in prod["hit_troughs"]:
+        truth = propagation_bearing(tr.t, stations, hourly_all)
+        if truth is None:
+            continue
+        for k in range(1, HIT_WINDOW_H + 1):
+            t = tr.t - timedelta(hours=k)
+            if not active_by_t.get(t):
+                continue
+            h = stats_by_t.get(t)
+            g_brg = h.falls_bearing if h else None
+            g_err = ang_err(g_brg, truth) if g_brg is not None else None
+            t_brg = centroid_bearing(t, stats_by_t)
+            t_err = ang_err(t_brg, truth) if t_brg is not None else None
+            c = fall_centroid(h)
+            cd = math.hypot(*c) if c else None
+            samples.append((k, g_err, t_err, h.own if h else None, cd,
+                            h.coherence if h else None,
+                            h.min_fall if h else None, g_brg, t_brg, truth))
+
+    def med(errs):
+        return f"{statistics.median(errs):3.0f}" if errs else "  —"
+
+    print("=== estimator error by lead time (all pre-trough approaching hours) ===")
+    for lo, hi in ((1, 3), (4, 6), (7, 12)):
+        sub = [s for s in samples if lo <= s[0] <= hi]
+        g = [s[1] for s in sub if s[1] is not None]
+        tk = [s[2] for s in sub if s[2] is not None]
+        print(f"  {lo:>2}-{hi:<2}h out: gradient {med(g)} deg (n={len(g)})   "
+              f"track {med(tk)} deg (n={len(tk)})")
+    print()
+
+    def eval_rule(name, choose):
+        """choose(sample) -> err|None (None = direction suppressed)."""
+        stated = [choose(s) for s in samples]
+        errs = [e for e in stated if e is not None]
+        if not errs:
+            print(f"  {name}: never states a direction")
+            return
+        harm = sum(1 for e in errs if e > 90)
+        print(f"  {name:<38} median {statistics.median(errs):3.0f} deg  "
+              f"within45 {sum(1 for e in errs if e <= 45)}/{len(errs)}  "
+              f"harmful(>90) {harm}/{len(errs)}  "
+              f"stated {len(errs)}/{len(samples)}")
+
+    print("=== switching rules (median over the same samples) ===")
+    eval_rule("always gradient", lambda s: s[1])
+    eval_rule("always track (else silent)", lambda s: s[2])
+    eval_rule("track if avail else gradient", lambda s: s[2] if s[2] is not None else s[1])
+    for cut in (-1.0, -1.25, -1.5):
+        eval_rule(f"own<={cut}: track|silent, else gradient",
+                  lambda s, c=cut: (s[2] if (s[3] is not None and s[3] <= c)
+                                    else s[1]))
+    for km in (60, 80, 120):
+        eval_rule(f"centroid<={km}km: track|silent, else grad",
+                  lambda s, km=km: (s[2] if (s[4] is not None and s[4] <= km)
+                                    else s[1]))
+    # The plane fit's own R² as the regime detector: it degrades exactly when
+    # the wave is inside the ring, i.e. when the gradient bearing goes bad.
+    for cc in (0.35, 0.45, 0.60):
+        eval_rule(f"coh<{cc}: track|silent, else gradient",
+                  lambda s, cc=cc: (s[2] if (s[5] is None or s[5] < cc)
+                                    else s[1]))
+    for cc in (0.35, 0.45, 0.60):
+        eval_rule(f"coh<{cc}: track|GRAD fallback",
+                  lambda s, cc=cc: ((s[2] if s[2] is not None else s[1])
+                                    if (s[5] is None or s[5] < cc) else s[1]))
+
+    def agree_rule(s, tol=60.0):
+        g, t = s[7], s[8]
+        if g is not None and t is not None:
+            if ang_err(g, t) <= tol:
+                # circular mean of the two bearings
+                x = math.sin(math.radians(g)) + math.sin(math.radians(t))
+                y = math.cos(math.radians(g)) + math.cos(math.radians(t))
+                m = (math.degrees(math.atan2(x, y)) + 360.0) % 360.0
+                return ang_err(m, s[9])
+            return None  # they disagree -> stay silent
+        b = g if g is not None else t
+        return ang_err(b, s[9]) if b is not None else None
+
+    eval_rule("agree<=60: blend, disagree: silent", agree_rule)
+    eval_rule("agree<=90: blend, disagree: silent",
+              lambda s: agree_rule(s, tol=90.0))
+
+    def agree_coh_rule(s):
+        r = agree_rule(s)
+        if r is not None:
+            return r
+        # disagreement: fall back to whichever regime the fit quality points at
+        if s[7] is not None and s[8] is not None:
+            return s[2] if (s[5] is None or s[5] < 0.45) else s[1]
+        return None
+
+    eval_rule("agree: blend, disagree: coh picks", agree_coh_rule)
     print()
 
     # Candidate observational ETA: time for the fall centroid to close on the

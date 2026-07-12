@@ -52,35 +52,48 @@ def sample_metars(sid="KLUK", *, with_pres_tend=True):
 
 
 def sample_bbox_metars(pattern):
-    """A ring of 8 stations ~100 km around KLUK with a linear tendency field.
+    """A ring of 8 stations ~100 km around KLUK with a MOVING tendency field.
 
-    Each station reports altimeter only (exercises the SLP-fallback path), two
-    obs 3h apart. Patterns:
-      west_falls  d(x) = -1.0 + 0.015x -> -2.5 hPa/3h at the west station,
-                  +0.5 at the east one (gradient 1.5 hPa/3h per 100 km, east-up:
-                  the classic "front to the west" signature)
-      east_falls  mirrored (falls to the east — the "it moved through" field)
+    Each station reports altimeter only (exercises the SLP-fallback path), three
+    obs so the front watch can evaluate the ring at two epochs (now and -4h) and
+    see the fall pattern's motion. Patterns:
+      west_falls  d(x) = -1.5 + 0.02x now (deep falls west), the whole pattern
+                  80 km further west 4 h ago -> centroid tracks EASTWARD, so the
+                  change is coming from the west
+      east_falls  mirrored, drifting away east (the "it moved through" field)
       flat        incoherent +/-0.1 wobble -> no call
     """
     end = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
-    base = int((end - timedelta(hours=3)).timestamp())
+    t0 = int((end - timedelta(hours=7.5)).timestamp())  # spans: 3.5 h + 4.0 h,
+    t1 = int((end - timedelta(hours=4)).timestamp())    # both within the 2-4 h
+    t2 = int(end.timestamp())                           # delta-pair window
     origin_lat, origin_lon = 39.103, -84.419
     recs = []
     import math
+
+    def field(x, shift):
+        if pattern == "west_falls":
+            return -1.5 + 0.02 * (x + shift)
+        if pattern == "east_falls":
+            return -1.5 - 0.02 * (x - shift)
+        return None
+
     for i, bearing in enumerate(range(0, 360, 45)):
         dist = 100.0
         x = dist * math.sin(math.radians(bearing))  # km east
         y = dist * math.cos(math.radians(bearing))  # km north
         lat = origin_lat + y / 111.32
         lon = origin_lon + x / (111.32 * math.cos(math.radians(origin_lat)))
-        if pattern == "west_falls":
-            d = -1.0 + 0.015 * x
-        elif pattern == "east_falls":
-            d = -1.0 - 0.015 * x
-        else:  # flat
-            d = 0.1 if i % 2 == 0 else -0.1
+        if pattern == "flat":
+            d_prev = d_now = 0.1 if i % 2 == 0 else -0.1
+        else:
+            d_prev = field(x, 80.0)  # pattern was 80 km upstream 4 h ago
+            d_now = field(x, 0.0)
+        v0 = 1015.0
+        v1 = v0 + d_prev * 3.5 / 3.0  # per-3h rate over the 3.5 h span
+        v2 = v1 + d_now * 4.0 / 3.0   # ...and the 4.0 h span
         sid = f"KR{i}A"
-        for t, altim in ((base, 1015.0), (base + 3 * 3600, 1015.0 + d)):
+        for t, altim in ((t0, v0), (t1, round(v1, 2)), (t2, round(v2, 2))):
             rec = _metar_record(sid, t, None, altim=altim, name=f"Ring {i}")
             rec["lat"] = round(lat, 4)
             rec["lon"] = round(lon, 4)

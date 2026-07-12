@@ -110,7 +110,7 @@ final class PressureStore: ObservableObject {
         front = FrontResponse(
             station: combined?.pressure.station ?? station, status: "approaching",
             headline: "Change moving in from the west",
-            detail: "Pressure is falling at KR6A and KR5A. The falls are spreading in from the west, and this kind of pattern usually brings the weather with it.",
+            detail: "Pressure is falling here and at KR6A and KR5A. The pattern is sliding in roughly from the west. In testing, roughly six of ten patterns like this brought a real pressure dip within a day. The rest slid past or fizzled.",
             bearingDeg: 270, cardinal: "west",
             eta: Date().addingTimeInterval(4.5 * 3600),
             maxFall3h: -2.5, ownDelta3h: -0.8, gradient: 1.5, coherence: 0.92,

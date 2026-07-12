@@ -1,19 +1,31 @@
 """Front watch — regional isallobaric analysis (the "front arrival ETA" feature).
 
-The app's thesis, applied sideways: one station's falling pressure says something
-is coming; a RING of stations says where it is and which way it's sliding. We take
-every METAR in a box around the user's station, compute each station's own 3-hour
-pressure delta, and fit a plane to that tendency field. A coherent gradient with
-real falls on one side is the observational signature of an approaching change.
+The app's thesis, applied sideways: a RING of stations says where a pressure
+change is and which way it's sliding. We take every METAR in a box around the
+user's station, compute each station's own 3-hour delta, and read the field two
+ways: a plane fit for the large-scale tilt, and the motion of the fall-weighted
+centroid between two epochs for how the pattern is actually moving.
 
 Division of labor, stated plainly in the copy so neither half borrows the other's
 credibility:
-  - DIRECTION comes from observations (the tendency-field gradient).
-  - TIMING comes from the model (the interpreter's trough time on the merged
-    observed+forecast curve) — surface obs alone don't give a speed in v1.
+  - DETECTION belongs to the user's own tendency (the hero). The backtest
+    (backend/backtest/RESULTS.md) showed the ring adds no detection skill over
+    the center station's own fall, so "approaching" REQUIRES the local fall and
+    the ring only explains it.
+  - DIRECTION comes from observations: the centroid track when the pattern's
+    motion is measurable, else the gradient when the fit is coherent, else the
+    banner honestly says the direction isn't clear. Measured accuracy is about
+    a compass quadrant — the copy says "roughly" and means it.
+  - TIMING comes from the model (the interpreter's trough time). The
+    observational ETA candidate (centroid closing speed) ran ~6 h early in the
+    backtest, because falls lead the trough itself; it was not shipped.
+
+POLICY: front statuses are banner-grade evidence (roughly 6 in 10 preceded a
+real pressure dip within a day in a year of Ohio Valley replay). They must
+NEVER feed notifications/StormAlerter — alerts stay on the own-tendency signal.
 
 Statuses:
-  approaching  coherent falls upstream, we're not rising -> change headed this way
+  approaching  falling here AND a coherent regional fall pattern -> context
   passed       coherent falls downstream while we rise -> it moved through
   passing      the interpreter says the trough is on us right now
   forecast     the model expects a trough but nearby stations don't confirm yet
@@ -29,15 +41,25 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 from .models import FrontResponse, FrontStationOut
 
-# --- Tunables ----------------------------------------------------------------
+# --- Tunables (thresholds backtested — see backend/backtest/RESULTS.md) -------
 
 MIN_RING_STATIONS = 5     # fewer reporting stations than this -> no spatial call
 MAX_RING_KM = 240.0       # ignore stations beyond this (different weather regime)
-MIN_COHERENCE = 0.30      # plane-fit R² below this = incoherent scatter, no call
+MIN_COHERENCE = 0.30      # plane-fit R² floor for a GRADIENT direction claim only
 MIN_GRADIENT = 0.5        # hPa/3h per 100 km — weaker than this isn't a pattern
 MIN_FALL = -1.0           # somebody in the ring must actually be falling this hard
+OWN_FALL_MAX = -0.3       # "approaching" requires the center itself falling: kept
+                          # every backtested frontal hit while trimming FAR + duty
 RISING_BEHIND = 0.5       # own delta at/above this + falls downstream = "passed"
 MAX_COMPASS_STATIONS = 24 # payload cap for the client's compass view
+
+# Centroid track (direction v2): the fall-weighted centroid's motion between two
+# epochs. Backtest: 59 deg median error inside 3 h of arrival where the gradient
+# reads 132 deg — and the mirror image far out, hence track-first with gradient
+# fallback.
+TRACK_LAG_H = 4.0         # epoch spacing; needs an hours>=8 bbox fetch
+TRACK_MIN_SHIFT_KM = 15.0 # less displacement than this is wobble, not motion
+CENTROID_MIN_WEIGHT = 1.5 # total fall-weight below this = no real fall region
 
 # Per-station 3h delta extraction
 SPAN_MIN_H = 2.0          # accept an ob pair spanning 2-4h, scaled to /3h
@@ -102,8 +124,15 @@ def ring_stations(
     origin_lon: float,
     exclude: str,
     now: datetime,
+    at: Optional[datetime] = None,
 ) -> List[RingStation]:
-    """Turn a parse_records() dict (from a bbox fetch) into the tendency ring."""
+    """Turn a parse_records() dict (from a bbox fetch) into the tendency ring.
+
+    `at` evaluates the ring as of an earlier epoch (only obs at/before it, with
+    staleness judged against it) — the second sample the centroid track needs,
+    carved from the same bbox response instead of server-side state.
+    """
+    epoch = at if at is not None else now
     out: List[RingStation] = []
     cos_lat = math.cos(math.radians(origin_lat))
     for sid, p in parsed.items():
@@ -117,7 +146,8 @@ def ring_stations(
         dist = math.hypot(dx, dy)
         if dist > MAX_RING_KM:
             continue
-        d = _delta3h(p.get("series", []), now)
+        series = [pt for pt in p.get("series", []) if pt.t <= epoch]
+        d = _delta3h(series, epoch)
         if d is None:
             continue
         bearing = (math.degrees(math.atan2(dx, dy)) + 360.0) % 360.0
@@ -125,6 +155,48 @@ def ring_stations(
                                distance_km=round(dist, 1), delta3h=d))
     out.sort(key=lambda s: s.distance_km)
     return out[:MAX_COMPASS_STATIONS]
+
+
+def _xy(s: RingStation) -> Tuple[float, float]:
+    rad = math.radians(s.bearing_deg)
+    return s.distance_km * math.sin(rad), s.distance_km * math.cos(rad)
+
+
+def fall_centroid(ring: Sequence[RingStation]) -> Optional[Tuple[float, float]]:
+    """Fall-weighted centroid of the ring — where the falling air 'is'.
+    Weight = how far below -0.5 hPa/3h a station sits; too little total weight
+    means there's no real fall region to locate."""
+    wx = wy = wsum = 0.0
+    for s in ring:
+        w = max(0.0, -s.delta3h - 0.5)
+        if w <= 0.0:
+            continue
+        x, y = _xy(s)
+        wx += w * x
+        wy += w * y
+        wsum += w
+    if wsum < CENTROID_MIN_WEIGHT:
+        return None
+    return wx / wsum, wy / wsum
+
+
+def _bearing(dx: float, dy: float) -> float:
+    return (math.degrees(math.atan2(dx, dy)) + 360.0) % 360.0
+
+
+def track_bearing(ring: Sequence[RingStation],
+                  ring_prev: Sequence[RingStation]) -> Optional[float]:
+    """'Coming from' bearing from the fall centroid's motion between the two
+    epochs. None when either centroid is missing or the displacement is within
+    wobble range — in which case the gradient (or silence) takes over."""
+    c1 = fall_centroid(ring)
+    c0 = fall_centroid(ring_prev)
+    if c1 is None or c0 is None:
+        return None
+    mx, my = c1[0] - c0[0], c1[1] - c0[1]
+    if math.hypot(mx, my) < TRACK_MIN_SHIFT_KM:
+        return None
+    return round(_bearing(-mx, -my), 1)
 
 
 # --- Plane fit ---------------------------------------------------------------
@@ -183,14 +255,26 @@ def _join(ids: Sequence[str]) -> str:
     return ids[0]
 
 
+# Honest odds line, from the backtest (backend/backtest/RESULTS.md): in a year
+# of Ohio Valley replay, ~6 in 10 of these calls preceded a real pressure dip
+# within a day. One region, one year — hence "roughly".
+_ODDS = ("In testing, roughly six of ten patterns like this brought a real "
+         "pressure dip within a day. The rest slid past or fizzled.")
+
+
 def _copy(status: str, direction: Optional[str], strongest: Sequence[str]) -> Tuple[Optional[str], Optional[str]]:
     if status == "approaching":
-        where = f" from the {direction}" if direction else ""
         at = f" at {_join(strongest)}" if strongest else " at stations nearby"
+        if direction:
+            return (
+                f"Change moving in from the {direction}",
+                f"Pressure is falling here and{at}. The pattern is sliding in "
+                f"roughly from the {direction}. {_ODDS}",
+            )
         return (
-            f"Change moving in{where}",
-            f"Pressure is falling{at}. The falls are spreading in"
-            f"{where}, and this kind of pattern usually brings the weather with it.",
+            "Pressure falling across the area",
+            f"Pressure is falling here and{at}, but which way the pattern is "
+            f"moving isn't clear from the station field yet. {_ODDS}",
         )
     if status == "passed":
         where = f" to the {direction}" if direction else " downstream"
@@ -225,11 +309,14 @@ def analyze(
     own_delta3h: Optional[float],
     reading,
     now: datetime,
+    ring_prev: Sequence[RingStation] = (),
 ) -> FrontResponse:
     """Classify the regional tendency field into a FrontResponse.
 
     `reading` is the interpreter's Reading for the user's station (or None); its
     trough feature supplies the ETA and the "passing right now" signal.
+    `ring_prev` is the same ring evaluated TRACK_LAG_H earlier — it powers the
+    centroid track; without it direction falls back to the gradient.
     """
     feature = reading.feature if reading is not None else "none"
     eta = None
@@ -239,12 +326,7 @@ def analyze(
         eta = reading.featureTime
 
     # Tendency field: ring stations at their offsets, own station at the origin.
-    pts = [
-        (s.distance_km * math.sin(math.radians(s.bearing_deg)),
-         s.distance_km * math.cos(math.radians(s.bearing_deg)),
-         s.delta3h)
-        for s in ring
-    ]
+    pts = [(*_xy(s), s.delta3h) for s in ring]
     if own_delta3h is not None:
         pts.append((0.0, 0.0, own_delta3h))
 
@@ -258,36 +340,52 @@ def analyze(
         if mag > 1e-6:
             # The gradient points toward rises; the falls (and the front that
             # rides them) lie the other way.
-            falls_bearing = round((math.degrees(math.atan2(-gx, -gy)) + 360.0) % 360.0, 1)
+            falls_bearing = round(_bearing(-gx, -gy), 1)
 
     min_fall = min((s.delta3h for s in ring), default=None)
     strongest = [s.id for s in sorted(ring, key=lambda s: s.delta3h)[:2] if s.delta3h <= MIN_FALL]
 
-    obs_ok = (
-        fit is not None
-        and falls_bearing is not None
-        and coherence >= MIN_COHERENCE
-        and gradient >= MIN_GRADIENT
-        and min_fall is not None
-        and min_fall <= MIN_FALL
+    # Is there a real regional fall pattern at all? (Coherence deliberately NOT
+    # in this gate — the backtest showed it filters nothing here. It survives
+    # below as a floor for gradient-based direction claims only.)
+    regional_falls = (
+        len(ring) >= MIN_RING_STATIONS
+        and gradient is not None and gradient >= MIN_GRADIENT
+        and min_fall is not None and min_fall <= MIN_FALL
     )
 
     if feature == "trough_passing":
         status = "passing"
-    elif obs_ok and own_delta3h is not None and own_delta3h >= RISING_BEHIND:
+    elif regional_falls and own_delta3h is not None and own_delta3h >= RISING_BEHIND:
         status = "passed"
-    elif obs_ok:
+    elif regional_falls and own_delta3h is not None and own_delta3h <= OWN_FALL_MAX:
+        # Detection stays the hero's job: the ring only explains a fall the
+        # user's own station is already showing.
         status = "approaching"
     elif feature == "approaching_trough" and eta is not None:
         status = "forecast"
     else:
         status = "none"
 
-    # A direction is only worth stating when the field is coherent — a low-R²
-    # gradient still has *some* bearing, but it's noise wearing a compass.
-    if not obs_ok:
-        falls_bearing = None
-    direction = cardinal(falls_bearing) if falls_bearing is not None else None
+    # Direction, by measured reliability: the centroid track when the pattern's
+    # motion is real; else the gradient, but only while the plane fit is
+    # coherent; else say nothing rather than guess (a late-stage gradient
+    # bearing backtested WORSE than random).
+    bearing = None
+    if status == "approaching":
+        bearing = track_bearing(ring, ring_prev)
+        if bearing is None and coherence is not None and coherence >= MIN_COHERENCE:
+            bearing = falls_bearing
+    elif status == "passed":
+        # "Where are the falls now" — the centroid's position beats a plane
+        # fit for pointing at the departing fall region.
+        c = fall_centroid(ring)
+        if c is not None:
+            bearing = round(_bearing(c[0], c[1]), 1)
+        elif coherence is not None and coherence >= MIN_COHERENCE:
+            bearing = falls_bearing
+
+    direction = cardinal(bearing) if bearing is not None else None
     headline, detail = _copy(status, direction, strongest)
 
     if status == "none":
@@ -298,7 +396,7 @@ def analyze(
         status=status,
         headline=headline,
         detail=detail,
-        bearingDeg=falls_bearing,
+        bearingDeg=bearing,
         cardinal=direction,
         eta=eta,
         maxFall3h=min_fall,

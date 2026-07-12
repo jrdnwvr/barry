@@ -3,7 +3,8 @@ replaying 8754 hours: 2025-07-01 .. 2026-06-30
 168 ground-truth troughs (33 with a frontal wind shift); 235 at the shallow bar
 
 === production vs single-station baselines ===
-production g.5 c.3 f-1.0           | POD 108/168 = 64%  frontal 30/33 = 91%  FAR 188/394 = 48% (shallow 43)  lead 9.0h  duty 11.6%
+v1.1 production g.5 f-1.0 own-.3   | POD 103/168 = 61%  frontal 30/33 = 91%  FAR 156/346 = 45% (shallow 33)  lead 9.0h  duty 10.0%
+v1 (shipped first) g.5 c.3 f-1.0   | POD 108/168 = 64%  frontal 30/33 = 91%  FAR 188/394 = 48% (shallow 43)  lead 9.0h  duty 11.6%
 baseline own<=-0.5                 | POD 167/168 = 99%  frontal 33/33 = 100%  FAR 307/504 = 61% (shallow 65)  lead 11.0h  duty 35.0%
 baseline own<=-1.0                 | POD 164/168 = 98%  frontal 33/33 = 100%  FAR 219/413 = 53% (shallow 51)  lead 10.0h  duty 23.8%
 baseline own<=-1.5                 | POD 151/168 = 90%  frontal 30/33 = 91%  FAR 145/323 = 45% (shallow 38)  lead 9.0h  duty 14.7%
@@ -12,6 +13,11 @@ baseline own<=-1.5                 | POD 151/168 = 90%  frontal 30/33 = 91%  FAR
   +persist 2h                      | POD  50/168 = 30%  frontal 15/33 = 45%  FAR  61/126 = 48% (shallow 5)  lead 7.0h  duty 3.2%
   +own falling (<= -0.3)           | POD 103/168 = 61%  frontal 30/33 = 91%  FAR 155/346 = 45% (shallow 31)  lead 9.0h  duty 9.7%
   +persist 2h +own falling         | POD  46/168 = 27%  frontal 13/33 = 39%  FAR  43/100 = 43% (shallow 4)  lead 7.0h  duty 2.5%
+
+=== candidate v1.1 gate: own falling, coherence out of detection ===
+g0.5 f-1.0 own<=-0.3 coh0          | POD 103/168 = 61%  frontal 30/33 = 91%  FAR 156/346 = 45% (shallow 33)  lead 9.0h  duty 10.0%
+g0.5 f-1.0 own<=-0.5 coh0          | POD  99/168 = 59%  frontal 28/33 = 85%  FAR 137/320 = 43% (shallow 24)  lead 9.0h  duty 9.1%
+g0.5 f-1.0 own<=-0.8 coh0          | POD  95/168 = 57%  frontal 28/33 = 85%  FAR 119/284 = 42% (shallow 20)  lead 9.0h  duty 7.9%
 
 === threshold sweep (gradient x coherence x min-fall) ===
 g0.3 c0.2 f-1.0                    | POD 147/168 = 88%  frontal 33/33 = 100%  FAR 316/547 = 58% (shallow 70)  lead 10.0h  duty 22.6%
@@ -44,10 +50,35 @@ g0.8 c0.3 f-1.0 +p2 +own           | POD  13/168 = 8%  frontal  6/33 = 18%  FAR 
 g0.8 c0.3 f-1.5 +p2 +own           | POD  13/168 = 8%  frontal  6/33 = 18%  FAR  12/27  = 44% (shallow 1)  lead 5.0h  duty 0.5%
 
 === direction (production hits with a scoreable propagation fit) ===
-  gradient @ first fire: median error 68 deg, within 45 deg 19/45, within 90 deg 27/45
-  gradient @ last fire: median error 131 deg, within 45 deg 7/45, within 90 deg 11/45
-  centroid-track @ first fire: median error 132 deg, within 45 deg 3/22, within 90 deg 6/22
-  centroid-track @ last fire: median error 50 deg, within 45 deg 17/34, within 90 deg 25/34
+  gradient @ first fire: median error 68 deg, within 45 deg 18/43, within 90 deg 27/43
+  gradient @ last fire: median error 140 deg, within 45 deg 5/43, within 90 deg 9/43
+  centroid-track @ first fire: median error 132 deg, within 45 deg 3/21, within 90 deg 6/21
+  centroid-track @ last fire: median error 50 deg, within 45 deg 16/32, within 90 deg 25/32
+
+=== estimator error by lead time (all pre-trough approaching hours) ===
+   1-3 h out: gradient 132 deg (n=51)   track  60 deg (n=39)
+   4-6 h out: gradient  92 deg (n=39)   track  75 deg (n=30)
+   7-12h out: gradient  55 deg (n=87)   track  84 deg (n=57)
+
+=== switching rules (median over the same samples) ===
+  always gradient                        median  90 deg  within45 51/177  harmful(>90) 89/177  stated 177/177
+  always track (else silent)             median  72 deg  within45 41/126  harmful(>90) 44/126  stated 126/177
+  track if avail else gradient           median  72 deg  within45 58/177  harmful(>90) 66/177  stated 177/177
+  own<=-1.0: track|silent, else gradient median  75 deg  within45 42/134  harmful(>90) 55/134  stated 134/177
+  own<=-1.25: track|silent, else gradient median  85 deg  within45 43/139  harmful(>90) 62/139  stated 139/177
+  own<=-1.5: track|silent, else gradient median  89 deg  within45 44/146  harmful(>90) 70/146  stated 146/177
+  centroid<=60km: track|silent, else grad median  76 deg  within45 40/132  harmful(>90) 51/132  stated 132/177
+  centroid<=80km: track|silent, else grad median  74 deg  within45 39/127  harmful(>90) 47/127  stated 127/177
+  centroid<=120km: track|silent, else grad median  72 deg  within45 41/126  harmful(>90) 44/126  stated 126/177
+  coh<0.35: track|silent, else gradient  median  88 deg  within45 52/174  harmful(>90) 84/174  stated 174/177
+  coh<0.45: track|silent, else gradient  median  86 deg  within45 51/171  harmful(>90) 80/171  stated 171/177
+  coh<0.6: track|silent, else gradient   median  74 deg  within45 50/159  harmful(>90) 63/159  stated 159/177
+  coh<0.35: track|GRAD fallback          median  88 deg  within45 52/177  harmful(>90) 86/177  stated 177/177
+  coh<0.45: track|GRAD fallback          median  87 deg  within45 51/177  harmful(>90) 84/177  stated 177/177
+  coh<0.6: track|GRAD fallback           median  74 deg  within45 55/177  harmful(>90) 72/177  stated 177/177
+  agree<=60: blend, disagree: silent     median  69 deg  within45 24/63  harmful(>90) 24/63  stated 63/177
+  agree<=90: blend, disagree: silent     median  65 deg  within45 27/72  harmful(>90) 28/72  stated 72/177
+  agree: blend, disagree: coh picks      median  86 deg  within45 52/177  harmful(>90) 83/177  stated 177/177
 
 === observational ETA (fall-centroid closing speed, all pre-trough fires) ===
   n=13  median signed error -5.8 h  median |error| 5.8 h  within 3 h: 4/13
@@ -82,7 +113,7 @@ g0.8 c0.3 f-1.5 +p2 +own           | POD  13/168 = 8%  frontal  6/33 = 18%  FAR 
   MISS 2025-08-30 03:00Z  fall  2.2  rise  4.3  shift     —         
   MISS 2025-09-02 04:00Z  fall  2.6  rise  1.5  shift     —         
   HIT  2025-09-03 05:00Z  fall  3.0  rise  1.2  shift     —         
-  HIT  2025-09-04 05:00Z  fall  4.2  rise  2.4  shift     —         
+  MISS 2025-09-04 05:00Z  fall  4.2  rise  2.4  shift     —         
   MISS 2025-09-05 16:00Z  fall  2.2  rise  3.2  shift  32deg        
   MISS 2025-09-09 04:00Z  fall  3.3  rise  2.4  shift     —         
   MISS 2025-09-10 02:00Z  fall  3.4  rise  3.2  shift     —         
@@ -118,14 +149,14 @@ g0.8 c0.3 f-1.5 +p2 +own           | POD  13/168 = 8%  frontal  6/33 = 18%  FAR 
   MISS 2025-11-14 05:00Z  fall  2.3  rise  1.8  shift     —         
   HIT  2025-11-15 22:00Z  fall 10.7  rise  2.2  shift  29deg        
   HIT  2025-11-19 00:00Z  fall  6.8  rise  6.1  shift     —         
-  HIT  2025-11-20 05:00Z  fall  2.3  rise  1.5  shift     —         
+  MISS 2025-11-20 05:00Z  fall  2.3  rise  1.5  shift     —         
   HIT  2025-11-21 05:00Z  fall  3.0  rise  1.2  shift     —         
   HIT  2025-11-22 04:00Z  fall  6.4  rise  5.7  shift     —         
   HIT  2025-11-25 18:00Z  fall  4.8  rise  1.3  shift   8deg        
   HIT  2025-11-28 04:00Z  fall  2.4  rise  3.8  shift  10deg        
   HIT  2025-11-30 06:00Z  fall 12.7  rise  4.5  shift  30deg        
   HIT  2025-12-02 11:00Z  fall  8.4  rise  2.9  shift     —         
-  HIT  2025-12-07 15:00Z  fall  2.1  rise  3.0  shift     —         
+  MISS 2025-12-07 15:00Z  fall  2.1  rise  3.0  shift     —         
   HIT  2025-12-10 16:00Z  fall  7.8  rise 10.3  shift  42deg frontal
   HIT  2025-12-13 04:00Z  fall  2.2  rise  2.2  shift  44deg frontal
   HIT  2025-12-16 04:00Z  fall 11.3  rise  2.2  shift     —         
@@ -149,7 +180,7 @@ g0.8 c0.3 f-1.5 +p2 +own           | POD  13/168 = 8%  frontal  6/33 = 18%  FAR 
   HIT  2026-01-25 19:00Z  fall 13.3  rise  8.7  shift  40deg        
   HIT  2026-01-27 16:00Z  fall  7.5  rise  5.6  shift  40deg frontal
   MISS 2026-01-31 18:00Z  fall  2.2  rise  1.8  shift     —         
-  HIT  2026-02-03 03:00Z  fall  2.0  rise  2.5  shift  15deg        
+  MISS 2026-02-03 03:00Z  fall  2.0  rise  2.5  shift  15deg        
   HIT  2026-02-03 18:00Z  fall  3.0  rise  1.3  shift   4deg        
   HIT  2026-02-06 16:00Z  fall  9.5  rise  9.5  shift 130deg frontal
   HIT  2026-02-10 20:00Z  fall  7.7  rise  4.5  shift  49deg frontal
@@ -181,7 +212,7 @@ g0.8 c0.3 f-1.5 +p2 +own           | POD  13/168 = 8%  frontal  6/33 = 18%  FAR 
   HIT  2026-04-10 05:00Z  fall  2.6  rise  2.7  shift     —         
   MISS 2026-04-10 17:00Z  fall  2.3  rise  1.4  shift  26deg        
   HIT  2026-04-13 04:00Z  fall  6.2  rise  3.2  shift  10deg        
-  HIT  2026-04-15 02:00Z  fall  2.6  rise  2.5  shift   2deg        
+  MISS 2026-04-15 02:00Z  fall  2.6  rise  2.5  shift   2deg        
   HIT  2026-04-16 04:00Z  fall  2.4  rise  2.4  shift   5deg        
   HIT  2026-04-16 16:00Z  fall  3.1  rise  2.3  shift  30deg        
   HIT  2026-04-18 14:00Z  fall  3.1  rise  8.2  shift  42deg frontal

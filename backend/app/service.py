@@ -6,7 +6,7 @@ so both the HTTP routes and the scheduled worker share one code path.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
@@ -217,7 +217,9 @@ class PressureService:
         reading, _ = _run_interpreter(pressure, forecast)
 
         try:
-            parsed = await awc.fetch_metars_bbox(f_lat, f_lon, self._client, hours=4)
+            # 8 h of history: the current ring plus the same ring TRACK_LAG_H
+            # earlier, so the centroid track gets its two epochs from one call.
+            parsed = await awc.fetch_metars_bbox(f_lat, f_lon, self._client, hours=8)
         except Exception:
             parsed = {}  # no regional field -> at most a "forecast" status
 
@@ -225,10 +227,15 @@ class PressureService:
             parsed, origin_lat=f_lat, origin_lon=f_lon,
             exclude=pressure.station, now=now,
         )
+        ring_prev = front_mod.ring_stations(
+            parsed, origin_lat=f_lat, origin_lon=f_lon,
+            exclude=pressure.station, now=now,
+            at=now - timedelta(hours=front_mod.TRACK_LAG_H),
+        )
         own = pressure.tendency.delta3h if pressure.tendency else None
         resp = front_mod.analyze(
             station=pressure.station, ring=ring, own_delta3h=own,
-            reading=reading, now=now,
+            reading=reading, now=now, ring_prev=ring_prev,
         )
         await self.cache.set(cache_key, resp, ttl=FRONT_TTL)
         return resp

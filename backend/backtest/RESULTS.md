@@ -77,6 +77,38 @@ the only defensible timing source.
    too chatty for an alert, acceptable for a passive banner, wrong for
    notifications. Do not wire this to push alerts as-is.
 
+## v1.1 — changes shipped from these findings
+
+Gate: "approaching" now REQUIRES the center's own tendency falling
+(own <= -0.3 hPa/3h) on top of the regional pattern, and coherence left the
+detection gate (it filtered nothing). Verified on the same year:
+
+| gate | POD (all) | POD (frontal) | FAR | lead | duty |
+|---|---|---|---|---|---|
+| v1 (as first shipped) | 64% | 91% | 48% | 9 h | 11.6% |
+| v1.1 (own fall required) | 61% | **91%** | **45%** | 9 h | **10.0%** |
+
+Every frontal hit kept, ~50 fewer episodes a year. Detection now belongs to
+the hero by construction; the ring only explains a fall already on screen.
+
+Direction: switching rules were tried against the same samples (see
+`results_full.txt`). Coherence-as-regime-detector failed (86-88 deg); the
+agreement blend was accurate (60 deg) but silent 60% of the time. Shipped:
+**centroid track when the fall pattern's motion is measurable (two epochs from
+one hours=8 bbox fetch), gradient as fallback only while the plane fit is
+coherent, otherwise the banner says the direction isn't clear.** Measured 71
+deg median with statements >90 deg wrong cut from 49% to 38% — roughly
+quadrant precision, so the copy says "roughly" and the "passed" status points
+at the fall centroid's position rather than a plane fit.
+
+ETA: unchanged (model trough). The observational candidate stays rejected.
+
+Copy: the detail sentence now carries the measured odds ("roughly six of ten
+patterns like this brought a real pressure dip within a day").
+
+Policy, encoded in front.py's docstring: front statuses never feed
+notifications — banner-grade evidence only.
+
 ## Limits of this backtest
 
 One region (Ohio Valley), one year, one center station. Ground truth is

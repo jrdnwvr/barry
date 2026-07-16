@@ -669,13 +669,21 @@ struct RadarPanel: View {
             controls
 
             if embedded {
-                HStack(spacing: 10) {
-                    compactToggle("Wind", icon: "wind", isOn: $showWindArrows)
-                    compactToggle("Layer top", icon: "cloud.fog", isOn: $showBoundaryLayer)
-                    Spacer()
-                    swatch(Color(red: 0.55, green: 0.75, blue: 0.95), "Light")
-                    swatch(Color(red: 0.13, green: 0.42, blue: 0.82), "Mod")
-                    swatch(Color(red: 0.94, green: 0.65, blue: 0.15), "Heavy")
+                // Two short rows — one row of buttons + swatches doesn't fit
+                // the portrait column and SwiftUI "fixes" that by wrapping the
+                // button titles mid-word.
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 10) {
+                        compactToggle("Wind", icon: "wind", isOn: $showWindArrows)
+                        compactToggle("Layer top", icon: "cloud.fog", isOn: $showBoundaryLayer)
+                        Spacer()
+                    }
+                    HStack(spacing: 14) {
+                        swatch(Color(red: 0.55, green: 0.75, blue: 0.95), "Light")
+                        swatch(Color(red: 0.13, green: 0.42, blue: 0.82), "Moderate")
+                        swatch(Color(red: 0.94, green: 0.65, blue: 0.15), "Heavy")
+                        Spacer()
+                    }
                 }
             } else {
                 Toggle(isOn: $showWindArrows) {
@@ -716,6 +724,8 @@ struct RadarPanel: View {
         Toggle(isOn: isOn) {
             Label(title, systemImage: icon)
                 .font(.caption)
+                .lineLimit(1)
+                .fixedSize()  // never wrap the title mid-word under compression
         }
         .toggleStyle(.button)
         .buttonStyle(.bordered)

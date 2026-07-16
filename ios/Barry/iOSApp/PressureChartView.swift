@@ -31,6 +31,9 @@ struct PressureChartView: View {
     var phoneTrace: [(Date, Double)] = []
     /// Visible time window around `now`. Defaults to the full view.
     var window: ChartWindow = .hours48
+    /// Plot height. The phone default reads as a glance; the iPad dashboard
+    /// passes more — a 220 pt chart floats in a sea of empty column there.
+    var height: CGFloat = 220
 
     /// The point the user last tapped on the chart — shown in the readout below.
     @State private var selected: SelectionPoint?
@@ -171,7 +174,7 @@ struct PressureChartView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             chartView
-                .frame(height: 220)
+                .frame(height: height)
             readout
         }
     }

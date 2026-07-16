@@ -20,6 +20,7 @@ from .models import (
     CurrentObs,
     ForecastResponse,
     FrontResponse,
+    HrrrMeta,
     PressureResponse,
     ReadingOut,
     SeriesPoint,
@@ -27,6 +28,7 @@ from .models import (
     TendencyOut,
 )
 from .sources import aviationweather as awc
+from .sources import iem
 from .sources import openmeteo as om
 from .tendency import resolve_tendency
 from .verdict import build_verdict
@@ -35,6 +37,8 @@ PRESSURE_TTL = 12 * 60.0  # METARs update ~hourly; 12 min keeps it fresh-ish & c
 FORECAST_TTL = 30 * 60.0  # forecasts move slowly; 30 min is plenty
 FRONT_TTL = 15 * 60.0     # regional bbox fetch is the priciest call; ring METARs
                           # are hourly anyway, so 15 min loses nothing
+HRRR_TTL = 10 * 60.0      # HRRR runs land hourly; re-probing IEM every 10 min
+                          # keeps the run fresh at ~8 tiny tile requests/hour
 
 # Stale-if-error: when Open-Meteo is down, re-serve the last good forecast for up
 # to this long (flagged stale=True) — a 6-hour-old forecast beats no forecast.
@@ -238,6 +242,23 @@ class PressureService:
             reading=reading, now=now, ring_prev=ring_prev,
         )
         await self.cache.set(cache_key, resp, ttl=FRONT_TTL)
+        return resp
+
+    # ---- HRRR forecast radar metadata ----------------------------------------
+
+    async def get_hrrr_meta(self) -> HrrrMeta:
+        """Latest HRRR run available on IEM (see sources/iem.py). Raises
+        LookupError when IEM is unreachable or no recent run resolves — the
+        client just skips the model frames."""
+        cache_key = "hrrr:run"
+        cached = await self.cache.get(cache_key)
+        if cached is not None:
+            return cached
+        run = await iem.latest_hrrr_run(self._client)
+        if run is None:
+            raise LookupError("no HRRR run available")
+        resp = HrrrMeta(run=run, cachedAt=_now())
+        await self.cache.set(cache_key, resp, ttl=HRRR_TTL)
         return resp
 
     # ---- combined (primary client endpoint) ---------------------------------

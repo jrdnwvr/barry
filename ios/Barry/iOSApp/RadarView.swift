@@ -16,9 +16,13 @@ import MapKit
 // MARK: - Frames
 
 struct RadarFrame: Equatable, Identifiable {
-    let time: Int      // unix epoch
-    let path: String   // e.g. /v2/radar/1720100000
+    let time: Int      // unix epoch (valid time)
+    let path: String   // e.g. /v2/radar/1720100000 (RainViewer frames)
     let nowcast: Bool
+    /// Set for HRRR model frames: the full IEM tile layer name
+    /// ("hrrr::REFD-F0180-202607161800"). These are MODEL reflectivity — a
+    /// guess about where, not a measurement — and the UI labels them so.
+    var iemLayer: String? = nil
     var id: Int { time }
 }
 
@@ -82,7 +86,42 @@ final class RadarModel: ObservableObject {
             index = nowIndex
         } catch {
             failed = true
+            return
         }
+        await appendModelFrames()
+    }
+
+    /// Hours to extend the timeline past the nowcast with HRRR model frames.
+    static let modelHours = 6
+
+    /// Extend the timeline with hourly HRRR forecast-reflectivity frames from
+    /// IEM. The backend supplies the run init time so every frame carries its
+    /// TRUE valid time; if that call fails the timeline just ends at the
+    /// RainViewer nowcast — model frames are enrichment, never load-bearing.
+    private func appendModelFrames() async {
+        guard let meta = try? await BarryAPI().hrrrRun() else { return }
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyyMMddHHmm"
+        fmt.timeZone = TimeZone(identifier: "UTC")
+        let runStamp = fmt.string(from: meta.run)
+        let runEpoch = Int(meta.run.timeIntervalSince1970)
+
+        let lastReal = frames.last?.time ?? Int(Date().timeIntervalSince1970)
+        let anchor = max(lastReal, Int(Date().timeIntervalSince1970))
+        // First model frame on the next full hour after the nowcast ends.
+        let firstHour = (anchor / 3600 + 1) * 3600
+        var model: [RadarFrame] = []
+        for h in 0..<Self.modelHours {
+            let valid = firstHour + h * 3600
+            let fmin = (valid - runEpoch) / 60
+            // HRRR hourly products run to F1080 (+18 h); both times are floored
+            // to the hour so fmin is always a whole hour.
+            guard fmin >= 60, fmin <= 1080 else { continue }
+            let layer = String(format: "hrrr::REFD-F%04d-%@", fmin, runStamp)
+            model.append(RadarFrame(time: valid, path: "", nowcast: true,
+                                    iemLayer: layer))
+        }
+        frames += model
     }
 
     // MARK: Field overlays (wind arrows, boundary layer top)
@@ -210,11 +249,12 @@ struct RadarMapView: UIViewRepresentable {
     final class RadarTileOverlay: MKTileOverlay {
         var frameTime = 0
 
-        /// RainViewer's deepest native zoom. Beyond it we fetch the z7 ancestor
+        /// Deepest native zoom of the tile source: RainViewer serves to z7,
+        /// IEM's HRRR tiles hold up to ~z10. Beyond it we fetch the ancestor
         /// tile, crop the requested quadrant, and upscale — MapKit's maximumZ
         /// would simply stop rendering (the "radar disappears when I zoom" bug),
         /// and progressively softer rain suits the Dark Sky look anyway.
-        static let maxNativeZ = 7
+        var maxNativeZ = 7
         private static let parentCache: NSCache<NSString, NSData> = {
             let c = NSCache<NSString, NSData>()
             c.countLimit = 80
@@ -223,14 +263,14 @@ struct RadarMapView: UIViewRepresentable {
 
         override func loadTile(at path: MKTileOverlayPath,
                                result: @escaping (Data?, Error?) -> Void) {
-            guard path.z > Self.maxNativeZ else {
+            guard path.z > maxNativeZ else {
                 super.loadTile(at: path, result: result)
                 return
             }
-            let factor = path.z - Self.maxNativeZ
+            let factor = path.z - maxNativeZ
             let scale = 1 << factor
             let parentPath = MKTileOverlayPath(x: path.x / scale, y: path.y / scale,
-                                               z: Self.maxNativeZ,
+                                               z: maxNativeZ,
                                                contentScaleFactor: path.contentScaleFactor)
             let subX = path.x % scale
             let subY = path.y % scale
@@ -475,11 +515,20 @@ struct RadarMapView: UIViewRepresentable {
         // z7 the overlay itself crops + upscales ancestor tiles (see loadTile) —
         // do NOT set maximumZ, which would stop rendering entirely past z7.
         for f in frames where context.coordinator.overlays[f.time] == nil {
-            let template = host + f.path + "/512/{z}/{x}/{y}/8/1_1.png"
-            let tile = RadarTileOverlay(urlTemplate: template)
+            let tile: RadarTileOverlay
+            if let layer = f.iemLayer {
+                // HRRR model frames: IEM TMS tiles, 256 px, native to ~z10.
+                tile = RadarTileOverlay(urlTemplate:
+                    "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/\(layer)/{z}/{x}/{y}.png")
+                tile.maxNativeZ = 10
+                tile.tileSize = CGSize(width: 256, height: 256)
+            } else {
+                tile = RadarTileOverlay(urlTemplate:
+                    host + f.path + "/512/{z}/{x}/{y}/8/1_1.png")
+                tile.tileSize = CGSize(width: 512, height: 512)
+            }
             tile.frameTime = f.time
             tile.canReplaceMapContent = false
-            tile.tileSize = CGSize(width: 512, height: 512)
             tile.minimumZ = 1
             context.coordinator.overlays[f.time] = tile
             map.addOverlay(tile, level: .aboveRoads)
@@ -527,6 +576,11 @@ struct RadarPanel: View {
     /// When set, an expand button overlays the map (dashboard embeds use it to
     /// pop the radar to full screen).
     var onExpand: (() -> Void)? = nil
+    /// Dashboard embeds run chrome-light: the toggles compress to one button
+    /// row and the attribution paragraph stays in the full-screen view, so the
+    /// MAP gets the panel's height instead of its own controls (in landscape
+    /// the full chrome squeezed the map to a sliver).
+    var embedded: Bool = false
 
     @StateObject private var model = RadarModel()
     @State private var dwellTicks = 0
@@ -614,34 +668,58 @@ struct RadarPanel: View {
 
             controls
 
-            Toggle(isOn: $showWindArrows) {
-                Label("Wind arrows", systemImage: "wind")
-                    .font(.subheadline)
-            }
-            .onChange(of: showWindArrows) { _, on in
-                if on {
-                    Task { await model.fetchWind(region: model.lastRegion ?? initialRegion) }
+            if embedded {
+                HStack(spacing: 10) {
+                    compactToggle("Wind", icon: "wind", isOn: $showWindArrows)
+                    compactToggle("Layer top", icon: "cloud.fog", isOn: $showBoundaryLayer)
+                    Spacer()
+                    swatch(Color(red: 0.55, green: 0.75, blue: 0.95), "Light")
+                    swatch(Color(red: 0.13, green: 0.42, blue: 0.82), "Mod")
+                    swatch(Color(red: 0.94, green: 0.65, blue: 0.15), "Heavy")
                 }
-            }
-
-            Toggle(isOn: $showBoundaryLayer) {
-                Label("Boundary layer top", systemImage: "cloud.fog")
-                    .font(.subheadline)
-            }
-            .onChange(of: showBoundaryLayer) { _, on in
-                if on {
-                    Task { await model.fetchBoundaryLayer(region: model.lastRegion ?? initialRegion) }
+            } else {
+                Toggle(isOn: $showWindArrows) {
+                    Label("Wind arrows", systemImage: "wind")
+                        .font(.subheadline)
                 }
-            }
-            if showBoundaryLayer {
-                Text("Model boundary layer top in feet above ground. Bumpy, hazy air mixes below it, smoother air above. Thermals top out near it.")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
 
-            legend
+                Toggle(isOn: $showBoundaryLayer) {
+                    Label("Boundary layer top", systemImage: "cloud.fog")
+                        .font(.subheadline)
+                }
+                if showBoundaryLayer {
+                    Text("Model boundary layer top in feet above ground. Bumpy, hazy air mixes below it, smoother air above. Thermals top out near it.")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                legend
+            }
         }
+        // Fetch triggers live on the container so the compact and full toggle
+        // variants share them.
+        .onChange(of: showWindArrows) { _, on in
+            if on {
+                Task { await model.fetchWind(region: model.lastRegion ?? initialRegion) }
+            }
+        }
+        .onChange(of: showBoundaryLayer) { _, on in
+            if on {
+                Task { await model.fetchBoundaryLayer(region: model.lastRegion ?? initialRegion) }
+            }
+        }
+    }
+
+    private func compactToggle(_ title: String, icon: String,
+                               isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            Label(title, systemImage: icon)
+                .font(.caption)
+        }
+        .toggleStyle(.button)
+        .buttonStyle(.bordered)
+        .controlSize(.small)
     }
 
     private var controls: some View {
@@ -666,7 +744,7 @@ struct RadarPanel: View {
             Text(timeLabel)
                 .font(.caption.weight(.medium))
                 .monospacedDigit()
-                .foregroundStyle(currentFrame?.nowcast == true ? .orange : .secondary)
+                .foregroundStyle(timeLabelColor)
                 .frame(width: 84, alignment: .trailing)
         }
     }
@@ -675,8 +753,20 @@ struct RadarPanel: View {
         model.frames.indices.contains(model.index) ? model.frames[model.index] : nil
     }
 
+    /// Purple = model reflectivity, orange = short nowcast, gray = observed —
+    /// three sources, three colors, no ambiguity about what you're looking at.
+    private var timeLabelColor: Color {
+        guard let f = currentFrame else { return .secondary }
+        if f.iemLayer != nil { return .purple }
+        return f.nowcast ? .orange : .secondary
+    }
+
     private var timeLabel: String {
         guard let f = currentFrame else { return "" }
+        if f.iemLayer != nil {
+            let hrs = max(1, Int(((Double(f.time) - Date().timeIntervalSince1970) / 3600).rounded()))
+            return "+\(hrs)h model"
+        }
         let mins = Int((Date().timeIntervalSince1970 - Double(f.time)) / 60)
         if f.nowcast { return "+\(max(0, -mins))m forecast" }
         return mins <= 1 ? "now" : "\(mins)m ago"
@@ -690,7 +780,7 @@ struct RadarPanel: View {
                 swatch(Color(red: 0.94, green: 0.65, blue: 0.15), "Heavy")
                 Spacer()
             }
-            Text("\(stationName) marked. Arrows point with the wind and show above ~8 kts. Forecast frames show in orange on the timeline. Radar tiles by RainViewer, data from NOAA NEXRAD. Wind and boundary layer by Open-Meteo.")
+            Text("\(stationName) marked. Arrows point with the wind and show above ~8 kts. Orange frames are a short nowcast; purple frames are HRRR model reflectivity via Iowa Environmental Mesonet, a model guess about where rain will be, not a measurement. Radar tiles by RainViewer, data from NOAA NEXRAD. Wind and boundary layer by Open-Meteo.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }

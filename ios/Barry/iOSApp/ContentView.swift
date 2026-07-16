@@ -177,7 +177,8 @@ struct ContentView: View {
 
     /// Window picker + chart + caveat — shared by the phone layout and the iPad
     /// dashboard, including the calibration trigger.
-    private func trendSection(_ combined: CombinedResponse) -> some View {
+    private func trendSection(_ combined: CombinedResponse,
+                              chartHeight: CGFloat = 220) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Picker("Window", selection: $chartWindowRaw) {
                 ForEach(ChartWindow.allCases) { w in
@@ -195,7 +196,8 @@ struct ContentView: View {
                 // splits the line where recording gaps would fake a bridge.
                 // Local trace only at the physical location.
                 phoneTrace: localSensorActive ? barometer.phoneHistoryTrace : [],
-                window: chartWindow
+                window: chartWindow,
+                height: chartHeight
             )
             // Trigger calibration whenever a fresh combined response arrives.
             // Physical location ONLY: a remote station's SLP fed into the
@@ -217,54 +219,85 @@ struct ContentView: View {
     /// The iPad kneeboard dashboard: METAR strip across the top, the glance rail
     /// on the left, and the chart + live radar filling the rest. Everything at
     /// once — the pilot use case inverts "glance then drill in".
+    ///
+    /// Wide layouts (iPad landscape) get THREE columns — rail | chart | radar —
+    /// so the radar map runs the full panel height. Stacking chart-over-radar
+    /// there left the map a sliver shorter than its own controls. Portrait (and
+    /// anything narrower than ~1000 pt) keeps the stacked two-column layout.
     private func dashboard(_ combined: CombinedResponse) -> some View {
-        VStack(spacing: 12) {
-            MetarStrip(combined: combined)
+        GeometryReader { geo in
+            let threeColumn = geo.size.width > geo.size.height && geo.size.width >= 1000
 
-            HStack(alignment: .top, spacing: 16) {
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 20) {
-                        HeroView(combined: combined, unit: unit, barometer: barometer,
-                                 now: store.now, barometerEnabled: localSensorActive,
-                                 locations: savedLocations.locations,
-                                 selectedLocationID: savedLocations.selectedID,
-                                 onSelectLocation: { savedLocations.selectedID = $0 })
+            VStack(spacing: 12) {
+                MetarStrip(combined: combined)
 
-                        frontBanner(combined)
+                HStack(alignment: .top, spacing: 16) {
+                    glanceRail(combined)
 
-                        ConfirmationOverlayView(combined: combined, now: store.now)
-
-                        if localSensorActive {
-                            SensorStationRow(combined: combined, now: store.now,
-                                             unit: unit, barometer: barometer)
+                    if threeColumn {
+                        VStack(spacing: 12) {
+                            trendSection(combined, chartHeight: 280)
+                            Spacer(minLength: 0)
                         }
+                        .frame(maxWidth: .infinity)
 
-                        DataSourceFootnote(combined: combined)
-                    }
-                }
-                .frame(width: 340)
-                .refreshable { await reload() }
-
-                VStack(spacing: 12) {
-                    trendSection(combined)
-
-                    if let rlat = combined.pressure.lat, let rlon = combined.pressure.lon {
-                        RadarPanel(lat: rlat, lon: rlon,
-                                   stationName: combined.pressure.name ?? combined.pressure.station,
-                                   onExpand: { showRadarFullScreen = true })
-                            .frame(maxHeight: .infinity)
-                            .fullScreenCover(isPresented: $showRadarFullScreen) {
-                                RadarView(lat: rlat, lon: rlon,
-                                          stationName: combined.pressure.name ?? combined.pressure.station)
-                            }
+                        radarColumn(combined)
+                            .frame(width: max(320, geo.size.width * 0.30))
                     } else {
-                        Spacer()
+                        VStack(spacing: 12) {
+                            trendSection(combined, chartHeight: 280)
+                            radarColumn(combined)
+                        }
+                        .frame(maxWidth: .infinity)
                     }
                 }
-                .frame(maxWidth: .infinity)
+            }
+            .padding()
+        }
+        .fullScreenCover(isPresented: $showRadarFullScreen) {
+            if let rlat = combined.pressure.lat, let rlon = combined.pressure.lon {
+                RadarView(lat: rlat, lon: rlon,
+                          stationName: combined.pressure.name ?? combined.pressure.station)
             }
         }
-        .padding()
+    }
+
+    private func glanceRail(_ combined: CombinedResponse) -> some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 20) {
+                HeroView(combined: combined, unit: unit, barometer: barometer,
+                         now: store.now, barometerEnabled: localSensorActive,
+                         locations: savedLocations.locations,
+                         selectedLocationID: savedLocations.selectedID,
+                         onSelectLocation: { savedLocations.selectedID = $0 })
+
+                frontBanner(combined)
+
+                ConfirmationOverlayView(combined: combined, now: store.now)
+
+                if localSensorActive {
+                    SensorStationRow(combined: combined, now: store.now,
+                                     unit: unit, barometer: barometer)
+                }
+
+                DataSourceFootnote(combined: combined)
+            }
+        }
+        .frame(width: 340)
+        .refreshable { await reload() }
+    }
+
+    @ViewBuilder
+    private func radarColumn(_ combined: CombinedResponse) -> some View {
+        if let rlat = combined.pressure.lat, let rlon = combined.pressure.lon {
+            RadarPanel(lat: rlat, lon: rlon,
+                       stationName: combined.pressure.name ?? combined.pressure.station,
+                       onExpand: { showRadarFullScreen = true },
+                       embedded: true)
+                .frame(maxHeight: .infinity)
+        } else {
+            Spacer()
+        }
     }
 
     private func initialLoad() async {

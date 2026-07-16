@@ -102,6 +102,19 @@ async def get_front(
     return resp.model_dump(mode="json", by_alias=True)
 
 
+@app.get("/radar/hrrr")
+async def radar_hrrr():
+    """Latest HRRR run IEM serves forecast-reflectivity tiles for. The client
+    builds tile layer names (hrrr::REFD-F{min}-{runstamp}) and true valid
+    times from this; 503 just means no model frames on the radar timeline."""
+    service = get_service()
+    try:
+        resp = await service.get_hrrr_meta()
+    except LookupError:
+        raise HTTPException(status_code=503, detail="HRRR unavailable")
+    return resp.model_dump(mode="json", by_alias=True)
+
+
 @app.get("/stations/nearest")
 async def nearest_station(
     lat: float = Query(..., ge=-90, le=90),

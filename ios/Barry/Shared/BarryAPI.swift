@@ -61,6 +61,12 @@ struct BarryAPI {
         return try await get(comps?.url)
     }
 
+    /// Latest HRRR run for forecast-radar frames. 503/failure just means the
+    /// radar timeline ends at the RainViewer nowcast.
+    func hrrrRun() async throws -> HrrrMeta {
+        try await get(baseURL.appendingPathComponent("radar/hrrr"))
+    }
+
     /// Location → nearest known station (brief Phase 3 resolution helper).
     func nearestStation(lat: Double, lon: Double) async throws -> NearestStation {
         var comps = URLComponents(url: baseURL.appendingPathComponent("stations/nearest"),

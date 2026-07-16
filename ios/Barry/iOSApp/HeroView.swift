@@ -242,6 +242,7 @@ private struct StatusRow: View {
             Text(stationText)
                 .font(.subheadline.weight(.medium))
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)  // "Cincinnati/Lunken Fl…" -> fits
             if chevron {
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.caption2.weight(.semibold))

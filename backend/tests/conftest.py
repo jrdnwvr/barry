@@ -148,9 +148,25 @@ class FakeUpstream:
         # curve contains a real trough (drives the interpreter's ETA).
         self.bbox_pattern = None
         self.om_trough = False
+        # IEM HRRR tiles: the run stamp (YYYYMMDDHHMI) tiles exist for, or
+        # None. Unknown layers get the same fixed bytes real tile.py returns
+        # for anything invalid — the probe logic keys on that.
+        self.hrrr_run = None
+        self.iem_fail = False
+        self.iem_calls = []
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         url = str(request.url)
+        if "mesonet.agron.iastate.edu" in url:
+            self.iem_calls.append(request)
+            # Faithful to real tile.py: runs it has -> 200 image/png; runs it
+            # doesn't (or a dead service) -> 503 text/plain.
+            if self.iem_fail:
+                return httpx.Response(503, text="down")
+            if self.hrrr_run and f"-{self.hrrr_run}/" in url:
+                return httpx.Response(200, content=b"REAL-HRRR-TILE",
+                                      headers={"content-type": "image/png"})
+            return httpx.Response(503, text="no such layer")
         if "aviationweather.gov" in url:
             self.awc_calls.append(request)
             if self.awc_fail:

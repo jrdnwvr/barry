@@ -81,6 +81,14 @@ struct Sources: Codable, Hashable {
     let forecast: String?
 }
 
+/// Latest HRRR model run IEM serves forecast-reflectivity tiles for. Forecast
+/// minute F on a tile layer is valid at run + F.
+struct HrrrMeta: Codable, Hashable {
+    let run: Date
+    var source: String?
+    let cachedAt: Date
+}
+
 // MARK: - Front watch (regional tendency field)
 
 /// One surrounding station's own 3h tendency — a dot on the front-watch compass.

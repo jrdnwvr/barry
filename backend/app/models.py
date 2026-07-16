@@ -114,6 +114,16 @@ class FrontResponse(BaseModel):
     cachedAt: datetime
 
 
+class HrrrMeta(BaseModel):
+    """Latest HRRR model run IEM is serving tiles for. Forecast minute F on the
+    tile layer is valid at run + F — the client needs this to label forecast
+    frames with true times instead of guesses."""
+
+    run: datetime
+    source: str = "HRRR via Iowa Environmental Mesonet"
+    cachedAt: datetime
+
+
 class Sources(BaseModel):
     """Where each half of the curve actually came from. Surfaces a graceful
     degradation (e.g. observed via Open-Meteo when AWC is blocked)."""

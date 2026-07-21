@@ -88,8 +88,16 @@ final class RadarModel: ObservableObject {
             failed = true
             return
         }
-        await appendModelFrames()
+        if Self.modelFramesEnabled {
+            await appendModelFrames()
+        }
     }
+
+    /// Feature flag: HRRR forecast frames on the radar timeline. OFF for now —
+    /// fully built and working (backend /radar/hrrr + IEM tiles), but parked
+    /// until we're ready to own the third-party tile traffic. While false the
+    /// app makes ZERO requests to IEM or /radar/hrrr; flip to true to ship it.
+    static let modelFramesEnabled = false
 
     /// Hours to extend the timeline past the nowcast with HRRR model frames.
     static let modelHours = 6
@@ -790,10 +798,21 @@ struct RadarPanel: View {
                 swatch(Color(red: 0.94, green: 0.65, blue: 0.15), "Heavy")
                 Spacer()
             }
-            Text("\(stationName) marked. Arrows point with the wind and show above ~8 kts. Orange frames are a short nowcast; purple frames are HRRR model reflectivity via Iowa Environmental Mesonet, a model guess about where rain will be, not a measurement. Radar tiles by RainViewer, data from NOAA NEXRAD. Wind and boundary layer by Open-Meteo.")
+            Text(footerText)
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
+    }
+
+    /// The nowcast/model sentences track the model-frames flag so the footer
+    /// never describes frames that can't appear.
+    private var footerText: String {
+        var text = "\(stationName) marked. Arrows point with the wind and show above ~8 kts. "
+        text += RadarModel.modelFramesEnabled
+            ? "Orange frames are a short nowcast; purple frames are HRRR model reflectivity via Iowa Environmental Mesonet, a model guess about where rain will be, not a measurement. "
+            : "Forecast frames show in orange on the timeline. "
+        text += "Radar tiles by RainViewer, data from NOAA NEXRAD. Wind and boundary layer by Open-Meteo."
+        return text
     }
 
     private func swatch(_ color: Color, _ label: String) -> some View {

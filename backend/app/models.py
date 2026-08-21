@@ -21,6 +21,9 @@ class SeriesPoint(BaseModel):
 class CurrentObs(BaseModel):
     slp: Optional[float] = None
     presTend: Optional[float] = None
+    altim: Optional[float] = None          # altimeter setting (hPa) — DA input
+    temp: Optional[float] = None           # °C, from the latest METAR
+    dewpoint: Optional[float] = None       # °C
     # Wind from the latest METAR — a real measurement, preferred over the model
     # forecast for "now" (METAR-first, Open-Meteo supplements). km/h + degrees;
     # windgust is only present when the station reported one (inherently notable).
@@ -48,6 +51,7 @@ class PressureResponse(BaseModel):
     name: Optional[str] = None
     lat: Optional[float] = None
     lon: Optional[float] = None
+    elevM: Optional[float] = None          # field elevation (m) — DA input
     series: List[SeriesPoint] = Field(default_factory=list)
     current: CurrentObs = Field(default_factory=CurrentObs)
     tendency: Optional[TendencyOut] = None
@@ -62,10 +66,21 @@ class ForecastHour(BaseModel):
     winddir: Optional[float] = None
     windgust: Optional[float] = None
     precip_prob: Optional[int] = None
+    # Field-conditions inputs (density altitude + fog risk)
+    temperature: Optional[float] = None     # °C at 2 m
+    dewpoint: Optional[float] = None        # °C at 2 m
+    cloudcover: Optional[float] = None      # %
+    surface_pressure: Optional[float] = None  # hPa at model ground level
+
+
+class SunTimes(BaseModel):
+    sunrise: List[datetime] = Field(default_factory=list)
+    sunset: List[datetime] = Field(default_factory=list)
 
 
 class ForecastResponse(BaseModel):
     hourly: List[ForecastHour] = Field(default_factory=list)
+    sun: Optional[SunTimes] = None
     source: str
     cachedAt: datetime
     # True when the upstream fetch failed and this is the last good forecast being
@@ -124,6 +139,31 @@ class HrrrMeta(BaseModel):
     cachedAt: datetime
 
 
+class DAPoint(BaseModel):
+    t: datetime
+    ft: int
+
+
+class FogOut(BaseModel):
+    """Radiation fog outlook for the coming night. Only present when there IS a
+    risk — a quiet night renders nothing, same rule as the front watch."""
+
+    risk: str                              # "possible" | "likely"
+    onset: Optional[datetime] = None
+    clearing: Optional[datetime] = None    # burn-off estimate; None = unclear
+    detail: str
+
+
+class ConditionsOut(BaseModel):
+    """Field conditions (conditions.py): density altitude now + forecast, and
+    the fog outlook. All optional — each piece degrades independently."""
+
+    densityAltitudeFt: Optional[int] = None   # now, from the latest METAR
+    fieldElevationFt: Optional[int] = None
+    daForecast: List[DAPoint] = Field(default_factory=list)
+    fog: Optional[FogOut] = None
+
+
 class Sources(BaseModel):
     """Where each half of the curve actually came from. Surfaces a graceful
     degradation (e.g. observed via Open-Meteo when AWC is blocked)."""
@@ -138,5 +178,6 @@ class CombinedResponse(BaseModel):
     pressure: PressureResponse
     forecast: Optional[ForecastResponse] = None
     reading: Optional[ReadingOut] = None
+    conditions: Optional[ConditionsOut] = None
     sources: Optional[Sources] = None
     verdict: str

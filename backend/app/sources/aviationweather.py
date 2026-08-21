@@ -114,6 +114,9 @@ def _current_obs(newest: dict) -> CurrentObs:
     return CurrentObs(
         slp=newest.get("slp"),
         presTend=newest.get("presTend"),
+        altim=newest.get("altim"),
+        temp=newest.get("temp"),
+        dewpoint=newest.get("dewp"),
         windspeed=_wind_kmh(newest.get("wspd")),
         winddir=_wind_dir(newest.get("wdir")),
         windgust=_wind_kmh(newest.get("wgst")),
@@ -153,6 +156,9 @@ def parse_records(records: Sequence[dict]) -> Dict[str, dict]:
                     "name": r.get("name"),
                     "lat": r.get("lat"),
                     "lon": r.get("lon"),
+                    "elev": r.get("elev"),
+                    "temp": r.get("temp"),
+                    "dewp": r.get("dewp"),
                     "wspd": r.get("wspd"),
                     "wdir": r.get("wdir"),
                     "wgst": r.get("wgst"),
@@ -169,6 +175,7 @@ def parse_records(records: Sequence[dict]) -> Dict[str, dict]:
             "name": newest.get("name"),
             "lat": newest.get("lat"),
             "lon": newest.get("lon"),
+            "elev": newest.get("elev"),
             "series": [
                 SeriesPoint(t=p["t"], slp=p["slp"], altim=p["altim"]) for p in points
             ],

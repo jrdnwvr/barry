@@ -13,7 +13,7 @@ from typing import List, Optional
 
 import httpx
 
-from ..models import ForecastHour
+from ..models import ForecastHour, SunTimes
 
 BASE_URL = "https://api.open-meteo.com/v1/forecast"
 USER_AGENT = "Barry/1.0 (jrdn@wvr.me)"
@@ -25,7 +25,14 @@ HOURLY_FIELDS = [
     "winddirection_10m",
     "wind_gusts_10m",
     "precipitation_probability",
+    # Field-conditions inputs (density altitude + fog risk, conditions.py)
+    "temperature_2m",
+    "dew_point_2m",
+    "cloud_cover",
 ]
+
+# Sunrise/sunset bound the fog-risk night window and the burn-off estimate.
+DAILY_FIELDS = ["sunrise", "sunset"]
 
 
 def _parse_iso(t: str) -> datetime:
@@ -42,6 +49,10 @@ def parse_forecast(data: dict) -> List[ForecastHour]:
     wdir = hourly.get("winddirection_10m") or []
     wgst = hourly.get("wind_gusts_10m") or []
     pprob = hourly.get("precipitation_probability") or []
+    temp = hourly.get("temperature_2m") or []
+    dewp = hourly.get("dew_point_2m") or []
+    cloud = hourly.get("cloud_cover") or []
+    sp = hourly.get("surface_pressure") or []
 
     def at(seq, i):
         return seq[i] if i < len(seq) else None
@@ -56,9 +67,21 @@ def parse_forecast(data: dict) -> List[ForecastHour]:
                 winddir=at(wdir, i),
                 windgust=at(wgst, i),
                 precip_prob=at(pprob, i),
+                temperature=at(temp, i),
+                dewpoint=at(dewp, i),
+                cloudcover=at(cloud, i),
+                surface_pressure=at(sp, i),
             )
         )
     return out
+
+
+def parse_daily_sun(data: dict) -> SunTimes:
+    daily = data.get("daily") or {}
+    return SunTimes(
+        sunrise=[_parse_iso(t) for t in (daily.get("sunrise") or [])],
+        sunset=[_parse_iso(t) for t in (daily.get("sunset") or [])],
+    )
 
 
 def parse_surface_pressure_series(data: dict):
@@ -85,6 +108,7 @@ async def fetch_forecast(
         "latitude": lat,
         "longitude": lon,
         "hourly": ",".join(HOURLY_FIELDS),
+        "daily": ",".join(DAILY_FIELDS),
         "forecast_days": str(forecast_days),
         "timezone": "UTC",
     }

@@ -1,0 +1,202 @@
+"""Field conditions — density altitude (now + forecast) and radiation fog risk.
+
+Two small models a GA pilot actually uses, both computed from data the app
+already fetches:
+
+DENSITY ALTITUDE — via the full air-density calculation with virtual
+temperature, not the flight-computer approximation (humidity is worth a few
+hundred feet on a muggy day, and we have the dew point anyway):
+  - now: METAR temp/dewpoint/altimeter + field elevation (altimeter setting ->
+    station pressure by the standard-atmosphere reduction)
+  - forecast: Open-Meteo temperature_2m / dew_point_2m / surface_pressure —
+    the model reports station-level pressure directly, so no reduction at all
+The point of the FORECAST is the takeoff-performance decision: "3,100 ft if
+you go at 9 AM, 5,200 ft if you wait for 4 PM" turns a surprise into a choice.
+
+RADIATION FOG — rule-based scan of the coming night: the classic recipe is a
+small and closing temperature/dew-point spread, light wind, and a clear sky to
+radiate under. Scored over the sunset -> sunrise window; the burn-off estimate
+is the first post-sunrise hour where the spread reopens. Deliberately ONLY the
+radiation-fog story: advection/precip fog are different machines and guessing
+at them from these inputs would be theater. Quiet night -> no output at all
+(the front-watch rule: silence is the default state).
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timedelta
+from typing import List, Optional, Sequence, Tuple
+
+from .models import ConditionsOut, DAPoint, FogOut, ForecastHour, SunTimes
+
+# --- Density altitude tunables -----------------------------------------------
+
+DA_FORECAST_HOURS = 15      # enough to cover "this morning vs this afternoon"
+DA_ROUND_FT = 50            # model-derived numbers shouldn't pretend to 1 ft
+
+# --- Fog tunables -------------------------------------------------------------
+
+FOG_SPREAD_MAX = 2.5        # °C dewpoint depression that supports fog
+FOG_WIND_MAX = 10.0         # km/h — stronger mixing keeps the layer stirred
+FOG_CLOUD_MAX = 40.0        # % — need a mostly clear sky to radiate under
+FOG_PRECIP_MAX = 40         # % — a rainy night is a different (wetter) story
+FOG_MIN_HOURS = 2           # consecutive qualifying hours to say anything
+LIKELY_SPREAD = 1.5         # stricter bar for "likely"
+LIKELY_CLOUD = 25.0
+LIKELY_WIND = 7.0
+LIKELY_HOURS = 3
+CLEAR_SPREAD = 3.0          # spread reopening past this after sunrise = burn-off
+CLEAR_SEARCH_H = 6          # give up on a burn-off estimate after this
+
+
+# --- Density altitude ---------------------------------------------------------
+
+
+def vapor_pressure_hpa(td_c: float) -> float:
+    """Saturation vapor pressure at the dew point (Magnus/Tetens), hPa."""
+    return 6.1078 * 10.0 ** (7.5 * td_c / (237.3 + td_c))
+
+
+def station_pressure_hpa(altim_hpa: float, elev_m: float) -> float:
+    """Altimeter setting -> actual station pressure (standard-atmosphere lapse)."""
+    return altim_hpa * (1.0 - 0.0065 * elev_m / 288.15) ** 5.2559
+
+
+def density_altitude_ft(station_hpa: float, t_c: float, td_c: float) -> float:
+    """DA from station pressure + temp + dew point via virtual temperature."""
+    e = vapor_pressure_hpa(td_c) * 100.0        # Pa
+    p = station_hpa * 100.0                     # Pa
+    tv = (t_c + 273.15) / (1.0 - (e / p) * (1.0 - 0.622))
+    rho = p / (287.05 * tv)                     # kg/m³
+    return 145442.16 * (1.0 - (rho / 1.225) ** 0.234969)
+
+
+def _round_ft(ft: float) -> int:
+    return int(round(ft / DA_ROUND_FT) * DA_ROUND_FT)
+
+
+# --- Fog scan -----------------------------------------------------------------
+
+
+def _hour_supports_fog(h: ForecastHour) -> Optional[bool]:
+    """None = can't judge (missing inputs); else does this hour support fog."""
+    if h.temperature is None or h.dewpoint is None:
+        return None
+    spread = h.temperature - h.dewpoint
+    if spread > FOG_SPREAD_MAX:
+        return False
+    if h.windspeed is not None and h.windspeed > FOG_WIND_MAX:
+        return False
+    if h.cloudcover is not None and h.cloudcover > FOG_CLOUD_MAX:
+        return False
+    if h.precip_prob is not None and h.precip_prob > FOG_PRECIP_MAX:
+        return False
+    return True
+
+
+def _hour_is_prime(h: ForecastHour) -> bool:
+    spread = (h.temperature or 99) - (h.dewpoint or 0)
+    return (spread <= LIKELY_SPREAD
+            and (h.windspeed is None or h.windspeed <= LIKELY_WIND)
+            and (h.cloudcover is None or h.cloudcover <= LIKELY_CLOUD))
+
+
+def _night_windows(sun: SunTimes, now: datetime) -> List[Tuple[datetime, datetime]]:
+    """(sunset, following sunrise + 2h) pairs that haven't fully ended yet."""
+    windows = []
+    for ss in sun.sunset:
+        sr = next((s for s in sun.sunrise if s > ss), None)
+        if sr is None:
+            continue
+        end = sr + timedelta(hours=2)
+        if end > now:
+            windows.append((ss, end))
+    return sorted(windows)
+
+
+def scan_fog(hours: Sequence[ForecastHour], sun: Optional[SunTimes],
+             now: datetime) -> Optional[FogOut]:
+    if sun is None or not sun.sunset or not sun.sunrise:
+        return None
+    for start, end in _night_windows(sun, now):
+        night = [h for h in hours if max(start, now) <= h.t <= end]
+        if not night:
+            continue
+        # Longest consecutive run of supporting hours.
+        best_run: List[ForecastHour] = []
+        run: List[ForecastHour] = []
+        for h in night:
+            ok = _hour_supports_fog(h)
+            if ok:
+                run.append(h)
+                if len(run) > len(best_run):
+                    best_run = list(run)
+            elif ok is False:
+                run = []
+            # ok is None (unjudgeable hour): neither extends nor breaks the run
+        if len(best_run) < FOG_MIN_HOURS:
+            continue
+
+        prime = 0
+        max_prime = 0
+        for h in best_run:
+            prime = prime + 1 if _hour_is_prime(h) else 0
+            max_prime = max(max_prime, prime)
+        risk = "likely" if max_prime >= LIKELY_HOURS else "possible"
+
+        sunrise = end - timedelta(hours=2)
+        clearing = next(
+            (h.t for h in hours
+             if sunrise <= h.t <= sunrise + timedelta(hours=CLEAR_SEARCH_H)
+             and h.temperature is not None and h.dewpoint is not None
+             and (h.temperature - h.dewpoint) >= CLEAR_SPREAD),
+            None,
+        )
+        detail = (
+            "The temperature and dew point close up overnight with light wind "
+            "and a mostly clear sky. Classic radiation fog setup."
+            if risk == "likely" else
+            "The spread gets close overnight. If the wind stays down and the "
+            "sky stays clear, patchy fog is on the table."
+        )
+        return FogOut(risk=risk, onset=best_run[0].t, clearing=clearing,
+                      detail=detail)
+    return None
+
+
+# --- Assembly -----------------------------------------------------------------
+
+
+def build(pressure, forecast, now: datetime) -> Optional[ConditionsOut]:
+    """ConditionsOut from a PressureResponse + ForecastResponse, or None when
+    nothing at all can be computed. Each piece degrades independently."""
+    da_now = None
+    elev_ft = None
+    elev_m = pressure.elevM
+    cur = pressure.current
+    if elev_m is not None:
+        elev_ft = int(round(elev_m * 3.28084))
+        if cur.altim is not None and cur.temp is not None and cur.dewpoint is not None:
+            sp = station_pressure_hpa(cur.altim, elev_m)
+            da_now = _round_ft(density_altitude_ft(sp, cur.temp, cur.dewpoint))
+
+    da_fc: List[DAPoint] = []
+    fog = None
+    if forecast is not None:
+        horizon = now + timedelta(hours=DA_FORECAST_HOURS)
+        for h in forecast.hourly:
+            if h.t < now or h.t > horizon:
+                continue
+            if h.surface_pressure is None or h.temperature is None or h.dewpoint is None:
+                continue
+            da_fc.append(DAPoint(
+                t=h.t,
+                ft=_round_ft(density_altitude_ft(h.surface_pressure,
+                                                 h.temperature, h.dewpoint)),
+            ))
+        fog = scan_fog(forecast.hourly, forecast.sun, now)
+
+    if da_now is None and not da_fc and fog is None:
+        return None
+    return ConditionsOut(densityAltitudeFt=da_now, fieldElevationFt=elev_ft,
+                         daForecast=da_fc, fog=fog)

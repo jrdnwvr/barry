@@ -137,6 +137,11 @@ struct ContentView: View {
                 // Secondary: wind + rain confirmation, always expanded.
                 ConfirmationOverlayView(combined: combined, now: store.now)
 
+                // Field conditions: DA now + trend, fog outlook when one exists.
+                if let cond = combined.conditions {
+                    FieldConditionsCard(conditions: cond)
+                }
+
                 // Radar: the sky itself, as corroboration for the trend. Sheet keeps
                 // the main screen a glance. Needs station coords to center on.
                 if let rlat = combined.pressure.lat, let rlon = combined.pressure.lon {
@@ -274,6 +279,10 @@ struct ContentView: View {
                 frontBanner(combined)
 
                 ConfirmationOverlayView(combined: combined, now: store.now)
+
+                if let cond = combined.conditions {
+                    FieldConditionsCard(conditions: cond)
+                }
 
                 if localSensorActive {
                     SensorStationRow(combined: combined, now: store.now,

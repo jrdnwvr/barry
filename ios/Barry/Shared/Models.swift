@@ -19,6 +19,11 @@ struct SeriesPoint: Codable, Identifiable, Hashable {
 struct CurrentObs: Codable, Hashable {
     let slp: Double?
     let presTend: Double?
+    /// Altimeter setting (hPa) + temp/dew point (°C) from the latest METAR —
+    /// the density-altitude inputs. Optional: absent on old backends.
+    var altim: Double?
+    var temp: Double?
+    var dewpoint: Double?
     /// Wind from the latest METAR — a real measurement, preferred over the model
     /// forecast for "now" (km/h + degrees). `windgust` only present when the
     /// station reported one (inherently notable). Optional: absent on old backends.
@@ -49,6 +54,7 @@ struct PressureResponse: Codable, Hashable {
     let name: String?
     let lat: Double?
     let lon: Double?
+    var elevM: Double?
     let series: [SeriesPoint]
     let current: CurrentObs
     let tendency: TendencyOut?
@@ -63,12 +69,23 @@ struct ForecastHour: Codable, Identifiable, Hashable {
     let winddir: Double?
     var windgust: Double?  // model gusts (km/h); optional: absent on old backends
     let precip_prob: Int?
+    // Field-conditions inputs; optional: absent on old backends.
+    var temperature: Double?
+    var dewpoint: Double?
+    var cloudcover: Double?
+    var surface_pressure: Double?
 
     var id: Date { t }
 }
 
+struct SunTimes: Codable, Hashable {
+    var sunrise: [Date] = []
+    var sunset: [Date] = []
+}
+
 struct ForecastResponse: Codable, Hashable {
     let hourly: [ForecastHour]
+    var sun: SunTimes?
     let source: String
     let cachedAt: Date
     /// True when the backend re-served its last good forecast because the upstream
@@ -79,6 +96,30 @@ struct ForecastResponse: Codable, Hashable {
 struct Sources: Codable, Hashable {
     let observed: String
     let forecast: String?
+}
+
+// MARK: - Field conditions (density altitude + fog risk)
+
+struct DAPoint: Codable, Identifiable, Hashable {
+    let t: Date
+    let ft: Int
+    var id: Date { t }
+}
+
+/// Radiation fog outlook for the coming night. Only present when there IS a
+/// risk — a quiet night renders nothing.
+struct FogOut: Codable, Hashable {
+    let risk: String       // "possible" | "likely"
+    var onset: Date?
+    var clearing: Date?
+    let detail: String
+}
+
+struct ConditionsOut: Codable, Hashable {
+    var densityAltitudeFt: Int?
+    var fieldElevationFt: Int?
+    var daForecast: [DAPoint] = []
+    var fog: FogOut?
 }
 
 /// Latest HRRR model run IEM serves forecast-reflectivity tiles for. Forecast
@@ -124,6 +165,7 @@ struct CombinedResponse: Codable, Hashable {
     let pressure: PressureResponse
     let forecast: ForecastResponse?
     let reading: Reading?
+    var conditions: ConditionsOut?
     let sources: Sources?
     let verdict: String
 }

@@ -19,6 +19,7 @@
 		0F22D62C5D40785243A56CD0 /* PressureUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D967187F3CE6292310A2937 /* PressureUnit.swift */; };
 		0F4644054E93F1968564CD2B /* PressureHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */; };
 		135B9F935421A07D8AEDE093 /* PressureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A60F6C6B6915B13C8CAD3A3 /* PressureStore.swift */; };
+		1499AE344651937BC57A3E81 /* FieldConditionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52B4C35AC0CE61C4C1CCE6D5 /* FieldConditionsView.swift */; };
 		161F54967F58CB6AF2EAE650 /* WindUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E3203C0CBC7B1D5F0A57759 /* WindUnit.swift */; };
 		17B2F3F6A33ED2C6DB766640 /* ForecastCaveatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031482E889A2274CBD689E88 /* ForecastCaveatView.swift */; };
 		20AD2A1B5CC1C7738EAEF8F5 /* StormAlerter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E569F3B3B9FAB65C07970B1A /* StormAlerter.swift */; };
@@ -184,6 +185,7 @@
 		4D967187F3CE6292310A2937 /* PressureUnit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureUnit.swift; sourceTree = "<group>"; };
 		4EB1F388C1A5FE3D18F1D62E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		4EBD287C6CB46A536198173F /* RangeAnalysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RangeAnalysis.swift; sourceTree = "<group>"; };
+		52B4C35AC0CE61C4C1CCE6D5 /* FieldConditionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldConditionsView.swift; sourceTree = "<group>"; };
 		5B1CE5EDD6706AFE35F1B6D9 /* BarryComplication.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = BarryComplication.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		5C59EF4878E06062DC20D1D7 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		68D08500DD9FA42C666DFF25 /* ComplicationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComplicationViews.swift; sourceTree = "<group>"; };
@@ -343,6 +345,7 @@
 				4B8FF4A39677C2C8F46B98F7 /* BarryApp.swift */,
 				A59F4AD2D2CF0AC8FB31B534 /* ConfirmationOverlayView.swift */,
 				4EB1F388C1A5FE3D18F1D62E /* ContentView.swift */,
+				52B4C35AC0CE61C4C1CCE6D5 /* FieldConditionsView.swift */,
 				031482E889A2274CBD689E88 /* ForecastCaveatView.swift */,
 				6FE1451AAFD8A470C4CB228A /* FrontWatchView.swift */,
 				01599505777741EA095092C0 /* HeroView.swift */,
@@ -600,6 +603,7 @@
 				DACD1A75954EE1A27EDEC976 /* BarryApp.swift in Sources */,
 				3FD01657A6175EE55DF94D91 /* ConfirmationOverlayView.swift in Sources */,
 				E1DA0A2BA6D5DAE408366B62 /* ContentView.swift in Sources */,
+				1499AE344651937BC57A3E81 /* FieldConditionsView.swift in Sources */,
 				17B2F3F6A33ED2C6DB766640 /* ForecastCaveatView.swift in Sources */,
 				83C8C470DA68480C043EF623 /* FrontWatchView.swift in Sources */,
 				4ED2D56EC1DA59D7FBBD779D /* HeroView.swift in Sources */,

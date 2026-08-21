@@ -156,7 +156,7 @@ def test_ring_stations_scale_and_fallback(client, upstream):
     from app.sources import aviationweather as awc
 
     upstream.bbox_pattern = "west_falls"
-    parsed = asyncio.get_event_loop().run_until_complete(
+    parsed = asyncio.run(
         awc.fetch_metars_bbox(39.103, -84.419, client, hours=4)
     )
     now = datetime.now(timezone.utc)

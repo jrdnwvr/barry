@@ -10,7 +10,7 @@ import pytest
 
 
 def _metar_record(sid, obs_time, slp, *, altim=None, pres_tend=None, name="Test Field",
-                  wspd=10, wdir=230, wgst=None):
+                  wspd=10, wdir=230, wgst=None, temp=27.0, dewp=18.0):
     return {
         "icaoId": sid,
         "obsTime": obs_time,
@@ -20,6 +20,9 @@ def _metar_record(sid, obs_time, slp, *, altim=None, pres_tend=None, name="Test 
         "name": name,
         "lat": 39.103,
         "lon": -84.419,
+        "elev": 147.0,
+        "temp": temp,
+        "dewp": dewp,
         "wspd": wspd,
         "wdir": wdir,
         "wgst": wgst,
@@ -131,7 +134,17 @@ def sample_forecast(trough=False):
             "wind_gusts_10m": [14.0 + 2.5 * i for i in range(n)],
             # precip crosses 40% partway through
             "precipitation_probability": [10, 15, 20, 30, 45, 60, 70, 65, 50, 40, 30, 20],
-        }
+            # Field-conditions inputs: a warm, moderately humid stretch.
+            "temperature_2m": [26.0 - 0.5 * i for i in range(n)],
+            "dew_point_2m": [17.0 for _ in range(n)],
+            "cloud_cover": [55.0 for _ in range(n)],
+        },
+        "daily": {
+            # One sunrise/sunset pair bracketing tonight (UTC, IEM-style local
+            # fixtures don't matter here — the scan only needs the ordering).
+            "sunrise": [(start + timedelta(hours=14)).strftime("%Y-%m-%dT%H:%M")],
+            "sunset": [(start + timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M")],
+        },
     }
 
 

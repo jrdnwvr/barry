@@ -11,6 +11,7 @@ from typing import Optional
 
 import httpx
 
+from . import conditions as conditions_mod
 from . import front as front_mod
 from . import stations
 from .cache import StationRegistry, TTLCache
@@ -105,6 +106,7 @@ class PressureService:
                 name=parsed.get("name") or (stations.get(used_station) or {}).get("name"),
                 lat=parsed.get("lat"),
                 lon=parsed.get("lon"),
+                elevM=parsed.get("elev"),
                 series=parsed["series"],
                 current=parsed["current"],
                 tendency=_tendency_out(tendency),
@@ -181,6 +183,7 @@ class PressureService:
 
         resp = ForecastResponse(
             hourly=om.parse_forecast(raw),
+            sun=om.parse_daily_sun(raw),
             source="open-meteo",
             cachedAt=_now(),
         )
@@ -293,6 +296,12 @@ class PressureService:
             local_hour_offset=local_offset,
         )
 
+        # Field conditions (DA + fog) are enrichment — never block the response.
+        try:
+            conditions = conditions_mod.build(pressure, forecast, _now())
+        except Exception:
+            conditions = None
+
         sources = Sources(
             observed=pressure.source,
             forecast=forecast.source if forecast else None,
@@ -301,6 +310,7 @@ class PressureService:
             pressure=pressure,
             forecast=forecast,
             reading=reading_out,
+            conditions=conditions,
             sources=sources,
             verdict=verdict,
         )

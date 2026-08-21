@@ -19,7 +19,8 @@ at-a-glance watch complication.
 barry/
 ├── backend/                 # FastAPI caching proxy (Python 3.10+, done + tested)
 │   ├── app/
-│   │   ├── main.py          # routes: /combined, /pressure/{station}, /forecast, /stations/nearest, /healthz
+│   │   ├── main.py          # routes: /combined, /pressure/{station}, /forecast, /front,
+│   │   │                    #         /radar/hrrr, /stations/nearest, /healthz
 │   │   ├── service.py       # orchestration: sources + cache + graceful degradation
 │   │   ├── scheduler.py     # periodic BATCHED metar refresh of active stations
 │   │   ├── cache.py         # in-process TTL cache + active-station registry
@@ -28,7 +29,9 @@ barry/
 │   │   ├── models.py        # normalized response schemas (the client contract)
 │   │   ├── stations.py      # small ICAO station table + nearest() resolver
 │   │   └── sources/aviationweather.py, openmeteo.py
-│   ├── tests/               # pytest, upstreams mocked (36 tests)
+│   ├── tests/               # pytest, upstreams mocked (94 tests)
+│   ├── backtest/            # front-watch validation harness (IEM archive replay;
+│   │                        #   RESULTS.md = the evidence behind front.py's constants)
 │   ├── Dockerfile, fly.toml, DEPLOY.md
 │   └── pyproject.toml       # venv at backend/.venv
 └── ios/
@@ -119,12 +122,23 @@ cd ~/barry/backend && .venv/bin/pytest -q     # run backend tests (36, no networ
 - Forecast pressure is smoothed; it's rendered dashed with a caveat note, because
   real fronts arrive sharper than the model shows.
 
-## Status
+## Status (2026-08)
 
-Backend: done, tested, live-verified, and **deployed** (self-hosted on Unraid
-behind a Cloudflare Tunnel at `https://barry.wide-stack.com`). iOS/watch/complication:
-built and compiling (`xcodebuild ** BUILD SUCCEEDED **`). Live phone barometer
-(`CMAltimeter` calibration + local trace + on-demand "Measure now") done. **Storm
-alerts** done: local notifications (no push server) on `falling_fast` / `rising_fast`,
-driven by the BGAppRefreshTask in `StormAlerter.swift`. Distributed via TestFlight.
-Not yet: multiple saved stations, `falling_fast` push (local-only for now).
+Backend deployed (Unraid + Cloudflare Tunnel, `https://barry.wide-stack.com`);
+deploy = `cd /mnt/user/appdata/barry && git pull && cd backend && docker compose
+up -d --build`. Shipped and live: phone barometer calibration engine, storm
+alerts (local notifications), saved locations, onboarding, iPad kneeboard
+dashboard (3-column in landscape), radar (RainViewer + wind arrows + boundary
+layer top), drag-select range analysis, and the **front watch** (`/front`,
+regional isallobaric analysis — constants validated in `backend/backtest/`
+across five climates plus a held-out year; direction = centroid track with
+coherent-gradient fallback; NEVER wire front statuses to notifications).
+
+Parked, fully built: **forecast radar** (HRRR via Iowa Mesonet, +6 h model
+frames) behind `RadarModel.modelFramesEnabled = false` — flip one Bool to ship;
+while false the app makes zero IEM / `/radar/hrrr` requests.
+
+Not yet: density altitude + fog risk (agreed next build batch), TestFlight bump
+(project.yml still 1.0 build 3 — testers lack everything since ~July), courtesy
+emails to RainViewer + IEM before public App Store, privacy policy URL + iPad
+screenshots for submission, verdict track record, APNs push.

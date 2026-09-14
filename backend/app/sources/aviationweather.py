@@ -171,11 +171,18 @@ def parse_records(records: Sequence[dict]) -> Dict[str, dict]:
             continue
         points.sort(key=lambda p: p["t"])
         newest = points[-1]
+
+        def any_of(key):
+            # Station metadata is the same on every report, but individual
+            # records (SPECIs especially) drop fields — take it from whichever
+            # report has it, newest first.
+            return next((p[key] for p in reversed(points) if p.get(key) is not None), None)
+
         out[sid] = {
-            "name": newest.get("name"),
-            "lat": newest.get("lat"),
-            "lon": newest.get("lon"),
-            "elev": newest.get("elev"),
+            "name": any_of("name"),
+            "lat": any_of("lat"),
+            "lon": any_of("lon"),
+            "elev": any_of("elev"),
             "series": [
                 SeriesPoint(t=p["t"], slp=p["slp"], altim=p["altim"]) for p in points
             ],

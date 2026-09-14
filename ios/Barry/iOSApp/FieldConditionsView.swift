@@ -46,9 +46,13 @@ struct FieldConditionsCard: View {
         return ("Around \(ft(p.ft)) at \(time)", true)
     }
 
+    /// A station without temp/dew point (some AWOS fields) still gets the
+    /// forecast DA; nothing at all means the card shouldn't exist.
+    private var hasDA: Bool { conditions.densityAltitudeFt != nil || peak != nil }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let da = conditions.densityAltitudeFt {
+            if hasDA {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Image(systemName: "airplane.departure")
                         .font(.subheadline)
@@ -56,13 +60,21 @@ struct FieldConditionsCard: View {
                     Text("Density altitude")
                         .font(.subheadline.weight(.medium))
                     Spacer()
-                    Text(ft(da))
-                        .font(.subheadline.weight(.semibold))
-                        .monospacedDigit()
+                    if let da = conditions.densityAltitudeFt {
+                        Text(ft(da))
+                            .font(.subheadline.weight(.semibold))
+                            .monospacedDigit()
+                    } else if let p = peak {
+                        Text("~\(ft(p.ft)) later")
+                            .font(.subheadline.weight(.semibold))
+                            .monospacedDigit()
+                    }
                 }
                 HStack {
                     if let elev = conditions.fieldElevationFt {
                         Text("Field \(ft(elev))")
+                    } else if conditions.densityAltitudeFt == nil {
+                        Text("No temperature in this station's report")
                     }
                     Spacer()
                     if let line = peakLine {
@@ -78,7 +90,7 @@ struct FieldConditionsCard: View {
             }
 
             if let fog = conditions.fog {
-                if conditions.densityAltitudeFt != nil { Divider() }
+                if hasDA { Divider() }
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Image(systemName: "cloud.fog.fill")
                         .font(.subheadline)

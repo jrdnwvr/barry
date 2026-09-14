@@ -108,6 +108,22 @@ def test_no_sun_data_no_call():
     assert conditions.scan_fog(hours, None, T0) is None
 
 
+def test_station_metadata_survives_a_sparse_newest_report():
+    # A SPECI without elev/lat/lon must not erase the elevation the hourly
+    # reports carry — that blanked the density-altitude card in production.
+    from app.sources.aviationweather import parse_records
+    from conftest import _metar_record
+
+    full = _metar_record("KLUK", 1_700_000_000, 1012.0, altim=1012.7)
+    sparse = _metar_record("KLUK", 1_700_003_600, 1011.8, altim=1012.5)
+    for k in ("elev", "lat", "lon", "name"):
+        sparse[k] = None
+    parsed = parse_records([full, sparse])["KLUK"]
+    assert parsed["elev"] == 147.0
+    assert parsed["lat"] == 39.103 and parsed["name"] == "Test Field"
+    assert parsed["current"].altim == 1012.5   # current obs still the newest
+
+
 # ---- integration -------------------------------------------------------------
 
 

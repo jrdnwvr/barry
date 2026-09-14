@@ -138,7 +138,9 @@ struct ContentView: View {
                 ConfirmationOverlayView(combined: combined, now: store.now)
 
                 // Field conditions: DA now + trend, fog outlook when one exists.
-                if let cond = combined.conditions {
+                // Only when there's something to say — never an empty card.
+                if let cond = combined.conditions,
+                   cond.densityAltitudeFt != nil || !cond.daForecast.isEmpty || cond.fog != nil {
                     FieldConditionsCard(conditions: cond)
                 }
 

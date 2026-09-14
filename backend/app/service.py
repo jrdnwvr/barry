@@ -27,6 +27,8 @@ from .models import (
     ReadingOut,
     SeriesPoint,
     Sources,
+    StationObs,
+    StationsResponse,
     TendencyOut,
 )
 from .sources import aviationweather as awc
@@ -43,6 +45,7 @@ FRONT_TTL = 15 * 60.0     # regional bbox fetch is the priciest call; ring METAR
 HRRR_TTL = 10 * 60.0      # HRRR runs land hourly; re-probing IEM every 10 min
                           # keeps the run fresh at ~8 tiny tile requests/hour
 FRONTS_TTL = 30 * 60.0    # WPC redraws the chart every 3 h; 30 min is plenty
+STATIONS_TTL = 10 * 60.0  # radar station layer: METARs are hourly, specials aside
 
 # Stale-if-error: when Open-Meteo is down, re-serve the last good forecast for up
 # to this long (flagged stale=True) — a 6-hour-old forecast beats no forecast.
@@ -272,6 +275,33 @@ class PressureService:
             raise LookupError("no HRRR run available")
         resp = HrrrMeta(run=run, cachedAt=_now())
         await self.cache.set(cache_key, resp, ttl=HRRR_TTL)
+        return resp
+
+    # ---- station wind layer --------------------------------------------------
+
+    async def get_station_obs(self, lat: float, lon: float) -> StationsResponse:
+        """Latest wind at every reporting station in the radar's box — the
+        wind-barb / speed-label layer. One bbox METAR call, cached by a 0.2°
+        grid cell so panning around one area doesn't re-fetch."""
+        cache_key = f"stations:{round(lat * 5) / 5}:{round(lon * 5) / 5}"
+        cached = await self.cache.get(cache_key)
+        if cached is not None:
+            return cached
+        parsed = await awc.fetch_metars_bbox(lat, lon, self._client, hours=2)
+        stations = []
+        for sid, p in parsed.items():
+            cur: CurrentObs = p["current"]
+            if p.get("lat") is None or p.get("lon") is None:
+                continue
+            kt = round(cur.windspeed / 1.852, 0) if cur.windspeed is not None else None
+            gust = round(cur.windgust / 1.852, 0) if cur.windgust is not None else None
+            stations.append(StationObs(
+                id=sid, lat=p["lat"], lon=p["lon"],
+                windKt=kt, windDir=cur.winddir, gustKt=gust, fltCat=cur.fltCat,
+                obsTime=p["series"][-1].t if p.get("series") else None,
+            ))
+        resp = StationsResponse(stations=stations, cachedAt=_now())
+        await self.cache.set(cache_key, resp, ttl=STATIONS_TTL)
         return resp
 
     # ---- WPC surface fronts --------------------------------------------------

@@ -115,6 +115,18 @@ async def radar_hrrr():
     return resp.model_dump(mode="json", by_alias=True)
 
 
+@app.get("/metars")
+async def get_metars(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+):
+    """Latest wind at every station in a ~300 km box: the radar's wind-barb
+    and speed-label layers."""
+    service = get_service()
+    resp = await service.get_station_obs(lat, lon)
+    return resp.model_dump(mode="json", by_alias=True)
+
+
 @app.get("/fronts")
 async def get_fronts():
     """WPC surface fronts: the current analysis plus 12/24/36/48 h forecast

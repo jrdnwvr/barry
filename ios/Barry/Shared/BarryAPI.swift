@@ -61,6 +61,17 @@ struct BarryAPI {
         return try await get(comps?.url)
     }
 
+    /// Latest wind at every station around a point — the radar's barb/speed layer.
+    func metars(lat: Double, lon: Double) async throws -> StationsResponse {
+        var comps = URLComponents(url: baseURL.appendingPathComponent("metars"),
+                                  resolvingAgainstBaseURL: false)
+        comps?.queryItems = [
+            URLQueryItem(name: "lat", value: String(lat)),
+            URLQueryItem(name: "lon", value: String(lon)),
+        ]
+        return try await get(comps?.url)
+    }
+
     /// WPC surface fronts: analysis + forecast positions. Failure just means
     /// the fronts layer stays empty.
     func fronts() async throws -> FrontsResponse {

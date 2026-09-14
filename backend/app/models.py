@@ -178,6 +178,24 @@ class FrontsResponse(BaseModel):
     cachedAt: datetime
 
 
+class StationObs(BaseModel):
+    """One reporting station's latest wind, for the radar's station layer."""
+
+    id: str
+    lat: float
+    lon: float
+    windKt: Optional[float] = None
+    windDir: Optional[float] = None     # None = variable or calm
+    gustKt: Optional[float] = None
+    fltCat: Optional[str] = None
+    obsTime: Optional[datetime] = None
+
+
+class StationsResponse(BaseModel):
+    stations: List[StationObs] = Field(default_factory=list)
+    cachedAt: datetime
+
+
 class HrrrMeta(BaseModel):
     """Latest HRRR model run IEM is serving tiles for. Forecast minute F on the
     tile layer is valid at run + F — the client needs this to label forecast

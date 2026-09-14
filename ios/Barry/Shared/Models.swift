@@ -122,6 +122,24 @@ struct ConditionsOut: Codable, Hashable {
     var fog: FogOut?
 }
 
+// MARK: - Station wind layer
+
+struct StationObs: Codable, Hashable, Identifiable {
+    let id: String
+    let lat: Double
+    let lon: Double
+    var windKt: Double?
+    var windDir: Double?
+    var gustKt: Double?
+    var fltCat: String?
+    var obsTime: Date?
+}
+
+struct StationsResponse: Codable, Hashable {
+    let stations: [StationObs]
+    let cachedAt: Date
+}
+
 // MARK: - WPC surface fronts
 
 /// One front off the WPC chart: type cold|warm|stnry|ocfnt|trof and points

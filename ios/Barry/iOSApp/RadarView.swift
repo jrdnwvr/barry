@@ -52,6 +52,23 @@ final class RadarModel: ObservableObject {
     /// The whole wind grid, calm points included — the flow layer's field.
     @Published var windField: [WindArrow] = []
     @Published var blPoints: [BLPoint] = []
+    /// Reporting stations with their latest wind (barb / speed layer).
+    @Published var stationObs: [StationObs] = []
+    private var stationTask: Task<Void, Never>?
+    private var stationsFetchedAround: CLLocationCoordinate2D?
+
+    /// Fetch stations for a region center; the backend caches by 0.2° cell, so
+    /// this only bothers it after a real move (~1°).
+    func fetchStations(center: CLLocationCoordinate2D) async {
+        if let prev = stationsFetchedAround,
+           abs(prev.latitude - center.latitude) < 1, abs(prev.longitude - center.longitude) < 1,
+           !stationObs.isEmpty {
+            return
+        }
+        guard let resp = try? await BarryAPI().metars(lat: center.latitude, lon: center.longitude) else { return }
+        stationsFetchedAround = center
+        stationObs = resp.stations
+    }
 
     /// Last region the map reported — used when a toggle flips on.
     var lastRegion: MKCoordinateRegion?
@@ -230,8 +247,17 @@ final class RadarModel: ObservableObject {
     // MARK: Field overlays (wind arrows, boundary layer top)
 
     /// Debounced reload — pans/zooms fire this; only the last one within ~0.7 s wins.
-    func scheduleFieldReload(for region: MKCoordinateRegion, wind: Bool, boundaryLayer: Bool) {
+    func scheduleFieldReload(for region: MKCoordinateRegion, wind: Bool, boundaryLayer: Bool,
+                             stations: Bool = false) {
         lastRegion = region
+        if stations {
+            stationTask?.cancel()
+            stationTask = Task {
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                guard !Task.isCancelled else { return }
+                await fetchStations(center: region.center)
+            }
+        }
         if wind {
             windTask?.cancel()
             windTask = Task {
@@ -352,6 +378,8 @@ struct RadarMapView: UIViewRepresentable {
     var showBL: Bool = false
     /// nil = fronts layer off; otherwise the field to draw (morphs included).
     var frontState: FrontRenderState? = nil
+    var stations: [StationObs] = []
+    var stationStyle: StationLayerStyle = .off
     var onRegionChange: ((MKCoordinateRegion) -> Void)? = nil
 
     final class RadarTileOverlay: MKTileOverlay {
@@ -490,6 +518,26 @@ struct RadarMapView: UIViewRepresentable {
         var lastFrontVersion = -1
         var centerAnnotations: [PressureCenterAnnotation] = []
         var flowView: WindFlowView?
+        var stationAnnotations: [StationAnnotation] = []
+        var shownStations: [StationObs] = []
+        var shownStationStyle: StationLayerStyle = .off
+
+        /// Barb or speed annotations per station; rebuilt only when the set or
+        /// the style changes (the style is baked into the reuse identifier).
+        func syncStations(_ obs: [StationObs], style: StationLayerStyle, on map: MKMapView) {
+            let want = style == .off ? [] : obs
+            guard want != shownStations || style != shownStationStyle else { return }
+            shownStations = want
+            shownStationStyle = style
+            map.removeAnnotations(stationAnnotations)
+            stationAnnotations = want.map { o in
+                let a = StationAnnotation()
+                a.coordinate = CLLocationCoordinate2D(latitude: o.lat, longitude: o.lon)
+                a.obs = o
+                return a
+            }
+            map.addAnnotations(stationAnnotations)
+        }
 
         func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
             flowView?.mapWillMove()
@@ -536,6 +584,22 @@ struct RadarMapView: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            if let st = annotation as? StationAnnotation {
+                if shownStationStyle == .speeds {
+                    let id = "stationSpeed"
+                    let view = (mapView.dequeueReusableAnnotationView(withIdentifier: id) as? SpeedLabelView)
+                        ?? SpeedLabelView(annotation: st, reuseIdentifier: id)
+                    view.annotation = st
+                    view.configure(st)
+                    return view
+                }
+                let id = "stationBarb"
+                let view = (mapView.dequeueReusableAnnotationView(withIdentifier: id) as? WindBarbView)
+                    ?? WindBarbView(annotation: st, reuseIdentifier: id)
+                view.annotation = st
+                view.configure(st)
+                return view
+            }
             if let center = annotation as? PressureCenterAnnotation {
                 let id = "pressureCenter"
                 let view = (mapView.dequeueReusableAnnotationView(withIdentifier: id) as? PressureCenterView)
@@ -552,7 +616,17 @@ struct RadarMapView: UIViewRepresentable {
                 view.set(feet: bl.meters * 3.281)
                 return view
             }
-            guard let wind = annotation as? WindArrowAnnotation else { return nil }
+            guard let wind = annotation as? WindArrowAnnotation else {
+                // The home-station pin. Explicit so it always outranks the
+                // station layer in collisions instead of vanishing under a barb.
+                let id = "homePin"
+                let view = (mapView.dequeueReusableAnnotationView(withIdentifier: id) as? MKMarkerAnnotationView)
+                    ?? MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: id)
+                view.annotation = annotation
+                view.displayPriority = .required
+                view.collisionMode = .circle
+                return view
+            }
             let id = "windArrow"
             let view = mapView.dequeueReusableAnnotationView(withIdentifier: id)
                 ?? MKAnnotationView(annotation: wind, reuseIdentifier: id)
@@ -740,36 +814,28 @@ struct RadarMapView: UIViewRepresentable {
         context.coordinator.syncBL(showBL ? blPoints : [], on: map)
         context.coordinator.syncFronts(frontState, on: map)
         context.coordinator.syncFlow(windFlow, on: map)
+        context.coordinator.syncStations(stations, style: stationStyle, on: map)
 
         guard frames.indices.contains(index) else { return }
         context.coordinator.setCurrent(frames[index].time)
     }
 }
 
-// MARK: - Sheet
+// MARK: - Screen
 
-/// Sheet wrapper around RadarPanel (the compact-width presentation). On iPad the
-/// dashboard embeds RadarPanel directly, no navigation chrome.
-struct RadarView: View {
+/// The radar as its own screen (pushed, with a real Back button): the map fills
+/// the view and the controls float over it. The iPad dashboard embeds RadarPanel
+/// directly in compact form and pushes this for the full experience.
+struct RadarScreen: View {
     let lat: Double
     let lon: Double
     let stationName: String
 
-    @Environment(\.dismiss) private var dismiss
-
     var body: some View {
-        NavigationStack {
-            RadarPanel(lat: lat, lon: lon, stationName: stationName)
-                .padding(.horizontal)
-                .padding(.bottom, 8)
-                .navigationTitle("Radar")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { dismiss() }
-                    }
-                }
-        }
+        RadarPanel(lat: lat, lon: lon, stationName: stationName)
+            .navigationTitle("Radar")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.visible, for: .navigationBar)
     }
 }
 
@@ -797,7 +863,13 @@ struct RadarPanel: View {
     /// "flow" (animated streaks, the default) or "arrows" (the static grid).
     @AppStorage("radarWindStyle", store: AppConfig.sharedDefaults)
     private var windStyle: String = "flow"
+    /// Station layer: "off", "barbs" (METAR wind flags) or "speeds" (labels).
+    @AppStorage("radarStations", store: AppConfig.sharedDefaults)
+    private var stationStyleRaw: String = "off"
+    @State private var showLayers = false
     private let ticker = Timer.publish(every: 0.55, on: .main, in: .common).autoconnect()
+
+    private var stationStyle: StationLayerStyle { StationLayerStyle(rawValue: stationStyleRaw) ?? .off }
 
     private var initialRegion: MKCoordinateRegion {
         MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
@@ -832,6 +904,9 @@ struct RadarPanel: View {
             if showFronts {
                 await model.fetchFronts()
             }
+            if stationStyle != .off {
+                await model.fetchStations(center: initialRegion.center)
+            }
         }
         .onReceive(ticker) { _ in
             guard model.playing, !model.frames.isEmpty else { return }
@@ -848,27 +923,185 @@ struct RadarPanel: View {
         }
     }
 
-    private var content: some View {
+    @ViewBuilder private var content: some View {
+        Group {
+            if embedded {
+                embeddedContent
+            } else {
+                fullScreenContent
+            }
+        }
+        .onChange(of: stationStyleRaw) { _, raw in
+            if raw != "off" {
+                Task { await model.fetchStations(center: model.lastRegion?.center ?? initialRegion.center) }
+            }
+        }
+        .onChange(of: showFronts) { _, on in
+            if on, model.frontFrames.isEmpty {
+                Task { await model.fetchFronts() }
+            }
+        }
+        // Fetch triggers live on the container so the compact and full toggle
+        // variants share them.
+        .onChange(of: showWindArrows) { _, on in
+            if on {
+                Task { await model.fetchWind(region: model.lastRegion ?? initialRegion) }
+            }
+        }
+        .onChange(of: showBoundaryLayer) { _, on in
+            if on {
+                Task { await model.fetchBoundaryLayer(region: model.lastRegion ?? initialRegion) }
+            }
+        }
+    }
+
+    /// The map itself, shared by both layouts.
+    private var mapView: some View {
+        RadarMapView(host: model.host,
+                     frames: model.frames,
+                     index: model.index,
+                     center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+                     windArrows: model.windArrows,
+                     showWind: showWindArrows && windStyle == "arrows",
+                     windFlow: (showWindArrows && windStyle == "flow") ? model.windField : nil,
+                     blPoints: model.blPoints,
+                     showBL: showBoundaryLayer,
+                     frontState: showFronts ? model.frontState : nil,
+                     stations: model.stationObs,
+                     stationStyle: stationStyle,
+                     onRegionChange: { region in
+                         model.scheduleFieldReload(for: region,
+                                                   wind: showWindArrows,
+                                                   boundaryLayer: showBoundaryLayer,
+                                                   stations: stationStyle != .off)
+                     })
+    }
+
+    /// Full screen: the map fills the view; the scrubber and front chips float
+    /// in a card at the bottom, the layer toggles hide behind a Layers button.
+    private var fullScreenContent: some View {
+        ZStack(alignment: .bottom) {
+            mapView
+                .ignoresSafeArea(edges: .bottom)
+
+            VStack(spacing: 0) {
+                HStack(alignment: .top) {
+                    Spacer()
+                    layersColumn
+                }
+                .padding(12)
+
+                Spacer(minLength: 0)
+
+                if showFronts, !model.frontFrames.isEmpty {
+                    HStack(alignment: .bottom) {
+                        FrontKeyView(validText: frontValidText, compact: true)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+                }
+
+                bottomCard
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 10)
+            }
+        }
+    }
+
+    /// The Layers button and, when open, the panel beneath it.
+    private var layersColumn: some View {
+        VStack(alignment: .trailing, spacing: 8) {
+            Button {
+                withAnimation(.snappy(duration: 0.25)) { showLayers.toggle() }
+            } label: {
+                Image(systemName: showLayers ? "xmark" : "square.3.layers.3d")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 20, height: 20)
+                    .padding(10)
+                    .background(.thinMaterial, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(showLayers ? "Hide layers" : "Layers")
+
+            if showLayers {
+                layersPanel
+                    .transition(.scale(scale: 0.92, anchor: .topTrailing).combined(with: .opacity))
+            }
+        }
+    }
+
+    private var layersPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle(isOn: $showWindArrows) {
+                Label("Wind", systemImage: "wind")
+            }
+            if showWindArrows {
+                Picker("Wind style", selection: $windStyle) {
+                    Text("Flow").tag("flow")
+                    Text("Arrows").tag("arrows")
+                }
+                .pickerStyle(.segmented)
+                .controlSize(.small)
+            }
+            windCalmNote
+
+            Toggle(isOn: $showBoundaryLayer) {
+                Label("Boundary layer top", systemImage: "cloud.fog")
+            }
+            if showBoundaryLayer {
+                Text("Model boundary layer top in feet above ground. Bumpy, hazy air mixes below it, smoother air above.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            Toggle(isOn: $showFronts) {
+                Label("Fronts", systemImage: "line.diagonal")
+            }
+
+            Label("Stations", systemImage: "mappin.and.ellipse")
+            Picker("Stations", selection: $stationStyleRaw) {
+                Text("Off").tag("off")
+                Text("Barbs").tag("barbs")
+                Text("Speeds").tag("speeds")
+            }
+            .pickerStyle(.segmented)
+            .controlSize(.small)
+
+            Divider()
+            legend
+        }
+        .font(.subheadline)
+        .padding(12)
+        .frame(width: 290)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// The things you actually touch: radar scrubber, front chips, and the
+    /// one-line attribution that must stay on screen.
+    private var bottomCard: some View {
+        VStack(spacing: 8) {
+            controls
+            if showFronts, model.frontFrames.count > 1 {
+                frontTimeline
+            }
+            Text("Radar RainViewer · NOAA NEXRAD · Wind Open-Meteo · Fronts NWS WPC")
+                .font(.system(size: 8))
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// The iPad dashboard embed: map in a rounded card, compact controls below.
+    private var embeddedContent: some View {
         VStack(spacing: 10) {
-            RadarMapView(host: model.host,
-                         frames: model.frames,
-                         index: model.index,
-                         center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
-                         windArrows: model.windArrows,
-                         showWind: showWindArrows && windStyle == "arrows",
-                         windFlow: (showWindArrows && windStyle == "flow") ? model.windField : nil,
-                         blPoints: model.blPoints,
-                         showBL: showBoundaryLayer,
-                         frontState: showFronts ? model.frontState : nil,
-                         onRegionChange: { region in
-                             model.scheduleFieldReload(for: region,
-                                                       wind: showWindArrows,
-                                                       boundaryLayer: showBoundaryLayer)
-                         })
+            mapView
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(alignment: .bottomLeading) {
                     if showFronts, !model.frontFrames.isEmpty {
-                        FrontKeyView(validText: frontValidText, compact: embedded)
+                        FrontKeyView(validText: frontValidText, compact: true)
                             .padding(8)
                     }
                 }
@@ -892,76 +1125,26 @@ struct RadarPanel: View {
                 frontTimeline
             }
 
-            if embedded {
-                // Two short rows — one row of buttons + swatches doesn't fit
-                // the portrait column and SwiftUI "fixes" that by wrapping the
-                // button titles mid-word.
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 10) {
-                        compactToggle("Wind", icon: "wind", isOn: $showWindArrows)
-                        compactToggle("Layer top", icon: "cloud.fog", isOn: $showBoundaryLayer)
-                        compactToggle("Fronts", icon: "line.diagonal", isOn: $showFronts)
-                        Spacer()
-                    }
-                    windCalmNote
-                    HStack(spacing: 14) {
-                        swatch(Color(red: 0.55, green: 0.75, blue: 0.95), "Light")
-                        swatch(Color(red: 0.13, green: 0.42, blue: 0.82), "Moderate")
-                        swatch(Color(red: 0.94, green: 0.65, blue: 0.15), "Heavy")
-                        Spacer()
-                    }
-                }
-            } else {
-                Toggle(isOn: $showWindArrows) {
-                    Label("Wind", systemImage: "wind")
-                        .font(.subheadline)
-                }
-                if showWindArrows {
-                    Picker("Wind style", selection: $windStyle) {
-                        Text("Flow").tag("flow")
-                        Text("Arrows").tag("arrows")
-                    }
-                    .pickerStyle(.segmented)
-                    .controlSize(.small)
-                    .frame(maxWidth: 200)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+            // Two short rows — one row of buttons + swatches doesn't fit the
+            // portrait column and SwiftUI "fixes" that by wrapping the button
+            // titles mid-word.
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    compactToggle("Wind", icon: "wind", isOn: $showWindArrows)
+                    compactToggle("Layer top", icon: "cloud.fog", isOn: $showBoundaryLayer)
+                    compactToggle("Fronts", icon: "line.diagonal", isOn: $showFronts)
+                    compactToggle("Barbs", icon: "flag", isOn: Binding(
+                        get: { stationStyleRaw == "barbs" },
+                        set: { stationStyleRaw = $0 ? "barbs" : "off" }))
+                    Spacer()
                 }
                 windCalmNote
-
-                Toggle(isOn: $showBoundaryLayer) {
-                    Label("Boundary layer top", systemImage: "cloud.fog")
-                        .font(.subheadline)
+                HStack(spacing: 14) {
+                    swatch(Color(red: 0.55, green: 0.75, blue: 0.95), "Light")
+                    swatch(Color(red: 0.13, green: 0.42, blue: 0.82), "Moderate")
+                    swatch(Color(red: 0.94, green: 0.65, blue: 0.15), "Heavy")
+                    Spacer()
                 }
-                if showBoundaryLayer {
-                    Text("Model boundary layer top in feet above ground. Bumpy, hazy air mixes below it, smoother air above. Thermals top out near it.")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-
-                Toggle(isOn: $showFronts) {
-                    Label("Fronts", systemImage: "line.diagonal")
-                        .font(.subheadline)
-                }
-
-                legend
-            }
-        }
-        .onChange(of: showFronts) { _, on in
-            if on, model.frontFrames.isEmpty {
-                Task { await model.fetchFronts() }
-            }
-        }
-        // Fetch triggers live on the container so the compact and full toggle
-        // variants share them.
-        .onChange(of: showWindArrows) { _, on in
-            if on {
-                Task { await model.fetchWind(region: model.lastRegion ?? initialRegion) }
-            }
-        }
-        .onChange(of: showBoundaryLayer) { _, on in
-            if on {
-                Task { await model.fetchBoundaryLayer(region: model.lastRegion ?? initialRegion) }
             }
         }
     }

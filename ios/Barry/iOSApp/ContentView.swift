@@ -261,10 +261,10 @@ struct ContentView: View {
             }
             .padding()
         }
-        .fullScreenCover(isPresented: $showRadarFullScreen) {
+        .navigationDestination(isPresented: $showRadarFullScreen) {
             if let rlat = combined.pressure.lat, let rlon = combined.pressure.lon {
-                RadarView(lat: rlat, lon: rlon,
-                          stationName: combined.pressure.name ?? combined.pressure.station)
+                RadarScreen(lat: rlat, lon: rlon,
+                            stationName: combined.pressure.name ?? combined.pressure.station)
             }
         }
     }
@@ -413,10 +413,12 @@ private struct RadarRow: View {
     let lat: Double
     let lon: Double
     let stationName: String
-    @State private var showRadar = false
 
     var body: some View {
-        Button { showRadar = true } label: {
+        // Pushed, not presented: the radar is a full screen of its own now.
+        NavigationLink {
+            RadarScreen(lat: lat, lon: lon, stationName: stationName)
+        } label: {
             HStack(spacing: 8) {
                 Image(systemName: "antenna.radiowaves.left.and.right")
                     .font(.subheadline)
@@ -435,9 +437,6 @@ private struct RadarRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .sheet(isPresented: $showRadar) {
-            RadarView(lat: lat, lon: lon, stationName: stationName)
-        }
     }
 }
 

@@ -129,6 +129,39 @@ class FrontResponse(BaseModel):
     cachedAt: datetime
 
 
+class FrontLine(BaseModel):
+    """One WPC front: type cold|warm|stnry|ocfnt|trof, points [[lat, lon], ...]
+    in the bulletin's order (the front moves toward the LEFT of travel along
+    them — the client puts the pips on that side)."""
+
+    type: str
+    weak: bool = False
+    points: List[List[float]]
+
+
+class PressureCenter(BaseModel):
+    pressure: int
+    lat: float
+    lon: float
+
+
+class FrontFrame(BaseModel):
+    """The surface chart at one valid time: hours=0 is the analysis, 12/24/36/48
+    are WPC's forecast positions."""
+
+    hours: int
+    valid: datetime
+    fronts: List[FrontLine] = Field(default_factory=list)
+    highs: List[PressureCenter] = Field(default_factory=list)
+    lows: List[PressureCenter] = Field(default_factory=list)
+
+
+class FrontsResponse(BaseModel):
+    frames: List[FrontFrame] = Field(default_factory=list)   # analysis first, then progs
+    source: str = "NWS Weather Prediction Center via Iowa Environmental Mesonet"
+    cachedAt: datetime
+
+
 class HrrrMeta(BaseModel):
     """Latest HRRR model run IEM is serving tiles for. Forecast minute F on the
     tile layer is valid at run + F — the client needs this to label forecast

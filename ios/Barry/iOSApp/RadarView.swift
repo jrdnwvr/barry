@@ -67,6 +67,82 @@ final class RadarModel: ObservableObject {
     /// True once a wind fetch has answered, so "no arrows" is a real answer.
     @Published var windSampled = false
 
+    // MARK: Fronts (WPC surface chart, analysis + forecast positions)
+
+    @Published var frontFrames: [FrontFrame] = []
+    /// Where on the 0...48 h front timeline we're drawing; fractional mid-glide.
+    @Published var frontHours: Double = 0
+    @Published var frontState: FrontRenderState = .empty
+    private var frontAnimTask: Task<Void, Never>?
+    private var frontVersion = 0
+
+    func fetchFronts() async {
+        guard let resp = try? await BarryAPI().fronts() else { return }
+        frontFrames = resp.frames.sorted { $0.hours < $1.hours }
+        frontHours = 0
+        updateFrontState()
+    }
+
+    /// The drawn field for `frontHours`: an exact frame, or a morph between the
+    /// two frames it sits between.
+    func updateFrontState() {
+        var next: FrontRenderState
+        if let exact = frontFrames.first(where: { Double($0.hours) == frontHours }) {
+            next = FrontMorph.state(for: exact)
+        } else if let a = frontFrames.last(where: { Double($0.hours) < frontHours }),
+                  let b = frontFrames.first(where: { Double($0.hours) > frontHours }) {
+            let t = (frontHours - Double(a.hours)) / Double(b.hours - a.hours)
+            next = FrontMorph.blend(a, b, t: t)
+        } else if let edge = frontFrames.last {
+            next = FrontMorph.state(for: edge)
+        } else {
+            next = .empty
+        }
+        frontVersion += 1
+        next.version = frontVersion
+        frontState = next
+    }
+
+    /// Glide to a valid time — the old Weather Channel move, eased, ~1.3 s.
+    func animateFronts(to hours: Double, duration: Double = 1.3) {
+        frontAnimTask?.cancel()
+        let from = frontHours
+        guard from != hours else { return }
+        frontAnimTask = Task { @MainActor in
+            let steps = max(1, Int(duration * 30))
+            for i in 1...steps {
+                guard !Task.isCancelled else { return }
+                let p = Double(i) / Double(steps)
+                let eased = p < 0.5 ? 2 * p * p : 1 - pow(-2 * p + 2, 2) / 2
+                frontHours = from + (hours - from) * eased
+                updateFrontState()
+                try? await Task.sleep(nanoseconds: UInt64(duration / Double(steps) * 1e9))
+            }
+            frontHours = hours
+            updateFrontState()
+        }
+    }
+
+    /// Sweep the whole timeline from the analysis to the last prog.
+    func playFronts() {
+        guard let last = frontFrames.last, last.hours > 0 else { return }
+        frontAnimTask?.cancel()
+        frontAnimTask = Task { @MainActor in
+            frontHours = 0
+            updateFrontState()
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            let total = Double(last.hours)
+            let duration = 1.8 * Double(max(1, frontFrames.count - 1))
+            let steps = Int(duration * 30)
+            for i in 1...steps {
+                guard !Task.isCancelled else { return }
+                frontHours = total * Double(i) / Double(steps)
+                updateFrontState()
+                try? await Task.sleep(nanoseconds: UInt64(duration / Double(steps) * 1e9))
+            }
+        }
+    }
+
     /// Index of the most recent observed (non-forecast) frame.
     var nowIndex: Int {
         frames.lastIndex(where: { !$0.nowcast }) ?? 0
@@ -260,6 +336,8 @@ struct RadarMapView: UIViewRepresentable {
     var showWind: Bool = false
     var blPoints: [BLPoint] = []
     var showBL: Bool = false
+    /// nil = fronts layer off; otherwise the field to draw (morphs included).
+    var frontState: FrontRenderState? = nil
     var onRegionChange: ((MKCoordinateRegion) -> Void)? = nil
 
     final class RadarTileOverlay: MKTileOverlay {
@@ -393,8 +471,17 @@ struct RadarMapView: UIViewRepresentable {
         var arrowAnnotations: [WindArrowAnnotation] = []
         var shownBL: [BLPoint] = []
         var blAnnotations: [BLAnnotation] = []
+        var frontOverlay: FrontFieldOverlay?
+        var frontRenderer: FrontFieldRenderer?
+        var lastFrontVersion = -1
+        var centerAnnotations: [PressureCenterAnnotation] = []
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            if let field = overlay as? FrontFieldOverlay {
+                let r = FrontFieldRenderer(overlay: field)
+                frontRenderer = r
+                return r
+            }
             if let tile = overlay as? RadarTileOverlay {
                 let r = MKTileOverlayRenderer(tileOverlay: tile)
                 r.alpha = tile.frameTime == currentTime ? Self.visibleAlpha : Self.idleAlpha
@@ -409,6 +496,14 @@ struct RadarMapView: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            if let center = annotation as? PressureCenterAnnotation {
+                let id = "pressureCenter"
+                let view = (mapView.dequeueReusableAnnotationView(withIdentifier: id) as? PressureCenterView)
+                    ?? PressureCenterView(annotation: center, reuseIdentifier: id)
+                view.annotation = center
+                view.configure(center)
+                return view
+            }
             if let bl = annotation as? BLAnnotation {
                 let id = "blLabel"
                 let view = (mapView.dequeueReusableAnnotationView(withIdentifier: id) as? BLLabelView)
@@ -467,6 +562,53 @@ struct RadarMapView: UIViewRepresentable {
                 return ann
             }
             map.addAnnotations(blAnnotations)
+        }
+
+        /// The fronts layer: one world-sized overlay whose renderer reads a state
+        /// struct, so a morph tick is "swap state, redraw" — no overlay churn.
+        /// Pressure centers are annotations, moved in place while animating.
+        func syncFronts(_ state: FrontRenderState?, on map: MKMapView) {
+            guard let state else {
+                if let o = frontOverlay {
+                    map.removeOverlay(o)
+                    frontOverlay = nil
+                    frontRenderer = nil
+                }
+                map.removeAnnotations(centerAnnotations)
+                centerAnnotations = []
+                lastFrontVersion = -1
+                return
+            }
+            if frontOverlay == nil {
+                let o = FrontFieldOverlay()
+                frontOverlay = o
+                map.addOverlay(o, level: .aboveLabels)
+            }
+            guard state.version != lastFrontVersion else { return }
+            lastFrontVersion = state.version
+            frontOverlay?.state = state
+            frontRenderer?.setNeedsDisplay()
+
+            if centerAnnotations.count == state.centers.count {
+                for (ann, c) in zip(centerAnnotations, state.centers) {
+                    ann.coordinate = CLLocationCoordinate2D(latitude: c.lat, longitude: c.lon)
+                    ann.isHigh = c.isHigh
+                    ann.pressure = c.pressure
+                    ann.alpha = c.alpha
+                    (map.view(for: ann) as? PressureCenterView)?.configure(ann)
+                }
+            } else {
+                map.removeAnnotations(centerAnnotations)
+                centerAnnotations = state.centers.map { c in
+                    let ann = PressureCenterAnnotation()
+                    ann.coordinate = CLLocationCoordinate2D(latitude: c.lat, longitude: c.lon)
+                    ann.isHigh = c.isHigh
+                    ann.pressure = c.pressure
+                    ann.alpha = c.alpha
+                    return ann
+                }
+                map.addAnnotations(centerAnnotations)
+            }
         }
 
         /// Crossfade to a new frame (~0.3 s) instead of hard-cutting — most of the
@@ -556,6 +698,7 @@ struct RadarMapView: UIViewRepresentable {
         context.coordinator.onRegionChange = onRegionChange
         context.coordinator.syncArrows(showWind ? windArrows : [], on: map)
         context.coordinator.syncBL(showBL ? blPoints : [], on: map)
+        context.coordinator.syncFronts(frontState, on: map)
 
         guard frames.indices.contains(index) else { return }
         context.coordinator.setCurrent(frames[index].time)
@@ -608,6 +751,8 @@ struct RadarPanel: View {
     private var showWindArrows: Bool = true
     @AppStorage("radarBoundaryLayer", store: AppConfig.sharedDefaults)
     private var showBoundaryLayer: Bool = false
+    @AppStorage("radarFronts", store: AppConfig.sharedDefaults)
+    private var showFronts: Bool = true
     private let ticker = Timer.publish(every: 0.55, on: .main, in: .common).autoconnect()
 
     private var initialRegion: MKCoordinateRegion {
@@ -640,6 +785,9 @@ struct RadarPanel: View {
             if showBoundaryLayer {
                 await model.fetchBoundaryLayer(region: model.lastRegion ?? initialRegion)
             }
+            if showFronts {
+                await model.fetchFronts()
+            }
         }
         .onReceive(ticker) { _ in
             guard model.playing, !model.frames.isEmpty else { return }
@@ -666,12 +814,19 @@ struct RadarPanel: View {
                          showWind: showWindArrows,
                          blPoints: model.blPoints,
                          showBL: showBoundaryLayer,
+                         frontState: showFronts ? model.frontState : nil,
                          onRegionChange: { region in
                              model.scheduleFieldReload(for: region,
                                                        wind: showWindArrows,
                                                        boundaryLayer: showBoundaryLayer)
                          })
                 .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(alignment: .bottomLeading) {
+                    if showFronts, !model.frontFrames.isEmpty {
+                        FrontKeyView(validText: frontValidText, compact: embedded)
+                            .padding(8)
+                    }
+                }
                 .overlay(alignment: .topTrailing) {
                     if let onExpand {
                         Button(action: onExpand) {
@@ -688,6 +843,10 @@ struct RadarPanel: View {
 
             controls
 
+            if showFronts, model.frontFrames.count > 1 {
+                frontTimeline
+            }
+
             if embedded {
                 // Two short rows — one row of buttons + swatches doesn't fit
                 // the portrait column and SwiftUI "fixes" that by wrapping the
@@ -696,6 +855,7 @@ struct RadarPanel: View {
                     HStack(spacing: 10) {
                         compactToggle("Wind", icon: "wind", isOn: $showWindArrows)
                         compactToggle("Layer top", icon: "cloud.fog", isOn: $showBoundaryLayer)
+                        compactToggle("Fronts", icon: "line.diagonal", isOn: $showFronts)
                         Spacer()
                     }
                     windCalmNote
@@ -724,7 +884,17 @@ struct RadarPanel: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
+                Toggle(isOn: $showFronts) {
+                    Label("Fronts", systemImage: "line.diagonal")
+                        .font(.subheadline)
+                }
+
                 legend
+            }
+        }
+        .onChange(of: showFronts) { _, on in
+            if on, model.frontFrames.isEmpty {
+                Task { await model.fetchFronts() }
             }
         }
         // Fetch triggers live on the container so the compact and full toggle
@@ -739,6 +909,47 @@ struct RadarPanel: View {
                 Task { await model.fetchBoundaryLayer(region: model.lastRegion ?? initialRegion) }
             }
         }
+    }
+
+    /// Now / +12h / +24h ... chips plus a play button. Tapping a chip glides the
+    /// field there; play sweeps the whole timeline.
+    private var frontTimeline: some View {
+        HStack(spacing: 8) {
+            Button { model.playFronts() } label: {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Play front movement")
+
+            ForEach(model.frontFrames) { frame in
+                let selected = abs(model.frontHours - Double(frame.hours)) < 0.5
+                Button(frame.hours == 0 ? "Now" : "+\(frame.hours)h") {
+                    model.animateFronts(to: Double(frame.hours))
+                }
+                .font(.caption.weight(selected ? .semibold : .regular))
+                .buttonStyle(.bordered)
+                .tint(selected ? .accentColor : .secondary)
+                .controlSize(.small)
+            }
+            Spacer()
+            Text(frontChipTime)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+        }
+    }
+
+    /// Local valid time of the frame nearest the current front position.
+    private var frontChipTime: String {
+        guard let f = model.frontFrames.min(by: {
+            abs(Double($0.hours) - model.frontHours) < abs(Double($1.hours) - model.frontHours)
+        }) else { return "" }
+        return f.valid.formatted(.dateTime.weekday(.abbreviated).hour())
+    }
+
+    private var frontValidText: String {
+        "WPC fronts, \(frontChipTime), to about 50 mi"
     }
 
     /// A toggled-on layer that draws nothing must say why, or it reads as broken.
@@ -835,7 +1046,8 @@ struct RadarPanel: View {
         text += RadarModel.modelFramesEnabled
             ? "Orange frames are a short nowcast; purple frames are HRRR model reflectivity via Iowa Environmental Mesonet, a model guess about where rain will be, not a measurement. "
             : "Forecast frames show in orange on the timeline. "
-        text += "Radar tiles by RainViewer, data from NOAA NEXRAD. Wind and boundary layer by Open-Meteo."
+        text += "Radar tiles by RainViewer, data from NOAA NEXRAD. Wind and boundary layer by Open-Meteo. "
+        text += "Fronts are the NWS Weather Prediction Center's chart, positions good to about 50 miles; the forecast positions glide between WPC's 12 hour steps."
         return text
     }
 

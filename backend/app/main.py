@@ -115,6 +115,18 @@ async def radar_hrrr():
     return resp.model_dump(mode="json", by_alias=True)
 
 
+@app.get("/fronts")
+async def get_fronts():
+    """WPC surface fronts: the current analysis plus 12/24/36/48 h forecast
+    positions, as typed polylines. 503 means the bulletins are unavailable."""
+    service = get_service()
+    try:
+        resp = await service.get_fronts()
+    except LookupError:
+        raise HTTPException(status_code=503, detail="fronts unavailable")
+    return resp.model_dump(mode="json", by_alias=True)
+
+
 @app.get("/stations/nearest")
 async def nearest_station(
     lat: float = Query(..., ge=-90, le=90),

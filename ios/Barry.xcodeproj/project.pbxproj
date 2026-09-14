@@ -57,6 +57,7 @@
 		62FE249CDA4A80409C304F3D /* Tendency.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2542DA2C850B2399B31A9069 /* Tendency.swift */; };
 		63129BEFD89CFA743A98860E /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918B4D14CC966B0E820FC1AC /* Models.swift */; };
 		6341C06F45343F3FAAAE7353 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918B4D14CC966B0E820FC1AC /* Models.swift */; };
+		70D7BA6937527AE4D263FF9A /* FrontsOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35839C2045A30D70938041B6 /* FrontsOverlay.swift */; };
 		73C115787B3F6EB1F3D44776 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918B4D14CC966B0E820FC1AC /* Models.swift */; };
 		7492FC46266CE19D8B710E51 /* RectangularComplications.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAFA9596978A2666CDFADAB4 /* RectangularComplications.swift */; };
 		772708512B575F16B6A02B14 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0094727B647701DDDCF17BD2 /* LocationManager.swift */; };
@@ -178,6 +179,7 @@
 		292532F4A2C2D5C39CC797B1 /* CoreMotion.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMotion.framework; path = System/Library/Frameworks/CoreMotion.framework; sourceTree = SDKROOT; };
 		2BB3C628CF8662B6BEF5A73F /* BarryWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryWatchApp.swift; sourceTree = "<group>"; };
 		34019275BE3EADB1E1E1739B /* BarryPhoneWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BarryPhoneWidget.entitlements; sourceTree = "<group>"; };
+		35839C2045A30D70938041B6 /* FrontsOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontsOverlay.swift; sourceTree = "<group>"; };
 		42AF37A1FEB24BB66E9E0A34 /* ComplicationDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComplicationDial.swift; sourceTree = "<group>"; };
 		44083DF235ACE8084DC9A498 /* Interpreter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Interpreter.swift; sourceTree = "<group>"; };
 		4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedLocations.swift; sourceTree = "<group>"; };
@@ -347,6 +349,7 @@
 				4EB1F388C1A5FE3D18F1D62E /* ContentView.swift */,
 				52B4C35AC0CE61C4C1CCE6D5 /* FieldConditionsView.swift */,
 				031482E889A2274CBD689E88 /* ForecastCaveatView.swift */,
+				35839C2045A30D70938041B6 /* FrontsOverlay.swift */,
 				6FE1451AAFD8A470C4CB228A /* FrontWatchView.swift */,
 				01599505777741EA095092C0 /* HeroView.swift */,
 				F4C5676D3E1E52D59CDFED12 /* Info.plist */,
@@ -606,6 +609,7 @@
 				1499AE344651937BC57A3E81 /* FieldConditionsView.swift in Sources */,
 				17B2F3F6A33ED2C6DB766640 /* ForecastCaveatView.swift in Sources */,
 				83C8C470DA68480C043EF623 /* FrontWatchView.swift in Sources */,
+				70D7BA6937527AE4D263FF9A /* FrontsOverlay.swift in Sources */,
 				4ED2D56EC1DA59D7FBBD779D /* HeroView.swift in Sources */,
 				3BE203844E7BC24AC1600A7B /* Interpreter.swift in Sources */,
 				8C7B2F5AFF63137EA0451EA1 /* LocationManager.swift in Sources */,

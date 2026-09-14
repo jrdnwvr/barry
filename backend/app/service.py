@@ -21,6 +21,7 @@ from .models import (
     CurrentObs,
     ForecastResponse,
     FrontResponse,
+    FrontsResponse,
     HrrrMeta,
     PressureResponse,
     ReadingOut,
@@ -31,6 +32,7 @@ from .models import (
 from .sources import aviationweather as awc
 from .sources import iem
 from .sources import openmeteo as om
+from .sources import wpc
 from .tendency import resolve_tendency
 from .verdict import build_verdict
 
@@ -40,6 +42,7 @@ FRONT_TTL = 15 * 60.0     # regional bbox fetch is the priciest call; ring METAR
                           # are hourly anyway, so 15 min loses nothing
 HRRR_TTL = 10 * 60.0      # HRRR runs land hourly; re-probing IEM every 10 min
                           # keeps the run fresh at ~8 tiny tile requests/hour
+FRONTS_TTL = 30 * 60.0    # WPC redraws the chart every 3 h; 30 min is plenty
 
 # Stale-if-error: when Open-Meteo is down, re-serve the last good forecast for up
 # to this long (flagged stale=True) — a 6-hour-old forecast beats no forecast.
@@ -262,6 +265,23 @@ class PressureService:
             raise LookupError("no HRRR run available")
         resp = HrrrMeta(run=run, cachedAt=_now())
         await self.cache.set(cache_key, resp, ttl=HRRR_TTL)
+        return resp
+
+    # ---- WPC surface fronts --------------------------------------------------
+
+    async def get_fronts(self) -> FrontsResponse:
+        """The WPC surface chart as data: analysis + 12/24/36/48 h forecast
+        front positions (sources/wpc.py). Global, so one cache entry."""
+        cache_key = "fronts"
+        cached = await self.cache.get(cache_key)
+        if cached is not None:
+            return cached
+        got = await wpc.fetch_fronts(self._client)
+        frames = got["analysis"] + sorted(got["progs"], key=lambda f: f.hours)
+        if not frames:
+            raise LookupError("no WPC front bulletins available")
+        resp = FrontsResponse(frames=frames, cachedAt=_now())
+        await self.cache.set(cache_key, resp, ttl=FRONTS_TTL)
         return resp
 
     # ---- combined (primary client endpoint) ---------------------------------

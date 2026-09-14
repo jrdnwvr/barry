@@ -61,6 +61,12 @@ struct BarryAPI {
         return try await get(comps?.url)
     }
 
+    /// WPC surface fronts: analysis + forecast positions. Failure just means
+    /// the fronts layer stays empty.
+    func fronts() async throws -> FrontsResponse {
+        try await get(baseURL.appendingPathComponent("fronts"))
+    }
+
     /// Latest HRRR run for forecast-radar frames. 503/failure just means the
     /// radar timeline ends at the RainViewer nowcast.
     func hrrrRun() async throws -> HrrrMeta {

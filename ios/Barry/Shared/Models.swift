@@ -122,6 +122,46 @@ struct ConditionsOut: Codable, Hashable {
     var fog: FogOut?
 }
 
+// MARK: - WPC surface fronts
+
+/// One front off the WPC chart: type cold|warm|stnry|ocfnt|trof and points
+/// [[lat, lon], ...] in bulletin order. The front moves toward the LEFT of
+/// travel along the points — the renderer puts the pips on that side.
+struct FrontLine: Codable, Hashable {
+    let type: String
+    var isWeak: Bool = false
+    let points: [[Double]]
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case isWeak = "weak"
+        case points
+    }
+}
+
+struct PressureCenter: Codable, Hashable {
+    let pressure: Int
+    let lat: Double
+    let lon: Double
+}
+
+/// The surface chart at one valid time: hours 0 = analysis, 12/24/36/48 =
+/// WPC's forecast positions.
+struct FrontFrame: Codable, Hashable, Identifiable {
+    let hours: Int
+    let valid: Date
+    var fronts: [FrontLine] = []
+    var highs: [PressureCenter] = []
+    var lows: [PressureCenter] = []
+    var id: Int { hours }
+}
+
+struct FrontsResponse: Codable, Hashable {
+    let frames: [FrontFrame]
+    var source: String?
+    let cachedAt: Date
+}
+
 /// Latest HRRR model run IEM serves forecast-reflectivity tiles for. Forecast
 /// minute F on a tile layer is valid at run + F.
 struct HrrrMeta: Codable, Hashable {

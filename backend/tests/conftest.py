@@ -148,6 +148,51 @@ def sample_forecast(trough=False):
     }
 
 
+CODSUS_SAMPLE = """
+657
+ASUS01 KWBC 141622
+CODSUS
+
+CODED SURFACE FRONTAL POSITIONS
+NWS WEATHER PREDICTION CENTER COLLEGE PARK MD
+1221 PM EDT MON SEP 14 2026
+
+VALID 091415Z
+HIGHS 1018 38107 1014 36112 1028 4385
+LOWS 1000 48104 1006 40109 993 6889
+OCFNT 48104 47103 44103
+WARM 44103 43102 40100 3997 3895 3694
+STNRY 3491 3492 3593 3593 3694
+COLD 4865 4467 4169 3972 3676 3580 3583 3586 3589
+COLD 44103 42105 41106
+TROF 41115 39115 37115
+"""
+
+CODSRP_SAMPLE = """
+743
+FSUS02 KWBC 141729
+CODSRP
+
+CODED SURFACE FRONTAL POSITIONS FORECAST
+NWS WEATHER PREDICTION CENTER COLLEGE PARK MD
+128 PM EDT MON SEP 14 2026
+
+12HR PROG VALID 150600Z
+HIGHS 1018 2989 1021 38107 1020 34109 1020 56118 1021 46113 1022 44110 1026
+3979 1027 4474 1018 28108
+LOWS 1009 39122 1006 33115
+STNRY WK 41105 41107 41108 40109 40109 39110
+COLD WK 4792 4593 4394 4296 4099 40101 40104 41105
+TROF 47125 45125 43124 41123 40122 39122 37121 35120 35119 35118
+
+24HR PROG VALID 151800Z
+HIGHS 1030 4271 1022 43100
+LOWS 993 5486 1008 33115
+COLD WK 4884 4587 4389 4191 3994 3897
+WARM WK 4984 4384 3980
+"""
+
+
 class FakeUpstream:
     """Records calls and serves canned AWC / Open-Meteo responses."""
 
@@ -167,9 +212,21 @@ class FakeUpstream:
         self.hrrr_run = None
         self.iem_fail = False
         self.iem_calls = []
+        self.wpc_fail = False
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         url = str(request.url)
+        if "afos/retrieve.py" in url:
+            # WPC coded front bulletins (text). Trimmed from real 2026-09-14
+            # products so the parser is tested against the genuine format.
+            pil = request.url.params.get("pil", "")
+            if self.wpc_fail:
+                return httpx.Response(503, text="down")
+            if pil == "CODSUS":
+                return httpx.Response(200, text=CODSUS_SAMPLE)
+            if pil == "CODSRP":
+                return httpx.Response(200, text=CODSRP_SAMPLE)
+            return httpx.Response(200, text="")
         if "mesonet.agron.iastate.edu" in url:
             self.iem_calls.append(request)
             # Faithful to real tile.py: runs it has -> 200 image/png; runs it

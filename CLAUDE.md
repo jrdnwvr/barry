@@ -138,7 +138,10 @@ Also live (2026-09): **fronts on the radar** — `/fronts` parses WPC's coded
 bulletins (CODSUS analysis + CODSRP 12/24/36/48 h progs, via IEM AFOS) into
 typed polylines; `FrontsOverlay.swift` draws the classic chart (pips on the
 left-of-travel side = direction of motion, verified) and morphs between valid
-times. Wind arrows now scale with speed from ~3 kt instead of hiding below 8 kt.
+times. Wind is a particle-flow layer by default (`WindFlowView.swift`, Flow/Arrows
+picker); arrows scale with speed from ~3 kt. `/front` also names the nearest
+WPC-analyzed front (`nearestFront`: type, distance, bearing, and motion/ETA
+from WPC's 12 h prog) — enrichment only, the backtested status logic is untouched.
 
 Parked, fully built: **forecast radar** (HRRR via Iowa Mesonet, +6 h model
 frames) behind `RadarModel.modelFramesEnabled = false` — flip one Bool to ship;

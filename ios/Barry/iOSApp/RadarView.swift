@@ -56,9 +56,16 @@ final class RadarModel: ObservableObject {
     private var windTask: Task<Void, Never>?
     private var blTask: Task<Void, Never>?
 
-    /// Arrows only render where the wind is worth drawing (~8 kt) — the Dark Sky
-    /// rule: calm areas stay clean.
-    static let minArrowKmh = 15.0
+    /// Arrows render from a light breeze up (~3 kt) and fade/shrink with speed,
+    /// so calm still reads calm without the layer going blank. The old ~8 kt
+    /// floor applied to the MODEL grid wind, which runs lower than an airport
+    /// anemometer and sat under the floor across the Ohio Valley most days —
+    /// green toggle, empty map, indistinguishable from broken.
+    static let minArrowKmh = 6.0
+    /// Speed at which an arrow reaches full size and presence (km/h).
+    static let fullArrowKmh = 45.0
+    /// True once a wind fetch has answered, so "no arrows" is a real answer.
+    @Published var windSampled = false
 
     /// Index of the most recent observed (non-forecast) frame.
     var nowIndex: Int {
@@ -196,6 +203,7 @@ final class RadarModel: ObservableObject {
                 .map { WindArrow(lat: $0.latitude, lon: $0.longitude,
                                  speedKmh: $0.current_weather.windspeed,
                                  fromDeg: $0.current_weather.winddirection) }
+            windSampled = true
         } catch {
             // Wind layer is enrichment; fail quietly and keep whatever we had.
         }
@@ -414,14 +422,18 @@ struct RadarMapView: UIViewRepresentable {
             let view = mapView.dequeueReusableAnnotationView(withIdentifier: id)
                 ?? MKAnnotationView(annotation: wind, reuseIdentifier: id)
             view.annotation = wind
-            let cfg = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
+            // Light air = small and faint, a real wind = full size and dark: the
+            // map reads the wind field at a glance instead of hiding half of it.
+            let t = CGFloat(min(1.0, max(0.0,
+                (wind.speedKmh - RadarModel.minArrowKmh)
+                    / (RadarModel.fullArrowKmh - RadarModel.minArrowKmh))))
+            let cfg = UIImage.SymbolConfiguration(pointSize: 9 + 7 * t, weight: .bold)
             view.image = UIImage(systemName: "arrow.up", withConfiguration: cfg)?
                 .withTintColor(.label, renderingMode: .alwaysOriginal)
             // Wind FROM fromDeg blows TOWARD fromDeg+180 — point the arrow with the flow.
             view.transform = CGAffineTransform(
                 rotationAngle: CGFloat((wind.fromDeg + 180) * .pi / 180))
-            // Stronger wind, more present arrow.
-            view.alpha = 0.45 + min(0.35, CGFloat(wind.speedKmh) / 80)
+            view.alpha = 0.3 + 0.55 * t
             view.isEnabled = false
             view.displayPriority = .defaultLow
             return view
@@ -686,6 +698,7 @@ struct RadarPanel: View {
                         compactToggle("Layer top", icon: "cloud.fog", isOn: $showBoundaryLayer)
                         Spacer()
                     }
+                    windCalmNote
                     HStack(spacing: 14) {
                         swatch(Color(red: 0.55, green: 0.75, blue: 0.95), "Light")
                         swatch(Color(red: 0.13, green: 0.42, blue: 0.82), "Moderate")
@@ -698,6 +711,7 @@ struct RadarPanel: View {
                     Label("Wind arrows", systemImage: "wind")
                         .font(.subheadline)
                 }
+                windCalmNote
 
                 Toggle(isOn: $showBoundaryLayer) {
                     Label("Boundary layer top", systemImage: "cloud.fog")
@@ -724,6 +738,16 @@ struct RadarPanel: View {
             if on {
                 Task { await model.fetchBoundaryLayer(region: model.lastRegion ?? initialRegion) }
             }
+        }
+    }
+
+    /// A toggled-on layer that draws nothing must say why, or it reads as broken.
+    @ViewBuilder private var windCalmNote: some View {
+        if showWindArrows, model.windSampled, model.windArrows.isEmpty {
+            Text("Winds under 3 kt across the map right now, so there are no arrows to draw.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -807,7 +831,7 @@ struct RadarPanel: View {
     /// The nowcast/model sentences track the model-frames flag so the footer
     /// never describes frames that can't appear.
     private var footerText: String {
-        var text = "\(stationName) marked. Arrows point with the wind and show above ~8 kts. "
+        var text = "\(stationName) marked. Arrows point with the wind, smaller and fainter the lighter it is. "
         text += RadarModel.modelFramesEnabled
             ? "Orange frames are a short nowcast; purple frames are HRRR model reflectivity via Iowa Environmental Mesonet, a model guess about where rain will be, not a measurement. "
             : "Forecast frames show in orange on the timeline. "

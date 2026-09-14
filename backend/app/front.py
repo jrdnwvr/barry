@@ -39,7 +39,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from .models import FrontResponse, FrontStationOut
+from .models import FrontFrame, FrontResponse, FrontStationOut, NearestFront
 
 # --- Tunables (thresholds backtested — see backend/backtest/RESULTS.md) -------
 
@@ -302,6 +302,82 @@ def _copy(status: str, direction: Optional[str], strongest: Sequence[str]) -> Tu
             "falls show up.",
         )
     return None, None
+
+
+# --- Nearest WPC front -------------------------------------------------------
+
+NEAREST_FRONT_MAX_KM = 800.0    # beyond this a front isn't "yours" yet
+FRONT_MATCH_KM = 650.0          # centroid distance to call a prog front "the same"
+APPROACH_MIN_KM = 30.0          # closing less than this in 12 h is noise
+ETA_MAX_HOURS = 48.0
+
+
+def _local_xy(lat: float, lon: float, lat0: float, lon0: float) -> Tuple[float, float]:
+    """Equirectangular km offsets from (lat0, lon0) — fine at sub-1000 km."""
+    return ((lon - lon0) * KM_PER_DEG_LAT * math.cos(math.radians(lat0)),
+            (lat - lat0) * KM_PER_DEG_LAT)
+
+
+def _dist_to_polyline_km(lat0: float, lon0: float,
+                         points: Sequence[Sequence[float]]) -> Tuple[float, float]:
+    """(distance km, bearing deg) from the station to the nearest point on the
+    front's polyline (segment-wise, not vertex-wise)."""
+    best = (float("inf"), 0.0)
+    xy = [_local_xy(p[0], p[1], lat0, lon0) for p in points]
+    for (ax, ay), (bx, by) in zip(xy, xy[1:]) if len(xy) > 1 else [(xy[0], xy[0])]:
+        dx, dy = bx - ax, by - ay
+        seg2 = dx * dx + dy * dy
+        t = 0.0 if seg2 == 0 else max(0.0, min(1.0, -(ax * dx + ay * dy) / seg2))
+        px, py = ax + t * dx, ay + t * dy
+        d = math.hypot(px, py)
+        if d < best[0]:
+            best = (d, _bearing(px, py))
+    return best
+
+
+def _centroid(points: Sequence[Sequence[float]]) -> Tuple[float, float]:
+    n = max(len(points), 1)
+    return (sum(p[0] for p in points) / n, sum(p[1] for p in points) / n)
+
+
+def nearest_wpc_front(frames: Sequence[FrontFrame], lat: float, lon: float) -> Optional[NearestFront]:
+    """The analyzed front nearest the station, with WPC's own forecast motion
+    when the same front can be found on the 12 h prog."""
+    analysis = next((f for f in frames if f.hours == 0), None)
+    if analysis is None or not analysis.fronts:
+        return None
+    best = None
+    for line in analysis.fronts:
+        d, brg = _dist_to_polyline_km(lat, lon, line.points)
+        if d <= NEAREST_FRONT_MAX_KM and (best is None or d < best[0]):
+            best = (d, brg, line)
+    if best is None:
+        return None
+    d0, brg, line = best
+    out = NearestFront(type=line.type, weak=line.weak, distanceKm=round(d0),
+                       bearingDeg=round(brg, 1), cardinal=cardinal(brg))
+
+    prog = next((f for f in frames if f.hours == 12), None)
+    if prog is not None:
+        c0 = _centroid(line.points)
+        match = None
+        for cand in prog.fronts:
+            if cand.type != line.type:
+                continue
+            c1 = _centroid(cand.points)
+            dx, dy = _local_xy(c1[0], c1[1], c0[0], c0[1])
+            dist = math.hypot(dx, dy)
+            if dist <= FRONT_MATCH_KM and (match is None or dist < match[0]):
+                match = (dist, cand)
+        if match is not None:
+            d12, _ = _dist_to_polyline_km(lat, lon, match[1].points)
+            closing = d0 - d12
+            out.approaching = closing >= APPROACH_MIN_KM
+            if out.approaching and closing > 0:
+                eta = min(ETA_MAX_HOURS, 12.0 * d0 / closing)
+                out.etaHours = round(eta, 1)
+                out.etaAt = analysis.valid + timedelta(hours=out.etaHours)
+    return out
 
 
 # --- Main entry --------------------------------------------------------------

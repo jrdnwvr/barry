@@ -110,11 +110,27 @@ class FrontStationOut(BaseModel):
     tendency3h: float
 
 
+class NearestFront(BaseModel):
+    """The WPC-analyzed front nearest the station: what the pressure field is
+    actually reacting to. Motion comes from WPC's 12 h forecast position when
+    the same front can be matched there; etaHours is a linear closing estimate."""
+
+    type: str                          # cold | warm | stnry | ocfnt | trof
+    weak: bool = False
+    distanceKm: float
+    bearingDeg: float                  # from the station to the nearest point
+    cardinal: str
+    approaching: Optional[bool] = None
+    etaHours: Optional[float] = None
+    etaAt: Optional[datetime] = None
+
+
 class FrontResponse(BaseModel):
     """Front watch (regional isallobaric analysis, see front.py). status "none"
     means a quiet field — the client renders nothing at all."""
 
     station: str
+    nearestFront: Optional[NearestFront] = None
     status: str = "none"  # none | forecast | approaching | passing | passed
     headline: Optional[str] = None
     detail: Optional[str] = None

@@ -247,6 +247,13 @@ class PressureService:
             station=pressure.station, ring=ring, own_delta3h=own,
             reading=reading, now=now, ring_prev=ring_prev,
         )
+        # Name the WPC-analyzed front the field is reacting to (enrichment;
+        # never changes the backtested status logic).
+        try:
+            fronts = await self.get_fronts()
+            resp.nearestFront = front_mod.nearest_wpc_front(fronts.frames, f_lat, f_lon)
+        except Exception:
+            pass
         await self.cache.set(cache_key, resp, ttl=FRONT_TTL)
         return resp
 

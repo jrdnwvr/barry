@@ -180,11 +180,41 @@ struct FrontStation: Codable, Hashable, Identifiable {
     let tendency3h: Double
 }
 
+/// The WPC-analyzed front nearest the station, with WPC's own forecast motion.
+struct NearestFront: Codable, Hashable {
+    let type: String       // cold | warm | stnry | ocfnt | trof
+    var isWeak: Bool = false
+    let distanceKm: Double
+    let bearingDeg: Double
+    let cardinal: String
+    var approaching: Bool?
+    var etaHours: Double?
+    var etaAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case type, distanceKm, bearingDeg, cardinal, approaching, etaHours, etaAt
+        case isWeak = "weak"
+    }
+
+    var name: String {
+        switch type {
+        case "cold": return "Cold front"
+        case "warm": return "Warm front"
+        case "stnry": return "Stationary front"
+        case "ocfnt": return "Occluded front"
+        default: return "Trough"
+        }
+    }
+
+    var distanceMiles: Int { Int((distanceKm * 0.621371).rounded()) }
+}
+
 /// The `/front` payload. Direction comes from real station reports around the
 /// user; timing (`eta`) comes from the model trough. Status "none" means a quiet
 /// field — render nothing at all.
 struct FrontResponse: Codable, Hashable {
     let station: String
+    var nearestFront: NearestFront?
     let status: String   // none | forecast | approaching | passing | passed
     var headline: String?
     var detail: String?

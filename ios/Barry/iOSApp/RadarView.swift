@@ -49,6 +49,8 @@ final class RadarModel: ObservableObject {
     @Published var playing = true
     @Published var failed = false
     @Published var windArrows: [WindArrow] = []
+    /// The whole wind grid, calm points included — the flow layer's field.
+    @Published var windField: [WindArrow] = []
     @Published var blPoints: [BLPoint] = []
 
     /// Last region the map reported — used when a toggle flips on.
@@ -123,11 +125,21 @@ final class RadarModel: ObservableObject {
         }
     }
 
-    /// Sweep the whole timeline from the analysis to the last prog.
+    @Published var frontPlaying = false
+
+    /// Sweep the whole timeline from the analysis to the last prog; tapping
+    /// again while it runs stops it where it is.
     func playFronts() {
+        if frontPlaying {
+            frontAnimTask?.cancel()
+            frontPlaying = false
+            return
+        }
         guard let last = frontFrames.last, last.hours > 0 else { return }
         frontAnimTask?.cancel()
+        frontPlaying = true
         frontAnimTask = Task { @MainActor in
+            defer { frontPlaying = false }
             frontHours = 0
             updateFrontState()
             try? await Task.sleep(nanoseconds: 500_000_000)
@@ -274,11 +286,11 @@ final class RadarModel: ObservableObject {
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             let points = try JSONDecoder().decode([Point].self, from: data)
-            windArrows = points
-                .filter { $0.current_weather.windspeed >= Self.minArrowKmh }
-                .map { WindArrow(lat: $0.latitude, lon: $0.longitude,
-                                 speedKmh: $0.current_weather.windspeed,
-                                 fromDeg: $0.current_weather.winddirection) }
+            let all = points.map { WindArrow(lat: $0.latitude, lon: $0.longitude,
+                                             speedKmh: $0.current_weather.windspeed,
+                                             fromDeg: $0.current_weather.winddirection) }
+            windField = all
+            windArrows = all.filter { $0.speedKmh >= Self.minArrowKmh }
             windSampled = true
         } catch {
             // Wind layer is enrichment; fail quietly and keep whatever we had.
@@ -334,6 +346,8 @@ struct RadarMapView: UIViewRepresentable {
     let center: CLLocationCoordinate2D
     var windArrows: [WindArrow] = []
     var showWind: Bool = false
+    /// nil = flow layer off; otherwise the full wind grid to animate.
+    var windFlow: [WindArrow]? = nil
     var blPoints: [BLPoint] = []
     var showBL: Bool = false
     /// nil = fronts layer off; otherwise the field to draw (morphs included).
@@ -475,6 +489,31 @@ struct RadarMapView: UIViewRepresentable {
         var frontRenderer: FrontFieldRenderer?
         var lastFrontVersion = -1
         var centerAnnotations: [PressureCenterAnnotation] = []
+        var flowView: WindFlowView?
+
+        func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
+            flowView?.mapWillMove()
+        }
+
+        /// The particle layer rides on top of the map as a subview; the map
+        /// tells it when it moved so it can reseed.
+        func syncFlow(_ field: [WindArrow]?, on map: MKMapView) {
+            guard let field else {
+                flowView?.removeFromSuperview()
+                flowView = nil
+                return
+            }
+            if flowView == nil {
+                let v = WindFlowView(frame: map.bounds)
+                v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                v.mapView = map
+                map.addSubview(v)
+                flowView = v
+            }
+            if flowView?.samples != field {
+                flowView?.samples = field
+            }
+        }
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
             if let field = overlay as? FrontFieldOverlay {
@@ -493,6 +532,7 @@ struct RadarMapView: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
             onRegionChange?(mapView.region)
+            flowView?.mapDidMove()
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
@@ -699,6 +739,7 @@ struct RadarMapView: UIViewRepresentable {
         context.coordinator.syncArrows(showWind ? windArrows : [], on: map)
         context.coordinator.syncBL(showBL ? blPoints : [], on: map)
         context.coordinator.syncFronts(frontState, on: map)
+        context.coordinator.syncFlow(windFlow, on: map)
 
         guard frames.indices.contains(index) else { return }
         context.coordinator.setCurrent(frames[index].time)
@@ -753,6 +794,9 @@ struct RadarPanel: View {
     private var showBoundaryLayer: Bool = false
     @AppStorage("radarFronts", store: AppConfig.sharedDefaults)
     private var showFronts: Bool = true
+    /// "flow" (animated streaks, the default) or "arrows" (the static grid).
+    @AppStorage("radarWindStyle", store: AppConfig.sharedDefaults)
+    private var windStyle: String = "flow"
     private let ticker = Timer.publish(every: 0.55, on: .main, in: .common).autoconnect()
 
     private var initialRegion: MKCoordinateRegion {
@@ -811,7 +855,8 @@ struct RadarPanel: View {
                          index: model.index,
                          center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
                          windArrows: model.windArrows,
-                         showWind: showWindArrows,
+                         showWind: showWindArrows && windStyle == "arrows",
+                         windFlow: (showWindArrows && windStyle == "flow") ? model.windField : nil,
                          blPoints: model.blPoints,
                          showBL: showBoundaryLayer,
                          frontState: showFronts ? model.frontState : nil,
@@ -868,8 +913,18 @@ struct RadarPanel: View {
                 }
             } else {
                 Toggle(isOn: $showWindArrows) {
-                    Label("Wind arrows", systemImage: "wind")
+                    Label("Wind", systemImage: "wind")
                         .font(.subheadline)
+                }
+                if showWindArrows {
+                    Picker("Wind style", selection: $windStyle) {
+                        Text("Flow").tag("flow")
+                        Text("Arrows").tag("arrows")
+                    }
+                    .pickerStyle(.segmented)
+                    .controlSize(.small)
+                    .frame(maxWidth: 200)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 windCalmNote
 
@@ -916,11 +971,11 @@ struct RadarPanel: View {
     private var frontTimeline: some View {
         HStack(spacing: 8) {
             Button { model.playFronts() } label: {
-                Image(systemName: "play.fill")
+                Image(systemName: model.frontPlaying ? "stop.fill" : "play.fill")
                     .font(.system(size: 12, weight: .semibold))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Play front movement")
+            .accessibilityLabel(model.frontPlaying ? "Stop front movement" : "Play front movement")
 
             ForEach(model.frontFrames) { frame in
                 let selected = abs(model.frontHours - Double(frame.hours)) < 0.5
@@ -1042,7 +1097,7 @@ struct RadarPanel: View {
     /// The nowcast/model sentences track the model-frames flag so the footer
     /// never describes frames that can't appear.
     private var footerText: String {
-        var text = "\(stationName) marked. Arrows point with the wind, smaller and fainter the lighter it is. "
+        var text = "\(stationName) marked. Wind streaks drift with the model wind, brighter and faster where it blows harder; arrows are the same field, standing still. "
         text += RadarModel.modelFramesEnabled
             ? "Orange frames are a short nowcast; purple frames are HRRR model reflectivity via Iowa Environmental Mesonet, a model guess about where rain will be, not a measurement. "
             : "Forecast frames show in orange on the timeline. "

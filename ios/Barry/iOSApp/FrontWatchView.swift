@@ -71,6 +71,17 @@ struct FrontBanner: View {
     }
 
     private var subline: String? {
+        // When WPC has drawn the front the field is reacting to, name it — a
+        // real line on a real chart beats "change moving in".
+        if let nf = front.nearestFront, front.status == "approaching" || front.status == "forecast" {
+            var line = "\(nf.name) \(nf.distanceMiles) mi to the \(nf.cardinal)"
+            if nf.approaching == true, let at = nf.etaAt {
+                line += ", WPC has it here around \(at.formatted(date: .omitted, time: .shortened))"
+            } else if let eta = front.eta, front.status == "approaching" {
+                line += ", low point here around \(eta.formatted(date: .omitted, time: .shortened))"
+            }
+            return line
+        }
         switch front.status {
         case "approaching":
             if let eta = front.eta {
@@ -130,6 +141,11 @@ struct FrontDetailView: View {
                               systemImage: "clock")
                             .font(.subheadline)
                     }
+                    if let nf = front.nearestFront {
+                        Label(nearestFrontLine(nf), systemImage: "line.diagonal")
+                            .font(.subheadline)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
 
                     if !front.stations.isEmpty {
                         FrontCompass(front: front)
@@ -155,6 +171,25 @@ struct FrontDetailView: View {
                 }
             }
         }
+    }
+
+    /// "WPC's chart: cold front 120 mi to the west, moving this way. Their
+    /// forecast puts it here around 9 PM."
+    private func nearestFrontLine(_ nf: NearestFront) -> String {
+        var s = "WPC's chart: \(nf.name.lowercased()) \(nf.distanceMiles) mi to the \(nf.cardinal)"
+        if nf.isWeak { s += " (marked weak)" }
+        switch nf.approaching {
+        case .some(true):
+            s += ", moving this way."
+            if let at = nf.etaAt {
+                s += " Their forecast puts it here around \(at.formatted(date: .omitted, time: .shortened))."
+            }
+        case .some(false):
+            s += ", moving away or holding."
+        case .none:
+            s += "."
+        }
+        return s
     }
 
     private var legend: some View {

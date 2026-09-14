@@ -48,6 +48,7 @@
 		5674736757CC86B2ECD79A39 /* BarryPhoneWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 078B13121EBACB3059A82BC9 /* BarryPhoneWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		568F6FDF35365FFD67F5D81D /* WindUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E3203C0CBC7B1D5F0A57759 /* WindUnit.swift */; };
 		56B07C1F7EC0EC1BF3B731E8 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C59EF4878E06062DC20D1D7 /* AppConfig.swift */; };
+		56C21F3EA69EB17912672252 /* WindFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39AF53020220091BA0FC5C07 /* WindFlowView.swift */; };
 		571426E9EFB2689033DDB2CD /* BarryAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */; };
 		57240D7CD7B6FC81EE382681 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B98E77604746429DE78EF9C4 /* OnboardingView.swift */; };
 		57789B75BDC58D0AACC5CA36 /* Tendency.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2542DA2C850B2399B31A9069 /* Tendency.swift */; };
@@ -180,6 +181,7 @@
 		2BB3C628CF8662B6BEF5A73F /* BarryWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryWatchApp.swift; sourceTree = "<group>"; };
 		34019275BE3EADB1E1E1739B /* BarryPhoneWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BarryPhoneWidget.entitlements; sourceTree = "<group>"; };
 		35839C2045A30D70938041B6 /* FrontsOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontsOverlay.swift; sourceTree = "<group>"; };
+		39AF53020220091BA0FC5C07 /* WindFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindFlowView.swift; sourceTree = "<group>"; };
 		42AF37A1FEB24BB66E9E0A34 /* ComplicationDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComplicationDial.swift; sourceTree = "<group>"; };
 		44083DF235ACE8084DC9A498 /* Interpreter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Interpreter.swift; sourceTree = "<group>"; };
 		4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedLocations.swift; sourceTree = "<group>"; };
@@ -360,6 +362,7 @@
 				DA12AC45B8A41856114FD9A7 /* SensorComparisonView.swift */,
 				72812DF1800A9DF0CF5EF2C3 /* SettingsView.swift */,
 				E569F3B3B9FAB65C07970B1A /* StormAlerter.swift */,
+				39AF53020220091BA0FC5C07 /* WindFlowView.swift */,
 			);
 			path = iOSApp;
 			sourceTree = "<group>";
@@ -629,6 +632,7 @@
 				20AD2A1B5CC1C7738EAEF8F5 /* StormAlerter.swift in Sources */,
 				7917511FB9F6E4E7614296AA /* Tendency.swift in Sources */,
 				50F708BB96C5BBFE917DE01A /* TendencyProvider.swift in Sources */,
+				56C21F3EA69EB17912672252 /* WindFlowView.swift in Sources */,
 				0C6CE77FC97065E5CF6D21D1 /* WindUnit.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

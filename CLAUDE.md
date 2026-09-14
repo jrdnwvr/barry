@@ -134,6 +134,12 @@ regional isallobaric analysis — constants validated in `backend/backtest/`
 across five climates plus a held-out year; direction = centroid track with
 coherent-gradient fallback; NEVER wire front statuses to notifications).
 
+Also live (2026-09): **fronts on the radar** — `/fronts` parses WPC's coded
+bulletins (CODSUS analysis + CODSRP 12/24/36/48 h progs, via IEM AFOS) into
+typed polylines; `FrontsOverlay.swift` draws the classic chart (pips on the
+left-of-travel side = direction of motion, verified) and morphs between valid
+times. Wind arrows now scale with speed from ~3 kt instead of hiding below 8 kt.
+
 Parked, fully built: **forecast radar** (HRRR via Iowa Mesonet, +6 h model
 frames) behind `RadarModel.modelFramesEnabled = false` — flip one Bool to ship;
 while false the app makes zero IEM / `/radar/hrrr` requests.

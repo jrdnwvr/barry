@@ -142,6 +142,10 @@ times. Wind is a particle-flow layer by default (`WindFlowView.swift`, Flow/Arro
 picker); arrows scale with speed from ~3 kt. `/front` also names the nearest
 WPC-analyzed front (`nearestFront`: type, distance, bearing, and motion/ETA
 from WPC's 12 h prog) — enrichment only, the backtested status logic is untouched.
+The radar is its own pushed screen (`RadarScreen`; map full-bleed, floating
+bottom card, collapsible Layers panel) and has a **station layer**: `/metars`
+returns bbox winds in knots, `StationLayer.swift` draws METAR wind barbs or
+speed labels (Off/Barbs/Speeds, `@AppStorage("radarStations")`).
 
 Parked, fully built: **forecast radar** (HRRR via Iowa Mesonet, +6 h model
 frames) behind `RadarModel.modelFramesEnabled = false` — flip one Bool to ship;

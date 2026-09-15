@@ -119,60 +119,68 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, minHeight: 320)
         case .loaded(let combined):
             VStack(alignment: .leading, spacing: 20) {
-                // The glance: station, live-aware current value, trend, verdict.
-                // The station row doubles as the saved-locations switcher.
-                HeroView(combined: combined, unit: unit, barometer: barometer,
-                         now: store.now, barometerEnabled: localSensorActive,
-                         locations: savedLocations.locations,
-                         selectedLocationID: savedLocations.selectedID,
-                         onSelectLocation: { savedLocations.selectedID = $0 })
-
-                // Front watch: absent on quiet days, one row when the regional
-                // field shows a pattern. Everything deeper lives in its sheet.
-                frontBanner(combined)
-
-                // The focused trend: window toggle + chart + the honest caveat.
-                trendSection(combined)
-
-                // Secondary: wind + rain confirmation, always expanded.
-                ConfirmationOverlayView(combined: combined, now: store.now)
-
-                // Field conditions: DA now + trend, fog outlook when one exists.
-                // Only when there's something to say — never an empty card.
-                if let cond = combined.conditions,
-                   cond.densityAltitudeFt != nil || !cond.daForecast.isEmpty || cond.fog != nil {
-                    FieldConditionsCard(conditions: cond)
-                }
-
-                // Crosswind per runway from the METAR wind; nothing when calm
-                // or the field has no runway data.
-                RunwayWindsCard(combined: combined)
-
-                // Radar: the sky itself, as corroboration for the trend. Sheet keeps
-                // the main screen a glance. Needs station coords to center on.
-                if let rlat = combined.pressure.lat, let rlon = combined.pressure.lon {
-                    RadarRow(lat: rlat, lon: rlon,
-                             stationName: combined.pressure.name ?? combined.pressure.station)
-                }
-
-                // Sensor vs Station: a compact entry row — the full comparison panel
-                // (windows, legend, Δ, Measure now) lives on its own screen so the
-                // default experience stays glance + verdict + chart. Physical
-                // location only: comparing the pocket barometer to a remote
-                // station is meaningless.
-                if localSensorActive {
-                    SensorStationRow(
-                        combined: combined,
-                        now: store.now,
-                        unit: unit,
-                        barometer: barometer
-                    )
-                }
-
-                DataSourceFootnote(combined: combined)
+                glanceCards(combined, layout: .phone)
             }
             .padding(.vertical)
         }
+    }
+
+    /// Which chrome the card list is embedded in. The phone stack carries the
+    /// chart and the radar row inline; the iPad dashboard puts those in their
+    /// own columns and only wants the glance cards.
+    private enum GlanceLayout { case phone, dashboard }
+
+    /// THE list of cards, in order, for both layouts. Adding a card here adds
+    /// it everywhere; there is no second list to forget.
+    @ViewBuilder
+    private func glanceCards(_ combined: CombinedResponse, layout: GlanceLayout) -> some View {
+        // The glance: station, live-aware current value, trend, verdict.
+        // The station row doubles as the saved-locations switcher.
+        HeroView(combined: combined, unit: unit, barometer: barometer,
+                 now: store.now, barometerEnabled: localSensorActive,
+                 locations: savedLocations.locations,
+                 selectedLocationID: savedLocations.selectedID,
+                 onSelectLocation: { savedLocations.selectedID = $0 })
+
+        // Front watch: absent on quiet days, one row when the regional
+        // field shows a pattern. Everything deeper lives in its sheet.
+        frontBanner(combined)
+
+        // The focused trend: window toggle + chart + the honest caveat.
+        if layout == .phone {
+            trendSection(combined)
+        }
+
+        // Secondary: wind + rain confirmation, always expanded.
+        ConfirmationOverlayView(combined: combined, now: store.now)
+
+        // Field conditions: DA now + trend, fog outlook when one exists.
+        // Only when there's something to say — never an empty card.
+        if let cond = combined.conditions,
+           cond.densityAltitudeFt != nil || !cond.daForecast.isEmpty || cond.fog != nil {
+            FieldConditionsCard(conditions: cond)
+        }
+
+        // Crosswind per runway from the METAR wind; nothing when calm
+        // or the field has no runway data.
+        RunwayWindsCard(combined: combined)
+
+        // Radar: the sky itself, as corroboration for the trend. Its own
+        // screen; needs station coords to center on.
+        if layout == .phone, let rlat = combined.pressure.lat, let rlon = combined.pressure.lon {
+            RadarRow(lat: rlat, lon: rlon,
+                     stationName: combined.pressure.name ?? combined.pressure.station)
+        }
+
+        // Sensor vs Station: a compact entry row — the full comparison panel
+        // lives on its own screen. Physical location only: comparing the
+        // pocket barometer to a remote station is meaningless.
+        if localSensorActive {
+            SensorStationRow(combined: combined, now: store.now,
+                             unit: unit, barometer: barometer)
+        }
+
+        DataSourceFootnote(combined: combined)
     }
 
     /// The front-watch banner, shared by both layouts. Guarded three ways: the
@@ -276,28 +284,7 @@ struct ContentView: View {
     private func glanceRail(_ combined: CombinedResponse) -> some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 20) {
-                HeroView(combined: combined, unit: unit, barometer: barometer,
-                         now: store.now, barometerEnabled: localSensorActive,
-                         locations: savedLocations.locations,
-                         selectedLocationID: savedLocations.selectedID,
-                         onSelectLocation: { savedLocations.selectedID = $0 })
-
-                frontBanner(combined)
-
-                ConfirmationOverlayView(combined: combined, now: store.now)
-
-                if let cond = combined.conditions {
-                    FieldConditionsCard(conditions: cond)
-                }
-
-                RunwayWindsCard(combined: combined)
-
-                if localSensorActive {
-                    SensorStationRow(combined: combined, now: store.now,
-                                     unit: unit, barometer: barometer)
-                }
-
-                DataSourceFootnote(combined: combined)
+                glanceCards(combined, layout: .dashboard)
             }
         }
         .frame(width: 340)
@@ -311,9 +298,6 @@ struct ContentView: View {
                        stationName: combined.pressure.name ?? combined.pressure.station,
                        onExpand: { showRadarFullScreen = true },
                        embedded: true)
-                // The map centers itself once, at creation: a station switch
-                // must rebuild the panel or it stays on the old city.
-                .id("\(rlat),\(rlon)")
                 .frame(maxHeight: .infinity)
         } else {
             Spacer()

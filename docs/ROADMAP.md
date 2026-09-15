@@ -194,7 +194,7 @@ snapshot; it's a rendering change.
 RadarPanel. Three files, no behavior change. Do this before B and C touch
 the radar again.
 
-**E2. One card list for phone and iPad.** (S)
+**E2. One card list for phone and iPad.** (S) DONE 2026-09-15: `glanceCards(_:layout:)`; embedded radar now recenters instead of rebuilding.
 ContentView builds the phone stack and the iPad dashboard as two separate
 lists; every new card (I did it twice today) is added in two places and
 can drift. Extract a single `cards(for:)` builder both layouts consume.

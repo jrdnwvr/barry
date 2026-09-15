@@ -175,6 +175,8 @@ struct RadarMapView: UIViewRepresentable {
         var frontRenderer: FrontFieldRenderer?
         var lastFrontVersion = -1
         var centerAnnotations: [PressureCenterAnnotation] = []
+        var homePin: MKPointAnnotation?
+        var centeredOn: CLLocationCoordinate2D?
         var flowView: WindFlowView?
         var stationAnnotations: [StationAnnotation] = []
         var shownStations: [StationObs] = []
@@ -440,10 +442,24 @@ struct RadarMapView: UIViewRepresentable {
         let pin = MKPointAnnotation()
         pin.coordinate = center
         map.addAnnotation(pin)
+        context.coordinator.homePin = pin
+        context.coordinator.centeredOn = center
         return map
     }
 
     func updateUIView(_ map: MKMapView, context: Context) {
+        // A station switch (the iPad dashboard resolving location after first
+        // paint, or a saved place) moves the home pin and glides the map
+        // there; the region change then refetches the location-bound layers.
+        // Cheaper than rebuilding the whole panel and its model.
+        if let was = context.coordinator.centeredOn,
+           was.latitude != center.latitude || was.longitude != center.longitude {
+            context.coordinator.centeredOn = center
+            context.coordinator.homePin?.coordinate = center
+            map.setRegion(MKCoordinateRegion(
+                center: center,
+                span: MKCoordinateSpan(latitudeDelta: 3.2, longitudeDelta: 3.2)), animated: true)
+        }
         // Lazily add an overlay per frame (RainViewer "Dark Sky" scheme = color 8;
         // options 1_1 = smoothed + snow shown distinctly). Past RainViewer's native
         // z7 the overlay itself crops + upscales ancestor tiles (see loadTile) —

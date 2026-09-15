@@ -16,7 +16,7 @@ The rule in CLAUDE.md is "clients never talk to upstreams". The audit found
 four places that still do, plus two backend calls that are now redundant
 with the bulk METAR table.
 
-**A1. Proxy the radar's Open-Meteo wind grid and boundary-layer grid.** (S)
+**A1. Proxy the radar's Open-Meteo wind grid and boundary-layer grid.** (S) DONE 2026-09-15, commit 1c2484b: `/radar/field`, one call for both layers.
 `RadarModel.fetchWind` and `fetchBoundaryLayer` call api.open-meteo.com
 directly from the phone for every map pan (one multi-point request each).
 Every user pays it; nothing is shared. Move both behind `/wind-grid` and
@@ -226,7 +226,7 @@ forecasts, ad hoc) makes deploys invisible to users.
 - `/combined` and the scheduler share the pressure cache; no double fetch.
 - `/metars` and (after A3) nearest station: zero upstream calls per user.
 - `/front`: one 8 h bbox call per station per 15 min (A4 removes it).
-- Radar wind and boundary layer: direct from the phone per pan (A1).
+- Radar wind and boundary layer: one backend call per region cell per 10 min (A1 done).
 - RainViewer frame list: direct from the phone per open (A2).
 - Fronts (WPC via IEM): one call per 30 min, global. Fine.
 - Foreground polling: `/combined` and `/front` every 5 min while active;

@@ -233,6 +233,20 @@ class StationsResponse(BaseModel):
     cachedAt: datetime
 
 
+class RadarFrameOut(BaseModel):
+    """One radar frame: unix valid time and the RainViewer tile path."""
+
+    time: int
+    path: str
+    nowcast: bool = False
+
+
+class RadarFramesResponse(BaseModel):
+    host: str
+    frames: List[RadarFrameOut] = Field(default_factory=list)
+    cachedAt: datetime
+
+
 class HrrrMeta(BaseModel):
     """Latest HRRR model run IEM is serving tiles for. Forecast minute F on the
     tile layer is valid at run + F — the client needs this to label forecast

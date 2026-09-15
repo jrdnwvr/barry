@@ -213,6 +213,19 @@ struct FrontsResponse: Codable, Hashable {
     let cachedAt: Date
 }
 
+/// The radar timeline as the backend trimmed it: observed frames then nowcast.
+struct RadarFrameOut: Codable, Hashable {
+    let time: Int
+    let path: String
+    var nowcast: Bool = false
+}
+
+struct RadarFramesResponse: Codable, Hashable {
+    let host: String
+    let frames: [RadarFrameOut]
+    let cachedAt: Date
+}
+
 /// Latest HRRR model run IEM serves forecast-reflectivity tiles for. Forecast
 /// minute F on a tile layer is valid at run + F.
 struct HrrrMeta: Codable, Hashable {

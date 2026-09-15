@@ -246,6 +246,19 @@ def sample_field_grid(request):
     return out
 
 
+def sample_rainviewer_maps(past=13, nowcast=2):
+    """RainViewer weather-maps.json: 10-minute frames, hashed paths."""
+    base = 1789495800
+    return {
+        "version": "2.0", "generated": base, "host": "https://tilecache.rainviewer.com",
+        "radar": {
+            "past": [{"time": base - 600 * (past - 1 - i), "path": f"/v2/radar/p{i:02d}"} for i in range(past)],
+            "nowcast": [{"time": base + 600 * (i + 1), "path": f"/v2/radar/n{i:02d}"} for i in range(nowcast)],
+        },
+        "satellite": {"infrared": []},
+    }
+
+
 class FakeUpstream:
     """Records calls and serves canned AWC / Open-Meteo responses."""
 
@@ -269,6 +282,8 @@ class FakeUpstream:
         # Bulk METAR cache: served gzip'd like AWC; extra_rows lets a test
         # pile on stations to exercise thinning.
         self.bulk_fail = False
+        self.rv_fail = False
+        self.rv_calls = 0
         self.bulk_extra_rows = ()
         self.bulk_calls = 0
 
@@ -303,6 +318,11 @@ class FakeUpstream:
             body = gzip.compress(sample_metar_cache(self.bulk_extra_rows).encode("utf-8"))
             return httpx.Response(200, content=body,
                                   headers={"content-type": "application/x-gzip"})
+        if "rainviewer.com" in url:
+            self.rv_calls += 1
+            if self.rv_fail:
+                return httpx.Response(503, text="down")
+            return httpx.Response(200, json=sample_rainviewer_maps())
         if "aviationweather.gov" in url:
             self.awc_calls.append(request)
             if self.awc_fail:

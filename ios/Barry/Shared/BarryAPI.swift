@@ -92,6 +92,11 @@ struct BarryAPI {
         try await get(baseURL.appendingPathComponent("fronts"))
     }
 
+    /// RainViewer's frame list, trimmed and cached by the backend.
+    func radarFrames() async throws -> RadarFramesResponse {
+        try await get(baseURL.appendingPathComponent("radar/frames"))
+    }
+
     /// Latest HRRR run for forecast-radar frames. 503/failure just means the
     /// radar timeline ends at the RainViewer nowcast.
     func hrrrRun() async throws -> HrrrMeta {

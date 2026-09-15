@@ -147,6 +147,17 @@ async def get_metars(
     return resp.model_dump(mode="json", by_alias=True)
 
 
+@app.get("/radar/frames")
+async def radar_frames():
+    """RainViewer's frame list, trimmed to what the timeline shows and shared
+    across users (one upstream call per two minutes)."""
+    try:
+        resp = await get_service().get_radar_frames()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"radar frames unavailable: {exc}")
+    return resp.model_dump(mode="json", by_alias=True)
+
+
 @app.get("/radar/field")
 async def radar_field(
     lat: float = Query(..., ge=-90, le=90),

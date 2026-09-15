@@ -22,6 +22,7 @@ from .cache import StationRegistry, TTLCache
 from .interpreter import Sample, interpret
 from .models import (
     FieldGridResponse,
+    RadarFramesResponse,
     CombinedResponse,
     CurrentObs,
     ForecastResponse,
@@ -39,6 +40,7 @@ from .models import (
 from .sources import aviationweather as awc
 from .sources import iem
 from .sources import openmeteo as om
+from .sources import rainviewer as rv
 from .sources import wpc
 from .tendency import resolve_tendency
 from .verdict import build_verdict
@@ -53,6 +55,7 @@ FRONTS_TTL = 30 * 60.0    # WPC redraws the chart every 3 h; 30 min is plenty
 STATIONS_TTL = 10 * 60.0  # radar station layer: METARs are hourly, specials aside
 BULK_TTL = 5 * 60.0       # AWC's whole-world METAR cache: one 250 KB pull serves everyone
 FIELD_TTL = 10 * 60.0     # radar wind/BL grid: model updates hourly; one call per region cell
+FRAMES_TTL = 2 * 60.0     # RainViewer adds a frame every 10 min; 2 min keeps the newest near-live
 STATIONS_MAX = 350        # most annotation views a phone map should carry
 
 # Stale-if-error: when Open-Meteo is down, re-serve the last good forecast for up
@@ -411,6 +414,19 @@ class PressureService:
                     "lon": info["lon"], "distance_km": round(dist, 1)}
         await self.cache.set(cache_key, best, ttl=STATIONS_TTL)
         return best
+
+    # ---- Radar frames (RainViewer) -------------------------------------------
+
+    async def get_radar_frames(self) -> RadarFramesResponse:
+        """The radar timeline: last 7 observed frames + up to 3 nowcast, from
+        one RainViewer call every two minutes for every user (the app used to
+        fetch the full list itself on every radar open)."""
+        cached = await self.cache.get("radar_frames")
+        if cached is not None:
+            return cached
+        resp = await rv.fetch_frames(self._client, now=_now())
+        await self.cache.set("radar_frames", resp, ttl=FRAMES_TTL)
+        return resp
 
     # ---- Radar model field (wind + boundary layer) ------------------------
 

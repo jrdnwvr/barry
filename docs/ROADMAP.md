@@ -24,7 +24,7 @@ Every user pays it; nothing is shared. Move both behind `/wind-grid` and
 one call per region per ten minutes for everyone. Also removes the phone's
 last dependence on Open-Meteo's URL format.
 
-**A2. Proxy RainViewer's frame list.** (S)
+**A2. Proxy RainViewer's frame list.** (S) DONE 2026-09-15: `/radar/frames`, 2 min TTL.
 `RadarModel.load` fetches `weather-maps.json` from RainViewer on every
 radar open. Serve it from `/radar/frames` with a 5 min TTL: one upstream
 call per five minutes total, and the app gets a clean model (frames + host)
@@ -227,7 +227,7 @@ forecasts, ad hoc) makes deploys invisible to users.
 - `/metars` and (after A3) nearest station: zero upstream calls per user.
 - `/front`: one 8 h bbox call per station per 15 min (A4 removes it).
 - Radar wind and boundary layer: one backend call per region cell per 10 min (A1 done).
-- RainViewer frame list: direct from the phone per open (A2).
+- RainViewer frame list: one backend call per 2 min total (A2 done).
 - Fronts (WPC via IEM): one call per 30 min, global. Fine.
 - Foreground polling: `/combined` and `/front` every 5 min while active;
   server TTLs (12 and 15 min) make most of those cache hits. Fine.

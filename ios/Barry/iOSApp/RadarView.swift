@@ -177,24 +177,16 @@ final class RadarModel: ObservableObject {
         frames.lastIndex(where: { !$0.nowcast }) ?? 0
     }
 
+    /// The timeline comes from the backend (`/radar/frames`), already trimmed
+    /// to the seven observed frames plus nowcast and shared across users, so a
+    /// radar open costs one small request and RainViewer sees one call every
+    /// two minutes total.
     func load() async {
         failed = false
-        struct Maps: Decodable {
-            struct Entry: Decodable { let time: Int; let path: String }
-            struct Radar: Decodable { let past: [Entry]; let nowcast: [Entry] }
-            let host: String
-            let radar: Radar
-        }
         do {
-            let url = URL(string: "https://api.rainviewer.com/public/weather-maps.json")!
-            let (data, _) = try await URLSession.shared.data(from: url)
-            let maps = try JSONDecoder().decode(Maps.self, from: data)
-            host = maps.host
-            let past = maps.radar.past.suffix(7)
-                .map { RadarFrame(time: $0.time, path: $0.path, nowcast: false) }
-            let cast = maps.radar.nowcast.prefix(3)
-                .map { RadarFrame(time: $0.time, path: $0.path, nowcast: true) }
-            frames = Array(past) + Array(cast)
+            let resp = try await BarryAPI().radarFrames()
+            host = resp.host
+            frames = resp.frames.map { RadarFrame(time: $0.time, path: $0.path, nowcast: $0.nowcast) }
             index = nowIndex
         } catch {
             failed = true

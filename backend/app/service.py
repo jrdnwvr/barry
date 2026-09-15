@@ -96,6 +96,38 @@ def _thin_stations(box, lat, lon, half, lon_half, limit):
     return [v[1] for v in best.values()]
 
 
+
+NEAREST_FRESH_H = 3.0     # prefer a station that reported within this many hours
+NEAREST_BOX_DEG = 5.0     # cheap pre-filter before the haversine pass
+
+
+def _nearest_in_table(table, lat, lon, now):
+    """Closest pressure-reporting station in the bulk table: a cheap box
+    filter first, then haversine only on the survivors. Fresh reports win;
+    a stale nearest is used only when nothing fresh is within the box."""
+    from datetime import timedelta
+    cutoff = now - timedelta(hours=NEAREST_FRESH_H)
+    cos_lat = max(0.2, math.cos(math.radians(lat)))
+    best_fresh = best_any = None
+    for s in table:
+        if s.altim is None:
+            continue
+        if abs(s.lat - lat) > NEAREST_BOX_DEG or abs(s.lon - lon) * cos_lat > NEAREST_BOX_DEG:
+            continue
+        d = stations._haversine_km(lat, lon, s.lat, s.lon)
+        fresh = s.obsTime is not None and s.obsTime >= cutoff
+        if fresh and (best_fresh is None or d < best_fresh[0]):
+            best_fresh = (d, s)
+        if best_any is None or d < best_any[0]:
+            best_any = (d, s)
+    pick = best_fresh or best_any
+    if pick is None:
+        return None
+    d, s = pick
+    return {"station": s.id, "name": s.name or s.id, "lat": s.lat, "lon": s.lon,
+            "distance_km": round(d, 1)}
+
+
 class PressureService:
     def __init__(
         self,
@@ -376,15 +408,34 @@ class PressureService:
         return resp
 
     async def nearest_reporting_station(self, lat: float, lon: float) -> dict:
-        """The closest station that actually reports pressure, found by asking
-        AWC for everything in a box around the point (widened once for remote
-        areas). The tiny built-in table is only the last resort — it used to be
-        the ONLY resort, which sent anyone outside ten metros to the wrong city."""
+        """The closest station that reports pressure, from the in-memory bulk
+        METAR table (no upstream call). A station whose latest report is
+        older than 3 h is passed over if a fresh one is nearby. Falls back to
+        an AWC bbox query when the bulk table is unavailable, and to the
+        built-in table as a last resort."""
         cache_key = f"nearest:{round(lat * 5) / 5}:{round(lon * 5) / 5}"
         cached = await self.cache.get(cache_key)
         if cached is not None:
             return cached
 
+        best = None
+        table = await self.metar_bulk()
+        if table is not None:
+            best = _nearest_in_table(table, lat, lon, _now())
+        if best is None:
+            best = await self._nearest_via_bbox(lat, lon)
+        if best is None:
+            fallback = stations.nearest(lat, lon)
+            if fallback is None:
+                raise LookupError("no stations known")
+            sid, info, dist = fallback
+            best = {"station": sid, "name": info["name"], "lat": info["lat"],
+                    "lon": info["lon"], "distance_km": round(dist, 1)}
+        await self.cache.set(cache_key, best, ttl=STATIONS_TTL)
+        return best
+
+    async def _nearest_via_bbox(self, lat: float, lon: float) -> Optional[dict]:
+        """Old path: one or two bbox METAR calls. Only when the bulk pull failed."""
         best = None
         for half in (1.4, 4.0):
             try:
@@ -404,15 +455,6 @@ class PressureService:
                             "lat": p["lat"], "lon": p["lon"], "distance_km": round(d, 1)}
             if best is not None:
                 break
-
-        if best is None:
-            fallback = stations.nearest(lat, lon)
-            if fallback is None:
-                raise LookupError("no stations known")
-            sid, info, dist = fallback
-            best = {"station": sid, "name": info["name"], "lat": info["lat"],
-                    "lon": info["lon"], "distance_km": round(dist, 1)}
-        await self.cache.set(cache_key, best, ttl=STATIONS_TTL)
         return best
 
     # ---- Radar frames (RainViewer) -------------------------------------------

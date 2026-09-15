@@ -189,7 +189,7 @@ snapshot; it's a rendering change.
 
 ## E. Structural debt
 
-**E1. Split RadarView.swift.** (S)
+**E1. Split RadarView.swift.** (S) DONE 2026-09-15: RadarModel.swift (278), RadarMapView.swift (481), RadarView.swift (514).
 1,341 lines holding RadarModel, RadarMapView with its coordinator, and
 RadarPanel. Three files, no behavior change. Do this before B and C touch
 the radar again.

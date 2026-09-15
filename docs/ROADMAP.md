@@ -67,7 +67,7 @@ appears under the chart. The drag is precise but fiddly, the card pushes
 the layout, and the two features you most want to inspect (the feature pin
 and the front-edge marker) can't be selected directly.
 
-**B1. Select events, not pixels.** (M)
+**B1. Select events, not pixels.** (M) DONE 2026-09-15: chips (Around the <feature>, Last 3 h, Since midnight, Next 6 h) + tap on the feature pin.
 Make the chart's markers tappable selections: tap the "trough" or "front
 edge" pin and the window around that feature (feature time minus 3 h to
 plus 3 h, clipped to data) is selected and analyzed. Add three preset chips

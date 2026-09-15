@@ -175,8 +175,63 @@ struct PressureChartView: View {
         VStack(alignment: .leading, spacing: 6) {
             chartView
                 .frame(height: height)
+            if rangeAnalysis == nil && selected == nil {
+                presetChips
+            }
             readout
         }
+    }
+
+    // MARK: - Event + preset selection
+
+    /// One-tap windows. The event chip only appears while the interpreter
+    /// has a feature pinned on the chart; the others depend on what data
+    /// exists, so nothing offers a window that would read "too short".
+    private var presets: [(label: String, range: ClosedRange<Date>)] {
+        let h = 3600.0
+        var out: [(String, ClosedRange<Date>)] = []
+        if let reading = combined.reading, let ft = reading.featureTime,
+           let label = featureChartLabel(reading.feature) {
+            out.append(("Around the \(label)", ft.addingTimeInterval(-3 * h)...ft.addingTimeInterval(3 * h)))
+        }
+        out.append(("Last 3 h", now.addingTimeInterval(-3 * h)...now))
+        let midnight = Calendar.current.startOfDay(for: now)
+        if now.timeIntervalSince(midnight) >= 2 * h {
+            out.append(("Since midnight", midnight...now))
+        }
+        if let last = forecast.last?.t, last > now.addingTimeInterval(h) {
+            out.append(("Next 6 h", now...min(last, now.addingTimeInterval(6 * h))))
+        }
+        return out.map { (label: $0.0, range: $0.1) }
+    }
+
+    private var presetChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(presets, id: \.label) { p in
+                    Button { selectRange(p.range) } label: {
+                        Text(p.label)
+                            .font(.caption.weight(.medium))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color(.secondarySystemBackground), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    /// Select a window, clipped to the data on hand, and analyze it. Every
+    /// selection path (chips, the event pin, a drag) ends here.
+    private func selectRange(_ r: ClosedRange<Date>) {
+        let first = observed.first?.t ?? r.lowerBound
+        let last = forecast.last?.t ?? observed.last?.t ?? r.upperBound
+        let lo = max(r.lowerBound, first), hi = min(r.upperBound, last)
+        guard hi > lo else { return }
+        selected = nil
+        rangeSelection = lo...hi
+        finalizeRange()
     }
 
     // MARK: - Chart content (split so the type-checker doesn't time out)
@@ -399,6 +454,15 @@ struct PressureChartView: View {
                         SpatialTapGesture().onEnded { value in
                             rangeSelection = nil
                             rangeAnalysis = nil
+                            // A tap on the feature pin's line selects the
+                            // event's window rather than reading one point.
+                            if let ft = combined.reading?.featureTime,
+                               let plotFrame = proxy.plotFrame,
+                               let fx = proxy.position(forX: ft),
+                               abs((value.location.x - geo[plotFrame].origin.x) - fx) < 14 {
+                                selectRange(ft.addingTimeInterval(-3 * 3600)...ft.addingTimeInterval(3 * 3600))
+                                return
+                            }
                             selectAt(location: value.location, proxy: proxy, geo: geo)
                         }
                     )

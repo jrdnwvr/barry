@@ -130,6 +130,18 @@ def _current_obs(newest: dict) -> CurrentObs:
     )
 
 
+def _series_point(p: dict) -> SeriesPoint:
+    vis = _visibility_sm(p.get("visib"))
+    ceiling_ft, _ = _ceiling(p.get("clouds"))
+    return SeriesPoint(
+        t=p["t"], slp=p["slp"], altim=p["altim"],
+        windKmh=_wind_kmh(p.get("wspd")), windDir=_wind_dir(p.get("wdir")),
+        gustKmh=_wind_kmh(p.get("wgst")), temp=p.get("temp"), dewpoint=p.get("dewp"),
+        visibilitySM=vis, ceilingFt=ceiling_ft,
+        fltCat=p.get("fltCat") or _flight_category(vis, ceiling_ft),
+    )
+
+
 def parse_records(records: Sequence[dict]) -> Dict[str, dict]:
     """Group raw METAR records by station id into a normalized intermediate form.
 
@@ -187,9 +199,7 @@ def parse_records(records: Sequence[dict]) -> Dict[str, dict]:
             "lat": any_of("lat"),
             "lon": any_of("lon"),
             "elev": any_of("elev"),
-            "series": [
-                SeriesPoint(t=p["t"], slp=p["slp"], altim=p["altim"]) for p in points
-            ],
+            "series": [_series_point(p) for p in points],
             # Wind + aviation conditions from the newest METAR — real measurements,
             # so the client can prefer them over the model for "now" (METAR-first).
             "current": _current_obs(newest),

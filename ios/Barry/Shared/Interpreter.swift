@@ -59,6 +59,8 @@ struct Reading: Hashable, Codable {
     let featureTime: Date?
     let confidence: Double
     let caveats: [String]
+    /// What else agrees or disagrees (C1). Optional: absent on old backends.
+    var explanation: ExplanationOut?
 }
 
 // MARK: - Helpers

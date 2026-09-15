@@ -15,6 +15,7 @@ from typing import Optional
 import httpx
 
 from . import conditions as conditions_mod
+from . import explain
 from . import runways
 from . import front as front_mod
 from . import stations
@@ -530,6 +531,7 @@ class PressureService:
         station: str,
         lat: Optional[float] = None,
         lon: Optional[float] = None,
+        tz_minutes: Optional[int] = None,
     ) -> CombinedResponse:
         pressure = await self.get_pressure(station)
 
@@ -545,7 +547,20 @@ class PressureService:
                 forecast = None  # forecast is enrichment; never block the response
 
         interp, local_offset = _run_interpreter(pressure, forecast)
+        # The client's real UTC offset beats the longitude/15 guess (which is
+        # an hour off wherever daylight saving is in effect).
+        if tz_minutes is not None:
+            local_offset = tz_minutes / 60.0
         reading_out = _to_reading_out(interp) if interp is not None else None
+        # What else agrees (observed signals + the model's view). Enrichment:
+        # never blocks the response.
+        if reading_out is not None:
+            try:
+                reading_out.explanation = explain.build(
+                    interp, forecast.hourly if forecast else None, pressure.series,
+                    _now(), local_hour_offset=local_offset)
+            except Exception:
+                reading_out.explanation = None
 
         tendency_class = pressure.tendency.cls if pressure.tendency else None
         verdict = build_verdict(

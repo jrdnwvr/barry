@@ -101,9 +101,11 @@ async def get_combined(
     station: str = Query(...),
     lat: Optional[float] = Query(None, ge=-90, le=90),
     lon: Optional[float] = Query(None, ge=-180, le=180),
+    tz: Optional[int] = Query(None, ge=-14 * 60, le=14 * 60,
+                              description="client UTC offset in minutes, for local times in copy"),
 ):
     service = get_service()
-    resp = await service.get_combined(station, lat, lon)
+    resp = await service.get_combined(station, lat, lon, tz_minutes=tz)
     return resp.model_dump(mode="json", by_alias=True)
 
 

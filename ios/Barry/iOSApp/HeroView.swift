@@ -85,6 +85,16 @@ struct HeroView: View {
                 .font(.headline)
                 .fixedSize(horizontal: false, vertical: true)
 
+            // What else agrees (observed at the station, or the model's view).
+            // Pressure leads; this is the corroboration, and disagreement is
+            // said out loud.
+            if let why = combined.reading?.explanation?.summary, !why.isEmpty {
+                Text(why)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if let note = honestyNote {
                 Text(note).font(.caption).foregroundStyle(.secondary)
             }

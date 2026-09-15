@@ -44,6 +44,9 @@ struct BarryAPI {
         var items = [URLQueryItem(name: "station", value: station)]
         if let lat { items.append(URLQueryItem(name: "lat", value: String(lat))) }
         if let lon { items.append(URLQueryItem(name: "lon", value: String(lon))) }
+        // The verdict and explanation quote local clock times; the device
+        // knows the real offset (with daylight saving), the server can only guess.
+        items.append(URLQueryItem(name: "tz", value: String(TimeZone.current.secondsFromGMT() / 60)))
         comps?.queryItems = items
         return try await get(comps?.url)
     }

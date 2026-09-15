@@ -10,6 +10,15 @@ struct SeriesPoint: Codable, Identifiable, Hashable {
     let t: Date
     let slp: Double?
     let altim: Double?
+    // The rest of the report (km/h, °C); optional: absent on old backends.
+    var windKmh: Double?
+    var windDir: Double?
+    var gustKmh: Double?
+    var temp: Double?
+    var dewpoint: Double?
+    var visibilitySM: Double?
+    var ceilingFt: Int?
+    var fltCat: String?
 
     var id: Date { t }
     /// Preferred pressure value for plotting: SLP, falling back to altimeter.
@@ -96,6 +105,21 @@ struct ForecastResponse: Codable, Hashable {
 struct Sources: Codable, Hashable {
     let observed: String
     let forecast: String?
+}
+
+// MARK: - Explanation (what else agrees with the pressure signal)
+
+struct SignalOut: Codable, Hashable {
+    let kind: String
+    let at: Date
+    let text: String
+    let source: String   // "metar" (observed here) | "model" (forecast)
+}
+
+struct ExplanationOut: Codable, Hashable {
+    let summary: String
+    var supporting: [SignalOut] = []
+    var conflicting: [SignalOut] = []
 }
 
 // MARK: - Field conditions (density altitude + fog risk)

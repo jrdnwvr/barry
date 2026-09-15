@@ -16,6 +16,16 @@ class SeriesPoint(BaseModel):
     t: datetime
     slp: Optional[float] = None
     altim: Optional[float] = None
+    # The rest of each METAR, kept so the reading can see a wind shift, a
+    # temperature drop, or a category change, not just pressure. km/h, °C.
+    windKmh: Optional[float] = None
+    windDir: Optional[float] = None
+    gustKmh: Optional[float] = None
+    temp: Optional[float] = None
+    dewpoint: Optional[float] = None
+    visibilitySM: Optional[float] = None
+    ceilingFt: Optional[int] = None
+    fltCat: Optional[str] = None
 
 
 class CurrentObs(BaseModel):
@@ -88,6 +98,25 @@ class ForecastResponse(BaseModel):
     stale: bool = False
 
 
+class SignalOut(BaseModel):
+    """One piece of evidence about the change, with when it happens/happened.
+    `source` is "metar" (observed at the station) or "model" (forecast)."""
+
+    kind: str
+    at: datetime
+    text: str
+    source: str
+
+
+class ExplanationOut(BaseModel):
+    """What else agrees with the pressure signal, and what doesn't. Pressure
+    leads; these are corroboration, labeled by source, never a replacement."""
+
+    summary: str
+    supporting: List[SignalOut] = Field(default_factory=list)
+    conflicting: List[SignalOut] = Field(default_factory=list)
+
+
 class ReadingOut(BaseModel):
     """Structured curve interpretation (brief §4.3). Computed server-side over
     the merged observed+forecast series so both clients see the same answer."""
@@ -99,6 +128,7 @@ class ReadingOut(BaseModel):
     featureTime: Optional[datetime] = None
     confidence: float
     caveats: List[str] = Field(default_factory=list)
+    explanation: Optional[ExplanationOut] = None
 
 
 class FrontStationOut(BaseModel):

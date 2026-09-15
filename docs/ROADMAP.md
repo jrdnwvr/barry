@@ -108,7 +108,7 @@ more useful. None of this is against the spirit as long as the sentence
 leads with the pressure and says "the model agrees" or "the model
 disagrees" rather than replacing the barometer with the forecast.
 
-**C1. Explain the change, not just the shape.** (M)
+**C1. Explain the change, not just the shape.** (M) DONE 2026-09-15: `explanation` block on the reading (supporting/conflicting, metar vs model), summary under the verdict; client now sends its real UTC offset.
 Extend the interpreter's `Reading` with an `explanation` block: the
 detected feature, the nearest WPC front and its ETA (already computed for
 the banner), and the forecast's own view of the same hours (rain
@@ -120,7 +120,7 @@ the model shifts wind to 310 at 7 PM and puts rain at 5 PM." When the
 model disagrees, say so: that's the most useful sentence a barometer app
 can offer.
 
-**C2. Wind shift and gust detection from METAR history.** (S)
+**C2. Wind shift and gust detection from METAR history.** (S) DONE 2026-09-15: series points carry wind/temp/vis/ceiling/category; `signals.py` detects shift, gust onset, temp drop, category change.
 The METAR parser already sees per-report wind but only keeps pressure in
 the series. Keep wind and temperature per point; then the interpreter can
 detect a veer or back of more than 60 degrees in 2 h and a temperature

@@ -31,7 +31,7 @@ call per five minutes total, and the app gets a clean model (frames + host)
 instead of parsing RainViewer's shape. Tiles keep coming from their CDN
 directly, which is what they want.
 
-**A3. Nearest station from the bulk table.** (S)
+**A3. Nearest station from the bulk table.** (S) DONE 2026-09-15, commit 292c363.
 `nearest_reporting_station` still issues a bbox METAR query (hours=3,
 widened once). The in-memory bulk table already has every station's
 position and pressure; pick the closest with an SLP or altimeter. Zero
@@ -224,7 +224,7 @@ forecasts, ad hoc) makes deploys invisible to users.
 ## F. Efficiency check (current state, for the record)
 
 - `/combined` and the scheduler share the pressure cache; no double fetch.
-- `/metars` and (after A3) nearest station: zero upstream calls per user.
+- `/metars` and nearest station: zero upstream calls per user (A3 done).
 - `/front`: one 8 h bbox call per station per 15 min (A4 removes it).
 - Radar wind and boundary layer: one backend call per region cell per 10 min (A1 done).
 - RainViewer frame list: one backend call per 2 min total (A2 done).

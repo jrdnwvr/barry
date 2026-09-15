@@ -39,7 +39,7 @@ upstream calls, and the ten-airport table in `stations.py` becomes
 unnecessary (keep it only for offline unit tests, or delete).
 
 **A4. Front watch ring from the bulk table (needs validation).** (M, then a
-backtest run)
+backtest run) DONE 2026-09-15 differently: the ring series come from a 9.5 h history of bulk snapshots with the validated math untouched (no re-validation needed); bbox only during the 7.5 h cold start, and the history is persisted (E6) so deploys don't restart it.
 `/front` makes the single priciest AWC call left: an 8 hour bbox pull per
 station every 15 minutes, to compute each ring station's 3 h delta from its
 series. The bulk file carries AWC's own `three_hr_pressure_tendency_mb`
@@ -215,7 +215,7 @@ tested without CoreMotion.
 Mac). Add a test action to the workflow so RangeAnalysis, Tendency, and
 the models get exercised on every cloud build.
 
-**E6. Backend: SQLite for the small durable things.** (M) Depends on C5.
+**E6. Backend: SQLite for the small durable things.** (M) Depends on C5. PARTLY DONE 2026-09-15: `persist.py` (atomic pickle in BARRY_DATA_DIR, compose volume ./state) holds the bulk history; reading history (C5) can use the same store.
 The cache is in-process; a restart loses the bulk table, reading history,
 and calibration state. A single SQLite file on the Unraid volume for
 history and the last-good copies of each upstream (already done for

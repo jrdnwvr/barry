@@ -19,6 +19,11 @@ services:
     restart: unless-stopped
     environment:
       - PORT=8080
+      # Small persisted state (bulk-snapshot history for the front watch), so
+      # a redeploy doesn't cost a 7.5 h warm-up. Lives next to the compose file.
+      - BARRY_DATA_DIR=/var/lib/barry
+    volumes:
+      - ./state:/var/lib/barry
     # Optional: also expose on the LAN (e.g. for testing from the server itself).
     # The tunnel does NOT need this — it reaches the container over the compose
     # network as http://barry-backend:8080.

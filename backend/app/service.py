@@ -16,6 +16,7 @@ import httpx
 
 from . import conditions as conditions_mod
 from . import explain
+from . import persist
 from . import runways
 from . import front as front_mod
 from . import stations
@@ -147,7 +148,9 @@ class PressureService:
         self.cache = cache or TTLCache()
         self.registry = registry or StationRegistry()
         # (fetch time, {station: (obsTime, slp, altim, lat, lon)}), oldest first.
-        self._bulk_history: List[tuple] = []
+        # Restored from disk when a data dir is configured, so a restart
+        # doesn't cost the front watch its 7.5 h warm-up.
+        self._bulk_history: List[tuple] = self._load_history()
 
     # ---- pressure (observed) -------------------------------------------------
 
@@ -390,6 +393,16 @@ class PressureService:
         self._bulk_history.append((now, snap))
         cutoff = now - timedelta(hours=HISTORY_KEEP_H)
         self._bulk_history = [h for h in self._bulk_history if h[0] >= cutoff]
+        persist.save("bulk_history", self._bulk_history)
+
+    @staticmethod
+    def _load_history() -> List[tuple]:
+        hist = persist.load("bulk_history") or []
+        cutoff = _now() - timedelta(hours=HISTORY_KEEP_H)
+        hist = [h for h in hist if isinstance(h, tuple) and len(h) == 2 and h[0] >= cutoff]
+        if hist:
+            log.info("bulk history restored: %d snapshots, oldest %s", len(hist), hist[0][0])
+        return hist
 
     def history_span_h(self, now: datetime) -> float:
         if not self._bulk_history:

@@ -980,6 +980,7 @@ struct RadarPanel: View {
     /// Full screen: the map fills the view; the scrubber and front chips float
     /// in a card at the bottom, the layer toggles hide behind a Layers button.
     private var fullScreenContent: some View {
+        GeometryReader { geo in
         ZStack(alignment: .bottom) {
             mapView
                 .ignoresSafeArea(edges: .bottom)
@@ -987,7 +988,9 @@ struct RadarPanel: View {
             VStack(spacing: 0) {
                 HStack(alignment: .top) {
                     Spacer()
-                    layersColumn
+                    // Leave room for the bottom card and the front key on
+                    // short phones; the panel scrolls inside that.
+                    layersColumn(maxPanelHeight: max(220, geo.size.height - 250))
                 }
                 .padding(12)
 
@@ -1007,10 +1010,11 @@ struct RadarPanel: View {
                     .padding(.bottom, 10)
             }
         }
+        }
     }
 
     /// The Layers button and, when open, the panel beneath it.
-    private var layersColumn: some View {
+    private func layersColumn(maxPanelHeight: CGFloat) -> some View {
         VStack(alignment: .trailing, spacing: 8) {
             Button {
                 withAnimation(.snappy(duration: 0.25)) { showLayers.toggle() }
@@ -1025,8 +1029,14 @@ struct RadarPanel: View {
             .accessibilityLabel(showLayers ? "Hide layers" : "Layers")
 
             if showLayers {
-                layersPanel
-                    .transition(.scale(scale: 0.92, anchor: .topTrailing).combined(with: .opacity))
+                ScrollView(showsIndicators: false) {
+                    layersPanel
+                }
+                .frame(width: 290)
+                .frame(maxHeight: maxPanelHeight)
+                .fixedSize(horizontal: false, vertical: true)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                .transition(.scale(scale: 0.92, anchor: .topTrailing).combined(with: .opacity))
             }
         }
     }
@@ -1067,14 +1077,25 @@ struct RadarPanel: View {
             }
             .pickerStyle(.segmented)
             .controlSize(.small)
+            if stationStyle != .off {
+                HStack(spacing: 10) {
+                    ForEach(FlightCategory.order, id: \.self) { cat in
+                        HStack(spacing: 3) {
+                            Circle().fill(FlightCategory.color(cat)).frame(width: 7, height: 7)
+                            Text(cat)
+                        }
+                    }
+                    Spacer()
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
 
             Divider()
             legend
         }
         .font(.subheadline)
         .padding(12)
-        .frame(width: 290)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
     }
 
     /// The things you actually touch: radar scrubber, front chips, and the
@@ -1280,12 +1301,11 @@ struct RadarPanel: View {
     /// The nowcast/model sentences track the model-frames flag so the footer
     /// never describes frames that can't appear.
     private var footerText: String {
-        var text = "\(stationName) marked. Wind streaks drift with the model wind, brighter and faster where it blows harder; arrows are the same field, standing still. "
-        text += RadarModel.modelFramesEnabled
-            ? "Orange frames are a short nowcast; purple frames are HRRR model reflectivity via Iowa Environmental Mesonet, a model guess about where rain will be, not a measurement. "
-            : "Forecast frames show in orange on the timeline. "
-        text += "Radar tiles by RainViewer, data from NOAA NEXRAD. Wind and boundary layer by Open-Meteo. "
-        text += "Fronts are the NWS Weather Prediction Center's chart, positions good to about 50 miles; the forecast positions glide between WPC's 12 hour steps."
+        var text = "Wind streaks and arrows are the Open-Meteo model wind; stations are real METAR reports in knots. "
+        if RadarModel.modelFramesEnabled {
+            text += "Purple frames are HRRR model reflectivity via Iowa Environmental Mesonet, a guess, not a measurement. "
+        }
+        text += "Radar by RainViewer from NOAA NEXRAD. Fronts from the NWS Weather Prediction Center, positions good to about 50 miles."
         return text
     }
 

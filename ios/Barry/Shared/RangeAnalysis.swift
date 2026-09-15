@@ -181,8 +181,11 @@ struct RangeAnalysis: Equatable {
                                 durationH: Double,
                                 unit: PressureUnit) -> (String, String) {
         func clock(_ d: Date) -> String { d.formatted(date: .omitted, time: .shortened) }
+        // Unsigned: the verb ("Fell", "Rose") already carries the direction.
         func mag(_ hPa: Double) -> String {
-            "\(unit.formatDelta(hPa)) \(unit.label)"
+            let v = abs(unit.convertDelta(hPa))
+            let digits = unit == .hPa ? 1 : 2
+            return "\(String(format: "%.\(digits)f", v)) \(unit.label)"
         }
 
         let moving = phases.filter { $0.kind != .steady }

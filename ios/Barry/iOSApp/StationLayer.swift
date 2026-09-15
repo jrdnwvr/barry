@@ -7,10 +7,32 @@
 //  the aviation convention the barbs are defined in.
 
 import MapKit
+import SwiftUI
 import UIKit
 
 enum StationLayerStyle: String {
     case off, barbs, speeds
+}
+
+/// Standard aviation flight-category colors, shared by the METAR readout on
+/// the main page and the station layer on the radar. Nil or unknown category
+/// falls back to the plain label color.
+enum FlightCategory {
+    static let order = ["VFR", "MVFR", "IFR", "LIFR"]
+
+    static func uiColor(_ cat: String?) -> UIColor {
+        switch cat {
+        case "VFR":  return UIColor(red: 0.13, green: 0.62, blue: 0.28, alpha: 1)
+        case "MVFR": return UIColor(red: 0.20, green: 0.48, blue: 0.85, alpha: 1)
+        case "IFR":  return UIColor(red: 0.85, green: 0.22, blue: 0.18, alpha: 1)
+        case "LIFR": return UIColor(red: 0.72, green: 0.20, blue: 0.70, alpha: 1)
+        default:     return .label
+        }
+    }
+
+    static func color(_ cat: String?) -> Color {
+        cat.map(order.contains) == true ? Color(uiColor: uiColor(cat)) : .secondary
+    }
 }
 
 final class StationAnnotation: MKPointAnnotation {
@@ -25,6 +47,7 @@ final class StationAnnotation: MKPointAnnotation {
 final class BarbGlyph: UIView {
     var knots: Double = 0
     var directionDeg: Double? = nil
+    var ink: UIColor = .label
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -38,7 +61,7 @@ final class BarbGlyph: UIView {
     override func draw(_ rect: CGRect) {
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
         let c = CGPoint(x: bounds.midX, y: bounds.midY)
-        let ink = UIColor.label.withAlphaComponent(0.9)
+        let ink = ink.withAlphaComponent(0.92)
         ctx.setStrokeColor(ink.cgColor)
         ctx.setFillColor(ink.cgColor)
         ctx.setLineWidth(1.6)
@@ -129,6 +152,7 @@ final class WindBarbView: MKAnnotationView {
     func configure(_ a: StationAnnotation) {
         glyph.knots = a.obs.windKt ?? 0
         glyph.directionDeg = a.obs.windDir
+        glyph.ink = FlightCategory.uiColor(a.obs.fltCat)
         glyph.setNeedsDisplay()
         idLabel.text = a.obs.id
     }
@@ -168,6 +192,13 @@ final class SpeedLabelView: MKAnnotationView {
         } else {
             label.text = " calm "
         }
+        // Flight category tints the label: VFR green, MVFR blue, IFR red,
+        // LIFR magenta. No category (a station without ceiling/visibility)
+        // stays neutral.
+        let cat = FlightCategory.uiColor(o.fltCat)
+        label.textColor = cat
+        label.layer.borderColor = cat.withAlphaComponent(0.55).cgColor
+        label.layer.borderWidth = 1
         label.sizeToFit()
         label.frame.size.height += 4
         label.frame.size.width += 2

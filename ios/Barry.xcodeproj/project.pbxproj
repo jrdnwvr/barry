@@ -58,6 +58,7 @@
 		62FE249CDA4A80409C304F3D /* Tendency.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2542DA2C850B2399B31A9069 /* Tendency.swift */; };
 		63129BEFD89CFA743A98860E /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918B4D14CC966B0E820FC1AC /* Models.swift */; };
 		6341C06F45343F3FAAAE7353 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918B4D14CC966B0E820FC1AC /* Models.swift */; };
+		69FA11493C9F04A3A79384A3 /* HorizontalDragGesture.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB906A0DF0FCEFBE609EBF06 /* HorizontalDragGesture.swift */; };
 		70D7BA6937527AE4D263FF9A /* FrontsOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35839C2045A30D70938041B6 /* FrontsOverlay.swift */; };
 		73C115787B3F6EB1F3D44776 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918B4D14CC966B0E820FC1AC /* Models.swift */; };
 		7492FC46266CE19D8B710E51 /* RectangularComplications.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAFA9596978A2666CDFADAB4 /* RectangularComplications.swift */; };
@@ -223,6 +224,7 @@
 		DA12AC45B8A41856114FD9A7 /* SensorComparisonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorComparisonView.swift; sourceTree = "<group>"; };
 		E569F3B3B9FAB65C07970B1A /* StormAlerter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StormAlerter.swift; sourceTree = "<group>"; };
 		E5A4A8464736F548F6F72A42 /* WatchContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchContentView.swift; sourceTree = "<group>"; };
+		EB906A0DF0FCEFBE609EBF06 /* HorizontalDragGesture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorizontalDragGesture.swift; sourceTree = "<group>"; };
 		F3DE49EE7CDCB4E59BB8E97F /* StationLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StationLayer.swift; sourceTree = "<group>"; };
 		F4C5676D3E1E52D59CDFED12 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F4F0EF3938BA8F192FB71228 /* WatchSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSettingsView.swift; sourceTree = "<group>"; };
@@ -356,6 +358,7 @@
 				35839C2045A30D70938041B6 /* FrontsOverlay.swift */,
 				6FE1451AAFD8A470C4CB228A /* FrontWatchView.swift */,
 				01599505777741EA095092C0 /* HeroView.swift */,
+				EB906A0DF0FCEFBE609EBF06 /* HorizontalDragGesture.swift */,
 				F4C5676D3E1E52D59CDFED12 /* Info.plist */,
 				B98E77604746429DE78EF9C4 /* OnboardingView.swift */,
 				778E430DEB72ECE6B1DB5CCA /* PressureChartView.swift */,
@@ -617,6 +620,7 @@
 				83C8C470DA68480C043EF623 /* FrontWatchView.swift in Sources */,
 				70D7BA6937527AE4D263FF9A /* FrontsOverlay.swift in Sources */,
 				4ED2D56EC1DA59D7FBBD779D /* HeroView.swift in Sources */,
+				69FA11493C9F04A3A79384A3 /* HorizontalDragGesture.swift in Sources */,
 				3BE203844E7BC24AC1600A7B /* Interpreter.swift in Sources */,
 				8C7B2F5AFF63137EA0451EA1 /* LocationManager.swift in Sources */,
 				63129BEFD89CFA743A98860E /* Models.swift in Sources */,

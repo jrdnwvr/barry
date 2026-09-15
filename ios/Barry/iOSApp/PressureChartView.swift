@@ -402,27 +402,45 @@ struct PressureChartView: View {
                             selectAt(location: value.location, proxy: proxy, geo: geo)
                         }
                     )
-                    // Horizontal drag paints an analysis range; the minimum
-                    // distance keeps vertical page scrolling working.
-                    .gesture(
-                        DragGesture(minimumDistance: 12)
-                            .onChanged { g in
-                                guard let plotFrame = proxy.plotFrame else { return }
-                                let x0 = g.startLocation.x - geo[plotFrame].origin.x
-                                let x1 = g.location.x - geo[plotFrame].origin.x
-                                guard let d0: Date = proxy.value(atX: x0),
-                                      let d1: Date = proxy.value(atX: x1) else { return }
-                                selected = nil
-                                rangeSelection = min(d0, d1)...max(d0, d1)
-                            }
-                            .onEnded { _ in finalizeRange() }
-                    )
+                    // Horizontal drag paints an analysis range. A vertical
+                    // swipe must keep scrolling the page, so the recognizer
+                    // fails itself when the finger heads up or down.
+                    .modifier(RangeDragModifier(
+                        onChanged: { start, now in
+                            guard let plotFrame = proxy.plotFrame else { return }
+                            let x0 = start.x - geo[plotFrame].origin.x
+                            let x1 = now.x - geo[plotFrame].origin.x
+                            guard let d0: Date = proxy.value(atX: x0),
+                                  let d1: Date = proxy.value(atX: x1) else { return }
+                            selected = nil
+                            rangeSelection = min(d0, d1)...max(d0, d1)
+                        },
+                        onEnded: { finalizeRange() }))
             }
         }
         .onChange(of: combined) { _, _ in
             selected = nil
             rangeSelection = nil
             rangeAnalysis = nil
+        }
+    }
+
+    /// iOS 18 gets the direction-aware UIKit pan; iOS 17 keeps the plain
+    /// SwiftUI drag (which still steals vertical swipes, the old behavior).
+    private struct RangeDragModifier: ViewModifier {
+        let onChanged: (CGPoint, CGPoint) -> Void
+        let onEnded: () -> Void
+
+        func body(content: Content) -> some View {
+            if #available(iOS 18.0, *) {
+                content.gesture(HorizontalDragGesture(onChanged: onChanged, onEnded: onEnded))
+            } else {
+                content.gesture(
+                    DragGesture(minimumDistance: 12)
+                        .onChanged { g in onChanged(g.startLocation, g.location) }
+                        .onEnded { _ in onEnded() }
+                )
+            }
         }
     }
 

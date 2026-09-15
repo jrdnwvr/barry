@@ -175,11 +175,23 @@ struct PressureChartView: View {
         VStack(alignment: .leading, spacing: 6) {
             chartView
                 .frame(height: height)
-            if rangeAnalysis == nil && selected == nil {
-                presetChips
-            }
+            presetChips
             readout
+                // The analysis card floats over whatever sits below the chart
+                // instead of pushing it down: the layout never jumps when a
+                // window is selected or cleared.
+                .overlay(alignment: .topLeading) {
+                    if let a = rangeAnalysis {
+                        analysisCard(a)
+                            .padding(12)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                            .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
         }
+        .zIndex(rangeAnalysis == nil ? 0 : 1)
+        .animation(.snappy(duration: 0.2), value: rangeAnalysis == nil)
     }
 
     // MARK: - Event + preset selection
@@ -541,9 +553,7 @@ struct PressureChartView: View {
     }
 
     @ViewBuilder private var readout: some View {
-        if let a = rangeAnalysis {
-            analysisCard(a)
-        } else if let sel = selected {
+        if let sel = selected {
             HStack(spacing: 8) {
                 Circle()
                     .fill(sel.observed ? Color.blue : Color.blue.opacity(0.5))

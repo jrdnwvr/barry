@@ -233,6 +233,9 @@ struct ContentView: View {
 
             ForecastCaveatView(combined: combined, now: store.now)
         }
+        // The chart's floating analysis card overflows this section; it must
+        // paint above the siblings below (cards on the phone, the map on iPad).
+        .zIndex(1)
     }
 
     /// The iPad kneeboard dashboard: METAR strip across the top, the glance rail

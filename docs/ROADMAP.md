@@ -80,7 +80,7 @@ style) so you adjust a window instead of redrawing it. Snap edges to the
 nearest half hour. Haptic tick on snap. Long-press anywhere starts a new
 range (so the scroll view never fights you, even on iOS 17).
 
-**B3. The analysis as a floating card, not a layout shift.** (S)
+**B3. The analysis as a floating card, not a layout shift.** (S) DONE 2026-09-15.
 Present the range result as a card anchored to the chart (overlay, with a
 close X) rather than inserting it into the scroll stack, so the chart
 doesn't jump when it appears.

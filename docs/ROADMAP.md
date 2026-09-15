@@ -127,13 +127,13 @@ detect a veer or back of more than 60 degrees in 2 h and a temperature
 drop, which is how a front actually announces itself at a field. Feeds C1
 and the front watch's "passed" call.
 
-**C3. Confidence from agreement.** (S) Depends on C1.
+**C3. Confidence from agreement.** (S) DONE 2026-09-15: +0.1 per strong supporting signal (capped at 1), ×0.8 when the model stays calm against a fall, `model_disagrees` caveat named in the honesty note. The computed six-of-ten replacement waits on D6.
 When the pressure feature, the WPC front motion, and the model forecast
 all point at the same window, raise confidence; when they disagree, lower
 it and name the disagreement. Replace the fixed "six of ten" copy with a
 computed figure once D6 exists.
 
-**C4. Tendency in the user's own terms.** (S)
+**C4. Tendency in the user's own terms.** (S) DONE 2026-09-15: per-hour rate with a front/storm comparison under the verdict when |rate| ≥ 1.5 hPa/3 h.
 Offer the 3 h rate as "hPa per 3 h" or "inHg per hour" plus a plain
 comparison ("as fast as a typical frontal passage") so a non-meteorologist
 gets a sense of scale.

@@ -114,3 +114,26 @@ def build(reading: Optional[Reading], forecast: Optional[Sequence[ForecastHour]]
     if conflicting:
         parts.append(sentence(conflicting, lead="but " if supporting else ""))
     return ExplanationOut(summary=" ".join(parts), supporting=supporting, conflicting=conflicting)
+
+
+# ---- Confidence from agreement (C3) ----------------------------------------
+
+STRONG_SUPPORT = {"rain", "model_wind_shift", "model_gusts", "wind_shift", "gust_onset", "temp_drop"}
+
+
+def adjust_confidence(confidence: float, ex: Optional[ExplanationOut]) -> tuple[float, List[str]]:
+    """Agreement between the pressure signal, observed signals, and the model
+    nudges confidence up (toward, never past, 1.0); the model flatly
+    disagreeing pulls it down and adds a caveat the app can name."""
+    if ex is None:
+        return confidence, []
+    caveats: List[str] = []
+    strong = sum(1 for i in ex.supporting if i.kind in STRONG_SUPPORT)
+    conf = min(1.0, confidence + 0.1 * strong)
+    if any(i.kind == "model_calm" for i in ex.conflicting):
+        conf *= 0.8
+        caveats.append("model_disagrees")
+    elif ex.conflicting:
+        conf *= 0.9
+        caveats.append("model_disagrees")
+    return round(max(0.0, min(1.0, conf)), 2), caveats

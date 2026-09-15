@@ -89,6 +89,13 @@ struct HeroView: View {
                 .font(.headline)
                 .fixedSize(horizontal: false, vertical: true)
 
+            // The 3 h rate in human terms (C4), only when it's worth a sentence.
+            if let scale = rateContext {
+                Text(scale)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             // What else agrees (observed at the station, or the model's view).
             // Pressure leads; this is the corroboration, and disagreement is
             // said out loud.
@@ -198,6 +205,22 @@ struct HeroView: View {
 
     // MARK: - Honesty note
 
+    /// "How fast is fast": the rate in the user's unit per hour, with a
+    /// comparison to what fronts and storms typically do. Silent when the
+    /// pressure is merely drifting.
+    private var rateContext: String? {
+        guard let r = combined.reading else { return nil }
+        let mag = abs(r.rate3h)                       // hPa per 3 h
+        guard mag >= 1.5 else { return nil }
+        let perHour = unit.formatDelta(r.rate3h / 3).replacingOccurrences(of: "+", with: "")
+        let scale: String
+        switch mag {
+        case 3.0...: scale = "a strong front or storm system"
+        default:     scale = "what a passing front usually does"
+        }
+        return "That is \(perHour) per hour, \(scale)."
+    }
+
     /// Surface non-obvious interpreter caveats (low confidence, sparse data).
     /// `forecast_derived` is already baked into the verdict sentence's hedged wording.
     private var honestyNote: String? {
@@ -205,6 +228,7 @@ struct HeroView: View {
         var bits: [String] = []
         if r.caveats.contains("short_window") { bits.append("limited recent data") }
         if r.caveats.contains("sparse") { bits.append("data gaps") }
+        if r.caveats.contains("model_disagrees") { bits.append("the model disagrees") }
         if r.confidence < 0.5 && bits.isEmpty { bits.append("lower confidence than usual") }
         return bits.isEmpty ? nil : "Read with care: " + bits.joined(separator: ", ") + "."
     }

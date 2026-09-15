@@ -598,6 +598,9 @@ class PressureService:
                 reading_out.explanation = explain.build(
                     interp, forecast.hourly if forecast else None, pressure.series,
                     _now(), local_hour_offset=local_offset)
+                reading_out.confidence, extra = explain.adjust_confidence(
+                    reading_out.confidence, reading_out.explanation)
+                reading_out.caveats = list(reading_out.caveats) + extra
             except Exception:
                 reading_out.explanation = None
 

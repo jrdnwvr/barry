@@ -94,3 +94,17 @@ async def test_combined_carries_series_fields_and_explanation(client):
     # must be well-formed or absent, never an error.
     ex = combined.reading.explanation if combined.reading else None
     assert ex is None or (ex.summary and (ex.supporting or ex.conflicting))
+
+
+def test_confidence_rises_with_agreement_and_falls_on_disagreement():
+    from app.models import ExplanationOut, SignalOut
+    sup = [SignalOut(kind="rain", at=NOW, text="", source="model"),
+           SignalOut(kind="wind_shift", at=NOW, text="", source="metar")]
+    conf, cav = explain.adjust_confidence(0.7, ExplanationOut(summary="", supporting=sup))
+    assert conf == 0.9 and cav == []
+    conf, cav = explain.adjust_confidence(1.0, ExplanationOut(summary="", supporting=sup))
+    assert conf == 1.0                                   # never past 1
+    calm = [SignalOut(kind="model_calm", at=NOW, text="", source="model")]
+    conf, cav = explain.adjust_confidence(1.0, ExplanationOut(summary="", conflicting=calm))
+    assert conf == 0.8 and cav == ["model_disagrees"]
+    assert explain.adjust_confidence(0.6, None) == (0.6, [])

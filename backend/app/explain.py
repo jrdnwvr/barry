@@ -13,7 +13,7 @@ from typing import List, Optional, Sequence
 
 from . import signals as sig
 from .interpreter import Reading
-from .models import ExplanationOut, ForecastHour, SeriesPoint, SignalOut
+from .models import ExplanationOut, ForecastHour, SeriesPoint, SignalOut, TafOut
 from .verdict import CALM_WIND_MAX_KMH, PRECIP_THRESHOLD, _fmt_local_hour, forecast_stays_calm
 
 LOOK_AHEAD_H = 12.0
@@ -45,9 +45,53 @@ def _phrase_observed(s: sig.Signal, fmt) -> str:
     return s.kind
 
 
+CAT_ORDER = {"VFR": 0, "MVFR": 1, "IFR": 2, "LIFR": 3}
+
+
+def _taf_signals(taf: Optional[TafOut], now: datetime, fmt, reading: Reading) -> List[SignalOut]:
+    """What the forecaster's TAF says about the coming hours, as evidence.
+    Base period = the current conditions; FM/BECMG periods are changes,
+    TEMPO/PROB periods are intermittent. Only the first of each kind, within
+    LOOK_AHEAD_H, and timed against the barometer's feature when there is one."""
+    if taf is None or not taf.periods:
+        return []
+    horizon = now + timedelta(hours=LOOK_AHEAD_H)
+    base = next((p for p in taf.periods if p.change is None), taf.periods[0])
+    out: List[SignalOut] = []
+    shift_done = cat_done = wx_done = False
+    for p in taf.periods:
+        if p.change is None or p.timeFrom < now - timedelta(hours=1) or p.timeFrom > horizon:
+            continue
+        when = fmt(p.timeFrom)
+        lag = ""
+        if reading.featureTime is not None:
+            dh = (p.timeFrom - reading.featureTime).total_seconds() / 3600.0
+            if abs(dh) >= 1.5:
+                lag = f", {abs(dh):.0f} h {'after' if dh > 0 else 'before'} the barometer's turn"
+        if not shift_done and p.change in ("FM", "BECMG") and p.windDir is not None \
+           and base.windDir is not None and (p.windKt or 0) >= 5 \
+           and abs(sig._angle_delta(base.windDir, p.windDir)) >= MODEL_SHIFT_DEG:
+            gust = f" gusting {int(p.gustKt)}" if p.gustKt else ""
+            out.append(SignalOut(kind="taf_wind_shift", at=p.timeFrom, source="taf",
+                                 text=f"the TAF shifts the wind to {int(p.windDir):03d}° at {int(p.windKt)} kt{gust} at {when}{lag}"))
+            shift_done = True
+        if not wx_done and p.wx and any(w in p.wx for w in ("RA", "SN", "TS", "DZ", "SH")):
+            kind = "thunderstorms" if "TS" in p.wx else "precipitation"
+            how = "" if p.change in ("FM", "BECMG") else " at times"
+            out.append(SignalOut(kind="taf_wx", at=p.timeFrom, source="taf",
+                                 text=f"the TAF has {kind}{how} from {when}{lag}"))
+            wx_done = True
+        if not cat_done and p.fltCat in CAT_ORDER and base.fltCat in CAT_ORDER \
+           and CAT_ORDER[p.fltCat] > CAT_ORDER[base.fltCat]:
+            out.append(SignalOut(kind="taf_category", at=p.timeFrom, source="taf",
+                                 text=f"the TAF drops to {p.fltCat} at {when}"))
+            cat_done = True
+    return out
+
+
 def build(reading: Optional[Reading], forecast: Optional[Sequence[ForecastHour]],
           series: Sequence[SeriesPoint], now: datetime,
-          local_hour_offset: float = 0.0) -> Optional[ExplanationOut]:
+          local_hour_offset: float = 0.0, taf: Optional[TafOut] = None) -> Optional[ExplanationOut]:
     if reading is None:
         return None
     fmt = lambda t: _fmt_local_hour(t, local_hour_offset)
@@ -96,14 +140,20 @@ def build(reading: Optional[Reading], forecast: Optional[Sequence[ForecastHour]]
                 kind="model_calm", at=window[0].t, source="model",
                 text="the model keeps the next hours dry and calm"))
 
+    # The forecaster's TAF: a wind shift or weather backs a fall; a category
+    # drop or rain against a rise is worth saying too.
+    for item in _taf_signals(taf, now, fmt, reading):
+        (conflicting if (rising and item.kind in ("taf_wx", "taf_category")) else supporting).append(item)
+
     if not supporting and not conflicting:
         return None
 
     def sentence(items: List[SignalOut], lead: str = "") -> str:
         texts = [i.text for i in items[:2]]
-        # "the model X and the model Y" reads badly; say it once.
-        if len(texts) == 2 and all(t.startswith("the model ") for t in texts):
-            texts[1] = texts[1][len("the model "):]
+        # "the model X and the model Y" reads badly; say the subject once.
+        for subject in ("the model ", "the TAF "):
+            if len(texts) == 2 and all(t.startswith(subject) for t in texts):
+                texts[1] = texts[1][len(subject):]
         joined = " and ".join(texts)
         joined = lead + joined
         return joined[0].upper() + joined[1:] + "."
@@ -118,7 +168,8 @@ def build(reading: Optional[Reading], forecast: Optional[Sequence[ForecastHour]]
 
 # ---- Confidence from agreement (C3) ----------------------------------------
 
-STRONG_SUPPORT = {"rain", "model_wind_shift", "model_gusts", "wind_shift", "gust_onset", "temp_drop"}
+STRONG_SUPPORT = {"rain", "model_wind_shift", "model_gusts", "wind_shift", "gust_onset", "temp_drop",
+                  "taf_wind_shift", "taf_wx"}
 
 
 def adjust_confidence(confidence: float, ex: Optional[ExplanationOut]) -> tuple[float, List[str]]:

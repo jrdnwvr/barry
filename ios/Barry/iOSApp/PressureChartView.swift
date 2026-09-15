@@ -457,6 +457,45 @@ struct PressureChartView: View {
         }
     }
 
+    // MARK: - TAF change groups (D3)
+
+    /// The forecaster's timeline on the same axis as the barometer: FM/BECMG
+    /// starts as thin teal rules labeled with the new wind, TEMPO/PROB spans
+    /// as faint teal bands labeled with their weather. Only what falls inside
+    /// the visible window, and never more than a few, so it reads as
+    /// annotation rather than a second chart.
+    private var visibleTafPeriods: [TafPeriod] {
+        guard let taf = combined.taf else { return [] }
+        let (lo, hi) = domainBounds
+        return Array(taf.periods.filter { $0.change != nil && $0.timeFrom >= lo && $0.timeFrom <= hi }.prefix(4))
+    }
+
+    @ChartContentBuilder private var tafContent: some ChartContent {
+        ForEach(visibleTafPeriods) { p in
+            if p.change == "FM" || p.change == "BECMG" {
+                RuleMark(x: .value("TAF", p.timeFrom))
+                    .foregroundStyle(.teal.opacity(0.5))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [1, 3]))
+                    .annotation(position: .bottom, alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("TAF \(p.change ?? "")")
+                                .font(.system(size: 8, weight: .semibold))
+                            if let w = p.windText { Text(w).font(.system(size: 8)) }
+                        }
+                        .foregroundStyle(.teal)
+                    }
+            } else {
+                RectangleMark(xStart: .value("From", p.timeFrom), xEnd: .value("To", min(p.timeTo, domainBounds.1)))
+                    .foregroundStyle(.teal.opacity(0.07))
+                    .annotation(position: .overlay, alignment: .topLeading, spacing: 2) {
+                        Text("\(p.change ?? "") \(p.wx ?? p.fltCat ?? "")")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(.teal)
+                    }
+            }
+        }
+    }
+
     @ChartContentBuilder private var featureContent: some ChartContent {
         // Interpreter feature pin (§4.3): a dashed purple guide at the detected /
         // forecast feature time (the verdict's "trough at 6pm" on the curve).
@@ -551,6 +590,7 @@ struct PressureChartView: View {
     private var chartView: some View {
         Chart {
             trendBandContent
+            tafContent
             observedLineContent
             forecastLineContent
             phoneContent
@@ -747,6 +787,9 @@ struct PressureChartView: View {
             if trendFit != nil {
                 legendSwatch(colors: [.blue.opacity(0.25), .blue.opacity(0.25)],
                              label: "scatter around the 3 h trend")
+            }
+            if !visibleTafPeriods.isEmpty {
+                legendSwatch(colors: [.teal, .teal], label: "TAF changes")
             }
             Spacer()
             Text("tap or drag to read")

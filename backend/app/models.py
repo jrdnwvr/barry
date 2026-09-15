@@ -247,6 +247,32 @@ class FieldGridResponse(BaseModel):
     cachedAt: datetime
 
 
+class TafPeriod(BaseModel):
+    """One TAF forecast period, decoded by AWC. `change` is None for the base
+    period, else FM | BECMG | TEMPO | PROB30 | PROB40."""
+
+    timeFrom: datetime
+    timeTo: datetime
+    change: Optional[str] = None
+    windDir: Optional[float] = None     # degrees; None = variable
+    windKt: Optional[float] = None
+    gustKt: Optional[float] = None
+    visibilitySM: Optional[float] = None
+    ceilingFt: Optional[int] = None
+    ceilingCover: Optional[str] = None
+    wx: Optional[str] = None
+    fltCat: Optional[str] = None
+
+
+class TafOut(BaseModel):
+    station: str
+    issueTime: Optional[datetime] = None
+    validFrom: Optional[datetime] = None
+    validTo: Optional[datetime] = None
+    raw: Optional[str] = None
+    periods: List[TafPeriod] = Field(default_factory=list)
+
+
 class Runway(BaseModel):
     """One runway, both ends. Headings are degrees TRUE (OurAirports
     le_heading_degT), the same reference the METAR wind uses, so crosswind
@@ -329,5 +355,6 @@ class CombinedResponse(BaseModel):
     reading: Optional[ReadingOut] = None
     conditions: Optional[ConditionsOut] = None
     runways: List[Runway] = Field(default_factory=list)
+    taf: Optional[TafOut] = None
     sources: Optional[Sources] = None
     verdict: str

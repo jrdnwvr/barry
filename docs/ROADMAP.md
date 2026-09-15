@@ -157,7 +157,7 @@ flight category as a strip under the METAR line (green/blue/red/magenta
 blocks) and note the trend ("ceiling lowering 1,500 ft/h"). Costs nothing
 upstream (C2 keeps the fields).
 
-**D3. TAF alongside Barry.** (M)
+**D3. TAF alongside Barry.** (M) DONE 2026-09-15: `/combined.taf` (AWC decoded TAF, 30 min TTL per station), FM/BECMG rules and TEMPO/PROB bands on the chart, and TAF evidence in the explanation timed against the barometer's turn.
 The one new upstream worth adding. AWC's TAF endpoint (same terms, same
 cache style: `tafs.cache.csv.gz`) gives the forecaster's expected wind,
 ceiling, and visibility by hour. Show the TAF's change groups on the

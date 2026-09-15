@@ -21,7 +21,7 @@ from typing import Dict, List, Optional, Sequence
 
 import httpx
 
-from ..models import StationObs, CurrentObs, SeriesPoint
+from ..models import StationObs, CurrentObs, SeriesPoint, TafOut, TafPeriod
 from ..tendency import resolve_tendency
 
 BASE_URL = "https://aviationweather.gov/api/data/metar"
@@ -30,6 +30,7 @@ BASE_URL = "https://aviationweather.gov/api/data/metar"
 CACHE_URL = "https://aviationweather.gov/data/cache/metars.cache.csv.gz"
 # Station directory (names, elevation, what each site issues). ~350 KB, daily.
 STATIONS_URL = "https://aviationweather.gov/data/cache/stations.cache.json.gz"
+TAF_URL = "https://aviationweather.gov/api/data/taf"
 USER_AGENT = "Barry/1.0 (jrdn@wvr.me)"
 
 
@@ -411,3 +412,55 @@ async def fetch_station_info(client: httpx.AsyncClient) -> Dict[str, dict]:
     if body[:2] == b"\x1f\x8b":
         body = gzip.decompress(body)
     return parse_station_info(json.loads(body.decode("utf-8", errors="replace")))
+
+
+# ---- TAF ------------------------------------------------------------------
+
+def _any_to_dt(value) -> Optional[datetime]:
+    """AWC mixes epoch integers (period times) and ISO strings (issue/valid
+    times) in the same TAF record."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return _epoch_to_dt(value)
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def parse_taf(records) -> Optional[TafOut]:
+    """AWC's decoded TAF JSON (one record per station, `fcsts` = periods)."""
+    if not records:
+        return None
+    rec = records[0]
+    sid = (rec.get("icaoId") or "").upper()
+    if not sid:
+        return None
+    periods: List[TafPeriod] = []
+    for f in rec.get("fcsts") or []:
+        vis = _visibility_sm(f.get("visib"))
+        ceiling_ft, cover = _ceiling(f.get("clouds"))
+        wdir = f.get("wdir")
+        periods.append(TafPeriod(
+            timeFrom=_any_to_dt(f.get("timeFrom")), timeTo=_any_to_dt(f.get("timeTo")),
+            change=f.get("fcstChange") or None,
+            windDir=float(wdir) if isinstance(wdir, (int, float)) else None,
+            windKt=f.get("wspd"), gustKt=f.get("wgst"),
+            visibilitySM=vis, ceilingFt=ceiling_ft, ceilingCover=cover,
+            wx=f.get("wxString") or None,
+            fltCat=_flight_category(vis, ceiling_ft),
+        ))
+    return TafOut(station=sid, issueTime=_any_to_dt(rec.get("issueTime")),
+                  validFrom=_any_to_dt(rec.get("validTimeFrom")),
+                  validTo=_any_to_dt(rec.get("validTimeTo")),
+                  raw=rec.get("rawTAF"), periods=periods)
+
+
+async def fetch_taf(station: str, client: httpx.AsyncClient) -> Optional[TafOut]:
+    r = await client.get(TAF_URL, params={"ids": station.upper(), "format": "json"},
+                         headers={"User-Agent": USER_AGENT}, timeout=15.0)
+    r.raise_for_status()
+    if not r.content.strip():
+        return None
+    return parse_taf(r.json())

@@ -274,6 +274,27 @@ def sample_station_info():
     ]
 
 
+def sample_taf(sid="KLUK"):
+    """AWC decoded TAF JSON, trimmed from a real 2026-09-15 product."""
+    base = int(datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0).timestamp())
+    return [{
+        # Real AWC mixes types: issueTime is an ISO string, period times are epochs.
+        "icaoId": sid, "issueTime": "2026-09-15T17:20:00.000Z", "validTimeFrom": base, "validTimeTo": base + 24 * 3600,
+        "rawTAF": f"TAF {sid} 151720Z 1518/1618 19008KT P6SM SCT250 FM152300 31015G25KT P6SM BKN040 "
+                  f"TEMPO 1523/1602 4SM -RA BR OVC020 FM160600 32008KT P6SM SCT050",
+        "fcsts": [
+            {"timeFrom": base, "timeTo": base + 6 * 3600, "fcstChange": None, "wdir": 190, "wspd": 8, "wgst": None,
+             "visib": "6+", "wxString": None, "clouds": [{"cover": "SCT", "base": 25000}]},
+            {"timeFrom": base + 6 * 3600, "timeTo": base + 13 * 3600, "fcstChange": "FM", "wdir": 310, "wspd": 15,
+             "wgst": 25, "visib": "6+", "wxString": None, "clouds": [{"cover": "BKN", "base": 4000}]},
+            {"timeFrom": base + 6 * 3600, "timeTo": base + 9 * 3600, "fcstChange": "TEMPO", "wdir": None, "wspd": None,
+             "wgst": None, "visib": 4, "wxString": "-RA BR", "clouds": [{"cover": "OVC", "base": 2000}]},
+            {"timeFrom": base + 13 * 3600, "timeTo": base + 24 * 3600, "fcstChange": "FM", "wdir": 320, "wspd": 8,
+             "wgst": None, "visib": "6+", "wxString": None, "clouds": [{"cover": "SCT", "base": 5000}]},
+        ],
+    }]
+
+
 class FakeUpstream:
     """Records calls and serves canned AWC / Open-Meteo responses."""
 
@@ -345,6 +366,14 @@ class FakeUpstream:
             if self.rv_fail:
                 return httpx.Response(503, text="down")
             return httpx.Response(200, json=sample_rainviewer_maps())
+        if "aviationweather.gov" in url and "/api/data/taf" in url:
+            self.taf_calls = getattr(self, "taf_calls", 0) + 1
+            sid = request.url.params.get("ids", "")
+            if getattr(self, "taf_fail", False):
+                return httpx.Response(503, text="down")
+            if sid == "KLUK":
+                return httpx.Response(200, json=sample_taf(sid))
+            return httpx.Response(200, text="")          # no TAF issued
         if "aviationweather.gov" in url:
             self.awc_calls.append(request)
             if self.awc_fail:

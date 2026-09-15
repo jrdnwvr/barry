@@ -213,6 +213,40 @@ struct FieldGridResponse: Codable, Hashable {
     let cachedAt: Date
 }
 
+// MARK: - TAF
+
+struct TafPeriod: Codable, Hashable, Identifiable {
+    let timeFrom: Date
+    let timeTo: Date
+    var change: String?          // nil = base period; FM | BECMG | TEMPO | PROB30 | PROB40
+    var windDir: Double?
+    var windKt: Double?
+    var gustKt: Double?
+    var visibilitySM: Double?
+    var ceilingFt: Int?
+    var ceilingCover: String?
+    var wx: String?
+    var fltCat: String?
+    var id: Date { timeFrom }
+
+    /// "310@15G25" / "VRB05", the TAF's own shorthand.
+    var windText: String? {
+        guard let kt = windKt else { return nil }
+        let dir = windDir.map { String(format: "%03d", Int($0)) } ?? "VRB"
+        let g = gustKt.map { "G\(Int($0))" } ?? ""
+        return "\(dir)@\(Int(kt))\(g)"
+    }
+}
+
+struct TafOut: Codable, Hashable {
+    let station: String
+    var issueTime: Date?
+    var validFrom: Date?
+    var validTo: Date?
+    var raw: String?
+    var periods: [TafPeriod] = []
+}
+
 // MARK: - Station search
 
 struct StationSearchResult: Codable, Hashable, Identifiable {
@@ -355,6 +389,7 @@ struct CombinedResponse: Codable, Hashable {
     let reading: Reading?
     var conditions: ConditionsOut?
     var runways: [Runway]?   // optional: absent on old backends
+    var taf: TafOut?         // optional: none issued, or an old backend
     let sources: Sources?
     let verdict: String
 }

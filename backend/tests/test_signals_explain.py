@@ -108,3 +108,23 @@ def test_confidence_rises_with_agreement_and_falls_on_disagreement():
     conf, cav = explain.adjust_confidence(1.0, ExplanationOut(summary="", conflicting=calm))
     assert conf == 0.8 and cav == ["model_disagrees"]
     assert explain.adjust_confidence(0.6, None) == (0.6, [])
+
+
+def test_taf_evidence_is_timed_against_the_barometer():
+    from app.sources.aviationweather import parse_taf
+    from conftest import sample_taf
+    taf = parse_taf(sample_taf())
+    base = taf.periods[0].timeFrom
+    # Barometer's turn at +4 h; the TAF's FM shift is at +6 h: "2 h after".
+    r = Reading("falling_mod", -2.0, 0.9, "front_knee", base + timedelta(hours=4), 0.9, ())
+    out = explain.build(r, None, [], base, local_hour_offset=0, taf=taf)
+    kinds = [x.kind for x in out.supporting]
+    assert kinds[:2] == ["taf_wind_shift", "taf_wx"]
+    assert "2 h after the barometer's turn" in out.supporting[0].text
+    assert "gusting 25" in out.supporting[0].text
+    assert "at times" in out.supporting[1].text            # TEMPO
+    assert all(x.source == "taf" for x in out.supporting)
+    # Against a rise, TAF weather counts as disagreement.
+    r2 = Reading("rising", 1.0, 0.9, "none", None, 0.9, ())
+    out2 = explain.build(r2, None, [], base, taf=taf)
+    assert [x.kind for x in out2.conflicting] == ["taf_wx", "taf_category"]

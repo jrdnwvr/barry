@@ -24,6 +24,7 @@ from .cache import StationRegistry, TTLCache
 from .interpreter import Sample, interpret
 from .models import (
     FieldGridResponse,
+    TafOut,
     RadarFramesResponse,
     CombinedResponse,
     CurrentObs,
@@ -59,6 +60,7 @@ BULK_TTL = 5 * 60.0       # AWC's whole-world METAR cache: one 250 KB pull serve
 FIELD_TTL = 10 * 60.0     # radar wind/BL grid: model updates hourly; one call per region cell
 FRAMES_TTL = 2 * 60.0     # RainViewer adds a frame every 10 min; 2 min keeps the newest near-live
 STATION_INFO_TTL = 24 * 3600.0  # AWC station directory: names change about never
+TAF_TTL = 30 * 60.0       # TAFs issue every 6 h with amendments; 30 min is plenty
 # Bulk-snapshot history for the front watch ring (A4): one snapshot at most
 # every HISTORY_STEP_MIN, kept HISTORY_KEEP_H, usable once HISTORY_MIN_H deep.
 HISTORY_STEP_MIN = 25.0
@@ -568,6 +570,23 @@ class PressureService:
                 break
         return best
 
+    # ---- TAF ------------------------------------------------------------------
+
+    async def get_taf(self, station: str) -> Optional[TafOut]:
+        """The station's TAF, decoded; None where none is issued. One call per
+        station per 30 min; enrichment, never blocks /combined."""
+        cache_key = f"taf:{station.upper()}"
+        cached = await self.cache.get(cache_key)
+        if cached is not None:
+            return cached or None
+        try:
+            taf = await awc.fetch_taf(station, self._client)
+        except Exception as exc:
+            log.warning("taf fetch failed for %s: %s", station, exc)
+            return None
+        await self.cache.set(cache_key, taf or False, ttl=TAF_TTL)
+        return taf
+
     # ---- Radar frames (RainViewer) -------------------------------------------
 
     async def get_radar_frames(self) -> RadarFramesResponse:
@@ -664,11 +683,17 @@ class PressureService:
         reading_out = _to_reading_out(interp) if interp is not None else None
         # What else agrees (observed signals + the model's view). Enrichment:
         # never blocks the response.
+        taf: Optional[TafOut] = None
+        try:
+            taf = await self.get_taf(pressure.station)
+        except Exception:
+            taf = None
+
         if reading_out is not None:
             try:
                 reading_out.explanation = explain.build(
                     interp, forecast.hourly if forecast else None, pressure.series,
-                    _now(), local_hour_offset=local_offset)
+                    _now(), local_hour_offset=local_offset, taf=taf)
                 reading_out.confidence, extra = explain.adjust_confidence(
                     reading_out.confidence, reading_out.explanation)
                 reading_out.caveats = list(reading_out.caveats) + extra
@@ -699,6 +724,7 @@ class PressureService:
             reading=reading_out,
             conditions=conditions,
             runways=runways.for_station(station),
+            taf=taf,
             sources=sources,
             verdict=verdict,
         )

@@ -308,6 +308,46 @@ class PressureService:
         await self.cache.set(cache_key, resp, ttl=STATIONS_TTL)
         return resp
 
+    async def nearest_reporting_station(self, lat: float, lon: float) -> dict:
+        """The closest station that actually reports pressure, found by asking
+        AWC for everything in a box around the point (widened once for remote
+        areas). The tiny built-in table is only the last resort — it used to be
+        the ONLY resort, which sent anyone outside ten metros to the wrong city."""
+        cache_key = f"nearest:{round(lat * 5) / 5}:{round(lon * 5) / 5}"
+        cached = await self.cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        best = None
+        for half in (1.4, 4.0):
+            try:
+                parsed = await awc.fetch_metars_bbox(
+                    lat, lon, self._client, hours=3, half_lat_deg=half)
+            except Exception:
+                parsed = {}
+            for sid, p in parsed.items():
+                if p.get("lat") is None or p.get("lon") is None:
+                    continue
+                if not any(pt.slp is not None or pt.altim is not None
+                           for pt in p.get("series", [])):
+                    continue
+                d = stations._haversine_km(lat, lon, p["lat"], p["lon"])
+                if best is None or d < best["distance_km"]:
+                    best = {"station": sid, "name": p.get("name") or sid,
+                            "lat": p["lat"], "lon": p["lon"], "distance_km": round(d, 1)}
+            if best is not None:
+                break
+
+        if best is None:
+            fallback = stations.nearest(lat, lon)
+            if fallback is None:
+                raise LookupError("no stations known")
+            sid, info, dist = fallback
+            best = {"station": sid, "name": info["name"], "lat": info["lat"],
+                    "lon": info["lon"], "distance_km": round(dist, 1)}
+        await self.cache.set(cache_key, best, ttl=STATIONS_TTL)
+        return best
+
     # ---- WPC surface fronts --------------------------------------------------
 
     async def get_fronts(self) -> FrontsResponse:

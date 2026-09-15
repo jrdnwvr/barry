@@ -311,6 +311,9 @@ struct ContentView: View {
                        stationName: combined.pressure.name ?? combined.pressure.station,
                        onExpand: { showRadarFullScreen = true },
                        embedded: true)
+                // The map centers itself once, at creation: a station switch
+                // must rebuild the panel or it stays on the old city.
+                .id("\(rlat),\(rlon)")
                 .frame(maxHeight: .infinity)
         } else {
             Spacer()

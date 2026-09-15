@@ -162,14 +162,7 @@ async def nearest_station(
     lat: float = Query(..., ge=-90, le=90),
     lon: float = Query(..., ge=-180, le=180),
 ):
-    result = stations.nearest(lat, lon)
-    if result is None:
+    try:
+        return await get_service().nearest_reporting_station(lat, lon)
+    except LookupError:
         raise HTTPException(status_code=404, detail="no stations known")
-    sid, info, dist = result
-    return {
-        "station": sid,
-        "name": info["name"],
-        "lat": info["lat"],
-        "lon": info["lon"],
-        "distance_km": round(dist, 1),
-    }

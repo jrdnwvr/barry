@@ -213,6 +213,20 @@ struct FieldGridResponse: Codable, Hashable {
     let cachedAt: Date
 }
 
+// MARK: - Station search
+
+struct StationSearchResult: Codable, Hashable, Identifiable {
+    let station: String
+    let name: String
+    let lat: Double
+    let lon: Double
+    var id: String { station }
+}
+
+struct StationSearchResponse: Codable {
+    let results: [StationSearchResult]
+}
+
 // MARK: - WPC surface fronts
 
 /// One front off the WPC chart: type cold|warm|stnry|ocfnt|trof and points

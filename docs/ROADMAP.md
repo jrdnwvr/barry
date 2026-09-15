@@ -49,7 +49,7 @@ were tuned on deltas computed from series, not reported tendencies. Do
 this only with a backtest that swaps the input and confirms the hit rate
 holds. If it does, `/front` costs nothing upstream.
 
-**A5. Station names.** (S)
+**A5. Station names.** (S) DONE 2026-09-15: AWC station directory, daily; names on /metars, nearest, and search.
 The bulk file has no station names, so the tap sheet shows a bare id
 outside the home station. AWC publishes `stations.cache.json.gz` (ids,
 names, elevations). Load it once a day; it also enables a real station
@@ -170,7 +170,7 @@ DA is computed but lives in its own card; the runway card is where takeoff
 decisions happen. Add "DA 2,500 ft, 5 kt tailwind on 3L" style callouts
 when DA exceeds field elevation by more than 1,500 ft.
 
-**D5. Station search anywhere.** (S) Depends on A5.
+**D5. Station search anywhere.** (S) DONE 2026-09-15: Settings airport field searches /stations/search as you type.
 With names loaded, the saved-locations picker can search any reporting
 station worldwide by id or name, instead of relying on location or a
 ten-airport table.

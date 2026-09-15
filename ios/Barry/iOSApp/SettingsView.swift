@@ -28,6 +28,8 @@ struct SettingsView: View {
     private var stormAlertsEnabled: Bool = false
 
     @State private var newICAO: String = ""
+    /// Live matches from /stations/search while the airport field has text.
+    @State private var stationMatches: [StationSearchResult] = []
     @State private var icaoError: String?
     @State private var isValidatingICAO = false
     @State private var placeQuery: String = ""
@@ -110,10 +112,19 @@ struct SettingsView: View {
                     .onDelete { savedLocations.remove(at: $0) }
 
                     HStack {
-                        TextField("Add airport (ICAO, e.g. KLUK)", text: $newICAO)
+                        TextField("Add airport (ICAO or name)", text: $newICAO)
                             .textInputAutocapitalization(.characters)
                             .autocorrectionDisabled()
                             .onSubmit { addAirport() }
+                            // Search as you type, debounced; the task is
+                            // cancelled and restarted on every keystroke.
+                            .task(id: newICAO) {
+                                let q = newICAO.trimmingCharacters(in: .whitespaces)
+                                guard q.count >= 2 else { stationMatches = []; return }
+                                try? await Task.sleep(for: .milliseconds(300))
+                                guard !Task.isCancelled else { return }
+                                stationMatches = (try? await BarryAPI().searchStations(q)) ?? []
+                            }
                         if isValidatingICAO {
                             ProgressView().controlSize(.small)
                         } else {
@@ -124,6 +135,26 @@ struct SettingsView: View {
                     }
                     if let err = icaoError {
                         Text(err).font(.caption).foregroundStyle(.orange)
+                    }
+                    ForEach(stationMatches) { m in
+                        Button {
+                            savedLocations.add(SavedLocation(kind: .airport(icao: m.station)))
+                            newICAO = ""
+                            stationMatches = []
+                        } label: {
+                            HStack(spacing: 8) {
+                                Text(m.station)
+                                    .font(.subheadline.weight(.semibold).monospaced())
+                                Text(m.name)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                Spacer()
+                                Image(systemName: "plus.circle")
+                                    .foregroundStyle(.blue)
+                            }
+                        }
+                        .buttonStyle(.plain)
                     }
 
                     HStack {

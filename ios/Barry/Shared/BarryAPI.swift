@@ -106,6 +106,15 @@ struct BarryAPI {
         try await get(baseURL.appendingPathComponent("radar/hrrr"))
     }
 
+    /// Station search by ICAO prefix or name (METAR-issuing sites only).
+    func searchStations(_ q: String) async throws -> [StationSearchResult] {
+        var comps = URLComponents(url: baseURL.appendingPathComponent("stations/search"),
+                                  resolvingAgainstBaseURL: false)
+        comps?.queryItems = [URLQueryItem(name: "q", value: q)]
+        let resp: StationSearchResponse = try await get(comps?.url)
+        return resp.results
+    }
+
     /// Location → nearest known station (brief Phase 3 resolution helper).
     func nearestStation(lat: Double, lon: Double) async throws -> NearestStation {
         var comps = URLComponents(url: baseURL.appendingPathComponent("stations/nearest"),

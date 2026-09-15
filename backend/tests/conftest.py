@@ -259,6 +259,21 @@ def sample_rainviewer_maps(past=13, nowcast=2):
     }
 
 
+def sample_station_info():
+    return [
+        {"id": "KLUK", "icaoId": "KLUK", "site": "Cincinnati/Lunken Fld", "lat": 39.106, "lon": -84.416,
+         "elev": 144, "state": "OH", "country": "US", "priority": 6, "siteType": ["METAR", "TAF"]},
+        {"id": "KCVG", "icaoId": "KCVG", "site": "Cincinnati/N Kentucky Intl", "lat": 39.044, "lon": -84.672,
+         "elev": 269, "state": "KY", "country": "US", "priority": 5, "siteType": ["METAR", "TAF"]},
+        {"id": "KILN", "icaoId": "KILN", "site": "Wilmington Airborne Airpark", "lat": 39.428, "lon": -83.792,
+         "elev": 329, "state": "OH", "country": "US", "priority": 6, "siteType": ["METAR"]},
+        {"id": "32012", "icaoId": None, "site": "Woods Hole Stratus Wave Station", "lat": 19.7, "lon": -85.6,
+         "elev": 0, "state": "", "country": None, "priority": 4, "siteType": []},
+        {"id": "KTAF", "icaoId": "KTAF", "site": "Taf Only Field", "lat": 40.0, "lon": -80.0,
+         "elev": 100, "state": "PA", "country": "US", "priority": 7, "siteType": ["TAF"]},
+    ]
+
+
 class FakeUpstream:
     """Records calls and serves canned AWC / Open-Meteo responses."""
 
@@ -310,6 +325,13 @@ class FakeUpstream:
                 return httpx.Response(200, content=b"REAL-HRRR-TILE",
                                       headers={"content-type": "image/png"})
             return httpx.Response(503, text="no such layer")
+        if "data/cache/stations.cache.json.gz" in url:
+            import gzip, json
+            self.info_calls = getattr(self, "info_calls", 0) + 1
+            if getattr(self, "info_fail", False):
+                return httpx.Response(503, text="down")
+            return httpx.Response(200, content=gzip.compress(json.dumps(sample_station_info()).encode()),
+                                  headers={"content-type": "application/x-gzip"})
         if "data/cache/metars.cache.csv.gz" in url:
             import gzip
             self.bulk_calls += 1

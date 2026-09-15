@@ -39,9 +39,11 @@ class Scheduler:
 
     async def refresh_once(self) -> int:
         """Refresh all active stations in batched calls. Returns #upstream calls."""
-        # Warm the whole-world METAR table so /metars never waits on AWC.
+        # Warm the whole-world METAR table and the station directory so no
+        # request waits on AWC for either.
         try:
             await self._service.metar_bulk()
+            await self._service.station_info()
         except Exception as exc:
             log.warning("scheduler: bulk metar warm failed: %s", exc)
 

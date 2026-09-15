@@ -57,6 +57,7 @@ STATIONS_TTL = 10 * 60.0  # radar station layer: METARs are hourly, specials asi
 BULK_TTL = 5 * 60.0       # AWC's whole-world METAR cache: one 250 KB pull serves everyone
 FIELD_TTL = 10 * 60.0     # radar wind/BL grid: model updates hourly; one call per region cell
 FRAMES_TTL = 2 * 60.0     # RainViewer adds a frame every 10 min; 2 min keeps the newest near-live
+STATION_INFO_TTL = 24 * 3600.0  # AWC station directory: names change about never
 STATIONS_MAX = 350        # most annotation views a phone map should carry
 
 # Stale-if-error: when Open-Meteo is down, re-serve the last good forecast for up
@@ -360,6 +361,36 @@ class PressureService:
         await self.cache.set("metar_bulk", table, ttl=BULK_TTL)
         return table
 
+    async def station_info(self) -> Dict[str, dict]:
+        """The station directory (names, elevation, METAR/TAF flags), held a
+        day. Empty when the pull fails: callers fall back to bare ids."""
+        cached = await self.cache.get("station_info")
+        if cached is not None:
+            return cached
+        try:
+            info = await awc.fetch_station_info(self._client)
+        except Exception as exc:
+            log.warning("station directory fetch failed: %s", exc)
+            return {}
+        if info:
+            await self.cache.set("station_info", info, ttl=STATION_INFO_TTL)
+        return info
+
+    async def search_stations(self, q: str, limit: int = 15) -> List[dict]:
+        """Station search for the saved-places picker: id prefix first, then
+        name substring, METAR-issuing sites only, case-insensitive."""
+        q = q.strip().upper()
+        if len(q) < 2:
+            return []
+        info = await self.station_info()
+        by_id = [(sid, v) for sid, v in info.items() if v["metar"] and sid.startswith(q)]
+        by_name = [(sid, v) for sid, v in info.items()
+                   if v["metar"] and not sid.startswith(q) and q in v["name"].upper()]
+        by_id.sort(key=lambda kv: kv[0])
+        by_name.sort(key=lambda kv: (kv[1]["name"].upper().find(q), kv[1]["name"]))
+        return [{"station": sid, "name": v["name"], "lat": v["lat"], "lon": v["lon"]}
+                for sid, v in (by_id + by_name)[:limit]]
+
     async def get_station_obs(self, lat: float, lon: float, half: float = 3.0) -> StationsResponse:
         """Stations within ±half degrees of a point, sliced from the in-memory
         bulk table (no upstream call per user). Dense areas are thinned on a
@@ -377,6 +408,10 @@ class PressureService:
         box = [s for s in table
                if abs(s.lat - lat) <= half and abs(s.lon - lon) <= lon_half]
         stations = _thin_stations(box, lat, lon, half, lon_half, STATIONS_MAX)
+        info = await self.station_info()
+        if info:
+            stations = [s.model_copy(update={"name": info.get(s.id, {}).get("name")})
+                        if s.name is None else s for s in stations]
         resp = StationsResponse(stations=stations, cachedAt=_now())
         await self.cache.set(cache_key, resp, ttl=BULK_TTL)
         return resp
@@ -423,6 +458,10 @@ class PressureService:
         table = await self.metar_bulk()
         if table is not None:
             best = _nearest_in_table(table, lat, lon, _now())
+            if best is not None:
+                info = await self.station_info()
+                if best["station"] in info:
+                    best["name"] = info[best["station"]]["name"]
         if best is None:
             best = await self._nearest_via_bbox(lat, lon)
         if best is None:

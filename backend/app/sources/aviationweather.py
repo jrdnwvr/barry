@@ -28,6 +28,8 @@ BASE_URL = "https://aviationweather.gov/api/data/metar"
 # Every station's latest METAR, one gzip'd CSV refreshed by AWC each minute.
 # ~250 KB for the whole world; the courteous way to cover a big area.
 CACHE_URL = "https://aviationweather.gov/data/cache/metars.cache.csv.gz"
+# Station directory (names, elevation, what each site issues). ~350 KB, daily.
+STATIONS_URL = "https://aviationweather.gov/data/cache/stations.cache.json.gz"
 USER_AGENT = "Barry/1.0 (jrdn@wvr.me)"
 
 
@@ -375,3 +377,36 @@ async def fetch_metar_cache(client: httpx.AsyncClient) -> List[StationObs]:
     if body[:2] == b"\x1f\x8b":
         body = gzip.decompress(body)
     return parse_metar_cache(body.decode("utf-8", errors="replace"))
+
+
+# ---- Station directory ------------------------------------------------------
+
+def parse_station_info(items) -> Dict[str, dict]:
+    """AWC stations.cache.json -> {ICAO: {name, lat, lon, elev, metar, taf}}.
+    Name is composed the way AWC's METAR JSON does it ("Site, ST, CC")."""
+    out: Dict[str, dict] = {}
+    for it in items or []:
+        sid = (it.get("icaoId") or "").strip().upper()
+        if not sid or it.get("lat") is None or it.get("lon") is None:
+            continue
+        bits = [b for b in (it.get("site"), it.get("state"), it.get("country")) if b]
+        types = it.get("siteType") or []
+        out[sid] = {
+            "name": ", ".join(bits) if bits else sid,
+            "site": it.get("site") or sid,
+            "lat": float(it["lat"]), "lon": float(it["lon"]),
+            "elev": it.get("elev"),
+            "metar": "METAR" in types, "taf": "TAF" in types,
+        }
+    return out
+
+
+async def fetch_station_info(client: httpx.AsyncClient) -> Dict[str, dict]:
+    import gzip
+    import json
+    r = await client.get(STATIONS_URL, headers={"User-Agent": USER_AGENT}, timeout=30.0)
+    r.raise_for_status()
+    body = r.content
+    if body[:2] == b"\x1f\x8b":
+        body = gzip.decompress(body)
+    return parse_station_info(json.loads(body.decode("utf-8", errors="replace")))

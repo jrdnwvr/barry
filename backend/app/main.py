@@ -189,6 +189,13 @@ async def get_fronts():
     return resp.model_dump(mode="json", by_alias=True)
 
 
+@app.get("/stations/search")
+async def search_stations(q: str = Query(..., min_length=1, max_length=40),
+                          limit: int = Query(15, ge=1, le=50)):
+    """Station search by ICAO id prefix or name, METAR-issuing sites only."""
+    return {"results": await get_service().search_stations(q, limit=limit)}
+
+
 @app.get("/stations/nearest")
 async def nearest_station(
     lat: float = Query(..., ge=-90, le=90),

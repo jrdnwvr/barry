@@ -1,0 +1,179 @@
+{
+  "" : {
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryWatch-primary.dia",
+    "emit-module-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryWatch-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryWatch-primary-emit-module.dia",
+    "pch" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryWatch-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryWatch-primary.swiftdeps"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/Shared/AppConfig.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/AppConfig.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/AppConfig.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/AppConfig.dia",
+    "index-unit-output-path" : "/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/AppConfig.o",
+    "llvm-bc" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/AppConfig.bc",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/AppConfig.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/AppConfig.swiftdeps",
+    "swiftmodule" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/AppConfig~partial.swiftmodule"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/Shared/BarryAPI.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryAPI.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryAPI.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryAPI.dia",
+    "index-unit-output-path" : "/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryAPI.o",
+    "llvm-bc" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryAPI.bc",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryAPI.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryAPI.swiftdeps",
+    "swiftmodule" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryAPI~partial.swiftmodule"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/Shared/LocationManager.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/LocationManager.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/LocationManager.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/LocationManager.dia",
+    "index-unit-output-path" : "/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/LocationManager.o",
+    "llvm-bc" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/LocationManager.bc",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/LocationManager.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/LocationManager.swiftdeps",
+    "swiftmodule" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/LocationManager~partial.swiftmodule"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/Shared/Models.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/Models.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/Models.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/Models.dia",
+    "index-unit-output-path" : "/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/Models.o",
+    "llvm-bc" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/Models.bc",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/Models.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/Models.swiftdeps",
+    "swiftmodule" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/Models~partial.swiftmodule"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/Shared/PressureHistory.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureHistory.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureHistory.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureHistory.dia",
+    "index-unit-output-path" : "/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureHistory.o",
+    "llvm-bc" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureHistory.bc",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureHistory.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureHistory.swiftdeps",
+    "swiftmodule" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureHistory~partial.swiftmodule"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/Shared/PressureStore.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureStore.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureStore.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureStore.dia",
+    "index-unit-output-path" : "/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureStore.o",
+    "llvm-bc" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureStore.bc",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureStore.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureStore.swiftdeps",
+    "swiftmodule" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureStore~partial.swiftmodule"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/Shared/PressureUnit.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureUnit.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureUnit.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureUnit.dia",
+    "index-unit-output-path" : "/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureUnit.o",
+    "llvm-bc" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureUnit.bc",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureUnit.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureUnit.swiftdeps",
+    "swiftmodule" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PressureUnit~partial.swiftmodule"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/Shared/RangeAnalysis.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/RangeAnalysis.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/RangeAnalysis.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/RangeAnalysis.dia",
+    "index-unit-output-path" : "/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/RangeAnalysis.o",
+    "llvm-bc" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/RangeAnalysis.bc",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/RangeAnalysis.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/RangeAnalysis.swiftdeps",
+    "swiftmodule" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/RangeAnalysis~partial.swiftmodule"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/Shared/SavedLocations.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/SavedLocations.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/SavedLocations.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/SavedLocations.dia",
+    "index-unit-output-path" : "/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/SavedLocations.o",
+    "llvm-bc" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/SavedLocations.bc",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/SavedLocations.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/SavedLocations.swiftdeps",
+    "swiftmodule" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/SavedLocations~partial.swiftmodule"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/Shared/SharedSnapshot.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/SharedSnapshot.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/SharedSnapshot.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/SharedSnapshot.dia",
+    "index-unit-output-path" : "/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/SharedSnapshot.o",
+    "llvm-bc" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/SharedSnapshot.bc",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/SharedSnapshot.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/SharedSnapshot.swiftdeps",
+    "swiftmodule" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/SharedSnapshot~partial.swiftmodule"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/Shared/Tendency.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/Tendency.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/Tendency.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/Tendency.dia",
+    "index-unit-output-path" : "/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/Tendency.o",
+    "llvm-bc" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/Tendency.bc",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/Tendency.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/Tendency.swiftdeps",
+    "swiftmodule" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/Tendency~partial.swiftmodule"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/Shared/TendencyProvider.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/TendencyProvider.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/TendencyProvider.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/TendencyProvider.dia",
+    "index-unit-output-path" : "/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/TendencyProvider.o",
+    "llvm-bc" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/TendencyProvider.bc",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/TendencyProvider.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/TendencyProvider.swiftdeps",
+    "swiftmodule" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/TendencyProvider~partial.swiftmodule"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/Shared/WindUnit.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WindUnit.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WindUnit.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WindUnit.dia",
+    "index-unit-output-path" : "/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WindUnit.o",
+    "llvm-bc" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WindUnit.bc",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WindUnit.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WindUnit.swiftdeps",
+    "swiftmodule" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WindUnit~partial.swiftmodule"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/WatchApp/BarryWatchApp.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryWatchApp.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryWatchApp.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryWatchApp.dia",
+    "index-unit-output-path" : "/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryWatchApp.o",
+    "llvm-bc" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryWatchApp.bc",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryWatchApp.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryWatchApp.swiftdeps",
+    "swiftmodule" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryWatchApp~partial.swiftmodule"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/WatchApp/WatchContentView.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WatchContentView.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WatchContentView.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WatchContentView.dia",
+    "index-unit-output-path" : "/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WatchContentView.o",
+    "llvm-bc" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WatchContentView.bc",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WatchContentView.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WatchContentView.swiftdeps",
+    "swiftmodule" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WatchContentView~partial.swiftmodule"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/WatchApp/WatchSettingsView.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WatchSettingsView.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WatchSettingsView.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WatchSettingsView.dia",
+    "index-unit-output-path" : "/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WatchSettingsView.o",
+    "llvm-bc" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WatchSettingsView.bc",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WatchSettingsView.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WatchSettingsView.swiftdeps",
+    "swiftmodule" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/WatchSettingsView~partial.swiftmodule"
+  },
+  "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/GeneratedAssetSymbols.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/GeneratedAssetSymbols.dia",
+    "index-unit-output-path" : "/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftdeps",
+    "swiftmodule" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/GeneratedAssetSymbols~partial.swiftmodule"
+  }
+}

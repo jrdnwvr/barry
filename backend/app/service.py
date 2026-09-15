@@ -10,13 +10,14 @@ import logging
 import math
 
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Dict, List, Optional
 
 import httpx
 
 from . import conditions as conditions_mod
 from . import explain
 from . import persist
+from . import track
 from . import runways
 from . import front as front_mod
 from . import stations
@@ -24,6 +25,7 @@ from .cache import StationRegistry, TTLCache
 from .interpreter import Sample, interpret
 from .models import (
     FieldGridResponse,
+    TrackRecordOut,
     TafOut,
     RadarFramesResponse,
     CombinedResponse,
@@ -153,6 +155,8 @@ class PressureService:
         # Restored from disk when a data dir is configured, so a restart
         # doesn't cost the front watch its 7.5 h warm-up.
         self._bulk_history: List[tuple] = self._load_history()
+        # {station: [call dicts]} — Barry's own trend calls, scored later.
+        self._track_log: Dict[str, List[dict]] = persist.load("track_log") or {}
 
     # ---- pressure (observed) -------------------------------------------------
 
@@ -718,6 +722,20 @@ class PressureService:
             observed=pressure.source,
             forecast=forecast.source if forecast else None,
         )
+        # Log this call and score the old ones (C5/D6). Enrichment.
+        track_out: Optional[TrackRecordOut] = None
+        try:
+            if reading_out is not None:
+                key = pressure.station
+                log_ = track.record(self._track_log.get(key, []), _now(),
+                                    reading_out.trend, reading_out.confidence)
+                log_ = track.score(log_, pressure.series, _now())
+                self._track_log[key] = log_
+                persist.save("track_log", self._track_log)
+                track_out = track.summary(log_)
+        except Exception:
+            track_out = None
+
         return CombinedResponse(
             pressure=pressure,
             forecast=forecast,
@@ -725,6 +743,7 @@ class PressureService:
             conditions=conditions,
             runways=runways.for_station(station),
             taf=taf,
+            trackRecord=track_out,
             sources=sources,
             verdict=verdict,
         )

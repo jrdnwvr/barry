@@ -273,6 +273,16 @@ class TafOut(BaseModel):
     periods: List[TafPeriod] = Field(default_factory=list)
 
 
+class TrackRecordOut(BaseModel):
+    """Barry's own scorecard at this station: trend calls that matched what
+    the pressure then did, over the last `days`. Absent until there are
+    enough scored calls to mean anything."""
+
+    right: int
+    total: int
+    days: int
+
+
 class Runway(BaseModel):
     """One runway, both ends. Headings are degrees TRUE (OurAirports
     le_heading_degT), the same reference the METAR wind uses, so crosswind
@@ -356,5 +366,6 @@ class CombinedResponse(BaseModel):
     conditions: Optional[ConditionsOut] = None
     runways: List[Runway] = Field(default_factory=list)
     taf: Optional[TafOut] = None
+    trackRecord: Optional[TrackRecordOut] = None
     sources: Optional[Sources] = None
     verdict: str

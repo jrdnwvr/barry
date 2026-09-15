@@ -213,6 +213,16 @@ struct FieldGridResponse: Codable, Hashable {
     let cachedAt: Date
 }
 
+// MARK: - Track record
+
+/// Barry's scorecard at this station: trend calls that matched what the
+/// pressure then did, over the last `days`. Absent until enough calls exist.
+struct TrackRecordOut: Codable, Hashable {
+    let right: Int
+    let total: Int
+    let days: Int
+}
+
 // MARK: - TAF
 
 struct TafPeriod: Codable, Hashable, Identifiable {
@@ -390,6 +400,7 @@ struct CombinedResponse: Codable, Hashable {
     var conditions: ConditionsOut?
     var runways: [Runway]?   // optional: absent on old backends
     var taf: TafOut?         // optional: none issued, or an old backend
+    var trackRecord: TrackRecordOut?
     let sources: Sources?
     let verdict: String
 }

@@ -138,7 +138,7 @@ Offer the 3 h rate as "hPa per 3 h" or "inHg per hour" plus a plain
 comparison ("as fast as a typical frontal passage") so a non-meteorologist
 gets a sense of scale.
 
-**C5. Serve the reading history.** (M)
+**C5. Serve the reading history.** (M) DONE 2026-09-15 (as the track log): per-station trend calls, 30 days, persisted in ./state; the chart's trend-change markers can read it later.
 Keep the last 48 h of readings per station on the server (cheap, in
 memory, persisted to a small SQLite). Lets the chart show when the trend
 class changed, and is the raw material for D6.
@@ -175,7 +175,7 @@ With names loaded, the saved-locations picker can search any reporting
 station worldwide by id or name, instead of relying on location or a
 ten-airport table.
 
-**D6. Verdict track record.** (M) Depends on C5.
+**D6. Verdict track record.** (M) DONE 2026-09-15: each call scored 3 h later against the station's own series (±0.5 hPa bands); `/combined.trackRecord` and a line under the verdict once ≥ 5 scored calls exist.
 For each reading, record what the pressure did over the following 6 h and
 whether rain or a wind shift arrived. Show a small "Barry's last 30 days
 here" line (right x of y times) on the honesty note. This replaces the

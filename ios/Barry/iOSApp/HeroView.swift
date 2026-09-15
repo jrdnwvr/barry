@@ -109,6 +109,14 @@ struct HeroView: View {
             if let note = honestyNote {
                 Text(note).font(.caption).foregroundStyle(.secondary)
             }
+
+            // Barry's own scorecard here (D6): a live, local number instead
+            // of the backtest's. Only once there are enough calls to mean it.
+            if let tr = combined.trackRecord {
+                Text("Barry's trend calls here, last \(tr.days) days: right \(tr.right) of \(tr.total).")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
         }
         .sheet(isPresented: $showGuide) { PressureGuideView() }
     }

@@ -13,6 +13,7 @@ through the Cloudflare tunnel), so treat them as order-of-magnitude.
 | C1/C2 (2026-09-15) | `/combined` explanation + per-report fields | 12.4 KB (series carried pressure only) | 15.6 KB, 0.10 s live: +3.2 KB for wind/gust/temp/dew/vis/ceiling/category on 23 series points; the explanation block itself is ~0.3 KB | Upstream: none (fields were already in AWC's response and discarded). Enables the category strip, observed signals, and the runway outlook without any new fetch. |
 | A4 (2026-09-15) | Front watch ring | 1 AWC bbox query (8 h of reports, ±1.4°) per station per 15 min, ~0.9 s upstream | Ring series assembled from the server's 9.5 h bulk-snapshot history (persisted to ./state, ~6 MB pickled); bbox only during a 7.5 h cold start after a wipe | Upstream: zero per station once warm. The validated delta/ring/track math is unchanged. |
 | D3 (2026-09-15) | TAF | not fetched | `/combined.taf`: 1 AWC TAF call per station per 30 min (~1.5 KB decoded) | New upstream, deliberately per active station only (not bulk): TAFs matter for the home field, not the map. |
+| C5/D6 (2026-09-15) | Track record | none | `/combined.trackRecord` (~40 B); log persisted in ./state (a few KB per station) | Upstream: none. Scores use the 24 h series already fetched. |
 
 Notes
 - A1 quantization: three slightly different regions from one iPad session

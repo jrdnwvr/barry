@@ -57,6 +57,49 @@ struct RunwayWindsCard: View {
                                    windDirDeg: cur.winddir, windKt: kt, gustKt: gust)
     }
 
+    /// The next hours on the best runway end: peak crosswind, and when another
+    /// end takes over. Model wind (Open-Meteo hourly) already in /combined.
+    private struct Outlook { let peakKt: Int; let peakAt: Date; let switchTo: String?; let switchAt: Date? }
+
+    private func outlook(best: RunwayWind, now: Date) -> Outlook? {
+        guard let hours = combined.forecast?.hourly, let runways = combined.runways, !runways.isEmpty else { return nil }
+        let window = hours.filter { $0.t > now && $0.t <= now.addingTimeInterval(12 * 3600) && $0.windspeed != nil }
+        guard window.count >= 3 else { return nil }
+        var peak: (Int, Date)? = nil
+        var switchTo: (String, Date)? = nil
+        for h in window {
+            let kt = (h.windspeed ?? 0) / 1.852
+            let all = RunwayWinds.compute(runways: runways, windDirDeg: h.winddir, windKt: kt,
+                                          gustKt: h.windgust.map { $0 / 1.852 })
+            guard let mine = all.first(where: { $0.ident == best.ident }) else { continue }
+            let x = Int(abs(mine.crosswind).rounded())
+            if peak == nil || x > peak!.0 { peak = (x, h.t) }
+            // Another end becomes clearly better: a headwind end with at
+            // least 3 kt less crosswind, or mine has turned into a tailwind.
+            if switchTo == nil, let top = all.first, top.ident != best.ident,
+               (mine.isTailwind || abs(mine.crosswind) - abs(top.crosswind) >= 3) {
+                switchTo = (top.ident, h.t)
+            }
+        }
+        guard let pk = peak else { return nil }
+        return Outlook(peakKt: pk.0, peakAt: pk.1, switchTo: switchTo?.0, switchAt: switchTo?.1)
+    }
+
+    private func outlookText(_ o: Outlook) -> String {
+        var t = "Next 12 h: crosswind peaks \(o.peakKt) kt around \(o.peakAt.formatted(date: .omitted, time: .shortened))"
+        if let sw = o.switchTo, let at = o.switchAt {
+            t += "; Rwy \(sw) better after \(at.formatted(date: .omitted, time: .shortened))"
+        }
+        return t + "."
+    }
+
+    /// Density altitude belongs where the takeoff decision is made.
+    private var daCallout: String? {
+        guard let c = combined.conditions, let da = c.densityAltitudeFt,
+              let field = c.fieldElevationFt, da - field >= 1500 else { return nil }
+        return "Density altitude \(da.formatted()) ft (field \(field.formatted()) ft)."
+    }
+
     var body: some View {
         let list = winds
         if let best = list.first {
@@ -78,6 +121,18 @@ struct RunwayWindsCard: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if let o = outlook(best: best, now: Date()) {
+                    Text(outlookText(o))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let da = daCallout {
+                    Text(da)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 if expanded, list.count > 1 {
                     Divider()

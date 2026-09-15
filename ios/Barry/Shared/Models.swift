@@ -107,6 +107,22 @@ struct Sources: Codable, Hashable {
     let forecast: String?
 }
 
+// MARK: - Reading (the server's structured curve interpretation)
+
+/// Mirrors the backend's ReadingOut. Computed server-side; the app never
+/// re-derives it.
+struct Reading: Hashable, Codable {
+    let trend: String
+    let rate3h: Double
+    let steadiness: Double
+    let feature: String
+    let featureTime: Date?
+    let confidence: Double
+    let caveats: [String]
+    /// What else agrees or disagrees (C1). Optional: absent on old backends.
+    var explanation: ExplanationOut?
+}
+
 // MARK: - Explanation (what else agrees with the pressure signal)
 
 struct SignalOut: Codable, Hashable {

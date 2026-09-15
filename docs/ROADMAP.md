@@ -55,7 +55,7 @@ outside the home station. AWC publishes `stations.cache.json.gz` (ids,
 names, elevations). Load it once a day; it also enables a real station
 search (D5).
 
-**A6. Delete the dead Swift interpreter.** (S)
+**A6. Delete the dead Swift interpreter.** (S) DONE 2026-09-15: `Reading` moved to Models.swift, the rest removed.
 `Shared/Interpreter.swift` (401 lines) mirrors the backend interpreter and
 nothing calls it. Delete it. `Tendency.swift` stays (the complication needs
 the color table offline).
@@ -145,13 +145,13 @@ class changed, and is the raw material for D6.
 
 ## D. Pilot utility from data we already have
 
-**D1. Runway winds over the next hours.** (S)
+**D1. Runway winds over the next hours.** (S) DONE 2026-09-15: 12 h outlook line (peak crosswind, when another end takes over).
 The runway card uses the current METAR wind only. Open-Meteo hourly wind
 and gusts are already in `/combined`. Add a small timeline: "Rwy 21L: 3 kt
 crosswind now, peaks 12 kt around 3 PM, favors Rwy 25 after 5 PM." That
 is the question a pilot planning a late departure actually has.
 
-**D2. Watch the field's category, not just the pressure.** (S)
+**D2. Watch the field's category, not just the pressure.** (S) DONE 2026-09-15: `CategoryStripView` under the station row with ceiling/visibility trend.
 METAR history has visibility and ceiling per report. Show the last 6 h of
 flight category as a strip under the METAR line (green/blue/red/magenta
 blocks) and note the trend ("ceiling lowering 1,500 ft/h"). Costs nothing
@@ -165,7 +165,7 @@ chart timeline as markers (FM, TEMPO, BECMG) and let C1 compare the
 pressure signal against the TAF's timing. Pilots trust TAFs; Barry saying
 "the TAF has this an hour later than the barometer does" is a strong hook.
 
-**D4. Density altitude on the runway card.** (S)
+**D4. Density altitude on the runway card.** (S) DONE 2026-09-15: callout when DA exceeds field by 1,500 ft.
 DA is computed but lives in its own card; the runway card is where takeoff
 decisions happen. Add "DA 2,500 ft, 5 kt tailwind on 3L" style callouts
 when DA exceeds field elevation by more than 1,500 ft.

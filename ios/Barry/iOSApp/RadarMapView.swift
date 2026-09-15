@@ -29,6 +29,9 @@ struct RadarMapView: UIViewRepresentable {
     var stations: [StationObs] = []
     var stationStyle: StationLayerStyle = .off
     var onSelectStation: ((StationObs) -> Void)? = nil
+    /// nil: the red pin marks the station and the map shows the user's own
+    /// blue dot. Otherwise the home station is drawn as itself (see HomeMarker).
+    var home: HomeMarker? = nil
     var onRegionChange: ((MKCoordinateRegion) -> Void)? = nil
 
     final class RadarTileOverlay: MKTileOverlay {
@@ -176,6 +179,8 @@ struct RadarMapView: UIViewRepresentable {
         var lastFrontVersion = -1
         var centerAnnotations: [PressureCenterAnnotation] = []
         var homePin: MKPointAnnotation?
+        var homeBarb: StationAnnotation?
+        var shownHome: HomeMarker?
         var centeredOn: CLLocationCoordinate2D?
         var flowView: WindFlowView?
         var stationAnnotations: [StationAnnotation] = []
@@ -184,8 +189,40 @@ struct RadarMapView: UIViewRepresentable {
 
         /// Barb or speed annotations per station; rebuilt only when the set or
         /// the style changes (the style is baked into the reuse identifier).
+        /// Pin or barb for the home station, and the user's blue dot only
+        /// when the pin is what marks the station.
+        func syncHome(_ home: HomeMarker?, center: CLLocationCoordinate2D, on map: MKMapView) {
+            guard home != shownHome else { return }
+            shownHome = home
+            if let h = home, h.asBarb {
+                if let pin = homePin { map.removeAnnotation(pin) }
+                map.showsUserLocation = false
+                let a = homeBarb ?? StationAnnotation()
+                a.coordinate = center
+                a.obs = h.obs
+                a.isHome = true
+                if homeBarb == nil { map.addAnnotation(a); homeBarb = a }
+                else if let v = map.view(for: a) as? WindBarbView { v.configure(a) }
+                else if let v = map.view(for: a) as? SpeedLabelView { v.configure(a) }
+            } else {
+                if let b = homeBarb { map.removeAnnotation(b); homeBarb = nil }
+                if let pin = homePin, map.view(for: pin) == nil, !map.annotations.contains(where: { $0 === pin }) {
+                    map.addAnnotation(pin)
+                }
+                map.showsUserLocation = true
+            }
+        }
+
         func syncStations(_ obs: [StationObs], style: StationLayerStyle, on map: MKMapView) {
-            let want = style == .off ? [] : obs
+            // The slice's copy of the home station is fuller (raw METAR); use
+            // it for the home marker and keep it out of the layer.
+            if let b = homeBarb, let full = obs.first(where: { $0.id == b.obs.id }), full != b.obs {
+                b.obs = full
+                if let v = map.view(for: b) as? WindBarbView { v.configure(b) }
+                else if let v = map.view(for: b) as? SpeedLabelView { v.configure(b) }
+            }
+            let homeID = homeBarb?.obs.id
+            let want = style == .off ? [] : obs.filter { $0.id != homeID }
             guard want != shownStations || style != shownStationStyle else { return }
             shownStations = want
             shownStationStyle = style
@@ -245,7 +282,7 @@ struct RadarMapView: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
             if let st = annotation as? StationAnnotation {
-                if shownStationStyle == .speeds {
+                if shownStationStyle == .speeds && !(st.isHome && shownStations.isEmpty) {
                     let id = "stationSpeed"
                     let view = (mapView.dequeueReusableAnnotationView(withIdentifier: id) as? SpeedLabelView)
                         ?? SpeedLabelView(annotation: st, reuseIdentifier: id)
@@ -456,6 +493,7 @@ struct RadarMapView: UIViewRepresentable {
            was.latitude != center.latitude || was.longitude != center.longitude {
             context.coordinator.centeredOn = center
             context.coordinator.homePin?.coordinate = center
+            context.coordinator.homeBarb?.coordinate = center
             map.setRegion(MKCoordinateRegion(
                 center: center,
                 span: MKCoordinateSpan(latitudeDelta: 3.2, longitudeDelta: 3.2)), animated: true)
@@ -485,6 +523,7 @@ struct RadarMapView: UIViewRepresentable {
         }
         context.coordinator.onRegionChange = onRegionChange
         context.coordinator.onSelectStation = onSelectStation
+        context.coordinator.syncHome(home, center: center, on: map)
         context.coordinator.syncArrows(showWind ? windArrows : [], on: map)
         context.coordinator.syncBL(showBL ? blPoints : [], on: map)
         context.coordinator.syncFronts(frontState, on: map)

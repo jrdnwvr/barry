@@ -18,9 +18,10 @@ struct RadarScreen: View {
     let lat: Double
     let lon: Double
     let stationName: String
+    var home: HomeMarker? = nil
 
     var body: some View {
-        RadarPanel(lat: lat, lon: lon, stationName: stationName)
+        RadarPanel(lat: lat, lon: lon, stationName: stationName, home: home)
             .navigationTitle("Radar")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.visible, for: .navigationBar)
@@ -31,6 +32,8 @@ struct RadarPanel: View {
     let lat: Double
     let lon: Double
     let stationName: String
+    /// How to mark the home station (pin, or its own barb with a halo).
+    var home: HomeMarker? = nil
     /// When set, an expand button overlays the map (dashboard embeds use it to
     /// pop the radar to full screen).
     var onExpand: (() -> Void)? = nil
@@ -90,7 +93,10 @@ struct RadarPanel: View {
             if showFronts {
                 await model.fetchFronts()
             }
-            if stationStyle != .off {
+            // The home barb wants the station's full report (raw METAR) for
+            // its sheet, which lives in the slice; fetch it even with the
+            // layer off. Server-side it's a cached in-memory slice.
+            if stationStyle != .off || home?.asBarb == true {
                 await model.fetchStations(center: initialRegion.center)
             }
         }
@@ -161,6 +167,7 @@ struct RadarPanel: View {
                      stations: model.stationObs,
                      stationStyle: stationStyle,
                      onSelectStation: { selectedStation = $0 },
+                     home: home,
                      onRegionChange: { region in
                          model.scheduleFieldReload(for: region,
                                                    wind: showWindArrows,

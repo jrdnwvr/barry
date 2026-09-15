@@ -37,6 +37,28 @@ enum FlightCategory {
 
 final class StationAnnotation: MKPointAnnotation {
     var obs = StationObs(id: "", lat: 0, lon: 0)
+    /// The home station drawn in place of the pin ("you are here").
+    var isHome = false
+}
+
+/// How the map marks the home station. `asBarb` when the selection is an
+/// airport or the user is within 3 NM of the station: the station's own
+/// barb with a halo replaces the pin, and tapping it opens its METAR.
+struct HomeMarker: Equatable {
+    let obs: StationObs
+    let asBarb: Bool
+}
+
+/// The blue "you are here" ring drawn behind the home station's glyph.
+private func makeHalo(diameter: CGFloat) -> UIView {
+    let v = UIView(frame: CGRect(x: 0, y: 0, width: diameter, height: diameter))
+    v.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.16)
+    v.layer.cornerRadius = diameter / 2
+    v.layer.borderColor = UIColor.systemBlue.withAlphaComponent(0.7).cgColor
+    v.layer.borderWidth = 1.5
+    v.isUserInteractionEnabled = false
+    v.isHidden = true
+    return v
 }
 
 // MARK: - Wind barb
@@ -131,9 +153,12 @@ final class BarbGlyph: UIView {
 final class WindBarbView: MKAnnotationView {
     private let glyph = BarbGlyph(frame: CGRect(x: 0, y: 0, width: 50, height: 50))
     private let idLabel = UILabel()
+    private let halo = makeHalo(diameter: 34)
 
     override init(annotation: MKAnnotation?, reuseIdentifier: String?) {
         super.init(annotation: annotation, reuseIdentifier: reuseIdentifier)
+        halo.center = CGPoint(x: 13, y: 13)
+        addSubview(halo)
         // The view's bounds double as its collision footprint: MapKit hides an
         // annotation whenever its frame overlaps another's. A 50x58 box
         // collided constantly and barbs blinked out on every zoom, so the
@@ -160,6 +185,10 @@ final class WindBarbView: MKAnnotationView {
         glyph.ink = FlightCategory.uiColor(a.obs.fltCat)
         glyph.setNeedsDisplay()
         idLabel.text = a.obs.id
+        halo.isHidden = !a.isHome
+        idLabel.font = .monospacedDigitSystemFont(ofSize: 8.5, weight: a.isHome ? .bold : .medium)
+        // Home never loses a collision; it's the one station that must show.
+        displayPriority = a.isHome ? .required : .defaultHigh
     }
 }
 
@@ -168,9 +197,11 @@ final class WindBarbView: MKAnnotationView {
 final class SpeedLabelView: MKAnnotationView {
     private let label = UILabel()
     private let idLabel = UILabel()
+    private let halo = makeHalo(diameter: 30)
 
     override init(annotation: MKAnnotation?, reuseIdentifier: String?) {
         super.init(annotation: annotation, reuseIdentifier: reuseIdentifier)
+        addSubview(halo)
         label.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
         label.textColor = .label
         label.textAlignment = .center
@@ -214,6 +245,10 @@ final class SpeedLabelView: MKAnnotationView {
         label.frame.origin = .zero
         idLabel.frame = CGRect(x: (bounds.width - 60) / 2, y: bounds.height + 1, width: 60, height: 11)
         centerOffset = CGPoint(x: 0, y: -bounds.height / 2 - 4)
+        // The ring sits on the station point itself (below the pill).
+        halo.center = CGPoint(x: bounds.width / 2, y: bounds.height + 4 + bounds.height / 2)
+        halo.isHidden = !a.isHome
+        displayPriority = a.isHome ? .required : .defaultHigh
     }
 }
 

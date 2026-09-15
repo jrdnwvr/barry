@@ -7,6 +7,7 @@
 //  loading/error state for the views.
 
 import Foundation
+import CoreLocation
 import SwiftUI
 import WidgetKit
 
@@ -32,6 +33,8 @@ final class PressureStore: ObservableObject {
 
     private let api: BarryAPI
     private let location: LocationManager
+    /// The device's last known position (nil before the first fix).
+    var userLocation: CLLocation? { location.lastLocation }
 
     init(api: BarryAPI = BarryAPI(),
          location: LocationManager? = nil,

@@ -5,6 +5,7 @@
 //  overlays, the forecast caveat, and a settings sheet (brief Phases 3 & 6).
 
 import SwiftUI
+import CoreLocation
 
 struct ContentView: View {
     @EnvironmentObject var store: PressureStore
@@ -169,7 +170,8 @@ struct ContentView: View {
         // screen; needs station coords to center on.
         if layout == .phone, let rlat = combined.pressure.lat, let rlon = combined.pressure.lon {
             RadarRow(lat: rlat, lon: rlon,
-                     stationName: combined.pressure.name ?? combined.pressure.station)
+                     stationName: combined.pressure.name ?? combined.pressure.station,
+                     home: homeMarker(combined))
         }
 
         // Sensor vs Station: a compact entry row — the full comparison panel
@@ -279,7 +281,8 @@ struct ContentView: View {
         .navigationDestination(isPresented: $showRadarFullScreen) {
             if let rlat = combined.pressure.lat, let rlon = combined.pressure.lon {
                 RadarScreen(lat: rlat, lon: rlon,
-                            stationName: combined.pressure.name ?? combined.pressure.station)
+                            stationName: combined.pressure.name ?? combined.pressure.station,
+                            home: homeMarker(combined))
             }
         }
     }
@@ -299,12 +302,44 @@ struct ContentView: View {
         if let rlat = combined.pressure.lat, let rlon = combined.pressure.lon {
             RadarPanel(lat: rlat, lon: rlon,
                        stationName: combined.pressure.name ?? combined.pressure.station,
+                       home: homeMarker(combined),
                        onExpand: { showRadarFullScreen = true },
                        embedded: true)
                 .frame(maxHeight: .infinity)
         } else {
             Spacer()
         }
+    }
+
+    /// Within this distance of the station, "my location" IS the airport.
+    private static let homeRadiusMeters = 3 * 1852.0   // 3 NM
+
+    /// The home station as a map marker: its own barb (with a halo) when the
+    /// selection is an airport or the user is within 3 NM of it; otherwise the
+    /// pin. Built from /combined so it needs no extra fetch; the radar swaps
+    /// in the station slice's fuller copy when it has one.
+    private func homeMarker(_ combined: CombinedResponse) -> HomeMarker? {
+        guard let lat = combined.pressure.lat, let lon = combined.pressure.lon else { return nil }
+        let cur = combined.pressure.current
+        let obs = StationObs(id: combined.pressure.station, lat: lat, lon: lon,
+                             name: combined.pressure.name,
+                             windKt: cur.windspeed.map { $0 / 1.852 }, windDir: cur.winddir,
+                             gustKt: cur.windgust.map { $0 / 1.852 }, fltCat: cur.fltCat,
+                             obsTime: combined.observedSeries.last?.t,
+                             visibilitySM: cur.visibilitySM, ceilingFt: cur.ceilingFt,
+                             ceilingCover: cur.ceilingCover, temp: cur.temp,
+                             dewpoint: cur.dewpoint, altim: cur.altim, raw: nil)
+        let asBarb: Bool
+        switch savedLocations.selected.kind {
+        case .airport:
+            asBarb = true
+        case .currentLocation:
+            let here = store.userLocation
+            asBarb = here.map { $0.distance(from: CLLocation(latitude: lat, longitude: lon)) <= Self.homeRadiusMeters } ?? false
+        case .place:
+            asBarb = false
+        }
+        return HomeMarker(obs: obs, asBarb: asBarb)
     }
 
     private func initialLoad() async {
@@ -400,11 +435,12 @@ private struct RadarRow: View {
     let lat: Double
     let lon: Double
     let stationName: String
+    var home: HomeMarker? = nil
 
     var body: some View {
         // Pushed, not presented: the radar is a full screen of its own now.
         NavigationLink {
-            RadarScreen(lat: lat, lon: lon, stationName: stationName)
+            RadarScreen(lat: lat, lon: lon, stationName: stationName, home: home)
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "antenna.radiowaves.left.and.right")

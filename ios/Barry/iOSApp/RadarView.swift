@@ -380,6 +380,7 @@ struct RadarMapView: UIViewRepresentable {
     var frontState: FrontRenderState? = nil
     var stations: [StationObs] = []
     var stationStyle: StationLayerStyle = .off
+    var onSelectStation: ((StationObs) -> Void)? = nil
     var onRegionChange: ((MKCoordinateRegion) -> Void)? = nil
 
     final class RadarTileOverlay: MKTileOverlay {
@@ -509,6 +510,15 @@ struct RadarMapView: UIViewRepresentable {
         private var fadeStart: CFTimeInterval = 0
 
         var onRegionChange: ((MKCoordinateRegion) -> Void)?
+        var onSelectStation: ((StationObs) -> Void)?
+
+        /// A station tap opens its detail sheet; the annotation is deselected
+        /// right away so the same station can be tapped again after dismissal.
+        func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
+            guard let st = view.annotation as? StationAnnotation else { return }
+            mapView.deselectAnnotation(st, animated: false)
+            onSelectStation?(st.obs)
+        }
         var shownArrows: [WindArrow] = []
         var arrowAnnotations: [WindArrowAnnotation] = []
         var shownBL: [BLPoint] = []
@@ -810,6 +820,7 @@ struct RadarMapView: UIViewRepresentable {
             map.addOverlay(tile, level: .aboveRoads)
         }
         context.coordinator.onRegionChange = onRegionChange
+        context.coordinator.onSelectStation = onSelectStation
         context.coordinator.syncArrows(showWind ? windArrows : [], on: map)
         context.coordinator.syncBL(showBL ? blPoints : [], on: map)
         context.coordinator.syncFronts(frontState, on: map)
@@ -867,6 +878,7 @@ struct RadarPanel: View {
     @AppStorage("radarStations", store: AppConfig.sharedDefaults)
     private var stationStyleRaw: String = "off"
     @State private var showLayers = false
+    @State private var selectedStation: StationObs?
     private let ticker = Timer.publish(every: 0.55, on: .main, in: .common).autoconnect()
 
     private var stationStyle: StationLayerStyle { StationLayerStyle(rawValue: stationStyleRaw) ?? .off }
@@ -931,6 +943,11 @@ struct RadarPanel: View {
                 fullScreenContent
             }
         }
+        .sheet(item: $selectedStation) { st in
+            StationDetailSheet(obs: st, now: Date())
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
         .onChange(of: stationStyleRaw) { _, raw in
             if raw != "off" {
                 Task { await model.fetchStations(center: model.lastRegion?.center ?? initialRegion.center) }
@@ -969,6 +986,7 @@ struct RadarPanel: View {
                      frontState: showFronts ? model.frontState : nil,
                      stations: model.stationObs,
                      stationStyle: stationStyle,
+                     onSelectStation: { selectedStation = $0 },
                      onRegionChange: { region in
                          model.scheduleFieldReload(for: region,
                                                    wind: showWindArrows,

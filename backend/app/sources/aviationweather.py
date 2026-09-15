@@ -165,6 +165,7 @@ def parse_records(records: Sequence[dict]) -> Dict[str, dict]:
                     "visib": r.get("visib"),
                     "clouds": r.get("clouds"),
                     "fltCat": r.get("fltCat"),
+                    "rawOb": r.get("rawOb"),
                 }
             )
         if not points:
@@ -190,6 +191,7 @@ def parse_records(records: Sequence[dict]) -> Dict[str, dict]:
             # so the client can prefer them over the model for "now" (METAR-first).
             "current": _current_obs(newest),
             "presTend": newest.get("presTend"),
+            "raw": newest.get("rawOb"),
             "_raw_points": points,
         }
     return out

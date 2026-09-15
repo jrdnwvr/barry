@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Barry Privacy Policy</title>
+<style>
+  body { font: 17px/1.55 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; color: #1d1d1f; background: #fff; margin: 0; padding: 32px 20px 64px; }
+  main { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  .meta { color: #6e6e73; margin: 0 0 28px; }
+  h2 { font-size: 19px; margin: 28px 0 8px; }
+  p, li { margin: 0 0 12px; }
+  a { color: #0066cc; }
+  @media (prefers-color-scheme: dark) { body { background: #000; color: #f5f5f7; } .meta { color: #a1a1a6; } a { color: #2997ff; } }
+</style>
+</head>
+<body>
+<main>
+<h1>Barry Privacy Policy</h1>
+<p class="meta">Last updated September 15, 2026</p>
+
+<p>Barry is a barometric pressure app for pilots and weather watchers. It is built by one person, has no accounts, no advertising, and no analytics. This page explains the little data it does handle.</p>
+
+<h2>Location</h2>
+<p>If you allow it, Barry uses your device's location to find the nearest weather-reporting station and to center the radar. Your coordinates are sent to Barry's own server (barry.wide-stack.com) as part of the request for that station's data, and the server uses them to build the response. They are not stored beyond a short in-memory cache used to answer repeat requests, and they are not shared with anyone. You can use Barry without location by picking a station yourself.</p>
+
+<h2>Barometer</h2>
+<p>On phones with a barometer, Barry can read the sensor to compare against the nearest station. Those readings stay on your device.</p>
+
+<h2>Weather data sources</h2>
+<p>Barry's server fetches public weather data on your behalf so your device never contacts these services directly:</p>
+<ul>
+  <li><a href="https://aviationweather.gov">NOAA Aviation Weather Center</a> (METAR reports)</li>
+  <li><a href="https://open-meteo.com">Open-Meteo</a> (forecasts)</li>
+  <li><a href="https://www.rainviewer.com">RainViewer</a> (radar imagery, from NOAA NEXRAD)</li>
+  <li><a href="https://mesonet.agron.iastate.edu">Iowa Environmental Mesonet</a> (NWS surface analysis bulletins)</li>
+  <li><a href="https://ourairports.com">OurAirports</a> (runway data, bundled with the server)</li>
+</ul>
+<p>Radar map tiles are loaded by the app from RainViewer, and the base map comes from Apple Maps; each receives the standard technical information any web request carries, such as your IP address. Apple's own <a href="https://www.apple.com/legal/privacy/">privacy policy</a> covers Maps.</p>
+
+<h2>Notifications</h2>
+<p>Storm alerts are local notifications scheduled on your device from the forecast data. No push tokens or notification data leave your device.</p>
+
+<h2>What Barry does not do</h2>
+<p>Barry does not collect your name, email, contacts, or any identifier; does not use third-party analytics or advertising SDKs; and does not sell or share data.</p>
+
+<h2>Server logs</h2>
+<p>Barry's server keeps ordinary request logs (IP address, requested path, timestamp) for a short period to diagnose problems. They are not used for anything else.</p>
+
+<h2>Changes and contact</h2>
+<p>If this policy changes, the date above will be updated. Questions: <a href="mailto:jrdn@wvr.me">jrdn@wvr.me</a>.</p>
+</main>
+</body>
+</html>

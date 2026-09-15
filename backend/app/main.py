@@ -15,7 +15,10 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 import httpx
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
 
 from . import stations
 from .scheduler import Scheduler
@@ -49,6 +52,21 @@ app = FastAPI(title="Barry backend", version="1.0", lifespan=lifespan)
 
 def get_service() -> PressureService:
     return app.state.service
+
+
+STATIC = Path(__file__).resolve().parent / "static"
+
+
+@app.get("/privacy", include_in_schema=False)
+async def privacy_page():
+    """The App Store privacy policy URL."""
+    return FileResponse(STATIC / "privacy.html", media_type="text/html")
+
+
+@app.get("/support", include_in_schema=False)
+async def support_page():
+    """The App Store support URL."""
+    return FileResponse(STATIC / "support.html", media_type="text/html")
 
 
 @app.get("/healthz")

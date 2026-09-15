@@ -97,6 +97,7 @@
 		E05FC95492D2378F98823D23 /* WindUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E3203C0CBC7B1D5F0A57759 /* WindUnit.swift */; };
 		E1DA0A2BA6D5DAE408366B62 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EB1F388C1A5FE3D18F1D62E /* ContentView.swift */; };
 		E1F631B6FE1E863E001704F2 /* SharedSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */; };
+		EF29D661015A900FB9D47F02 /* RunwayWindsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F83C3064588614F2B8DEAA34 /* RunwayWindsView.swift */; };
 		F1A6FC2E3347FCA151FA44A1 /* CoreMotion.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 292532F4A2C2D5C39CC797B1 /* CoreMotion.framework */; };
 		F9FAEAFFE5323B1757725A34 /* WatchContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A4A8464736F548F6F72A42 /* WatchContentView.swift */; };
 /* End PBXBuildFile section */
@@ -229,6 +230,7 @@
 		F4C5676D3E1E52D59CDFED12 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F4F0EF3938BA8F192FB71228 /* WatchSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSettingsView.swift; sourceTree = "<group>"; };
 		F776D233FE3E44CDDD61C05B /* BarryWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BarryWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F83C3064588614F2B8DEAA34 /* RunwayWindsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayWindsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -364,6 +366,7 @@
 				778E430DEB72ECE6B1DB5CCA /* PressureChartView.swift */,
 				6978CE026B8EEE1A560877C0 /* PressureGuideView.swift */,
 				C0EBA6519DD65A01DF98B527 /* RadarView.swift */,
+				F83C3064588614F2B8DEAA34 /* RunwayWindsView.swift */,
 				DA12AC45B8A41856114FD9A7 /* SensorComparisonView.swift */,
 				72812DF1800A9DF0CF5EF2C3 /* SettingsView.swift */,
 				F3DE49EE7CDCB4E59BB8E97F /* StationLayer.swift */,
@@ -632,6 +635,7 @@
 				0F22D62C5D40785243A56CD0 /* PressureUnit.swift in Sources */,
 				06E7445D9EF69D7CD6C141EE /* RadarView.swift in Sources */,
 				2FC7F63C72023A1812F99D63 /* RangeAnalysis.swift in Sources */,
+				EF29D661015A900FB9D47F02 /* RunwayWindsView.swift in Sources */,
 				2D039F6DE65B45CABECF405F /* SavedLocations.swift in Sources */,
 				8B662BF9297E88CBB93B370B /* SensorComparisonView.swift in Sources */,
 				8C6BCDDE909F4DDEBB5F16AA /* SettingsView.swift in Sources */,

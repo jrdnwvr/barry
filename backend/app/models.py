@@ -179,16 +179,37 @@ class FrontsResponse(BaseModel):
 
 
 class StationObs(BaseModel):
-    """One reporting station's latest wind, for the radar's station layer."""
+    """One reporting station's latest report, for the radar's station layer
+    (wind drives the barbs; the rest fills the tap-for-details sheet)."""
 
     id: str
     lat: float
     lon: float
+    name: Optional[str] = None
     windKt: Optional[float] = None
     windDir: Optional[float] = None     # None = variable or calm
     gustKt: Optional[float] = None
     fltCat: Optional[str] = None
     obsTime: Optional[datetime] = None
+    visibilitySM: Optional[float] = None
+    ceilingFt: Optional[int] = None
+    ceilingCover: Optional[str] = None
+    temp: Optional[float] = None        # °C
+    dewpoint: Optional[float] = None    # °C
+    altim: Optional[float] = None       # hPa
+    raw: Optional[str] = None           # the METAR as transmitted
+
+
+class Runway(BaseModel):
+    """One runway, both ends. Headings are degrees TRUE (OurAirports
+    le_heading_degT), the same reference the METAR wind uses, so crosswind
+    math needs no variation."""
+
+    le: str                             # low-end ident, e.g. "3"
+    he: str                             # high-end ident, e.g. "21"
+    leHeading: float
+    heHeading: float
+    lengthFt: Optional[int] = None
 
 
 class StationsResponse(BaseModel):
@@ -246,5 +267,6 @@ class CombinedResponse(BaseModel):
     forecast: Optional[ForecastResponse] = None
     reading: Optional[ReadingOut] = None
     conditions: Optional[ConditionsOut] = None
+    runways: List[Runway] = Field(default_factory=list)
     sources: Optional[Sources] = None
     verdict: str

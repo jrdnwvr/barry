@@ -144,6 +144,10 @@ struct ContentView: View {
                     FieldConditionsCard(conditions: cond)
                 }
 
+                // Crosswind per runway from the METAR wind; nothing when calm
+                // or the field has no runway data.
+                RunwayWindsCard(combined: combined)
+
                 // Radar: the sky itself, as corroboration for the trend. Sheet keeps
                 // the main screen a glance. Needs station coords to center on.
                 if let rlat = combined.pressure.lat, let rlon = combined.pressure.lon {
@@ -285,6 +289,8 @@ struct ContentView: View {
                 if let cond = combined.conditions {
                     FieldConditionsCard(conditions: cond)
                 }
+
+                RunwayWindsCard(combined: combined)
 
                 if localSensorActive {
                     SensorStationRow(combined: combined, now: store.now,

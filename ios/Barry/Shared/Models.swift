@@ -128,11 +128,29 @@ struct StationObs: Codable, Hashable, Identifiable {
     let id: String
     let lat: Double
     let lon: Double
+    var name: String?
     var windKt: Double?
     var windDir: Double?
     var gustKt: Double?
     var fltCat: String?
     var obsTime: Date?
+    var visibilitySM: Double?
+    var ceilingFt: Int?
+    var ceilingCover: String?
+    var temp: Double?
+    var dewpoint: Double?
+    var altim: Double?
+    var raw: String?
+}
+
+/// One runway, both ends, headings in degrees TRUE (same reference as the
+/// METAR wind, so crosswind math needs no variation).
+struct Runway: Codable, Hashable {
+    let le: String
+    let he: String
+    let leHeading: Double
+    let heHeading: Double
+    var lengthFt: Int?
 }
 
 struct StationsResponse: Codable, Hashable {
@@ -254,6 +272,7 @@ struct CombinedResponse: Codable, Hashable {
     let forecast: ForecastResponse?
     let reading: Reading?
     var conditions: ConditionsOut?
+    var runways: [Runway]?   // optional: absent on old backends
     let sources: Sources?
     let verdict: String
 }

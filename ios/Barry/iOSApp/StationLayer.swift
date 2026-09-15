@@ -142,7 +142,7 @@ final class WindBarbView: MKAnnotationView {
         idLabel.frame = CGRect(x: -5, y: 46, width: 60, height: 11)
         addSubview(glyph)
         addSubview(idLabel)
-        isEnabled = false
+        isEnabled = true        // tappable: opens the station detail sheet
         displayPriority = .defaultHigh
         centerOffset = CGPoint(x: 0, y: -4)   // station dot sits on the coordinate
     }
@@ -177,7 +177,7 @@ final class SpeedLabelView: MKAnnotationView {
         idLabel.textAlignment = .center
         addSubview(label)
         addSubview(idLabel)
-        isEnabled = false
+        isEnabled = true        // tappable: opens the station detail sheet
         displayPriority = .defaultHigh
     }
 
@@ -207,5 +207,116 @@ final class SpeedLabelView: MKAnnotationView {
         bounds = CGRect(x: 0, y: 0, width: max(label.bounds.width, 40), height: label.bounds.height + 12)
         label.frame.origin = CGPoint(x: (bounds.width - label.bounds.width) / 2, y: 0)
         centerOffset = CGPoint(x: 0, y: -bounds.height / 2 - 4)
+    }
+}
+
+// MARK: - Detail sheet
+
+/// What you get when you tap a station on the radar: the report decoded, and
+/// the METAR itself underneath for anyone who reads them raw.
+struct StationDetailSheet: View {
+    let obs: StationObs
+    let now: Date
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(obs.id)
+                    .font(.title2.weight(.semibold))
+                if let cat = obs.fltCat {
+                    Text(cat)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(FlightCategory.color(cat))
+                }
+                Spacer()
+                if let t = obs.obsTime {
+                    Text(age(t))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if let name = obs.name {
+                Text(name)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, -10)
+            }
+
+            LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading),
+                                GridItem(.flexible(), alignment: .leading)],
+                      alignment: .leading, spacing: 10) {
+                fact("Wind", windText, icon: "wind")
+                fact("Visibility", visText, icon: "eye")
+                fact("Ceiling", ceilingText, icon: "cloud")
+                fact("Temp / dew", tempText, icon: "thermometer.medium")
+                fact("Altimeter", altimText, icon: "barometer")
+            }
+
+            if let raw = obs.raw {
+                Text(raw)
+                    .font(.footnote.monospaced())
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(.secondarySystemBackground),
+                                in: RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private func fact(_ label: String, _ value: String, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Label(label, systemImage: icon)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.body.weight(.medium))
+        }
+    }
+
+    private var windText: String {
+        guard let kt = obs.windKt, kt >= 1 else { return "Calm" }
+        let dir = obs.windDir.map { String(format: "%03d°", Int($0.rounded())) } ?? "Variable"
+        var t = "\(dir) at \(Int(kt)) kt"
+        if let g = obs.gustKt { t += ", gusts \(Int(g))" }
+        return t
+    }
+
+    private var visText: String {
+        guard let v = obs.visibilitySM else { return "Not reported" }
+        if v >= 10 { return "10+ mi" }
+        return v == v.rounded() ? "\(Int(v)) mi" : String(format: "%.1f mi", v)
+    }
+
+    private var ceilingText: String {
+        if let ft = obs.ceilingFt {
+            return "\(obs.ceilingCover ?? "") \(ft.formatted()) ft".trimmingCharacters(in: .whitespaces)
+        }
+        switch obs.ceilingCover {
+        case nil: return "Not reported"
+        case "CLR", "SKC": return "Clear"
+        case let c?: return "\(c), no ceiling"
+        }
+    }
+
+    private var tempText: String {
+        guard let t = obs.temp else { return "Not reported" }
+        let d = obs.dewpoint.map { " / \(Int($0.rounded()))°" } ?? ""
+        return "\(Int(t.rounded()))°\(d) C"
+    }
+
+    private var altimText: String {
+        guard let hPa = obs.altim else { return "Not reported" }
+        return String(format: "%.2f inHg", hPa / 33.8639)
+    }
+
+    private func age(_ t: Date) -> String {
+        let m = Int(now.timeIntervalSince(t) / 60)
+        if m < 1 { return "just now" }
+        if m < 60 { return "\(m)m ago" }
+        return "\(m / 60)h \(m % 60)m ago"
     }
 }

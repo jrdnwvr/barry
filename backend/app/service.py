@@ -12,6 +12,7 @@ from typing import Optional
 import httpx
 
 from . import conditions as conditions_mod
+from . import runways
 from . import front as front_mod
 from . import stations
 from .cache import StationRegistry, TTLCache
@@ -296,9 +297,12 @@ class PressureService:
             kt = round(cur.windspeed / 1.852, 0) if cur.windspeed is not None else None
             gust = round(cur.windgust / 1.852, 0) if cur.windgust is not None else None
             stations.append(StationObs(
-                id=sid, lat=p["lat"], lon=p["lon"],
+                id=sid, lat=p["lat"], lon=p["lon"], name=p.get("name"),
                 windKt=kt, windDir=cur.winddir, gustKt=gust, fltCat=cur.fltCat,
                 obsTime=p["series"][-1].t if p.get("series") else None,
+                visibilitySM=cur.visibilitySM, ceilingFt=cur.ceilingFt,
+                ceilingCover=cur.ceilingCover, temp=cur.temp,
+                dewpoint=cur.dewpoint, altim=cur.altim, raw=p.get("raw"),
             ))
         resp = StationsResponse(stations=stations, cachedAt=_now())
         await self.cache.set(cache_key, resp, ttl=STATIONS_TTL)
@@ -368,6 +372,7 @@ class PressureService:
             forecast=forecast,
             reading=reading_out,
             conditions=conditions,
+            runways=runways.for_station(station),
             sources=sources,
             verdict=verdict,
         )

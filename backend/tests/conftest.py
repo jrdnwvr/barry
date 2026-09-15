@@ -29,6 +29,7 @@ def _metar_record(sid, obs_time, slp, *, altim=None, pres_tend=None, name="Test 
         "visib": "10+",
         "clouds": [{"cover": "SCT", "base": 2500}, {"cover": "BKN", "base": 4500}],
         "fltCat": "VFR",
+        "rawOb": f"{sid} 121853Z {wdir:03d}{wspd:02d}KT 10SM SCT025 BKN045 27/18 A3006",
     }
 
 

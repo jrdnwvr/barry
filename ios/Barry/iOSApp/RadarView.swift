@@ -57,11 +57,12 @@ final class RadarModel: ObservableObject {
     private var stationTask: Task<Void, Never>?
     private var stationsFetchedAround: CLLocationCoordinate2D?
 
-    /// Fetch stations for a region center; the backend caches by 0.2° cell, so
-    /// this only bothers it after a real move (~1°).
+    /// Fetch stations for a region center. The backend slices ±3° out of its
+    /// in-memory METAR table (no upstream call), so this is cheap; still, only
+    /// bother it after a real move (~1.5°, half the box).
     func fetchStations(center: CLLocationCoordinate2D) async {
         if let prev = stationsFetchedAround,
-           abs(prev.latitude - center.latitude) < 1, abs(prev.longitude - center.longitude) < 1,
+           abs(prev.latitude - center.latitude) < 1.5, abs(prev.longitude - center.longitude) < 1.5,
            !stationObs.isEmpty {
             return
         }

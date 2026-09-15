@@ -21,10 +21,13 @@ from typing import Dict, List, Optional, Sequence
 
 import httpx
 
-from ..models import CurrentObs, SeriesPoint
+from ..models import StationObs, CurrentObs, SeriesPoint
 from ..tendency import resolve_tendency
 
 BASE_URL = "https://aviationweather.gov/api/data/metar"
+# Every station's latest METAR, one gzip'd CSV refreshed by AWC each minute.
+# ~250 KB for the whole world; the courteous way to cover a big area.
+CACHE_URL = "https://aviationweather.gov/data/cache/metars.cache.csv.gz"
 USER_AGENT = "Barry/1.0 (jrdn@wvr.me)"
 
 
@@ -268,3 +271,97 @@ def build_tendency(parsed: dict):
         p["slp"] if p["slp"] is not None else p["altim"] for p in points
     ]
     return resolve_tendency(parsed.get("presTend"), times, values)
+
+
+# ---- Bulk cache --------------------------------------------------------------
+
+def _f(value) -> Optional[float]:
+    """CSV cell -> float; "10+" style caps parse to their number."""
+    if value is None:
+        return None
+    v = str(value).strip().rstrip("+")
+    if not v:
+        return None
+    try:
+        return float(v)
+    except ValueError:
+        return None
+
+
+def parse_metar_cache(text: str) -> List[StationObs]:
+    """Parse AWC's metars.cache.csv into StationObs. Rows without a real
+    position (some military ids report -99.99) are dropped. Sky layers come
+    as repeated sky_cover/cloud_base_ft_agl column pairs."""
+    import csv
+    from io import StringIO
+
+    rows = csv.reader(StringIO(text))
+    header = next(rows, None)
+    if not header or "station_id" not in header:
+        return []
+    col = {name: i for i, name in enumerate(header)}   # last index wins for dupes
+    covers = [i for i, n in enumerate(header) if n == "sky_cover"]
+    bases = [i for i, n in enumerate(header) if n == "cloud_base_ft_agl"]
+
+    def cell(row, name):
+        i = col.get(name)
+        v = row[i] if i is not None and i < len(row) else None
+        # AWC writes the literal word "null" for some empty text fields.
+        return None if v is None or v.strip() in ("", "null") else v
+
+    out: List[StationObs] = []
+    for row in rows:
+        if len(row) < 12:
+            continue
+        sid = (cell(row, "station_id") or "").strip().upper()
+        lat, lon = _f(cell(row, "latitude")), _f(cell(row, "longitude"))
+        # -99.99/-99.99 (some military ids) fails the latitude range.
+        if not sid or lat is None or lon is None or abs(lat) > 90 or abs(lon) > 180:
+            continue
+        # Ceiling: lowest BKN/OVC/OVX layer; else the lowest layer reported.
+        layers = []
+        for ci, bi in zip(covers, bases):
+            cov = row[ci].strip() if ci < len(row) else ""
+            if cov and cov != "null":
+                layers.append((cov, _f(row[bi]) if bi < len(row) else None))
+        ceiling_ft, ceiling_cover = None, None
+        ceils = [(b, c) for c, b in layers if c in _CEILING_COVERS and b is not None]
+        if ceils:
+            b, c = min(ceils)
+            ceiling_ft, ceiling_cover = int(b), c
+        elif layers:
+            ceiling_cover = layers[0][0]
+        wdir = _f(cell(row, "wind_dir_degrees"))
+        altim_inhg = _f(cell(row, "altim_in_hg"))
+        obs = None
+        t = cell(row, "observation_time")
+        if t:
+            try:
+                obs = datetime.fromisoformat(t.replace("Z", "+00:00"))
+            except ValueError:
+                obs = None
+        out.append(StationObs(
+            id=sid, lat=lat, lon=lon,
+            windKt=_f(cell(row, "wind_speed_kt")),
+            windDir=wdir,
+            gustKt=_f(cell(row, "wind_gust_kt")),
+            fltCat=(cell(row, "flight_category") or None),
+            obsTime=obs,
+            visibilitySM=_f(cell(row, "visibility_statute_mi")),
+            ceilingFt=ceiling_ft, ceilingCover=ceiling_cover,
+            temp=_f(cell(row, "temp_c")), dewpoint=_f(cell(row, "dewpoint_c")),
+            altim=round(altim_inhg * 33.8639, 1) if altim_inhg is not None else None,
+            raw=(cell(row, "raw_text") or None),
+        ))
+    return out
+
+
+async def fetch_metar_cache(client: httpx.AsyncClient) -> List[StationObs]:
+    """One request for the whole world's latest METARs."""
+    import gzip
+    r = await client.get(CACHE_URL, headers={"User-Agent": USER_AGENT}, timeout=30.0)
+    r.raise_for_status()
+    body = r.content
+    if body[:2] == b"\x1f\x8b":
+        body = gzip.decompress(body)
+    return parse_metar_cache(body.decode("utf-8", errors="replace"))

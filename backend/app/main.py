@@ -137,11 +137,13 @@ async def radar_hrrr():
 async def get_metars(
     lat: float = Query(..., ge=-90, le=90),
     lon: float = Query(..., ge=-180, le=180),
+    half: float = Query(3.0, ge=0.5, le=5.0),
 ):
-    """Latest wind at every station in a ~300 km box: the radar's wind-barb
-    and speed-label layers."""
+    """Latest report at every station within ±half degrees of a point, from
+    the server's bulk METAR table (no upstream call per request): the radar's
+    wind-barb / speed-label layers and the station detail sheet."""
     service = get_service()
-    resp = await service.get_station_obs(lat, lon)
+    resp = await service.get_station_obs(lat, lon, half=half)
     return resp.model_dump(mode="json", by_alias=True)
 
 

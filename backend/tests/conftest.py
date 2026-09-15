@@ -194,6 +194,37 @@ WARM WK 4984 4384 3980
 """
 
 
+METAR_CACHE_HEADER = ("raw_text,station_id,observation_time,latitude,longitude,temp_c,dewpoint_c,"
+    "wind_dir_degrees,wind_speed_kt,wind_gust_kt,visibility_statute_mi,altim_in_hg,"
+    "sea_level_pressure_mb,corrected,auto,auto_station,maintenance_indicator_on,no_signal,"
+    "lightning_sensor_off,freezing_rain_sensor_off,present_weather_sensor_off,wx_string,"
+    "sky_cover,cloud_base_ft_agl,sky_cover,cloud_base_ft_agl,sky_cover,cloud_base_ft_agl,"
+    "sky_cover,cloud_base_ft_agl,flight_category,three_hr_pressure_tendency_mb,maxT_c,minT_c,"
+    "maxT24hr_c,minT24hr_c,precip_in,pcp3hr_in,pcp6hr_in,pcp24hr_in,snow_in,vert_vis_ft,"
+    "metar_type,elevation_m")
+
+
+def sample_metar_cache(extra_rows=()):
+    """A slice of AWC's metars.cache.csv in its real column layout: a few
+    stations around Cincinnati, one across the country, one with a bogus
+    -99.99 position (real military ids do this), one variable wind."""
+    rows = [
+        # raw, id, time, lat, lon, T, Td, dir, spd, gust, vis, altim, slp, ..., sky pairs, cat
+        '"METAR KLUK 151653Z 00000KT 10SM CLR 28/19 A3019 RMK AO2 SLP219",KLUK,2026-09-15T16:53:00.000Z,39.1060,-84.4161,28.3,18.9,0,0,,10+,30.19,1021.9,,,TRUE,,,,,,,CLR,,,,,,,,VFR,,,,,,,,,,,,METAR,144',
+        '"METAR KCVG 151652Z 12008G15KT 6SM BR SCT025 BKN040 27/20 A3018",KCVG,2026-09-15T16:52:00.000Z,39.0440,-84.6720,27,20,120,8,15,6,30.18,1021.2,,,TRUE,,,,,,BR,SCT,2500,BKN,4000,,,,,MVFR,,,,,,,,,,,,METAR,269',
+        '"METAR KILN 151653Z VRB03KT 10SM OVC008 24/22 A3017",KILN,2026-09-15T16:53:00.000Z,39.4280,-83.7920,24,22,VRB,3,,10+,30.17,,,,TRUE,,,,,,,OVC,800,,,,,,,IFR,,,,,,,,,,,,METAR,329',
+        '"METAR KSFO 151656Z 24004KT 10SM FEW015 18/12 A2998",KSFO,2026-09-15T16:56:00.000Z,37.6190,-122.3750,18,12,240,4,,10+,29.98,1015.3,,,TRUE,,,,,,,FEW,1500,,,,,,,null,,,,,,,,,,,,METAR,3',
+        '"METAR KQFV 151710Z AUTO 11001KT 9999 CLR 08/07 A3016",KQFV,2026-09-15T17:10:00.000Z,-99.9900,-99.9900,8,7,110,1,,6+,30.16,,,TRUE,TRUE,,,TRUE,,,,,,,,,,,,VFR,,,,,,,,,,,,METAR,9999',
+    ]
+    return METAR_CACHE_HEADER + "\n" + "\n".join(list(rows) + list(extra_rows)) + "\n"
+
+
+def metar_cache_row(sid, lat, lon, *, spd=7, d="270", cat="VFR"):
+    return (f'"METAR {sid} 151650Z {d}{spd:02d}KT 10SM CLR 20/10 A3000",{sid},'
+            f'2026-09-15T16:50:00.000Z,{lat:.4f},{lon:.4f},20,10,{d},{spd},,10+,30.00,,,,TRUE,'
+            f',,,,,,CLR,,,,,,,,{cat},,,,,,,,,,,,METAR,100')
+
+
 class FakeUpstream:
     """Records calls and serves canned AWC / Open-Meteo responses."""
 
@@ -214,6 +245,11 @@ class FakeUpstream:
         self.iem_fail = False
         self.iem_calls = []
         self.wpc_fail = False
+        # Bulk METAR cache: served gzip'd like AWC; extra_rows lets a test
+        # pile on stations to exercise thinning.
+        self.bulk_fail = False
+        self.bulk_extra_rows = ()
+        self.bulk_calls = 0
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         url = str(request.url)
@@ -238,6 +274,14 @@ class FakeUpstream:
                 return httpx.Response(200, content=b"REAL-HRRR-TILE",
                                       headers={"content-type": "image/png"})
             return httpx.Response(503, text="no such layer")
+        if "data/cache/metars.cache.csv.gz" in url:
+            import gzip
+            self.bulk_calls += 1
+            if self.bulk_fail:
+                return httpx.Response(503, text="down")
+            body = gzip.compress(sample_metar_cache(self.bulk_extra_rows).encode("utf-8"))
+            return httpx.Response(200, content=body,
+                                  headers={"content-type": "application/x-gzip"})
         if "aviationweather.gov" in url:
             self.awc_calls.append(request)
             if self.awc_fail:

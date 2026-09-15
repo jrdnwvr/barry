@@ -39,6 +39,12 @@ class Scheduler:
 
     async def refresh_once(self) -> int:
         """Refresh all active stations in batched calls. Returns #upstream calls."""
+        # Warm the whole-world METAR table so /metars never waits on AWC.
+        try:
+            await self._service.metar_bulk()
+        except Exception as exc:
+            log.warning("scheduler: bulk metar warm failed: %s", exc)
+
         active = await self._service.registry.active()
         if not active:
             log.info("scheduler: no active stations; skipping cycle")

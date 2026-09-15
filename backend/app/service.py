@@ -6,6 +6,9 @@ so both the HTTP routes and the scheduled worker share one code path.
 
 from __future__ import annotations
 
+import logging
+import math
+
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -47,6 +50,8 @@ HRRR_TTL = 10 * 60.0      # HRRR runs land hourly; re-probing IEM every 10 min
                           # keeps the run fresh at ~8 tiny tile requests/hour
 FRONTS_TTL = 30 * 60.0    # WPC redraws the chart every 3 h; 30 min is plenty
 STATIONS_TTL = 10 * 60.0  # radar station layer: METARs are hourly, specials aside
+BULK_TTL = 5 * 60.0       # AWC's whole-world METAR cache: one 250 KB pull serves everyone
+STATIONS_MAX = 350        # most annotation views a phone map should carry
 
 # Stale-if-error: when Open-Meteo is down, re-serve the last good forecast for up
 # to this long (flagged stale=True) — a 6-hour-old forecast beats no forecast.
@@ -63,6 +68,27 @@ def _tendency_out(t) -> Optional[TendencyOut]:
     if t is None:
         return None
     return TendencyOut(delta3h=t.delta3h, cls=t.cls, intensity=t.intensity)
+
+
+
+log = logging.getLogger(__name__)
+
+
+def _thin_stations(box, lat, lon, half, lon_half, limit):
+    """Grid-thin to at most ~limit stations: one per cell, preferring the
+    station with the fullest report (category, wind, longer raw text)."""
+    if len(box) <= limit:
+        return box
+    n = max(1, int(math.sqrt(limit)))
+    best = {}
+    for s in box:
+        r = min(n - 1, int((s.lat - (lat - half)) / (2 * half) * n))
+        c = min(n - 1, int((s.lon - (lon - lon_half)) / (2 * lon_half) * n))
+        score = (s.fltCat is not None, s.windKt is not None, len(s.raw or ""))
+        cur = best.get((r, c))
+        if cur is None or score > cur[0]:
+            best[(r, c)] = (score, s)
+    return [v[1] for v in best.values()]
 
 
 class PressureService:
@@ -280,10 +306,46 @@ class PressureService:
 
     # ---- station wind layer --------------------------------------------------
 
-    async def get_station_obs(self, lat: float, lon: float) -> StationsResponse:
-        """Latest wind at every reporting station in the radar's box — the
-        wind-barb / speed-label layer. One bbox METAR call, cached by a 0.2°
-        grid cell so panning around one area doesn't re-fetch."""
+    async def metar_bulk(self) -> Optional[List[StationObs]]:
+        """Every station's latest METAR, from AWC's cache file, held for
+        BULK_TTL. None when the pull fails (callers fall back to bbox)."""
+        cached = await self.cache.get("metar_bulk")
+        if cached is not None:
+            return cached
+        try:
+            table = await awc.fetch_metar_cache(self._client)
+        except Exception as exc:
+            log.warning("metar bulk cache fetch failed: %s", exc)
+            return None
+        if not table:
+            return None
+        await self.cache.set("metar_bulk", table, ttl=BULK_TTL)
+        return table
+
+    async def get_station_obs(self, lat: float, lon: float, half: float = 3.0) -> StationsResponse:
+        """Stations within ±half degrees of a point, sliced from the in-memory
+        bulk table (no upstream call per user). Dense areas are thinned on a
+        grid to STATIONS_MAX, keeping the fullest report per cell."""
+        half = max(0.5, min(5.0, half))
+        cache_key = f"stations:{round(lat * 5) / 5}:{round(lon * 5) / 5}:{half}"
+        cached = await self.cache.get(cache_key)
+        if cached is not None:
+            return cached
+        table = await self.metar_bulk()
+        if table is None:
+            return await self._station_obs_bbox(lat, lon)
+
+        lon_half = half / max(0.2, math.cos(math.radians(lat)))
+        box = [s for s in table
+               if abs(s.lat - lat) <= half and abs(s.lon - lon) <= lon_half]
+        stations = _thin_stations(box, lat, lon, half, lon_half, STATIONS_MAX)
+        resp = StationsResponse(stations=stations, cachedAt=_now())
+        await self.cache.set(cache_key, resp, ttl=BULK_TTL)
+        return resp
+
+    async def _station_obs_bbox(self, lat: float, lon: float) -> StationsResponse:
+        """Fallback when the bulk cache is unavailable: one bbox METAR call
+        (±1.4°), cached by 0.2° cell."""
         cache_key = f"stations:{round(lat * 5) / 5}:{round(lon * 5) / 5}"
         cached = await self.cache.get(cache_key)
         if cached is not None:

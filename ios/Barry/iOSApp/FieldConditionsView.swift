@@ -54,8 +54,8 @@ struct FieldConditionsCard: View {
         VStack(alignment: .leading, spacing: 8) {
             if hasDA {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: "airplane.departure")
-                        .font(.subheadline)
+                    AirLayersIcon()
+                        .frame(height: 13)
                         .foregroundStyle(.blue)
                     Text("Density altitude")
                         .font(.subheadline.weight(.medium))

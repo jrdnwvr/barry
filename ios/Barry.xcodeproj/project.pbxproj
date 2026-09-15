@@ -36,6 +36,7 @@
 		3BE203844E7BC24AC1600A7B /* Interpreter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44083DF235ACE8084DC9A498 /* Interpreter.swift */; };
 		3FD01657A6175EE55DF94D91 /* ConfirmationOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A59F4AD2D2CF0AC8FB31B534 /* ConfirmationOverlayView.swift */; };
 		42482AB94F1FE3D8035354D9 /* BarryAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */; };
+		4253341F1F79930A611AD743 /* CardIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0023323B71268E669397009E /* CardIcons.swift */; };
 		483CBC3B0160B52142C82C61 /* TendencyProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A24A6845ECB66698D61771D /* TendencyProvider.swift */; };
 		4841725627A1F0AC607A52BE /* SharedSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */; };
 		4B47718B22FC9723FF410F76 /* BarryWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BB3C628CF8662B6BEF5A73F /* BarryWatchApp.swift */; };
@@ -170,6 +171,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0023323B71268E669397009E /* CardIcons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardIcons.swift; sourceTree = "<group>"; };
 		0094727B647701DDDCF17BD2 /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		01599505777741EA095092C0 /* HeroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroView.swift; sourceTree = "<group>"; };
 		02CC4610E9A811E4A3554DCB /* BarometerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarometerManager.swift; sourceTree = "<group>"; };
@@ -353,6 +355,7 @@
 				02CC4610E9A811E4A3554DCB /* BarometerManager.swift */,
 				9639018DA53DA80272AC71E9 /* Barry.entitlements */,
 				4B8FF4A39677C2C8F46B98F7 /* BarryApp.swift */,
+				0023323B71268E669397009E /* CardIcons.swift */,
 				A59F4AD2D2CF0AC8FB31B534 /* ConfirmationOverlayView.swift */,
 				4EB1F388C1A5FE3D18F1D62E /* ContentView.swift */,
 				52B4C35AC0CE61C4C1CCE6D5 /* FieldConditionsView.swift */,
@@ -616,6 +619,7 @@
 				8F156D0C3F3371A2376F2394 /* BarometerManager.swift in Sources */,
 				D3CCE6CB0DB066A238922179 /* BarryAPI.swift in Sources */,
 				DACD1A75954EE1A27EDEC976 /* BarryApp.swift in Sources */,
+				4253341F1F79930A611AD743 /* CardIcons.swift in Sources */,
 				3FD01657A6175EE55DF94D91 /* ConfirmationOverlayView.swift in Sources */,
 				E1DA0A2BA6D5DAE408366B62 /* ContentView.swift in Sources */,
 				1499AE344651937BC57A3E81 /* FieldConditionsView.swift in Sources */,

@@ -62,8 +62,14 @@ struct RunwayWindsCard: View {
         if let best = list.first {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline) {
-                    Label("Runway winds", systemImage: "airplane.departure")
-                        .font(.subheadline.weight(.semibold))
+                    Label {
+                        Text("Runway winds")
+                    } icon: {
+                        RunwayIcon()
+                            .frame(height: 15)
+                            .foregroundStyle(.blue)
+                    }
+                    .font(.subheadline.weight(.semibold))
                     Spacer()
                     Text("Rwy \(best.ident)")
                         .font(.title3.weight(.semibold))

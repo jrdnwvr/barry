@@ -403,6 +403,60 @@ struct PressureChartView: View {
         }
     }
 
+    // MARK: - Trend fit band (B4: make the interpreter's steadiness visible)
+
+    /// The interpreter's rate3h is a least-squares line over the trailing 3 h;
+    /// its `steadiness` is that fit's R². When the fit is poor the number is
+    /// honest but invisible, so the chart draws the fitted segment and a band
+    /// of ± 2 × the residual scatter around it. Steady trends draw nothing.
+    private static let bandSteadinessBelow = 0.8
+    private static let bandHours = 3.0
+
+    private struct TrendFit {
+        let x0: Date, x1: Date, y0: Double, y1: Double, half: Double
+    }
+
+    private var trendFit: TrendFit? {
+        guard let reading = combined.reading, reading.steadiness < Self.bandSteadinessBelow,
+              let last = visibleObserved.last else { return nil }
+        let start = last.t.addingTimeInterval(-Self.bandHours * 3600)
+        let pts = visibleObserved.filter { $0.t >= start }
+        guard pts.count >= 4 else { return nil }
+        let t0 = pts[0].t.timeIntervalSinceReferenceDate
+        let xs = pts.map { ($0.t.timeIntervalSinceReferenceDate - t0) / 3600 }
+        let ys = pts.map(\.value)
+        let n = Double(xs.count)
+        let mx = xs.reduce(0, +) / n, my = ys.reduce(0, +) / n
+        var sxx = 0.0, sxy = 0.0
+        for i in xs.indices { sxx += (xs[i] - mx) * (xs[i] - mx); sxy += (xs[i] - mx) * (ys[i] - my) }
+        guard sxx > 0 else { return nil }
+        let slope = sxy / sxx, intercept = my - slope * mx
+        var ss = 0.0
+        for i in xs.indices { let r = ys[i] - (intercept + slope * xs[i]); ss += r * r }
+        let half = 2 * (ss / n).squareRoot()
+        guard half > 0 else { return nil }
+        return TrendFit(x0: pts[0].t, x1: last.t,
+                        y0: intercept, y1: intercept + slope * xs[xs.count - 1], half: half)
+    }
+
+    @ChartContentBuilder private var trendBandContent: some ChartContent {
+        if let f = trendFit {
+            ForEach([(f.x0, f.y0), (f.x1, f.y1)], id: \.0) { x, y in
+                AreaMark(x: .value("Time", x),
+                         yStart: .value("Low", y - f.half),
+                         yEnd: .value("High", y + f.half),
+                         series: .value("Series", "trendBand"))
+            }
+            .foregroundStyle(.blue.opacity(0.10))
+            ForEach([(f.x0, f.y0), (f.x1, f.y1)], id: \.0) { x, y in
+                LineMark(x: .value("Time", x), y: .value("Pressure", y),
+                         series: .value("Series", "trendFit"))
+            }
+            .foregroundStyle(.blue.opacity(0.45))
+            .lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 3]))
+        }
+    }
+
     @ChartContentBuilder private var featureContent: some ChartContent {
         // Interpreter feature pin (§4.3): a dashed purple guide at the detected /
         // forecast feature time (the verdict's "trough at 6pm" on the curve).
@@ -496,6 +550,7 @@ struct PressureChartView: View {
     // literal the Swift type-checker times out.
     private var chartView: some View {
         Chart {
+            trendBandContent
             observedLineContent
             forecastLineContent
             phoneContent
@@ -688,6 +743,10 @@ struct PressureChartView: View {
                          label: "deeper = faster change")
             if !visiblePhone.isEmpty {
                 legendSwatch(colors: [.orange, .orange], label: "local")
+            }
+            if trendFit != nil {
+                legendSwatch(colors: [.blue.opacity(0.25), .blue.opacity(0.25)],
+                             label: "scatter around the 3 h trend")
             }
             Spacer()
             Text("tap or drag to read")

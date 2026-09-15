@@ -85,7 +85,7 @@ Present the range result as a card anchored to the chart (overlay, with a
 close X) rather than inserting it into the scroll stack, so the chart
 doesn't jump when it appears.
 
-**B4. Show what the reading is made of.** (S)
+**B4. Show what the reading is made of.** (S) DONE 2026-09-15: trailing 3 h fit + scatter band when steadiness < 0.8 (caveats were already under the verdict).
 The interpreter already returns `steadiness`, `confidence`, and `caveats`.
 The chart shows none of them. A thin confidence band around the observed
 curve (wider when steadiness is low) and a caveat line under the verdict

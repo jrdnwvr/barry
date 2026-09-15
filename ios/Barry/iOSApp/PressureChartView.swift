@@ -40,6 +40,21 @@ struct PressureChartView: View {
     /// A dragged time range + its analysis — shown as a card below the chart.
     @State private var rangeSelection: ClosedRange<Date>?
     @State private var rangeAnalysis: RangeAnalysis?
+    /// What the current drag is doing: painting a new range, or moving one
+    /// edge of the existing one (a drag that started on a handle).
+    private enum DragMode { case new, lower, upper }
+    @State private var dragMode: DragMode?
+    private let haptic = UISelectionFeedbackGenerator()
+
+    /// Drags snap to the half hour: METARs are hourly, so finer edges only
+    /// add noise to the analysis and jitter to the handles.
+    private static let snapSeconds = 1800.0
+    private static func snap(_ d: Date) -> Date {
+        Date(timeIntervalSinceReferenceDate:
+             (d.timeIntervalSinceReferenceDate / snapSeconds).rounded() * snapSeconds)
+    }
+    /// Handle hit radius in points, measured on the plot's x axis.
+    private static let handleHitRadius: CGFloat = 16
 
     private struct Plot: Identifiable {
         let id = UUID()
@@ -234,6 +249,41 @@ struct PressureChartView: View {
         }
     }
 
+    /// One drag sample. The first sample decides the mode: a start on an
+    /// existing edge moves that edge; anywhere else paints a new range. Each
+    /// snapped change re-analyzes so the card follows the handle live.
+    private func dragChanged(from d0: Date, to d1: Date, startX: CGFloat, proxy: ChartProxy) {
+        if dragMode == nil {
+            dragMode = .new
+            if let r = rangeSelection,
+               let lx = proxy.position(forX: r.lowerBound),
+               let ux = proxy.position(forX: r.upperBound) {
+                if abs(startX - lx) < Self.handleHitRadius { dragMode = .lower }
+                else if abs(startX - ux) < Self.handleHitRadius { dragMode = .upper }
+            }
+            haptic.prepare()
+        }
+        let step = Self.snapSeconds
+        let s1 = Self.snap(d1)
+        let next: ClosedRange<Date>
+        switch dragMode ?? .new {
+        case .new:
+            let s0 = Self.snap(d0)
+            next = min(s0, s1)...max(s0, s1)
+        case .lower:
+            let hi = rangeSelection?.upperBound ?? s1
+            next = min(s1, hi.addingTimeInterval(-step))...hi
+        case .upper:
+            let lo = rangeSelection?.lowerBound ?? s1
+            next = lo...max(s1, lo.addingTimeInterval(step))
+        }
+        guard next != rangeSelection else { return }
+        selected = nil
+        rangeSelection = next
+        haptic.selectionChanged()
+        if next.upperBound > next.lowerBound { finalizeRange() }
+    }
+
     /// Select a window, clipped to the data on hand, and analyze it. Every
     /// selection path (chips, the event pin, a drag) ends here.
     private func selectRange(_ r: ClosedRange<Date>) {
@@ -426,10 +476,20 @@ struct PressureChartView: View {
             RuleMark(x: .value("Start", r.lowerBound))
                 .foregroundStyle(.blue.opacity(0.4))
                 .lineStyle(StrokeStyle(lineWidth: 1))
+                .annotation(position: .bottom, alignment: .center, spacing: -7) { edgeHandle }
             RuleMark(x: .value("End", r.upperBound))
                 .foregroundStyle(.blue.opacity(0.4))
                 .lineStyle(StrokeStyle(lineWidth: 1))
+                .annotation(position: .bottom, alignment: .center, spacing: -7) { edgeHandle }
         }
+    }
+
+    /// A grab point at the foot of each edge rule: drag it to resize the window.
+    private var edgeHandle: some View {
+        Circle()
+            .fill(Color.blue)
+            .frame(width: 12, height: 12)
+            .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
     }
 
     // Chart marks are split into @ChartContentBuilder pieces above — as one big
@@ -488,10 +548,12 @@ struct PressureChartView: View {
                             let x1 = now.x - geo[plotFrame].origin.x
                             guard let d0: Date = proxy.value(atX: x0),
                                   let d1: Date = proxy.value(atX: x1) else { return }
-                            selected = nil
-                            rangeSelection = min(d0, d1)...max(d0, d1)
+                            dragChanged(from: d0, to: d1, startX: x0, proxy: proxy)
                         },
-                        onEnded: { finalizeRange() }))
+                        onEnded: {
+                            dragMode = nil
+                            finalizeRange()
+                        }))
             }
         }
         .onChange(of: combined) { _, _ in

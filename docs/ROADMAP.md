@@ -74,7 +74,7 @@ plus 3 h, clipped to data) is selected and analyzed. Add three preset chips
 under the chart: Last 3 h, Since midnight, Next 6 h. Freehand drag stays
 for the curious, but most reads become one tap.
 
-**B2. Selection handles and snapping.** (M)
+**B2. Selection handles and snapping.** (M) DONE 2026-09-15 (half-hour snap, edge-handle drags, live re-analysis, haptics); handle drag awaits a hands-on check since the simulator gesture tool died mid-verification.
 Once a range exists, draw draggable handles on its edges (Screen Time
 style) so you adjust a window instead of redrawing it. Snap edges to the
 nearest half hour. Haptic tick on snap. Long-press anywhere starts a new

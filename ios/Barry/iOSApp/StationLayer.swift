@@ -134,17 +134,22 @@ final class WindBarbView: MKAnnotationView {
 
     override init(annotation: MKAnnotation?, reuseIdentifier: String?) {
         super.init(annotation: annotation, reuseIdentifier: reuseIdentifier)
-        bounds = CGRect(x: 0, y: 0, width: 50, height: 58)
-        glyph.frame.origin = .zero
+        // The view's bounds double as its collision footprint: MapKit hides an
+        // annotation whenever its frame overlaps another's. A 50x58 box
+        // collided constantly and barbs blinked out on every zoom, so the
+        // bounds are just the dot area (the glyph and label overflow, which
+        // MKAnnotationView doesn't clip) and collisions use the inscribed circle.
+        bounds = CGRect(x: 0, y: 0, width: 26, height: 26)
+        glyph.center = CGPoint(x: 13, y: 13)
         idLabel.font = .monospacedDigitSystemFont(ofSize: 8.5, weight: .medium)
         idLabel.textColor = .secondaryLabel
         idLabel.textAlignment = .center
-        idLabel.frame = CGRect(x: -5, y: 46, width: 60, height: 11)
+        idLabel.frame = CGRect(x: -17, y: 34, width: 60, height: 11)
         addSubview(glyph)
         addSubview(idLabel)
         isEnabled = true        // tappable: opens the station detail sheet
         displayPriority = .defaultHigh
-        centerOffset = CGPoint(x: 0, y: -4)   // station dot sits on the coordinate
+        collisionMode = .circle
     }
 
     required init?(coder: NSCoder) { fatalError("unused") }
@@ -203,9 +208,11 @@ final class SpeedLabelView: MKAnnotationView {
         label.frame.size.height += 4
         label.frame.size.width += 2
         idLabel.text = o.id
-        idLabel.frame = CGRect(x: 0, y: label.bounds.height + 1, width: max(label.bounds.width, 40), height: 11)
-        bounds = CGRect(x: 0, y: 0, width: max(label.bounds.width, 40), height: label.bounds.height + 12)
-        label.frame.origin = CGPoint(x: (bounds.width - label.bounds.width) / 2, y: 0)
+        // Bounds = the speed pill only (its collision footprint); the id label
+        // hangs below, outside the bounds, and never causes a collision.
+        bounds = CGRect(x: 0, y: 0, width: label.bounds.width, height: label.bounds.height)
+        label.frame.origin = .zero
+        idLabel.frame = CGRect(x: (bounds.width - 60) / 2, y: bounds.height + 1, width: 60, height: 11)
         centerOffset = CGPoint(x: 0, y: -bounds.height / 2 - 4)
     }
 }

@@ -143,9 +143,12 @@ picker); arrows scale with speed from ~3 kt. `/front` also names the nearest
 WPC-analyzed front (`nearestFront`: type, distance, bearing, and motion/ETA
 from WPC's 12 h prog) — enrichment only, the backtested status logic is untouched.
 The radar is its own pushed screen (`RadarScreen`; map full-bleed, floating
-bottom card, collapsible Layers panel) and has a **station layer**: `/metars`
-returns bbox winds in knots, `StationLayer.swift` draws METAR wind barbs or
-speed labels (Off/Barbs/Speeds, `@AppStorage("radarStations")`); tapping a
+bottom card, collapsible Layers panel) and has a **station layer**: the
+backend holds AWC's bulk METAR cache (`metars.cache.csv.gz`, every station,
+refreshed every 5 min by the scheduler) and `/metars?lat&lon&half=3` slices
+a box out of it in milliseconds with grid thinning to ~350 (no per-user AWC
+call; the old bbox query is only the fallback). `StationLayer.swift` draws
+METAR wind barbs or speed labels (Off/Barbs/Speeds, `@AppStorage("radarStations")`); tapping a
 station opens `StationDetailSheet` (decoded report + raw METAR). **Crosswind
 readout**: `backend/app/runways.py` serves OurAirports runways (TRUE headings;
 rebuild with `tools/build_runways.py`) on `/combined.runways`, and

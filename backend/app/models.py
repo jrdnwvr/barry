@@ -227,6 +227,7 @@ class StationObs(BaseModel):
     temp: Optional[float] = None        # °C
     dewpoint: Optional[float] = None    # °C
     altim: Optional[float] = None       # hPa
+    slp: Optional[float] = None         # sea-level pressure, hPa (when reported)
     raw: Optional[str] = None           # the METAR as transmitted
 
 

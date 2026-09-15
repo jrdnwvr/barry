@@ -58,6 +58,11 @@ BULK_TTL = 5 * 60.0       # AWC's whole-world METAR cache: one 250 KB pull serve
 FIELD_TTL = 10 * 60.0     # radar wind/BL grid: model updates hourly; one call per region cell
 FRAMES_TTL = 2 * 60.0     # RainViewer adds a frame every 10 min; 2 min keeps the newest near-live
 STATION_INFO_TTL = 24 * 3600.0  # AWC station directory: names change about never
+# Bulk-snapshot history for the front watch ring (A4): one snapshot at most
+# every HISTORY_STEP_MIN, kept HISTORY_KEEP_H, usable once HISTORY_MIN_H deep.
+HISTORY_STEP_MIN = 25.0
+HISTORY_KEEP_H = 9.5
+HISTORY_MIN_H = 7.5       # TRACK_LAG_H (4) + a 3 h delta at that epoch + slack
 STATIONS_MAX = 350        # most annotation views a phone map should carry
 
 # Stale-if-error: when Open-Meteo is down, re-serve the last good forecast for up
@@ -141,6 +146,8 @@ class PressureService:
         self._client = client
         self.cache = cache or TTLCache()
         self.registry = registry or StationRegistry()
+        # (fetch time, {station: (obsTime, slp, altim, lat, lon)}), oldest first.
+        self._bulk_history: List[tuple] = []
 
     # ---- pressure (observed) -------------------------------------------------
 
@@ -295,12 +302,19 @@ class PressureService:
             pass  # timing degrades to None; direction can still be called
         reading, _ = _run_interpreter(pressure, forecast)
 
-        try:
-            # 8 h of history: the current ring plus the same ring TRACK_LAG_H
-            # earlier, so the centroid track gets its two epochs from one call.
-            parsed = await awc.fetch_metars_bbox(f_lat, f_lon, self._client, hours=8)
-        except Exception:
-            parsed = {}  # no regional field -> at most a "forecast" status
+        if self.history_span_h(now) >= HISTORY_MIN_H:
+            # The ring from the server's own bulk-snapshot history: the same
+            # per-station series the bbox fetch gave, no upstream call. The
+            # delta/ring/track math is untouched (it is what the backtest
+            # validated); only where the points come from changed.
+            parsed = self._parsed_from_history(f_lat, f_lon)
+        else:
+            try:
+                # Cold start (history still warming): 8 h of bbox history, the
+                # current ring plus the same ring TRACK_LAG_H earlier.
+                parsed = await awc.fetch_metars_bbox(f_lat, f_lon, self._client, hours=8)
+            except Exception:
+                parsed = {}  # no regional field -> at most a "forecast" status
 
         ring = front_mod.ring_stations(
             parsed, origin_lat=f_lat, origin_lon=f_lon,
@@ -359,7 +373,51 @@ class PressureService:
         if not table:
             return None
         await self.cache.set("metar_bulk", table, ttl=BULK_TTL)
+        self._record_snapshot(table, _now())
         return table
+
+    # ---- Bulk history (the front watch ring without a bbox call) -------------
+
+    def _record_snapshot(self, table: List[StationObs], now: datetime) -> None:
+        """Keep a compact copy of each fresh bulk table so every station has
+        ~9 h of (obsTime, pressure) points on the server, no upstream needed."""
+        if self._bulk_history and \
+           (now - self._bulk_history[-1][0]).total_seconds() < HISTORY_STEP_MIN * 60:
+            return
+        snap = {s.id: (s.obsTime, s.slp, s.altim, s.lat, s.lon)
+                for s in table
+                if s.obsTime is not None and (s.slp is not None or s.altim is not None)}
+        self._bulk_history.append((now, snap))
+        cutoff = now - timedelta(hours=HISTORY_KEEP_H)
+        self._bulk_history = [h for h in self._bulk_history if h[0] >= cutoff]
+
+    def history_span_h(self, now: datetime) -> float:
+        if not self._bulk_history:
+            return 0.0
+        return (now - self._bulk_history[0][0]).total_seconds() / 3600.0
+
+    def _parsed_from_history(self, lat: float, lon: float,
+                             half_lat_deg: float = awc.BBOX_HALF_LAT_DEG) -> dict:
+        """The same shape parse_records() gives a bbox fetch ({id: {lat, lon,
+        series}}), assembled from the snapshots for stations in the box.
+        Points are keyed by observation time, so overlapping snapshots
+        don't duplicate a report."""
+        lon_half = half_lat_deg / max(0.2, math.cos(math.radians(lat)))
+        latest = self._bulk_history[-1][1]
+        ids = [sid for sid, rec in latest.items()
+               if abs(rec[3] - lat) <= half_lat_deg and abs(rec[4] - lon) <= lon_half]
+        out = {}
+        for sid in ids:
+            seen = {}
+            la = lo = None
+            for _, snap in self._bulk_history:
+                rec = snap.get(sid)
+                if rec is None:
+                    continue
+                t, slp, alt, la, lo = rec
+                seen[t] = SeriesPoint(t=t, slp=slp, altim=alt)
+            out[sid] = {"lat": la, "lon": lo, "series": [seen[k] for k in sorted(seen)]}
+        return out
 
     async def station_info(self) -> Dict[str, dict]:
         """The station directory (names, elevation, METAR/TAF flags), held a

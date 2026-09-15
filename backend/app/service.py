@@ -21,6 +21,7 @@ from . import stations
 from .cache import StationRegistry, TTLCache
 from .interpreter import Sample, interpret
 from .models import (
+    FieldGridResponse,
     CombinedResponse,
     CurrentObs,
     ForecastResponse,
@@ -51,6 +52,7 @@ HRRR_TTL = 10 * 60.0      # HRRR runs land hourly; re-probing IEM every 10 min
 FRONTS_TTL = 30 * 60.0    # WPC redraws the chart every 3 h; 30 min is plenty
 STATIONS_TTL = 10 * 60.0  # radar station layer: METARs are hourly, specials aside
 BULK_TTL = 5 * 60.0       # AWC's whole-world METAR cache: one 250 KB pull serves everyone
+FIELD_TTL = 10 * 60.0     # radar wind/BL grid: model updates hourly; one call per region cell
 STATIONS_MAX = 350        # most annotation views a phone map should carry
 
 # Stale-if-error: when Open-Meteo is down, re-serve the last good forecast for up
@@ -409,6 +411,42 @@ class PressureService:
                     "lon": info["lon"], "distance_km": round(dist, 1)}
         await self.cache.set(cache_key, best, ttl=STATIONS_TTL)
         return best
+
+    # ---- Radar model field (wind + boundary layer) ------------------------
+
+    FIELD_COLS, FIELD_ROWS, FIELD_INSET = 7, 5, 0.12
+
+    async def get_field_grid(self, lat: float, lon: float,
+                             lat_span: float, lon_span: float) -> FieldGridResponse:
+        """The radar's 7x5 sample grid of model wind + boundary-layer top for
+        a map region, from ONE Open-Meteo multi-point call. The region is
+        quantized (center to 0.05°, spans to 0.5°) so users
+        looking at the same area share the cache entry; the shift is far below
+        the grid spacing."""
+        lat_span = max(0.05, min(30.0, lat_span))
+        lon_span = max(0.05, min(60.0, lon_span))
+        q_lat, q_lon = round(lat * 20) / 20, round(lon * 20) / 20
+        # Spans snap to 0.5° (0.1° when zoomed in) so the map's small aspect
+        # and layout differences between devices land on the same entry.
+        def q_span(v):
+            return round(v * 2) / 2 if v >= 1 else round(v, 1)
+        q_lat_span, q_lon_span = q_span(lat_span), q_span(lon_span)
+        cache_key = f"field:{q_lat}:{q_lon}:{q_lat_span}:{q_lon_span}"
+        cached = await self.cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        cols, rows, inset = self.FIELD_COLS, self.FIELD_ROWS, self.FIELD_INSET
+        h = q_lat_span * (1 - 2 * inset)
+        w = q_lon_span * (1 - 2 * inset)
+        lat0, lon0 = q_lat - h / 2, q_lon - w / 2
+        lats = [lat0 + h * r / (rows - 1) for r in range(rows) for _ in range(cols)]
+        lons = [lon0 + w * c / (cols - 1) for _ in range(rows) for c in range(cols)]
+        now = _now()
+        points = await om.fetch_field_grid(lats, lons, self._client, now=now)
+        resp = FieldGridResponse(points=points, cachedAt=now)
+        await self.cache.set(cache_key, resp, ttl=FIELD_TTL)
+        return resp
 
     # ---- WPC surface fronts --------------------------------------------------
 

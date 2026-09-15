@@ -147,6 +147,23 @@ async def get_metars(
     return resp.model_dump(mode="json", by_alias=True)
 
 
+@app.get("/radar/field")
+async def radar_field(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    latSpan: float = Query(..., gt=0, le=30),
+    lonSpan: float = Query(..., gt=0, le=60),
+):
+    """Model wind + boundary-layer top on the radar's sample grid for a map
+    region. One upstream call per region cell per ten minutes, shared by
+    every user looking there."""
+    try:
+        resp = await get_service().get_field_grid(lat, lon, latSpan, lonSpan)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"field grid unavailable: {exc}")
+    return resp.model_dump(mode="json", by_alias=True)
+
+
 @app.get("/fronts")
 async def get_fronts():
     """WPC surface fronts: the current analysis plus 12/24/36/48 h forecast

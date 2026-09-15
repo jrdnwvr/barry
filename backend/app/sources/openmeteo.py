@@ -13,7 +13,7 @@ from typing import List, Optional
 
 import httpx
 
-from ..models import ForecastHour, SunTimes
+from ..models import FieldPoint, ForecastHour, SunTimes
 
 BASE_URL = "https://api.open-meteo.com/v1/forecast"
 USER_AGENT = "Barry/1.0 (jrdn@wvr.me)"
@@ -122,3 +122,45 @@ async def fetch_forecast(
     )
     resp.raise_for_status()
     return resp.json()
+
+
+# ---- Radar field grid (wind + boundary layer), many points in one call ----
+
+def parse_field_grid(data, now: datetime) -> List[FieldPoint]:
+    """Open-Meteo multi-location response -> FieldPoints. Boundary layer is
+    hourly, so the current UTC hour is picked once and indexed per point."""
+    items = data if isinstance(data, list) else [data]
+    hour_key = now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H")
+    out: List[FieldPoint] = []
+    for it in items:
+        cur = it.get("current") or {}
+        spd, deg = cur.get("wind_speed_10m"), cur.get("wind_direction_10m")
+        if spd is None or deg is None:
+            continue
+        bl = None
+        hourly = it.get("hourly") or {}
+        times = hourly.get("time") or []
+        vals = hourly.get("boundary_layer_height") or []
+        for i, t in enumerate(times):
+            if t.startswith(hour_key):
+                bl = vals[i] if i < len(vals) else None
+                break
+        out.append(FieldPoint(lat=it["latitude"], lon=it["longitude"],
+                              windKmh=float(spd), windDeg=float(deg), blM=bl))
+    return out
+
+
+async def fetch_field_grid(lats, lons, client: httpx.AsyncClient, *, now: datetime) -> List[FieldPoint]:
+    """Current wind and today's boundary-layer heights at many points, one request."""
+    params = {
+        "latitude": ",".join(f"{v:.3f}" for v in lats),
+        "longitude": ",".join(f"{v:.3f}" for v in lons),
+        "current": "wind_speed_10m,wind_direction_10m",
+        "hourly": "boundary_layer_height",
+        "forecast_days": "1",
+        "timezone": "UTC",
+    }
+    r = await client.get(BASE_URL, params=params,
+                         headers={"User-Agent": USER_AGENT}, timeout=15.0)
+    r.raise_for_status()
+    return parse_field_grid(r.json(), now)

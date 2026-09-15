@@ -73,8 +73,7 @@ final class RadarModel: ObservableObject {
 
     /// Last region the map reported — used when a toggle flips on.
     var lastRegion: MKCoordinateRegion?
-    private var windTask: Task<Void, Never>?
-    private var blTask: Task<Void, Never>?
+    private var fieldTask: Task<Void, Never>?
 
     /// Arrows render from a light breeze up (~3 kt) and fade/shrink with speed,
     /// so calm still reads calm without the layer going blank. The old ~8 kt
@@ -259,105 +258,33 @@ final class RadarModel: ObservableObject {
                 await fetchStations(center: region.center)
             }
         }
-        if wind {
-            windTask?.cancel()
-            windTask = Task {
+        if wind || boundaryLayer {
+            fieldTask?.cancel()
+            fieldTask = Task {
                 try? await Task.sleep(nanoseconds: 700_000_000)
                 guard !Task.isCancelled else { return }
-                await fetchWind(region: region)
-            }
-        }
-        if boundaryLayer {
-            blTask?.cancel()
-            blTask = Task {
-                try? await Task.sleep(nanoseconds: 700_000_000)
-                guard !Task.isCancelled else { return }
-                await fetchBoundaryLayer(region: region)
+                await fetchField(region: region)
             }
         }
     }
 
-    /// The shared 7×5 sample grid across a region (comma-joined for Open-Meteo's
-    /// multi-point API).
-    private func gridQuery(for region: MKCoordinateRegion) -> (lat: String, lon: String) {
-        let cols = 7, rows = 5
-        let inset = 0.12
-        var lats: [Double] = [], lons: [Double] = []
-        let latSpan = region.span.latitudeDelta * (1 - 2 * inset)
-        let lonSpan = region.span.longitudeDelta * (1 - 2 * inset)
-        let lat0 = region.center.latitude - latSpan / 2
-        let lon0 = region.center.longitude - lonSpan / 2
-        for r in 0..<rows {
-            for c in 0..<cols {
-                lats.append(lat0 + latSpan * Double(r) / Double(rows - 1))
-                lons.append(lon0 + lonSpan * Double(c) / Double(cols - 1))
-            }
+    /// Wind and boundary-layer top for the region in ONE backend call (the
+    /// server samples its 7×5 grid and shares one Open-Meteo request per
+    /// region cell across users). Both layers update from the same response,
+    /// so toggling either on costs nothing extra while the other is showing.
+    func fetchField(region: MKCoordinateRegion) async {
+        guard let resp = try? await BarryAPI().fieldGrid(
+            lat: region.center.latitude, lon: region.center.longitude,
+            latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta)
+        else { return }   // enrichment: fail quietly and keep whatever we had
+        let all = resp.points.map {
+            WindArrow(lat: $0.lat, lon: $0.lon, speedKmh: $0.windKmh, fromDeg: $0.windDeg)
         }
-        return (lats.map { String(format: "%.3f", $0) }.joined(separator: ","),
-                lons.map { String(format: "%.3f", $0) }.joined(separator: ","))
-    }
-
-    /// One multi-point Open-Meteo call for the wind grid.
-    func fetchWind(region: MKCoordinateRegion) async {
-        let grid = gridQuery(for: region)
-        guard let url = URL(string:
-            "https://api.open-meteo.com/v1/forecast?latitude=\(grid.lat)&longitude=\(grid.lon)&current_weather=true")
-        else { return }
-
-        struct Point: Decodable {
-            struct CW: Decodable { let windspeed: Double; let winddirection: Double }
-            let latitude: Double
-            let longitude: Double
-            let current_weather: CW
-        }
-        do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            let points = try JSONDecoder().decode([Point].self, from: data)
-            let all = points.map { WindArrow(lat: $0.latitude, lon: $0.longitude,
-                                             speedKmh: $0.current_weather.windspeed,
-                                             fromDeg: $0.current_weather.winddirection) }
-            windField = all
-            windArrows = all.filter { $0.speedKmh >= Self.minArrowKmh }
-            windSampled = true
-        } catch {
-            // Wind layer is enrichment; fail quietly and keep whatever we had.
-        }
-    }
-
-    /// Boundary layer top for the same grid — Open-Meteo hourly, current hour.
-    func fetchBoundaryLayer(region: MKCoordinateRegion) async {
-        let grid = gridQuery(for: region)
-        guard let url = URL(string:
-            "https://api.open-meteo.com/v1/forecast?latitude=\(grid.lat)&longitude=\(grid.lon)&hourly=boundary_layer_height&forecast_days=1&timezone=UTC")
-        else { return }
-
-        struct Point: Decodable {
-            struct Hourly: Decodable {
-                let time: [String]
-                let boundary_layer_height: [Double?]
-            }
-            let latitude: Double
-            let longitude: Double
-            let hourly: Hourly
-        }
-        // Match the current UTC hour against the hourly time axis.
-        let fmt = DateFormatter()
-        fmt.dateFormat = "yyyy-MM-dd'T'HH"
-        fmt.timeZone = TimeZone(identifier: "UTC")
-        let hourPrefix = fmt.string(from: Date())
-
-        do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            let points = try JSONDecoder().decode([Point].self, from: data)
-            blPoints = points.compactMap { p in
-                guard let idx = p.hourly.time.firstIndex(where: { $0.hasPrefix(hourPrefix) }),
-                      idx < p.hourly.boundary_layer_height.count,
-                      let m = p.hourly.boundary_layer_height[idx]
-                else { return nil }
-                return BLPoint(lat: p.latitude, lon: p.longitude, meters: m)
-            }
-        } catch {
-            // Enrichment; fail quietly.
+        windField = all
+        windArrows = all.filter { $0.speedKmh >= Self.minArrowKmh }
+        windSampled = true
+        blPoints = resp.points.compactMap { p in
+            p.blM.map { BLPoint(lat: p.lat, lon: p.lon, meters: $0) }
         }
     }
 }
@@ -908,11 +835,8 @@ struct RadarPanel: View {
         }
         .task {
             await model.load()
-            if showWindArrows {
-                await model.fetchWind(region: model.lastRegion ?? initialRegion)
-            }
-            if showBoundaryLayer {
-                await model.fetchBoundaryLayer(region: model.lastRegion ?? initialRegion)
+            if showWindArrows || showBoundaryLayer {
+                await model.fetchField(region: model.lastRegion ?? initialRegion)
             }
             if showFronts {
                 await model.fetchFronts()
@@ -963,12 +887,12 @@ struct RadarPanel: View {
         // variants share them.
         .onChange(of: showWindArrows) { _, on in
             if on {
-                Task { await model.fetchWind(region: model.lastRegion ?? initialRegion) }
+                Task { await model.fetchField(region: model.lastRegion ?? initialRegion) }
             }
         }
         .onChange(of: showBoundaryLayer) { _, on in
             if on {
-                Task { await model.fetchBoundaryLayer(region: model.lastRegion ?? initialRegion) }
+                Task { await model.fetchField(region: model.lastRegion ?? initialRegion) }
             }
         }
     }

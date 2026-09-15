@@ -158,6 +158,21 @@ struct StationsResponse: Codable, Hashable {
     let cachedAt: Date
 }
 
+// MARK: - Radar model field (wind + boundary layer)
+
+struct FieldPoint: Codable, Hashable {
+    let lat: Double
+    let lon: Double
+    let windKmh: Double
+    let windDeg: Double
+    var blM: Double?
+}
+
+struct FieldGridResponse: Codable, Hashable {
+    let points: [FieldPoint]
+    let cachedAt: Date
+}
+
 // MARK: - WPC surface fronts
 
 /// One front off the WPC chart: type cold|warm|stnry|ocfnt|trof and points

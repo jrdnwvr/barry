@@ -225,6 +225,27 @@ def metar_cache_row(sid, lat, lon, *, spd=7, d="270", cat="VFR"):
             f',,,,,,CLR,,,,,,,,{cat},,,,,,,,,,,,METAR,100')
 
 
+def sample_field_grid(request):
+    """Open-Meteo's multi-location shape: a list, one dict per point, with
+    `current` wind and a day of hourly boundary-layer heights. Wind speed
+    encodes the point index so tests can check ordering; BL is 900 m at the
+    current UTC hour and 300 m elsewhere."""
+    lats = [float(v) for v in request.url.params["latitude"].split(",")]
+    lons = [float(v) for v in request.url.params["longitude"].split(",")]
+    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    day0 = now.replace(hour=0)
+    times = [(day0 + timedelta(hours=h)).strftime("%Y-%m-%dT%H:%M") for h in range(24)]
+    out = []
+    for i, (la, lo) in enumerate(zip(lats, lons)):
+        out.append({
+            "latitude": la, "longitude": lo,
+            "current": {"wind_speed_10m": 10.0 + i, "wind_direction_10m": 240.0},
+            "hourly": {"time": times,
+                       "boundary_layer_height": [900.0 if h == now.hour else 300.0 for h in range(24)]},
+        })
+    return out
+
+
 class FakeUpstream:
     """Records calls and serves canned AWC / Open-Meteo responses."""
 
@@ -307,6 +328,8 @@ class FakeUpstream:
             self.om_calls.append(request)
             if self.om_fail:
                 return httpx.Response(503, text="down")
+            if "," in request.url.params.get("latitude", ""):
+                return httpx.Response(200, json=sample_field_grid(request))
             return httpx.Response(200, json=sample_forecast(trough=self.om_trough))
         return httpx.Response(404)
 

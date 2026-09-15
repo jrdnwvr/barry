@@ -72,6 +72,20 @@ struct BarryAPI {
         return try await get(comps?.url)
     }
 
+    /// The radar's wind + boundary-layer sample grid for a map region. The
+    /// server quantizes the region and shares one Open-Meteo call per cell.
+    func fieldGrid(lat: Double, lon: Double, latSpan: Double, lonSpan: Double) async throws -> FieldGridResponse {
+        var comps = URLComponents(url: baseURL.appendingPathComponent("radar/field"),
+                                  resolvingAgainstBaseURL: false)
+        comps?.queryItems = [
+            URLQueryItem(name: "lat", value: String(lat)),
+            URLQueryItem(name: "lon", value: String(lon)),
+            URLQueryItem(name: "latSpan", value: String(latSpan)),
+            URLQueryItem(name: "lonSpan", value: String(lonSpan)),
+        ]
+        return try await get(comps?.url)
+    }
+
     /// WPC surface fronts: analysis + forecast positions. Failure just means
     /// the fronts layer stays empty.
     func fronts() async throws -> FrontsResponse {

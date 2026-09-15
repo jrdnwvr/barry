@@ -200,6 +200,22 @@ class StationObs(BaseModel):
     raw: Optional[str] = None           # the METAR as transmitted
 
 
+class FieldPoint(BaseModel):
+    """One sample of the radar's model field: 10 m wind (km/h, degrees FROM)
+    and boundary-layer top (m AGL) for the current hour."""
+
+    lat: float
+    lon: float
+    windKmh: float
+    windDeg: float
+    blM: Optional[float] = None
+
+
+class FieldGridResponse(BaseModel):
+    points: List[FieldPoint] = Field(default_factory=list)
+    cachedAt: datetime
+
+
 class Runway(BaseModel):
     """One runway, both ends. Headings are degrees TRUE (OurAirports
     le_heading_degT), the same reference the METAR wind uses, so crosswind

@@ -145,7 +145,12 @@ from WPC's 12 h prog) — enrichment only, the backtested status logic is untouc
 The radar is its own pushed screen (`RadarScreen`; map full-bleed, floating
 bottom card, collapsible Layers panel) and has a **station layer**: `/metars`
 returns bbox winds in knots, `StationLayer.swift` draws METAR wind barbs or
-speed labels (Off/Barbs/Speeds, `@AppStorage("radarStations")`).
+speed labels (Off/Barbs/Speeds, `@AppStorage("radarStations")`); tapping a
+station opens `StationDetailSheet` (decoded report + raw METAR). **Crosswind
+readout**: `backend/app/runways.py` serves OurAirports runways (TRUE headings;
+rebuild with `tools/build_runways.py`) on `/combined.runways`, and
+`RunwayWindsView.swift` projects the METAR wind onto each runway end.
+`/privacy` and `/support` are the App Store URLs (app/static/).
 
 Parked, fully built: **forecast radar** (HRRR via Iowa Mesonet, +6 h model
 frames) behind `RadarModel.modelFramesEnabled = false` — flip one Bool to ship;

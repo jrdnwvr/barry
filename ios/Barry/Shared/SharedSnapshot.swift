@@ -41,6 +41,12 @@ struct TendencySnapshot: Codable, Hashable {
     var ceilingFt: Int? = nil
     var ceilingCover: String? = nil
     var fltCat: String? = nil
+    /// Front watch (D7): status when active (approaching | passing | passed |
+    /// forecast) and the direction the change is coming from. Filled in after
+    /// /front answers; nil on quiet days or before it does.
+    var frontStatus: String? = nil
+    var frontCardinal: String? = nil
+    var frontBearingDeg: Double? = nil
     /// Observed pressure, last ~12 h, at most one point per hour.
     var spark: [SparkPoint]? = nil
 

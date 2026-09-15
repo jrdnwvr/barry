@@ -182,7 +182,7 @@ here" line (right x of y times) on the honesty note. This replaces the
 backtest's number with a live, local one, and tells us where the model
 needs tuning.
 
-**D7. Watch complication: front watch and category.** (S)
+**D7. Watch complication: front watch and category.** (S) DONE 2026-09-15: category dot + code on rectangular/inline, front arrow (rotated to the bearing) when approaching/passing; snapshot re-saved once /front answers.
 The complication shows tendency only. Add the flight category color and
 the front watch arrow when active. Data already flows through the shared
 snapshot; it's a rendering change.
@@ -204,7 +204,7 @@ Fully built, parked behind `RadarModel.modelFramesEnabled = false`, with
 backend routes and tests. Either enable it (IEM courtesy email first) or
 delete the code path and its tests. Parked code is where bugs hide.
 
-**E4. BarometerManager.swift (1,024 lines).** (M)
+**E4. BarometerManager.swift (1,024 lines).** (M) DONE 2026-09-15: pure types moved to BarometerEngine.swift (347 lines); the manager is 687 lines of Core Motion glue.
 The calibration engine, CoreMotion plumbing, and the comparison state live
 in one class. Split the pure calibration math into a tested value type;
 leave the manager as glue. Enables the sensor-vs-station math to be unit

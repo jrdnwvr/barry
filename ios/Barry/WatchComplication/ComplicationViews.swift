@@ -21,6 +21,13 @@ struct ComplicationView: View {
     private var delta: Double { entry.snapshot?.delta3h ?? 0 }
     private var currentHPa: Double? { entry.snapshot?.currentPressureHPa }
     private var feature: String? { entry.snapshot?.feature }
+    private var fltCat: String? { entry.snapshot?.fltCat }
+    /// Front watch, only while it has something to say and the data is live.
+    private var frontActive: Bool {
+        guard !isStale, let st = entry.snapshot?.frontStatus else { return false }
+        return st == "approaching" || st == "passing"
+    }
+    private var frontBearing: Double { entry.snapshot?.frontBearingDeg ?? 0 }
 
     /// Data too old to present as current — the trend word becomes "STALE" and the
     /// trend color drops to gray, so old data never masquerades as live.
@@ -40,6 +47,18 @@ struct ComplicationView: View {
     /// the watch complication and the iPhone widget can never drift apart.
     private var trendSymbol: String {
         entry.snapshot?.trendSymbolName ?? cls.symbolName
+    }
+
+    /// Standard flight-category colors (duplicated from the app's
+    /// FlightCategory on purpose: the complication target has no UIKit glue).
+    private func catColor(_ cat: String) -> Color {
+        switch cat {
+        case "VFR":  return Color(red: 0.13, green: 0.62, blue: 0.28)
+        case "MVFR": return Color(red: 0.20, green: 0.48, blue: 0.85)
+        case "IFR":  return Color(red: 0.85, green: 0.22, blue: 0.18)
+        case "LIFR": return Color(red: 0.72, green: 0.20, blue: 0.70)
+        default:     return .secondary
+        }
     }
 
     var body: some View {
@@ -107,7 +126,7 @@ struct ComplicationView: View {
     // top and bottom slots read consistently.
     private var inline: some View {
         Label(isStale ? "\(pressureShort) \(unit.label) · Stale"
-                      : "\(pressureShort) \(unit.label)",
+                      : "\(pressureShort) \(unit.label)" + (fltCat.map { " · \($0)" } ?? ""),
               systemImage: trendSymbol)
     }
 
@@ -118,8 +137,23 @@ struct ComplicationView: View {
                 .font(.title3.weight(.bold))
                 .foregroundStyle(tint)
             VStack(alignment: .leading, spacing: 1) {
-                Text(isStale ? "Stale" : cls.label)
-                    .font(.caption.weight(.semibold))
+                HStack(spacing: 4) {
+                    Text(isStale ? "Stale" : cls.label)
+                        .font(.caption.weight(.semibold))
+                    // Flight category as a colored dot + code, and the front
+                    // watch's arrow when a change is on the move.
+                    if let cat = fltCat, !isStale {
+                        Circle().fill(catColor(cat)).frame(width: 6, height: 6)
+                        Text(cat).font(.caption2.weight(.semibold)).foregroundStyle(catColor(cat))
+                    }
+                    if frontActive {
+                        Image(systemName: "arrow.up")
+                            .font(.caption2.weight(.bold))
+                            .rotationEffect(.degrees(frontBearing + 180))
+                            .foregroundStyle(.orange)
+                            .accessibilityLabel("Change coming from the \(entry.snapshot?.frontCardinal ?? "")")
+                    }
+                }
                 Text("\(deltaShort) \(unit.label) · 3h")
                     .font(.caption2).monospacedDigit()
                     .foregroundStyle(.secondary)

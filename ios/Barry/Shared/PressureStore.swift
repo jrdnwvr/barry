@@ -87,6 +87,17 @@ final class PressureStore: ObservableObject {
                                             lat: combined.pressure.lat,
                                             lon: combined.pressure.lon) {
                 front = f
+                // Second snapshot with the front watch on it, so the
+                // complication can show the arrow (D7). Cheap: same payload
+                // plus three fields; the widget gets one more nudge.
+                var snap = TendencySnapshot(from: combined, updatedAt: now)
+                if f.isActive {
+                    snap.frontStatus = f.status
+                    snap.frontCardinal = f.cardinal
+                    snap.frontBearingDeg = f.bearingDeg
+                }
+                SnapshotStore.save(snap)
+                WidgetCenter.shared.reloadAllTimelines()
             }
             #endif
         } catch {

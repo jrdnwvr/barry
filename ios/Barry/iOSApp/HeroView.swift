@@ -220,22 +220,17 @@ struct HeroView: View {
 
     /// Surface non-obvious interpreter caveats (low confidence, sparse data).
     /// `forecast_derived` is already baked into the verdict sentence's hedged wording.
-    /// One short sentence when there's a reason to hold the reading loosely.
+    /// One calm line whenever the reading deserves to be held loosely
+    /// (disagreement with the forecast, thin or gappy reports, or low
+    /// confidence). The reason itself isn't shown: the point is how to use
+    /// the reading, not to alarm anyone about data plumbing.
     private var honestyNote: String? {
         guard let r = combined.reading else { return nil }
-        if r.caveats.contains("model_disagrees") {
-            return "The barometer currently disagrees with the standard forecast."
-        }
-        if r.caveats.contains("short_window") {
-            return "Based on only a couple of hours of reports."
-        }
-        if r.caveats.contains("sparse") {
-            return "The station's reports have gaps."
-        }
-        if r.confidence < 0.5 {
-            return "Lower confidence than usual."
-        }
-        return nil
+        let loosely = r.caveats.contains("model_disagrees")
+            || r.caveats.contains("short_window")
+            || r.caveats.contains("sparse")
+            || r.confidence < 0.5
+        return loosely ? "Use this as part of a wider weather picture." : nil
     }
 }
 

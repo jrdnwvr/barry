@@ -283,7 +283,11 @@ struct RadarPanel: View {
             windCalmNote
 
             Toggle(isOn: $showBoundaryLayer) {
-                Label("Boundary layer top", systemImage: "cloud.fog")
+                Label {
+                    Text("Boundary layer top")
+                } icon: {
+                    AirLayersIcon().frame(height: 12)
+                }
             }
             if showBoundaryLayer {
                 Text("Model boundary layer top in feet above ground. Bumpy, hazy air mixes below it, smoother air above.")
@@ -401,7 +405,7 @@ struct RadarPanel: View {
                 // the right edge of the screen.
                 HStack(spacing: 10) {
                     compactToggle("Wind", icon: "wind", isOn: $showWindArrows)
-                    compactToggle("Layer top", icon: "cloud.fog", isOn: $showBoundaryLayer)
+                    compactToggle("Layer top", isOn: $showBoundaryLayer) { AirLayersIcon().frame(height: 10) }
                     compactToggle("Fronts", icon: "line.diagonal", isOn: $showFronts)
                     Spacer()
                 }
@@ -486,6 +490,20 @@ struct RadarPanel: View {
                 .font(.caption)
                 .lineLimit(1)
                 .fixedSize()  // never wrap the title mid-word under compression
+        }
+        .toggleStyle(.button)
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+    }
+
+    /// Same button, with a hand-drawn glyph where no SF Symbol fits.
+    private func compactToggle<Icon: View>(_ title: String, isOn: Binding<Bool>,
+                                           @ViewBuilder icon: () -> Icon) -> some View {
+        Toggle(isOn: isOn) {
+            Label { Text(title) } icon: { icon() }
+                .font(.caption)
+                .lineLimit(1)
+                .fixedSize()
         }
         .toggleStyle(.button)
         .buttonStyle(.bordered)

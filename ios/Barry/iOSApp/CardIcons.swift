@@ -59,3 +59,36 @@ struct AirLayersIcon: View {
         .aspectRatio(1.25, contentMode: .fit)
     }
 }
+
+
+/// Density altitude as "performance altitude": the ground (solid), the
+/// height the airplane behaves as if it were at (dashed, above), and the
+/// lift between them.
+struct PerformanceAltitudeIcon: View {
+    var body: some View {
+        Canvas { ctx, size in
+            let w = size.width, h = size.height
+            let lw = max(1.4, h * 0.11)
+            var ground = Path()
+            ground.move(to: CGPoint(x: 0, y: h * 0.88)); ground.addLine(to: CGPoint(x: w, y: h * 0.88))
+            ctx.stroke(ground, with: .foreground, style: StrokeStyle(lineWidth: lw, lineCap: .round))
+
+            var felt = Path()
+            felt.move(to: CGPoint(x: 0, y: h * 0.2)); felt.addLine(to: CGPoint(x: w, y: h * 0.2))
+            ctx.stroke(felt, with: .foreground,
+                       style: StrokeStyle(lineWidth: lw, lineCap: .round, dash: [w * 0.16, w * 0.12]))
+
+            // Up-arrow from the ground to the felt altitude.
+            let x = w * 0.5
+            var shaft = Path()
+            shaft.move(to: CGPoint(x: x, y: h * 0.8)); shaft.addLine(to: CGPoint(x: x, y: h * 0.32))
+            ctx.stroke(shaft, with: .foreground, style: StrokeStyle(lineWidth: lw, lineCap: .round))
+            var head = Path()
+            head.move(to: CGPoint(x: x - w * 0.16, y: h * 0.46))
+            head.addLine(to: CGPoint(x: x, y: h * 0.3))
+            head.addLine(to: CGPoint(x: x + w * 0.16, y: h * 0.46))
+            ctx.stroke(head, with: .foreground, style: StrokeStyle(lineWidth: lw, lineCap: .round, lineJoin: .round))
+        }
+        .aspectRatio(1.1, contentMode: .fit)
+    }
+}

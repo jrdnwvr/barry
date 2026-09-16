@@ -43,7 +43,8 @@ final class PressureFieldRenderer: MKOverlayRenderer {
         }
         if st.showIsobars {
             for line in field.isobars {
-                drawLine(line, color: UIColor.label.withAlphaComponent(0.55), width: 1.2 * scale,
+                // Indigo, not gray: gray reads as a road on Apple's map.
+                drawLine(line, color: UIColor.systemIndigo.withAlphaComponent(0.85), width: 1.6 * scale,
                          dash: nil, label: String(Int(line.level)), scale: scale, visible: visible, in: ctx)
             }
         }

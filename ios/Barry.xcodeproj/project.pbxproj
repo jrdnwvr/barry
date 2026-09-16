@@ -80,7 +80,6 @@
 		967511152A1EBB2D602F2B9A /* SavedLocations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */; };
 		971C47371255C41380413D3E /* SavedLocations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */; };
 		98A632AA5A2B036CFA27697A /* PressureGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6978CE026B8EEE1A560877C0 /* PressureGuideView.swift */; };
-		9A0EDC2EE67F47A25A3CB8D7 /* CategoryStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF10D4E38E596EDE4568954C /* CategoryStripView.swift */; };
 		9F987BE952507B2A891ADC78 /* PressureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A60F6C6B6915B13C8CAD3A3 /* PressureStore.swift */; };
 		A11B605E76613C43AC5FE11E /* BarryAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */; };
 		A13AA88D91661ADCE95D6B34 /* PressureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A60F6C6B6915B13C8CAD3A3 /* PressureStore.swift */; };
@@ -229,7 +228,6 @@
 		C0EBA6519DD65A01DF98B527 /* RadarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarView.swift; sourceTree = "<group>"; };
 		C1326419A7770149C91B0438 /* PhoneWidgetViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWidgetViews.swift; sourceTree = "<group>"; };
 		CD077DE63D0DE437229C43CC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		CF10D4E38E596EDE4568954C /* CategoryStripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryStripView.swift; sourceTree = "<group>"; };
 		CF51EF6C7C37D4CEE92CE308 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		DA12AC45B8A41856114FD9A7 /* SensorComparisonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorComparisonView.swift; sourceTree = "<group>"; };
 		E569F3B3B9FAB65C07970B1A /* StormAlerter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StormAlerter.swift; sourceTree = "<group>"; };
@@ -363,7 +361,6 @@
 				9639018DA53DA80272AC71E9 /* Barry.entitlements */,
 				4B8FF4A39677C2C8F46B98F7 /* BarryApp.swift */,
 				0023323B71268E669397009E /* CardIcons.swift */,
-				CF10D4E38E596EDE4568954C /* CategoryStripView.swift */,
 				A59F4AD2D2CF0AC8FB31B534 /* ConfirmationOverlayView.swift */,
 				4EB1F388C1A5FE3D18F1D62E /* ContentView.swift */,
 				52B4C35AC0CE61C4C1CCE6D5 /* FieldConditionsView.swift */,
@@ -631,7 +628,6 @@
 				D3CCE6CB0DB066A238922179 /* BarryAPI.swift in Sources */,
 				DACD1A75954EE1A27EDEC976 /* BarryApp.swift in Sources */,
 				4253341F1F79930A611AD743 /* CardIcons.swift in Sources */,
-				9A0EDC2EE67F47A25A3CB8D7 /* CategoryStripView.swift in Sources */,
 				3FD01657A6175EE55DF94D91 /* ConfirmationOverlayView.swift in Sources */,
 				E1DA0A2BA6D5DAE408366B62 /* ContentView.swift in Sources */,
 				1499AE344651937BC57A3E81 /* FieldConditionsView.swift in Sources */,

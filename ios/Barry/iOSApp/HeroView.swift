@@ -57,10 +57,6 @@ struct HeroView: View {
                       locations: locations, selectedLocationID: selectedLocationID,
                       onSelectLocation: onSelectLocation)
 
-            // Six hours of flight category from the METAR history, with a
-            // trend phrase when ceiling or visibility has moved.
-            CategoryStripView(series: combined.pressure.series, now: now)
-
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 if let v = displayValue {
                     valueLabel(v)

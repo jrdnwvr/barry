@@ -396,10 +396,16 @@ struct RadarPanel: View {
             // portrait column and SwiftUI "fixes" that by wrapping the button
             // titles mid-word.
             VStack(alignment: .leading, spacing: 8) {
+                // Two rows: five buttons on one row is wider than the iPad
+                // mini's portrait column and pushes the whole dashboard off
+                // the right edge of the screen.
                 HStack(spacing: 10) {
                     compactToggle("Wind", icon: "wind", isOn: $showWindArrows)
                     compactToggle("Layer top", icon: "cloud.fog", isOn: $showBoundaryLayer)
                     compactToggle("Fronts", icon: "line.diagonal", isOn: $showFronts)
+                    Spacer()
+                }
+                HStack(spacing: 10) {
                     compactToggle("Isobars", icon: "circle.circle", isOn: $showIsobars)
                     compactToggle("Barbs", icon: "flag", isOn: Binding(
                         get: { stationStyleRaw == "barbs" },

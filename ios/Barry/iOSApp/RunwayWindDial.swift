@@ -19,7 +19,7 @@ struct RunwayWindDial: View {
     var body: some View {
         Canvas { ctx, size in
             let c = CGPoint(x: size.width / 2, y: size.height / 2)
-            let r = min(size.width, size.height) / 2 - 30          // ring radius, room for the barb + its label
+            let r = min(size.width, size.height) / 2 - 40          // ring radius, room for the barb + its label
             drawRose(ctx, c, r)
             drawRunways(ctx, c, r)
             if let d = windDirDeg, windKt >= 1 {
@@ -126,7 +126,7 @@ struct RunwayWindDial: View {
         // Speed (and gust) beside the bug, kept off the ring.
         var label = "\(Int(kt.rounded())) kt"
         if let g = gustKt { label += " G\(Int(g.rounded()))" }
-        let lp = CGPoint(x: base.x + out.x * (staff + 9), y: base.y + out.y * (staff + 9))
+        let lp = CGPoint(x: base.x + out.x * (staff + 8), y: base.y + out.y * (staff + 8))
         ctx.draw(Text(label).font(.system(size: 8.5, weight: .semibold)).foregroundStyle(ink), at: lp)
     }
 }

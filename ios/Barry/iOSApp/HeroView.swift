@@ -106,13 +106,6 @@ struct HeroView: View {
                 Text(note).font(.caption).foregroundStyle(.secondary)
             }
 
-            // Barry's own scorecard here (D6): a live, local number instead
-            // of the backtest's. Only once there are enough calls to mean it.
-            if let tr = combined.trackRecord {
-                Text("Barry's trend calls here, last \(tr.days) days: right \(tr.right) of \(tr.total).")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
         }
         .sheet(isPresented: $showGuide) { PressureGuideView() }
     }
@@ -227,14 +220,23 @@ struct HeroView: View {
 
     /// Surface non-obvious interpreter caveats (low confidence, sparse data).
     /// `forecast_derived` is already baked into the verdict sentence's hedged wording.
-    /// Plain sentences, one per reason, always ending the same way: Barry is
-    /// one input to the weather picture, never the whole picture.
+    /// One short sentence when there's a reason to hold the reading loosely.
     private var honestyNote: String? {
         guard let r = combined.reading else { return nil }
-        var reasons: [String] = []
-        if r.caveats.contains("short_window") {
-            reasons.append("this is based on only a couple of hours of reports")
+        if r.caveats.contains("model_disagrees") {
+            return "The barometer currently disagrees with the standard forecast."
         }
+        if r.caveats.contains("short_window") {
+            return "Based on only a couple of hours of reports."
+        }
+        if r.caveats.contains("sparse") {
+            return "The station's reports have gaps."
+        }
+        if r.confidence < 0.5 {
+            return "Lower confidence than usual."
+        }
+        return nil
+    }
         if r.caveats.contains("sparse") {
             reasons.append("the station's reports have gaps")
         }

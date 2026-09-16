@@ -140,11 +140,6 @@ struct RadarMapView: UIViewRepresentable {
             label.sizeToFit()
             label.frame.size.height += 3
             label.frame.size.width += 2
-            // Least important number on the map (neighbors agree with it), so
-            // its collision footprint is padded: it disappears before it can
-            // sit on a barb, a center, or the home marker.
-            bounds = CGRect(x: 0, y: 0, width: label.bounds.width + 28, height: label.bounds.height + 24)
-            label.center = CGPoint(x: bounds.midX, y: bounds.midY)
             bounds = label.bounds
             label.frame = bounds
         }
@@ -261,6 +256,7 @@ struct RadarMapView: UIViewRepresentable {
                 return a
             }
             map.addAnnotations(stationAnnotations)
+            applyBL(on: map)
         }
 
         func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
@@ -307,6 +303,7 @@ struct RadarMapView: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
             onRegionChange?(mapView.region)
+            applyBL(on: mapView)
             flowView?.mapDidMove()
         }
 
@@ -392,11 +389,33 @@ struct RadarMapView: UIViewRepresentable {
         }
 
         /// Same equality-guarded sync for the boundary-layer labels.
+        /// Boundary-layer heights are the least informative numbers on the map
+        /// (neighbors agree with them), so they keep clear of everything that
+        /// matters: any label within `keepClearPt` of a station marker or the
+        /// home marker on screen is simply not shown. Re-applied whenever the
+        /// stations, the home marker, or the zoom change.
+        static let keepClearPt: CGFloat = 46
+        private var wantedBL: [BLPoint] = []
+
         func syncBL(_ points: [BLPoint], on map: MKMapView) {
             guard points != shownBL else { return }
             shownBL = points
+            wantedBL = points
+            applyBL(on: map)
+        }
+
+        func applyBL(on map: MKMapView) {
+            let occupied = (stationAnnotations.map(\.coordinate) + [homeBarb?.coordinate].compactMap { $0 })
+                .map { map.convert($0, toPointTo: map) }
+            let r = Coordinator.keepClearPt
+            let keep = wantedBL.filter { p in
+                let sp = map.convert(CLLocationCoordinate2D(latitude: p.lat, longitude: p.lon), toPointTo: map)
+                return !occupied.contains { abs($0.x - sp.x) < r && abs($0.y - sp.y) < r }
+            }
+            let current = blAnnotations.map { BLPoint(lat: $0.coordinate.latitude, lon: $0.coordinate.longitude, meters: $0.meters) }
+            guard keep != current else { return }
             map.removeAnnotations(blAnnotations)
-            blAnnotations = points.map { p in
+            blAnnotations = keep.map { p in
                 let ann = BLAnnotation()
                 ann.coordinate = CLLocationCoordinate2D(latitude: p.lat, longitude: p.lon)
                 ann.meters = p.meters

@@ -305,11 +305,21 @@ class GridOut(BaseModel):
     values: List[List[Optional[float]]]
 
 
+class FieldExtremum(BaseModel):
+    """An H (maximum) or L (minimum) of a gridded field, with its value."""
+
+    kind: str
+    lat: float
+    lon: float
+    value: float
+
+
 class PressureFieldResponse(BaseModel):
     isobars: List[ContourLine] = Field(default_factory=list)
     isallobars: List[ContourLine] = Field(default_factory=list)
     pressureGrid: Optional[GridOut] = None
     tendencyGrid: Optional[GridOut] = None
+    tendencyExtrema: List[FieldExtremum] = Field(default_factory=list)
     stations: int = 0
     cachedAt: datetime
 

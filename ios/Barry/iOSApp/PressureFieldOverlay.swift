@@ -49,18 +49,52 @@ final class PressureFieldRenderer: MKOverlayRenderer {
             }
         }
         if st.showIsallobars {
+            // The NWS isallobar look: one color, solid for rises, dashed for
+            // falls, every whole unit, value labels along each line, and H/L
+            // marks with the value at the field's centers.
+            let ink = Self.changeInk
             for line in field.isallobars {
                 let falling = line.level < 0
-                let mag = min(3, abs(line.level))
-                let color = falling
-                    ? UIColor(red: 0.9, green: 0.35 - 0.08 * mag, blue: 0.1, alpha: 0.8)
-                    : UIColor(red: 0.1, green: 0.4, blue: 0.9 - 0.1 * mag, alpha: 0.8)
-                drawLine(line, color: color, width: (1.0 + 0.4 * mag) * scale,
-                         dash: falling ? [6 * scale, 4 * scale] : nil,
-                         label: String(format: "%+.0f", line.level), scale: scale,
+                let mag = min(6, abs(line.level))
+                drawLine(line, color: ink, width: (1.1 + 0.15 * mag) * scale,
+                         dash: falling ? [7 * scale, 5 * scale] : nil,
+                         label: String(format: "%.0f", line.level), scale: scale,
                          visible: visible, in: ctx)
             }
+            for e in field.tendencyExtrema {
+                let p = point(for: MKMapPoint(CLLocationCoordinate2D(latitude: e.lat, longitude: e.lon)))
+                guard visible.contains(MKMapPoint(CLLocationCoordinate2D(latitude: e.lat, longitude: e.lon))) else { continue }
+                drawExtremum(e, at: p, color: ink, scale: scale, in: ctx)
+            }
         }
+    }
+
+    /// Amber on the light map, a warmer yellow on dark: readable over the
+    /// pastel basemap without fighting the fronts' blue and red.
+    private static var changeInk: UIColor {
+        UIColor { tc in tc.userInterfaceStyle == .dark
+            ? UIColor(red: 0.98, green: 0.85, blue: 0.3, alpha: 0.95)
+            : UIColor(red: 0.62, green: 0.42, blue: 0.02, alpha: 0.95) }
+    }
+
+    private func drawExtremum(_ e: FieldExtremum, at p: CGPoint, color: UIColor, scale: CGFloat, in ctx: CGContext) {
+        let letterFont = UIFont.systemFont(ofSize: 15 * scale, weight: .black)
+        let valueFont = UIFont.systemFont(ofSize: 9 * scale, weight: .bold)
+        let letter = e.kind as NSString
+        let value = String(format: "%.0f", abs(e.value)) as NSString
+        let la: [NSAttributedString.Key: Any] = [.font: letterFont, .foregroundColor: color]
+        let va: [NSAttributedString.Key: Any] = [.font: valueFont, .foregroundColor: color]
+        let ls = letter.size(withAttributes: la), vs = value.size(withAttributes: va)
+        let box = CGRect(x: p.x - max(ls.width, vs.width) / 2 - 3 * scale, y: p.y - ls.height / 2 - 2 * scale,
+                         width: max(ls.width, vs.width) + 6 * scale, height: ls.height + vs.height + 2 * scale)
+        ctx.saveGState()
+        ctx.setFillColor(UIColor.systemBackground.withAlphaComponent(0.7).cgColor)
+        ctx.fill(box)
+        UIGraphicsPushContext(ctx)
+        letter.draw(at: CGPoint(x: p.x - ls.width / 2, y: p.y - ls.height / 2), withAttributes: la)
+        value.draw(at: CGPoint(x: p.x - vs.width / 2, y: p.y + ls.height / 2 - 2 * scale), withAttributes: va)
+        UIGraphicsPopContext()
+        ctx.restoreGState()
     }
 
     private func drawLine(_ line: ContourLine, color: UIColor, width: CGFloat, dash: [CGFloat]?,
@@ -84,19 +118,32 @@ final class PressureFieldRenderer: MKOverlayRenderer {
         ctx.strokePath()
         ctx.restoreGState()
 
-        // One label per line, at its midpoint, on a small knockout so it
-        // stays legible over the radar.
-        let mid = pts[pts.count / 2]
-        let font = UIFont.systemFont(ofSize: 9 * scale, weight: .semibold)
+        // Value labels along the line, every ~170 screen points, on small
+        // knockouts so they stay legible over the radar (the chart style).
+        let font = UIFont.systemFont(ofSize: 9 * scale, weight: .bold)
         let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
         let size = (label as NSString).size(withAttributes: attrs)
-        let box = CGRect(x: mid.x - size.width / 2 - 2 * scale, y: mid.y - size.height / 2,
-                         width: size.width + 4 * scale, height: size.height)
+        let every: CGFloat = 170 * scale
+        var run: CGFloat = every * 0.5
+        var spots: [CGPoint] = []
+        for k in 1..<pts.count {
+            let seg = hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y)
+            run += seg
+            if run >= every {
+                spots.append(pts[k])
+                run = 0
+            }
+        }
+        if spots.isEmpty { spots = [pts[pts.count / 2]] }
         ctx.saveGState()
-        ctx.setFillColor(UIColor.systemBackground.withAlphaComponent(0.7).cgColor)
-        ctx.fill(box)
         UIGraphicsPushContext(ctx)
-        (label as NSString).draw(at: CGPoint(x: box.minX + 2 * scale, y: box.minY), withAttributes: attrs)
+        for sp in spots {
+            let box = CGRect(x: sp.x - size.width / 2 - 2 * scale, y: sp.y - size.height / 2,
+                             width: size.width + 4 * scale, height: size.height)
+            ctx.setFillColor(UIColor.systemBackground.withAlphaComponent(0.75).cgColor)
+            ctx.fill(box)
+            (label as NSString).draw(at: CGPoint(x: box.minX + 2 * scale, y: box.minY), withAttributes: attrs)
+        }
         UIGraphicsPopContext()
         ctx.restoreGState()
     }

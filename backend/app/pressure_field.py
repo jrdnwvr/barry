@@ -14,13 +14,15 @@ import math
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from .models import ContourLine, GridOut, StationObs
+from .models import ContourLine, FieldExtremum, GridOut, StationObs
 
 KM_PER_DEG = 111.32
 ISOBAR_STEP = 4.0
 ISOBAR_RADIUS_KM = 110.0        # Gaussian half-width: synoptic-scale smoothing
 ISALLOBAR_RADIUS_KM = 140.0
-ISALLOBAR_LEVELS = (-3.0, -2.0, -1.0, 1.0, 2.0, 3.0)
+ISALLOBAR_STEP = 1.0            # every whole hPa per 3 h, no cap (the NWS chart style)
+EXTREMUM_MIN = 1.0              # H/L marks only where the change is at least this
+EXTREMUM_RADIUS_CELLS = 4       # local max/min over a (2r+1)^2 neighborhood
 MARGIN_DEG = 1.5                # stations beyond the box still shape its edges
 MAX_CELLS = 1600
 OUTLIER_HPA = 5.0               # vs the mean of the nearest neighbors
@@ -164,6 +166,49 @@ def _chain(segs) -> List[List[Tuple[float, float]]]:
     return lines
 
 
+def extrema(g: Optional[Grid], min_abs: float = EXTREMUM_MIN,
+            radius: int = EXTREMUM_RADIUS_CELLS) -> List[FieldExtremum]:
+    """H (local maximum) and L (local minimum) marks of a gridded field, the
+    way the NWS isallobar chart labels its centers. A cell qualifies when it
+    beats every neighbor within `radius` cells and |value| >= min_abs."""
+    if g is None:
+        return []
+    out: List[FieldExtremum] = []
+    v = g.values
+    # Cells within `radius` of the grid edge can't be judged (their
+    # neighborhood is cut off) and the edge lies outside the requested box
+    # anyway, so they never become marks.
+    for j in range(radius, g.ny - radius):
+        for i in range(radius, g.nx - radius):
+            c = v[j][i]
+            if c is None or abs(c) < min_abs:
+                continue
+            is_max = is_min = True
+            for dj in range(-radius, radius + 1):
+                for di in range(-radius, radius + 1):
+                    if dj == 0 and di == 0:
+                        continue
+                    jj, ii = j + dj, i + di
+                    if 0 <= jj < g.ny and 0 <= ii < g.nx:
+                        n = v[jj][ii]
+                        if n is None:
+                            continue
+                        if n >= c:
+                            is_max = False
+                        if n <= c:
+                            is_min = False
+                    if not is_max and not is_min:
+                        break
+                if not is_max and not is_min:
+                    break
+            if (is_max and c > 0) or (is_min and c < 0):
+                out.append(FieldExtremum(kind="H" if is_max else "L",
+                                         lat=round(g.lat0 + j * g.dlat, 3),
+                                         lon=round(g.lon0 + i * g.dlon, 3),
+                                         value=round(c, 1)))
+    return out
+
+
 def to_grid_out(g: Optional[Grid]) -> Optional[GridOut]:
     """The gridded field itself, for the app's shaded overlay. None cells
     become null; values rounded to keep the payload small."""
@@ -176,8 +221,8 @@ def to_grid_out(g: Optional[Grid]) -> Optional[GridOut]:
 def build(table: Sequence[StationObs], lat: float, lon: float,
           lat_span: float, lon_span: float,
           tend_pts: Optional[Sequence[Tuple[float, float, float]]] = None,
-          ) -> Tuple[List[ContourLine], List[ContourLine], Optional[GridOut], Optional[GridOut]]:
-    """(isobars, isallobars, pressure grid, tendency grid) for the region.
+          ) -> Tuple[List[ContourLine], List[ContourLine], Optional[GridOut], Optional[GridOut], List[FieldExtremum]]:
+    """(isobars, isallobars, pressure grid, tendency grid, tendency H/L) for the region.
     `tend_pts` (lat, lon, hPa per 3 h) normally come from the server's
     snapshot history; the bulk file's own tendency column is nearly empty
     outside synoptic hours, so it's only the fallback."""
@@ -215,7 +260,14 @@ def build(table: Sequence[StationObs], lat: float, lon: float,
     isallobars: List[ContourLine] = []
     g2 = grid_field(tend_pts, lat, lon, lat_span, lon_span, ISALLOBAR_RADIUS_KM)
     if g2 is not None:
-        for level in ISALLOBAR_LEVELS:
-            for line in contour(g2, level):
-                isallobars.append(ContourLine(level=level, points=[[p[0], p[1]] for p in line]))
-    return isobars, isallobars, to_grid_out(g), to_grid_out(g2)
+        vals = [x for row in g2.values for x in row if x is not None]
+        if vals:
+            lo = math.floor(min(vals) / ISALLOBAR_STEP) * ISALLOBAR_STEP
+            hi = math.ceil(max(vals) / ISALLOBAR_STEP) * ISALLOBAR_STEP
+            level = lo
+            while level <= hi:
+                if abs(level) >= ISALLOBAR_STEP / 2:          # no zero line
+                    for line in contour(g2, level):
+                        isallobars.append(ContourLine(level=level, points=[[p[0], p[1]] for p in line]))
+                level += ISALLOBAR_STEP
+    return isobars, isallobars, to_grid_out(g), to_grid_out(g2), extrema(g2)

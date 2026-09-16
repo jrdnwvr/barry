@@ -289,11 +289,19 @@ struct GridOut: Codable, Hashable {
     let values: [[Double?]]
 }
 
+struct FieldExtremum: Codable, Hashable {
+    let kind: String     // "H" | "L"
+    let lat: Double
+    let lon: Double
+    let value: Double
+}
+
 struct PressureFieldResponse: Codable, Hashable {
     var isobars: [ContourLine] = []
     var isallobars: [ContourLine] = []
     var pressureGrid: GridOut?
     var tendencyGrid: GridOut?
+    var tendencyExtrema: [FieldExtremum] = []
     var stations: Int = 0
     let cachedAt: Date
 }

@@ -654,10 +654,11 @@ class PressureService:
             return cached
         table = await self.metar_bulk() or []
         tend_pts = self._tendency_points(_now()) if self.history_span_h(_now()) >= 3.5 else None
-        isobars, isallobars, pgrid, tgrid = pressure_field.build(
+        isobars, isallobars, pgrid, tgrid, textrema = pressure_field.build(
             table, q_lat, q_lon, q_lat_span, q_lon_span, tend_pts=tend_pts)
         resp = PressureFieldResponse(isobars=isobars, isallobars=isallobars,
                                      pressureGrid=pgrid, tendencyGrid=tgrid,
+                                     tendencyExtrema=textrema,
                                      stations=len(table), cachedAt=_now())
         await self.cache.set(cache_key, resp, ttl=BULK_TTL)
         return resp

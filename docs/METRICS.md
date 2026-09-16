@@ -14,6 +14,7 @@ through the Cloudflare tunnel), so treat them as order-of-magnitude.
 | A4 (2026-09-15) | Front watch ring | 1 AWC bbox query (8 h of reports, ±1.4°) per station per 15 min, ~0.9 s upstream | Ring series assembled from the server's 9.5 h bulk-snapshot history (persisted to ./state, ~6 MB pickled); bbox only during a 7.5 h cold start after a wipe | Upstream: zero per station once warm. The validated delta/ring/track math is unchanged. |
 | D3 (2026-09-15) | TAF | not fetched | `/combined.taf`: 1 AWC TAF call per station per 30 min (~1.5 KB decoded) | New upstream, deliberately per active station only (not bulk): TAFs matter for the home field, not the map. |
 | C5/D6 (2026-09-15) | Track record | none | `/combined.trackRecord` (~40 B); log persisted in ./state (a few KB per station) | Upstream: none. Scores use the 24 h series already fetched. |
+| Pressure map (2026-09-16) | Isobars, isallobars, shaded fields | not available | `/radar/pressure`: ~13 KB per region (lines + two 41×41 grids); 20 ms to contour 65 stations locally; cached per quantized region for the bulk table's lifetime | Upstream: none. Isobars every 4 hPa (2 on flat days); 3 h change from the server's own snapshot history. |
 
 Notes
 - A1 quantization: three slightly different regions from one iPad session

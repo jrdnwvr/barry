@@ -117,15 +117,27 @@ struct RunwayWindsCard: View {
                     Text("Rwy \(best.ident)")
                         .font(.title3.weight(.semibold))
                 }
-                Text(sentence(best))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let o = outlook(best: best, now: Date()) {
-                    Text(outlookText(o))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                // The picture on the left, the words on the right: the rose
+                // with the field's runways and the wind bug on the ring.
+                HStack(alignment: .top, spacing: 12) {
+                    let cur = combined.pressure.current
+                    RunwayWindDial(runways: combined.runways ?? [], bestIdent: best.ident,
+                                   windDirDeg: cur.winddir,
+                                   windKt: (cur.windspeed ?? 0) / 1.852,
+                                   gustKt: cur.windgust.map { $0 / 1.852 })
+                        .frame(width: 150, height: 150)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(sentence(best))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let o = outlook(best: best, now: Date()) {
+                            Text(outlookText(o))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                 }
                 if let da = daCallout {
                     Text(da)

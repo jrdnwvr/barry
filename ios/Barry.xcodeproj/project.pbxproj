@@ -58,6 +58,7 @@
 		62FE249CDA4A80409C304F3D /* Tendency.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2542DA2C850B2399B31A9069 /* Tendency.swift */; };
 		63129BEFD89CFA743A98860E /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918B4D14CC966B0E820FC1AC /* Models.swift */; };
 		6341C06F45343F3FAAAE7353 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918B4D14CC966B0E820FC1AC /* Models.swift */; };
+		671235BD08B2C03DA62FCCB7 /* RunwayWindDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63055B6BCAEBB22C1F0B5177 /* RunwayWindDial.swift */; };
 		69FA11493C9F04A3A79384A3 /* HorizontalDragGesture.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB906A0DF0FCEFBE609EBF06 /* HorizontalDragGesture.swift */; };
 		70D7BA6937527AE4D263FF9A /* FrontsOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35839C2045A30D70938041B6 /* FrontsOverlay.swift */; };
 		73C115787B3F6EB1F3D44776 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918B4D14CC966B0E820FC1AC /* Models.swift */; };
@@ -198,6 +199,7 @@
 		52B4C35AC0CE61C4C1CCE6D5 /* FieldConditionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldConditionsView.swift; sourceTree = "<group>"; };
 		5B1CE5EDD6706AFE35F1B6D9 /* BarryComplication.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = BarryComplication.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		5C59EF4878E06062DC20D1D7 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
+		63055B6BCAEBB22C1F0B5177 /* RunwayWindDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayWindDial.swift; sourceTree = "<group>"; };
 		6662DFD4A743261C8134B535 /* RadarMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarMapView.swift; sourceTree = "<group>"; };
 		68D08500DD9FA42C666DFF25 /* ComplicationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComplicationViews.swift; sourceTree = "<group>"; };
 		6978CE026B8EEE1A560877C0 /* PressureGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureGuideView.swift; sourceTree = "<group>"; };
@@ -378,6 +380,7 @@
 				6662DFD4A743261C8134B535 /* RadarMapView.swift */,
 				8C448DCCFE61D866C777918A /* RadarModel.swift */,
 				C0EBA6519DD65A01DF98B527 /* RadarView.swift */,
+				63055B6BCAEBB22C1F0B5177 /* RunwayWindDial.swift */,
 				F83C3064588614F2B8DEAA34 /* RunwayWindsView.swift */,
 				DA12AC45B8A41856114FD9A7 /* SensorComparisonView.swift */,
 				72812DF1800A9DF0CF5EF2C3 /* SettingsView.swift */,
@@ -650,6 +653,7 @@
 				5204621388C2B94B99BE1CCF /* RadarModel.swift in Sources */,
 				06E7445D9EF69D7CD6C141EE /* RadarView.swift in Sources */,
 				2FC7F63C72023A1812F99D63 /* RangeAnalysis.swift in Sources */,
+				671235BD08B2C03DA62FCCB7 /* RunwayWindDial.swift in Sources */,
 				EF29D661015A900FB9D47F02 /* RunwayWindsView.swift in Sources */,
 				2D039F6DE65B45CABECF405F /* SavedLocations.swift in Sources */,
 				8B662BF9297E88CBB93B370B /* SensorComparisonView.swift in Sources */,

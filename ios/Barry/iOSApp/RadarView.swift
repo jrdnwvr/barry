@@ -421,6 +421,11 @@ struct RadarPanel: View {
     /// field there; play sweeps the whole timeline.
     private var frontTimeline: some View {
         HStack(spacing: 8) {
+            // Say what the row moves: these chips slide the WPC front lines
+            // and H/L centers to their forecast positions, not the radar.
+            Text("Fronts")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
             Button { model.playFronts() } label: {
                 Image(systemName: model.frontPlaying ? "stop.fill" : "play.fill")
                     .font(.system(size: 12, weight: .semibold))
@@ -451,11 +456,11 @@ struct RadarPanel: View {
         guard let f = model.frontFrames.min(by: {
             abs(Double($0.hours) - model.frontHours) < abs(Double($1.hours) - model.frontHours)
         }) else { return "" }
-        return f.valid.formatted(.dateTime.weekday(.abbreviated).hour())
+        return "at " + f.valid.formatted(.dateTime.weekday(.abbreviated).hour())
     }
 
     private var frontValidText: String {
-        "WPC fronts, \(frontChipTime), to about 50 mi"
+        "WPC fronts \(frontChipTime), to about 50 mi"
     }
 
     /// A toggled-on layer that draws nothing must say why, or it reads as broken.

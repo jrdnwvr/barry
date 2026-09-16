@@ -271,6 +271,33 @@ struct StationSearchResponse: Codable {
     let results: [StationSearchResult]
 }
 
+// MARK: - Pressure field (isobars, isallobars, shaded grids)
+
+struct ContourLine: Codable, Hashable, Identifiable {
+    let level: Double
+    let points: [[Double]]
+    var id: String { "\(level)-\(points.first ?? [])-\(points.count)" }
+}
+
+struct GridOut: Codable, Hashable {
+    let lat0: Double
+    let lon0: Double
+    let dlat: Double
+    let dlon: Double
+    let ny: Int
+    let nx: Int
+    let values: [[Double?]]
+}
+
+struct PressureFieldResponse: Codable, Hashable {
+    var isobars: [ContourLine] = []
+    var isallobars: [ContourLine] = []
+    var pressureGrid: GridOut?
+    var tendencyGrid: GridOut?
+    var stations: Int = 0
+    let cachedAt: Date
+}
+
 // MARK: - WPC surface fronts
 
 /// One front off the WPC chart: type cold|warm|stnry|ocfnt|trof and points

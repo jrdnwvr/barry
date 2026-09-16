@@ -90,6 +90,7 @@
 		B0ED75F3A2F54154E9DC25F8 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0094727B647701DDDCF17BD2 /* LocationManager.swift */; };
 		B5956053A3566C6DBCDAAF14 /* StationLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3DE49EE7CDCB4E59BB8E97F /* StationLayer.swift */; };
 		C1FA94A165B7428939C8372D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CD077DE63D0DE437229C43CC /* Assets.xcassets */; };
+		C2BB4B03167622269DA26352 /* PressureFieldOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 763CE62FEE3C1CA173ABA1C3 /* PressureFieldOverlay.swift */; };
 		C64D83BB7F2009F4F3BE2D7F /* BarometerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AF1347518FFA7C2430E8A95 /* BarometerEngine.swift */; };
 		D21F7D7C1B619DD998B3C235 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0094727B647701DDDCF17BD2 /* LocationManager.swift */; };
 		D3CCE6CB0DB066A238922179 /* BarryAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */; };
@@ -205,6 +206,7 @@
 		7124BFCE70A82D184062809B /* BarryComplication.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BarryComplication.entitlements; sourceTree = "<group>"; };
 		726AB15B448612548C2CCCCD /* BarryComplication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryComplication.swift; sourceTree = "<group>"; };
 		72812DF1800A9DF0CF5EF2C3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		763CE62FEE3C1CA173ABA1C3 /* PressureFieldOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureFieldOverlay.swift; sourceTree = "<group>"; };
 		778E430DEB72ECE6B1DB5CCA /* PressureChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureChartView.swift; sourceTree = "<group>"; };
 		77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryAPI.swift; sourceTree = "<group>"; };
 		7C00F07F019E06DA06E95BD0 /* BarometerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarometerTests.swift; sourceTree = "<group>"; };
@@ -371,6 +373,7 @@
 				F4C5676D3E1E52D59CDFED12 /* Info.plist */,
 				B98E77604746429DE78EF9C4 /* OnboardingView.swift */,
 				778E430DEB72ECE6B1DB5CCA /* PressureChartView.swift */,
+				763CE62FEE3C1CA173ABA1C3 /* PressureFieldOverlay.swift */,
 				6978CE026B8EEE1A560877C0 /* PressureGuideView.swift */,
 				6662DFD4A743261C8134B535 /* RadarMapView.swift */,
 				8C448DCCFE61D866C777918A /* RadarModel.swift */,
@@ -638,6 +641,7 @@
 				63129BEFD89CFA743A98860E /* Models.swift in Sources */,
 				57240D7CD7B6FC81EE382681 /* OnboardingView.swift in Sources */,
 				83F986D9DDC3CCBE8FA83873 /* PressureChartView.swift in Sources */,
+				C2BB4B03167622269DA26352 /* PressureFieldOverlay.swift in Sources */,
 				98A632AA5A2B036CFA27697A /* PressureGuideView.swift in Sources */,
 				77F617DE1799A58749B82524 /* PressureHistory.swift in Sources */,
 				094EEF5E8D649C8E37BEB643 /* PressureStore.swift in Sources */,

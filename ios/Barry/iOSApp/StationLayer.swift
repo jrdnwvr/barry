@@ -214,7 +214,9 @@ final class SpeedLabelView: MKAnnotationView {
         addSubview(label)
         addSubview(idLabel)
         isEnabled = true        // tappable: opens the station detail sheet
-        displayPriority = .defaultHigh
+        // Speed labels rank below barbs and centers: a number that mostly
+        // matches its neighbors shouldn't cover anything.
+        displayPriority = .defaultLow
     }
 
     required init?(coder: NSCoder) { fatalError("unused") }
@@ -248,7 +250,7 @@ final class SpeedLabelView: MKAnnotationView {
         // The ring sits on the station point itself (below the pill).
         halo.center = CGPoint(x: bounds.width / 2, y: bounds.height + 4 + bounds.height / 2)
         halo.isHidden = !a.isHome
-        displayPriority = a.isHome ? .required : .defaultHigh
+        displayPriority = a.isHome ? .required : .defaultLow
     }
 }
 

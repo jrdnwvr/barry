@@ -17,6 +17,7 @@ import httpx
 from . import conditions as conditions_mod
 from . import explain
 from . import persist
+from . import pressure_field
 from . import track
 from . import runways
 from . import front as front_mod
@@ -25,6 +26,7 @@ from .cache import StationRegistry, TTLCache
 from .interpreter import Sample, interpret
 from .models import (
     FieldGridResponse,
+    PressureFieldResponse,
     TrackRecordOut,
     TafOut,
     RadarFramesResponse,
@@ -410,6 +412,36 @@ class PressureService:
             log.info("bulk history restored: %d snapshots, oldest %s", len(hist), hist[0][0])
         return hist
 
+    def _tendency_points(self, now: datetime) -> List[tuple]:
+        """(lat, lon, hPa per 3 h) for every station with a report now and one
+        2 to 4 h ago in the snapshot history, same field for both ends."""
+        if not self._bulk_history:
+            return []
+        latest = self._bulk_history[-1][1]
+        out = []
+        for sid, (t1, slp1, alt1, la, lo) in latest.items():
+            if t1 is None or (now - t1).total_seconds() > 2 * 3600:
+                continue
+            best = None
+            for _, snap in self._bulk_history[:-1]:
+                rec = snap.get(sid)
+                if rec is None or rec[0] is None:
+                    continue
+                span_h = (t1 - rec[0]).total_seconds() / 3600.0
+                if 2.0 <= span_h <= 4.0 and (best is None or abs(span_h - 3.0) < abs(best[0] - 3.0)):
+                    best = (span_h, rec)
+            if best is None:
+                continue
+            span_h, (t0, slp0, alt0, _, _) = best
+            if slp1 is not None and slp0 is not None:
+                d = slp1 - slp0
+            elif alt1 is not None and alt0 is not None:
+                d = alt1 - alt0
+            else:
+                continue
+            out.append((la, lo, round(d / span_h * 3.0, 2)))
+        return out
+
     def history_span_h(self, now: datetime) -> float:
         if not self._bulk_history:
             return 0.0
@@ -602,6 +634,32 @@ class PressureService:
             return cached
         resp = await rv.fetch_frames(self._client, now=_now())
         await self.cache.set("radar_frames", resp, ttl=FRAMES_TTL)
+        return resp
+
+    # ---- Pressure field: isobars + isallobars from the bulk table -----------
+
+    async def get_pressure_field(self, lat: float, lon: float,
+                                 lat_span: float, lon_span: float) -> PressureFieldResponse:
+        """Contours for a map region from the in-memory bulk table. Quantized
+        like the wind grid; cached for the bulk table's own lifetime."""
+        lat_span = max(0.5, min(30.0, lat_span))
+        lon_span = max(0.5, min(60.0, lon_span))
+        q_lat, q_lon = round(lat * 10) / 10, round(lon * 10) / 10
+        def q_span(v):
+            return round(v * 2) / 2 if v >= 1 else round(v, 1)
+        q_lat_span, q_lon_span = q_span(lat_span), q_span(lon_span)
+        cache_key = f"pfield:{q_lat}:{q_lon}:{q_lat_span}:{q_lon_span}"
+        cached = await self.cache.get(cache_key)
+        if cached is not None:
+            return cached
+        table = await self.metar_bulk() or []
+        tend_pts = self._tendency_points(_now()) if self.history_span_h(_now()) >= 3.5 else None
+        isobars, isallobars, pgrid, tgrid = pressure_field.build(
+            table, q_lat, q_lon, q_lat_span, q_lon_span, tend_pts=tend_pts)
+        resp = PressureFieldResponse(isobars=isobars, isallobars=isallobars,
+                                     pressureGrid=pgrid, tendencyGrid=tgrid,
+                                     stations=len(table), cachedAt=_now())
+        await self.cache.set(cache_key, resp, ttl=BULK_TTL)
         return resp
 
     # ---- Radar model field (wind + boundary layer) ------------------------

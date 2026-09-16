@@ -95,6 +95,20 @@ struct BarryAPI {
         try await get(baseURL.appendingPathComponent("fronts"))
     }
 
+    /// Isobars, isallobars, and the gridded fields for a map region, from
+    /// the server's station table (no upstream call).
+    func pressureField(lat: Double, lon: Double, latSpan: Double, lonSpan: Double) async throws -> PressureFieldResponse {
+        var comps = URLComponents(url: baseURL.appendingPathComponent("radar/pressure"),
+                                  resolvingAgainstBaseURL: false)
+        comps?.queryItems = [
+            URLQueryItem(name: "lat", value: String(lat)),
+            URLQueryItem(name: "lon", value: String(lon)),
+            URLQueryItem(name: "latSpan", value: String(latSpan)),
+            URLQueryItem(name: "lonSpan", value: String(lonSpan)),
+        ]
+        return try await get(comps?.url)
+    }
+
     /// RainViewer's frame list, trimmed and cached by the backend.
     func radarFrames() async throws -> RadarFramesResponse {
         try await get(baseURL.appendingPathComponent("radar/frames"))

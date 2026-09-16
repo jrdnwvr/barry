@@ -70,6 +70,21 @@ final class RadarModel: ObservableObject {
     /// Last region the map reported — used when a toggle flips on.
     var lastRegion: MKCoordinateRegion?
     private var fieldTask: Task<Void, Never>?
+    private var pressureTask: Task<Void, Never>?
+
+    /// Isobars / isallobars / shaded grids for the current region (server
+    /// contours its station table; nothing upstream).
+    @Published var pressureField: PressureFieldResponse?
+    @Published var pressureVersion = 0
+
+    func fetchPressureField(region: MKCoordinateRegion) async {
+        guard let resp = try? await BarryAPI().pressureField(
+            lat: region.center.latitude, lon: region.center.longitude,
+            latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta)
+        else { return }
+        pressureField = resp
+        pressureVersion += 1
+    }
 
     /// Arrows render from a light breeze up (~3 kt) and fade/shrink with speed,
     /// so calm still reads calm without the layer going blank. The old ~8 kt
@@ -236,8 +251,16 @@ final class RadarModel: ObservableObject {
 
     /// Debounced reload — pans/zooms fire this; only the last one within ~0.7 s wins.
     func scheduleFieldReload(for region: MKCoordinateRegion, wind: Bool, boundaryLayer: Bool,
-                             stations: Bool = false) {
+                             stations: Bool = false, pressure: Bool = false) {
         lastRegion = region
+        if pressure {
+            pressureTask?.cancel()
+            pressureTask = Task {
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                guard !Task.isCancelled else { return }
+                await fetchPressureField(region: region)
+            }
+        }
         if stations {
             stationTask?.cancel()
             stationTask = Task {

@@ -32,6 +32,8 @@ struct RadarMapView: UIViewRepresentable {
     /// nil: the red pin marks the station and the map shows the user's own
     /// blue dot. Otherwise the home station is drawn as itself (see HomeMarker).
     var home: HomeMarker? = nil
+    /// nil hides the pressure layer entirely.
+    var pressureState: PressureFieldState? = nil
     var onRegionChange: ((MKCoordinateRegion) -> Void)? = nil
 
     final class RadarTileOverlay: MKTileOverlay {
@@ -138,6 +140,11 @@ struct RadarMapView: UIViewRepresentable {
             label.sizeToFit()
             label.frame.size.height += 3
             label.frame.size.width += 2
+            // Least important number on the map (neighbors agree with it), so
+            // its collision footprint is padded: it disappears before it can
+            // sit on a barb, a center, or the home marker.
+            bounds = CGRect(x: 0, y: 0, width: label.bounds.width + 28, height: label.bounds.height + 24)
+            label.center = CGPoint(x: bounds.midX, y: bounds.midY)
             bounds = label.bounds
             label.frame = bounds
         }
@@ -175,6 +182,26 @@ struct RadarMapView: UIViewRepresentable {
         var shownBL: [BLPoint] = []
         var blAnnotations: [BLAnnotation] = []
         var frontOverlay: FrontFieldOverlay?
+        var pressureOverlay: PressureFieldOverlay?
+        var shownPressure: PressureFieldState?
+
+        func syncPressure(_ state: PressureFieldState?, on map: MKMapView) {
+            guard state != shownPressure else { return }
+            shownPressure = state
+            guard let state, state.field != nil,
+                  state.showIsobars || state.showIsallobars || state.shade != .off else {
+                if let o = pressureOverlay { map.removeOverlay(o); pressureOverlay = nil }
+                return
+            }
+            if pressureOverlay == nil {
+                let o = PressureFieldOverlay()
+                pressureOverlay = o
+                // Below the fronts (labels) and above the radar tiles.
+                map.addOverlay(o, level: .aboveRoads)
+            }
+            pressureOverlay?.state = state
+            if let o = pressureOverlay, let r = map.renderer(for: o) { r.setNeedsDisplay() }
+        }
         var frontRenderer: FrontFieldRenderer?
         var lastFrontVersion = -1
         var centerAnnotations: [PressureCenterAnnotation] = []
@@ -261,6 +288,9 @@ struct RadarMapView: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            if let p = overlay as? PressureFieldOverlay {
+                return PressureFieldRenderer(overlay: p)
+            }
             if let field = overlay as? FrontFieldOverlay {
                 let r = FrontFieldRenderer(overlay: field)
                 frontRenderer = r
@@ -527,6 +557,7 @@ struct RadarMapView: UIViewRepresentable {
         context.coordinator.syncArrows(showWind ? windArrows : [], on: map)
         context.coordinator.syncBL(showBL ? blPoints : [], on: map)
         context.coordinator.syncFronts(frontState, on: map)
+        context.coordinator.syncPressure(pressureState, on: map)
         context.coordinator.syncFlow(windFlow, on: map)
         context.coordinator.syncStations(stations, style: stationStyle, on: map)
 

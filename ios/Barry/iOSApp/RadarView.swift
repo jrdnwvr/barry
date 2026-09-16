@@ -57,8 +57,25 @@ struct RadarPanel: View {
     /// Station layer: "off", "barbs" (METAR wind flags) or "speeds" (labels).
     @AppStorage("radarStations", store: AppConfig.sharedDefaults)
     private var stationStyleRaw: String = "off"
+    /// Pressure layer: isobars on by default (it's the point of the app),
+    /// isallobars and the shaded field opt-in.
+    @AppStorage("radarIsobars", store: AppConfig.sharedDefaults)
+    private var showIsobars: Bool = true
+    @AppStorage("radarIsallobars", store: AppConfig.sharedDefaults)
+    private var showIsallobars: Bool = false
+    @AppStorage("radarShade", store: AppConfig.sharedDefaults)
+    private var shadeRaw: String = "off"
     @State private var showLayers = false
     @State private var selectedStation: StationObs?
+
+    private var shade: PressureShade { PressureShade(rawValue: shadeRaw) ?? .off }
+    private var pressureWanted: Bool { showIsobars || showIsallobars || shade != .off }
+    private var pressureState: PressureFieldState? {
+        guard pressureWanted else { return nil }
+        return PressureFieldState(field: model.pressureField, showIsobars: showIsobars,
+                                  showIsallobars: showIsallobars, shade: shade,
+                                  version: model.pressureVersion)
+    }
     private let ticker = Timer.publish(every: 0.55, on: .main, in: .common).autoconnect()
 
     private var stationStyle: StationLayerStyle { StationLayerStyle(rawValue: stationStyleRaw) ?? .off }
@@ -99,6 +116,9 @@ struct RadarPanel: View {
             if stationStyle != .off || home?.asBarb == true {
                 await model.fetchStations(center: initialRegion.center)
             }
+            if pressureWanted {
+                await model.fetchPressureField(region: model.lastRegion ?? initialRegion)
+            }
         }
         .onReceive(ticker) { _ in
             guard model.playing, !model.frames.isEmpty else { return }
@@ -138,6 +158,11 @@ struct RadarPanel: View {
                 Task { await model.fetchFronts() }
             }
         }
+        .onChange(of: pressureWanted) { _, on in
+            if on, model.pressureField == nil {
+                Task { await model.fetchPressureField(region: model.lastRegion ?? initialRegion) }
+            }
+        }
         // Fetch triggers live on the container so the compact and full toggle
         // variants share them.
         .onChange(of: showWindArrows) { _, on in
@@ -168,11 +193,13 @@ struct RadarPanel: View {
                      stationStyle: stationStyle,
                      onSelectStation: { selectedStation = $0 },
                      home: home,
+                     pressureState: pressureState,
                      onRegionChange: { region in
                          model.scheduleFieldReload(for: region,
                                                    wind: showWindArrows,
                                                    boundaryLayer: showBoundaryLayer,
-                                                   stations: stationStyle != .off)
+                                                   stations: stationStyle != .off,
+                                                   pressure: pressureWanted)
                      })
     }
 
@@ -268,6 +295,26 @@ struct RadarPanel: View {
                 Label("Fronts", systemImage: "line.diagonal")
             }
 
+            Toggle(isOn: $showIsobars) {
+                Label("Isobars", systemImage: "circle.circle")
+            }
+            Toggle(isOn: $showIsallobars) {
+                Label("Pressure change", systemImage: "arrow.down.right.circle")
+            }
+            if showIsallobars {
+                Text("Where pressure fell or rose over the last 3 h, from Barry's own station history. Red dashed: falling. Blue: rising.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            Label("Shade the map by", systemImage: "square.stack.3d.down.forward")
+            Picker("Shade", selection: $shadeRaw) {
+                Text("Off").tag("off")
+                Text("Pressure").tag("pressure")
+                Text("Change").tag("change")
+            }
+            .pickerStyle(.segmented)
+            .controlSize(.small)
+
             Label("Stations", systemImage: "mappin.and.ellipse")
             Picker("Stations", selection: $stationStyleRaw) {
                 Text("Off").tag("off")
@@ -353,6 +400,7 @@ struct RadarPanel: View {
                     compactToggle("Wind", icon: "wind", isOn: $showWindArrows)
                     compactToggle("Layer top", icon: "cloud.fog", isOn: $showBoundaryLayer)
                     compactToggle("Fronts", icon: "line.diagonal", isOn: $showFronts)
+                    compactToggle("Isobars", icon: "circle.circle", isOn: $showIsobars)
                     compactToggle("Barbs", icon: "flag", isOn: Binding(
                         get: { stationStyleRaw == "barbs" },
                         set: { stationStyleRaw = $0 ? "barbs" : "off" }))

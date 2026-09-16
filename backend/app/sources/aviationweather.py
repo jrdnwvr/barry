@@ -365,6 +365,7 @@ def parse_metar_cache(text: str) -> List[StationObs]:
             temp=_f(cell(row, "temp_c")), dewpoint=_f(cell(row, "dewpoint_c")),
             altim=round(altim_inhg * 33.8639, 1) if altim_inhg is not None else None,
             slp=_f(cell(row, "sea_level_pressure_mb")),
+            presTend=_f(cell(row, "three_hr_pressure_tendency_mb")),
             raw=(cell(row, "raw_text") or None),
         ))
     return out

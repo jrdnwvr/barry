@@ -395,28 +395,40 @@ final class PressureCenterView: MKAnnotationView {
     private let letter = UILabel()
     private let value = UILabel()
 
+    private let disc = UIView()
+
     override init(annotation: MKAnnotation?, reuseIdentifier: String?) {
         super.init(annotation: annotation, reuseIdentifier: reuseIdentifier)
-        letter.font = .systemFont(ofSize: 22, weight: .heavy)
+        // The centers are the pressure story on the chart; they read at a
+        // glance: a big letter on a pale disc, the value underneath.
+        disc.frame = CGRect(x: 4, y: 0, width: 36, height: 36)
+        disc.layer.cornerRadius = 18
+        disc.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.85)
+        disc.layer.borderWidth = 2
+        letter.font = .systemFont(ofSize: 26, weight: .black)
         letter.textAlignment = .center
-        value.font = .monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
-        value.textColor = .secondaryLabel
+        value.font = .monospacedDigitSystemFont(ofSize: 10, weight: .bold)
+        value.textColor = .label
         value.textAlignment = .center
+        addSubview(disc)
         addSubview(letter)
         addSubview(value)
         isEnabled = false
         displayPriority = .required
-        bounds = CGRect(x: 0, y: 0, width: 36, height: 34)
-        letter.frame = CGRect(x: 0, y: 0, width: 36, height: 24)
-        value.frame = CGRect(x: 0, y: 23, width: 36, height: 11)
+        collisionMode = .circle
+        bounds = CGRect(x: 0, y: 0, width: 44, height: 50)
+        letter.frame = CGRect(x: 4, y: 0, width: 36, height: 36)
+        value.frame = CGRect(x: -8, y: 37, width: 60, height: 12)
     }
 
     required init?(coder: NSCoder) { fatalError("unused") }
 
     func configure(_ c: PressureCenterAnnotation) {
         letter.text = c.isHigh ? "H" : "L"
-        letter.textColor = c.isHigh ? FrontKind.cold_ : FrontKind.warm_
-        value.text = "\(c.pressure)"
+        let tint = c.isHigh ? FrontKind.cold_ : FrontKind.warm_
+        letter.textColor = tint
+        disc.layer.borderColor = tint.withAlphaComponent(0.8).cgColor
+        value.text = "\(c.pressure) hPa"
         alpha = c.alpha
     }
 }
@@ -458,8 +470,9 @@ struct FrontKeyView: View {
             }
             HStack(spacing: 5) {
                 Text("H").font(.system(size: 10, weight: .heavy)).foregroundStyle(Color(FrontKind.cold_))
+                Text(compact ? "high" : "high: fair, stable").font(.system(size: compact ? 8 : 9))
                 Text("L").font(.system(size: 10, weight: .heavy)).foregroundStyle(Color(FrontKind.warm_))
-                Text("pressure").font(.system(size: compact ? 8 : 9))
+                Text(compact ? "low" : "low: pressure falls toward it, weather with it").font(.system(size: compact ? 8 : 9))
                 Text("·").font(.system(size: 8)).foregroundStyle(.secondary)
                 Text(validText)
                     .font(.system(size: 7.5))

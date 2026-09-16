@@ -228,6 +228,7 @@ class StationObs(BaseModel):
     dewpoint: Optional[float] = None    # °C
     altim: Optional[float] = None       # hPa
     slp: Optional[float] = None         # sea-level pressure, hPa (when reported)
+    presTend: Optional[float] = None    # station-reported 3 h tendency, hPa
     raw: Optional[str] = None           # the METAR as transmitted
 
 
@@ -281,6 +282,36 @@ class TrackRecordOut(BaseModel):
     right: int
     total: int
     days: int
+
+
+class ContourLine(BaseModel):
+    """One contour polyline: `level` (hPa for isobars, hPa/3 h for
+    isallobars) and [[lat, lon], ...]."""
+
+    level: float
+    points: List[List[float]]
+
+
+class GridOut(BaseModel):
+    """A regular lat/lon lattice of values (row 0 = south, col 0 = west);
+    null where no station is near enough. The app shades it as a gradient."""
+
+    lat0: float
+    lon0: float
+    dlat: float
+    dlon: float
+    ny: int
+    nx: int
+    values: List[List[Optional[float]]]
+
+
+class PressureFieldResponse(BaseModel):
+    isobars: List[ContourLine] = Field(default_factory=list)
+    isallobars: List[ContourLine] = Field(default_factory=list)
+    pressureGrid: Optional[GridOut] = None
+    tendencyGrid: Optional[GridOut] = None
+    stations: int = 0
+    cachedAt: datetime
 
 
 class Runway(BaseModel):

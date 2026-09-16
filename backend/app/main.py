@@ -149,6 +149,19 @@ async def get_metars(
     return resp.model_dump(mode="json", by_alias=True)
 
 
+@app.get("/radar/pressure")
+async def radar_pressure(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    latSpan: float = Query(..., gt=0, le=30),
+    lonSpan: float = Query(..., gt=0, le=60),
+):
+    """Isobars (every 4 hPa) and isallobars (±1/2/3 hPa per 3 h) for a map
+    region, contoured from Barry's own station table. No upstream call."""
+    resp = await get_service().get_pressure_field(lat, lon, latSpan, lonSpan)
+    return resp.model_dump(mode="json", by_alias=True)
+
+
 @app.get("/radar/frames")
 async def radar_frames():
     """RainViewer's frame list, trimmed to what the timeline shows and shared

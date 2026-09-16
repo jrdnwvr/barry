@@ -227,14 +227,27 @@ struct HeroView: View {
 
     /// Surface non-obvious interpreter caveats (low confidence, sparse data).
     /// `forecast_derived` is already baked into the verdict sentence's hedged wording.
+    /// Plain sentences, one per reason, always ending the same way: Barry is
+    /// one input to the weather picture, never the whole picture.
     private var honestyNote: String? {
         guard let r = combined.reading else { return nil }
-        var bits: [String] = []
-        if r.caveats.contains("short_window") { bits.append("limited recent data") }
-        if r.caveats.contains("sparse") { bits.append("data gaps") }
-        if r.caveats.contains("model_disagrees") { bits.append("the model disagrees") }
-        if r.confidence < 0.5 && bits.isEmpty { bits.append("lower confidence than usual") }
-        return bits.isEmpty ? nil : "Read with care: " + bits.joined(separator: ", ") + "."
+        var reasons: [String] = []
+        if r.caveats.contains("short_window") {
+            reasons.append("this is based on only a couple of hours of reports")
+        }
+        if r.caveats.contains("sparse") {
+            reasons.append("the station's reports have gaps")
+        }
+        if r.caveats.contains("model_disagrees") {
+            reasons.append("the forecast model doesn't show the change the barometer suggests")
+        }
+        if r.confidence < 0.5 && reasons.isEmpty {
+            reasons.append("confidence is lower than usual")
+        }
+        guard !reasons.isEmpty else { return nil }
+        let lead = reasons.joined(separator: ", and ")
+        return lead.prefix(1).uppercased() + lead.dropFirst()
+            + ". Use it as one input to your weather picture, not the whole picture."
     }
 }
 

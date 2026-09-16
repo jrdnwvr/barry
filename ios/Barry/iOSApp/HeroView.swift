@@ -237,20 +237,6 @@ struct HeroView: View {
         }
         return nil
     }
-        if r.caveats.contains("sparse") {
-            reasons.append("the station's reports have gaps")
-        }
-        if r.caveats.contains("model_disagrees") {
-            reasons.append("the forecast model doesn't show the change the barometer suggests")
-        }
-        if r.confidence < 0.5 && reasons.isEmpty {
-            reasons.append("confidence is lower than usual")
-        }
-        guard !reasons.isEmpty else { return nil }
-        let lead = reasons.joined(separator: ", and ")
-        return lead.prefix(1).uppercased() + lead.dropFirst()
-            + ". Use it as one input to your weather picture, not the whole picture."
-    }
 }
 
 // MARK: - Status row (station + freshness)

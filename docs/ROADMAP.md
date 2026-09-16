@@ -175,7 +175,7 @@ With names loaded, the saved-locations picker can search any reporting
 station worldwide by id or name, instead of relying on location or a
 ten-airport table.
 
-**D6. Verdict track record.** (M) DONE 2026-09-15: each call scored 3 h later against the station's own series (±0.5 hPa bands); `/combined.trackRecord` and a line under the verdict once ≥ 5 scored calls exist.
+**D6. Verdict track record.** (M) BUILT 2026-09-15, HIDDEN 2026-09-16: the first metric scored a call right only if the 3 h trend persisted, which fails by design at troughs and fronts (it showed 2 of 12 at the user's station). The server keeps logging calls; the line comes back once the score is defined against what Barry claims (trough timing / front passage within a window), not trend persistence.
 For each reading, record what the pressure did over the following 6 h and
 whether rain or a wind shift arrived. Show a small "Barry's last 30 days
 here" line (right x of y times) on the honesty note. This replaces the

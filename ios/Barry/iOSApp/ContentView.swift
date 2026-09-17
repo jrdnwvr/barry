@@ -36,10 +36,11 @@ struct ContentView: View {
             rootContent
             .navigationTitle("Barry")
             .navigationBarTitleDisplayMode(hSizeClass == .regular ? .inline : .automatic)
-            // The kneeboard dashboard drops the title bar: the gear moves
-            // next to the update time and the mark sits bottom-left, so the
-            // row that only said "Barry" gives its height back to the data.
-            .toolbar(isDashboard ? .hidden : .visible, for: .navigationBar)
+            // Once there is data, the title bar goes: the gear moves next to
+            // the update time on the METAR strip and the mark sits at the
+            // foot of the page, so the row that only said "Barry" gives its
+            // height back to the data. Loading and error states keep it.
+            .toolbar(hasData ? .hidden : .visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showSettings = true } label: {
@@ -81,6 +82,12 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    /// Loaded with something to show (the title bar steps aside).
+    private var hasData: Bool {
+        guard case .loaded(let combined) = store.state else { return false }
+        return !combined.pressure.series.isEmpty
     }
 
     /// True when the kneeboard dashboard is what's on screen.
@@ -140,11 +147,12 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, minHeight: 320)
         case .loaded(let combined):
             VStack(alignment: .leading, spacing: 20) {
-                // The kneeboard's METAR line, phone-sized.
-                MetarStrip(combined: combined)
+                // The kneeboard's METAR line, phone-sized, gear included.
+                MetarStrip(combined: combined, onSettings: { showSettings = true })
                 glanceCards(combined, layout: .phone)
             }
-            .padding(.vertical)
+            .padding(.top, 8)
+            .padding(.bottom)
         }
     }
 
@@ -212,6 +220,19 @@ struct ContentView: View {
         }
 
         DataSourceFootnote(combined: combined)
+
+        // The app's name lives at the foot of the page, where the title
+        // bar used to say it.
+        HStack(spacing: 6) {
+            Image("BarryMark")
+                .resizable()
+                .renderingMode(.template)
+                .frame(width: 20, height: 20)
+                .foregroundStyle(Color(red: 0.42, green: 0.32, blue: 0.75))
+            Text("Barry")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
     }
 
     /// Lightning within 100 miles, as a card that opens the radar.
@@ -325,18 +346,6 @@ struct ContentView: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 20) {
                 glanceCards(combined, layout: .dashboard)
-                // The app's name lives here on the dashboard, where the
-                // title bar used to say it.
-                HStack(spacing: 6) {
-                    Image("BarryMark")
-                        .resizable()
-                        .renderingMode(.template)
-                        .frame(width: 20, height: 20)
-                        .foregroundStyle(Color(red: 0.42, green: 0.32, blue: 0.75))
-                    Text("Barry")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
             }
         }
         .frame(width: 340)

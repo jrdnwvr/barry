@@ -377,6 +377,13 @@ struct StationDetailSheet: View {
                     .padding(.top, -10)
             }
 
+            if obs.fltCatDerived == true, let cat = obs.fltCat {
+                Text("\(obs.id) does not report a flight category. \(cat) is derived from the ceiling and visibility it does report.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if let lt = obs.lightning {
                 Label(lt.sentence, systemImage: lt.status == "distant" ? "bolt" : "bolt.fill")
                     .font(.subheadline.weight(.medium))

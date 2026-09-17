@@ -154,6 +154,7 @@ def _current_obs(newest: dict) -> CurrentObs:
         ceilingFt=ceiling_ft,
         ceilingCover=ceiling_cover,
         fltCat=newest.get("fltCat") or _flight_category(vis, ceiling_ft),
+        fltCatDerived=not newest.get("fltCat") and _flight_category(vis, ceiling_ft) is not None,
         wx=newest.get("wxString") or None,
         lightning=ltg.parse(newest.get("rawOb"), newest.get("wxString") or None,
                             newest.get("t")),
@@ -375,6 +376,11 @@ def parse_metar_cache(text: str) -> List[StationObs]:
             ceiling_cover = layers[0][0]
         wdir = _f(cell(row, "wind_dir_degrees"))
         altim_inhg = _f(cell(row, "altim_in_hg"))
+        vis_sm = _f((cell(row, "visibility_statute_mi") or "").rstrip("+") or None)
+        # AWC leaves the category blank when a sensor is out (PWINO and
+        # friends); the standard rules still give one from what remains.
+        reported_cat = cell(row, "flight_category") or None
+        derived_cat = None if reported_cat else _flight_category(vis_sm, ceiling_ft)
         obs = None
         t = cell(row, "observation_time")
         if t:
@@ -387,9 +393,10 @@ def parse_metar_cache(text: str) -> List[StationObs]:
             windKt=_f(cell(row, "wind_speed_kt")),
             windDir=wdir,
             gustKt=_f(cell(row, "wind_gust_kt")),
-            fltCat=(cell(row, "flight_category") or None),
+            fltCat=reported_cat or derived_cat,
+            fltCatDerived=derived_cat is not None,
             obsTime=obs,
-            visibilitySM=_f(cell(row, "visibility_statute_mi")),
+            visibilitySM=vis_sm,
             ceilingFt=ceiling_ft, ceilingCover=ceiling_cover,
             temp=_f(cell(row, "temp_c")), dewpoint=_f(cell(row, "dewpoint_c")),
             altim=round(altim_inhg * 33.8639, 1) if altim_inhg is not None else None,

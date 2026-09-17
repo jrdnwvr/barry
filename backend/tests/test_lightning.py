@@ -79,3 +79,15 @@ def test_nearest_lightning_prefers_a_storm_over_distant_flashes():
     table[1] = st("KSTORM", 39.30, -84.62, "thunderstorm", "NE")
     assert lightning.nearest(table, 39.103, -84.419, now).towardYou is None
     assert lightning.nearest(table[2:], 39.103, -84.419, now) is None
+
+
+def test_bulk_row_without_a_category_gets_one_derived_and_flagged():
+    row = ('"METAR KFKR 170155Z AUTO 13004KT OVC041 23/22 A3025 RMK AO2 PWINO",KFKR,'
+           '2026-09-17T01:55:00.000Z,40.2730,-86.5620,23,22,130,4,,,30.25,,,,TRUE,,,,,,,OVC,4100,,,,,,,'
+           ',,,,,,,,,,,,METAR,262')
+    obs = parse_metar_cache(METAR_CACHE_HEADER + "\n" + row + "\n")
+    assert obs[0].fltCat == "VFR" and obs[0].fltCatDerived is True      # ceiling 4,100 ft, no visibility
+    assert obs[0].visibilitySM is None
+    # A reported category is never marked derived.
+    full = parse_metar_cache(METAR_CACHE_HEADER + "\n" + row.replace(",,,,,,,,,,,,METAR", "MVFR,,,,,,,,,,,,METAR", 1) + "\n")
+    assert full[0].fltCat == "MVFR" and full[0].fltCatDerived is False

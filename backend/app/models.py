@@ -68,6 +68,8 @@ class CurrentObs(BaseModel):
     ceilingCover: Optional[str] = None     # cover of that layer (BKN/OVC), or the
                                            # lowest layer / CLR when no ceiling
     fltCat: Optional[str] = None           # VFR / MVFR / IFR / LIFR
+    fltCatDerived: bool = False            # True when AWC left it blank and Barry
+                                           # worked it out from ceiling/visibility
     wx: Optional[str] = None               # present weather ("-TSRA BR")
     lightning: Optional[LightningOut] = None
     clouds: List[CloudLayer] = Field(default_factory=list)   # every layer, lowest first
@@ -254,6 +256,7 @@ class StationObs(BaseModel):
     windDir: Optional[float] = None     # None = variable or calm
     gustKt: Optional[float] = None
     fltCat: Optional[str] = None
+    fltCatDerived: bool = False         # category worked out from ceiling/visibility
     obsTime: Optional[datetime] = None
     visibilitySM: Optional[float] = None
     ceilingFt: Optional[int] = None

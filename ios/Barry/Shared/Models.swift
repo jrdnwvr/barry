@@ -102,6 +102,7 @@ struct CurrentObs: Codable, Hashable {
     var ceilingFt: Int?
     var ceilingCover: String?
     var fltCat: String?
+    var fltCatDerived: Bool? = nil   // Barry worked the category out; absent on old backends
     var wx: String?
     var lightning: LightningOut?
     var clouds: [CloudLayer]? = nil   // every layer, lowest first; absent on old backends
@@ -276,6 +277,7 @@ struct StationObs: Codable, Hashable, Identifiable {
     var windDir: Double?
     var gustKt: Double?
     var fltCat: String?
+    var fltCatDerived: Bool? = nil
     var obsTime: Date?
     var visibilitySM: Double?
     var ceilingFt: Int?

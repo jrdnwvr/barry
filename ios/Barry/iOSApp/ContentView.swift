@@ -355,6 +355,7 @@ struct ContentView: View {
                              name: combined.pressure.name,
                              windKt: cur.windspeed.map { $0 / 1.852 }, windDir: cur.winddir,
                              gustKt: cur.windgust.map { $0 / 1.852 }, fltCat: cur.fltCat,
+                             fltCatDerived: cur.fltCatDerived,
                              obsTime: combined.observedSeries.last?.t,
                              visibilitySM: cur.visibilitySM, ceilingFt: cur.ceilingFt,
                              ceilingCover: cur.ceilingCover, temp: cur.temp,

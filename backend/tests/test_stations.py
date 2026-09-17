@@ -22,7 +22,9 @@ def test_cache_parser_reads_real_layout():
     assert stations["KILN"].windDir is None         # VRB
     assert stations["KILN"].ceilingFt == 800
     assert stations["KSFO"].obsTime is not None
-    assert stations["KSFO"].fltCat is None          # AWC's literal "null"
+    # AWC's literal "null" category: derived from the rest of the report and flagged.
+    assert stations["KSFO"].fltCat == "VFR" and stations["KSFO"].fltCatDerived is True
+    assert stations["KCVG"].fltCatDerived is False
 
 
 @pytest.mark.asyncio

@@ -170,13 +170,6 @@ struct RunwayWindsCard: View {
         return "Next 12 h: " + joined + "."
     }
 
-    /// Density altitude belongs where the takeoff decision is made.
-    private var daCallout: String? {
-        guard let c = combined.conditions, let da = c.densityAltitudeFt,
-              let field = c.fieldElevationFt, da - field >= 1500 else { return nil }
-        return "Density altitude \(da.formatted()) ft (field \(field.formatted()) ft)."
-    }
-
     /// "From 240° at 12 kt, gusts 18." / "Calm."
     private var windSentence: String {
         guard windKt >= 1 else { return "Calm." }
@@ -247,13 +240,6 @@ struct RunwayWindsCard: View {
                         }
                     }
                 }
-                if let da = daCallout {
-                    Text(da)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
                 if expanded, list.count > 1 {
                     Divider()
                     ForEach(list.dropFirst()) { w in

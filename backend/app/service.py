@@ -84,6 +84,10 @@ STATIONS_MAX = 350        # most annotation views a phone map should carry
 STALE_FORECAST_MAX_AGE = 12 * 3600.0
 # How long a stale answer is re-served before retrying the upstream.
 STALE_RETRY_TTL = 5 * 60.0
+# A degraded pressure answer (fallback curve or the empty shell) is held only
+# briefly: the next app refresh should get a real try, not twelve minutes of
+# "unavailable" because one keep-alive connection dropped after a restart.
+DEGRADED_TTL = 45.0
 
 
 def _now() -> datetime:
@@ -166,6 +170,9 @@ class PressureService:
         self._bulk_history: List[tuple] = self._load_history()
         # {station: [call dicts]} — Barry's own trend calls, scored later.
         self._track_log: Dict[str, List[dict]] = persist.load("track_log") or {}
+        # Stations watched before the last restart, so the scheduler's first
+        # cycle warms them instead of waiting for each phone to ask again.
+        self.registry.restore(persist.load("registry") or [])
         # GLM flashes (sources/glm.py), fed by the scheduler's minute poll.
         self.flashes = flashes_mod.FlashStore()
 
@@ -183,8 +190,9 @@ class PressureService:
             if cached is not None:
                 return cached
 
+        degraded = False
         try:
-            parsed_all = await awc.fetch_metars([station], self._client, hours=hours)
+            parsed_all = await self._fetch_metars_retry([station], hours=hours)
             parsed = parsed_all.get(station)
             used_station = station
             if parsed is None and len(station) == 3:
@@ -192,7 +200,7 @@ class PressureService:
                 # (CVG -> KCVG) — and that includes alphanumeric fields
                 # (I67 -> KI67). Retry the K form and adopt it as canonical.
                 k_station = "K" + station
-                parsed_all = await awc.fetch_metars([k_station], self._client, hours=hours)
+                parsed_all = await self._fetch_metars_retry([k_station], hours=hours)
                 parsed = parsed_all.get(k_station)
                 if parsed is not None:
                     used_station = k_station
@@ -219,16 +227,37 @@ class PressureService:
                 source="aviationweather.gov",
                 cachedAt=_now(),
             )
-        except Exception:
+        except Exception as exc:
             # Graceful degradation: rebuild the recent-past line from Open-Meteo
             # surface_pressure so the app degrades rather than dies (brief §2.3).
+            log.warning("pressure %s: upstream failed (%s: %s); falling back",
+                        station, type(exc).__name__, exc)
+            degraded = True
             resp = await self._pressure_fallback(station, hours=hours)
 
-        await self.cache.set(cache_key, resp, ttl=PRESSURE_TTL)
+        await self.cache.set(cache_key, resp, ttl=DEGRADED_TTL if degraded else PRESSURE_TTL)
         return resp
+
+    async def _fetch_metars_retry(self, ids: List[str], *, hours: int) -> Dict[str, dict]:
+        """One METAR fetch, retried once on a transport error. AWC closes idle
+        keep-alive connections; the first reuse after a quiet minute can fail
+        instantly with a dropped socket, and that must not become the answer."""
+        try:
+            return await awc.fetch_metars(ids, self._client, hours=hours)
+        except httpx.TransportError as exc:
+            log.info("metar %s: transport error (%s), retrying once", ids, type(exc).__name__)
+            return await awc.fetch_metars(ids, self._client, hours=hours)
 
     async def _pressure_fallback(self, station: str, *, hours: int) -> PressureResponse:
         info = stations.get(station)
+        if info is None:
+            # The small table misses most fields; the AWC directory has them all.
+            try:
+                d = (await self.station_info()).get(station) or {}
+            except Exception:
+                d = {}
+            if d.get("lat") is not None and d.get("lon") is not None:
+                info = {"name": d.get("name") or station, "lat": d["lat"], "lon": d["lon"]}
         if info is None:
             # Nothing we can do without coordinates — return an empty, honest shell.
             return PressureResponse(

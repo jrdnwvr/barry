@@ -14,6 +14,7 @@ import os
 from datetime import datetime, timezone
 from typing import List, Optional
 
+from . import persist
 from .models import PressureResponse
 from .service import PRESSURE_TTL, PressureService, _now, _tendency_out
 from .sources import aviationweather as awc
@@ -51,6 +52,7 @@ class Scheduler:
             log.warning("scheduler: bulk metar warm failed: %s", exc)
 
         active = await self._service.registry.active()
+        persist.save("registry", active)
         if not active:
             log.info("scheduler: no active stations; skipping cycle")
             return 0

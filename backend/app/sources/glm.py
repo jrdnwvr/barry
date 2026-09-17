@@ -15,6 +15,7 @@ the flash-level variables are used; groups and events are ignored.
 
 from __future__ import annotations
 
+import asyncio
 import io
 import re
 from dataclasses import dataclass
@@ -168,4 +169,5 @@ async def list_recent(client: httpx.AsyncClient, bucket: str, now: datetime,
 async def fetch_file(client: httpx.AsyncClient, bucket: str, key: str) -> List[Flash]:
     r = await client.get(file_url(bucket, key), headers={"User-Agent": USER_AGENT}, timeout=30.0)
     r.raise_for_status()
-    return parse_file(r.content, key)
+    # h5py is synchronous; keep a burst of files off the event loop.
+    return await asyncio.to_thread(parse_file, r.content, key)

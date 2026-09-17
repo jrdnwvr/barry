@@ -271,6 +271,8 @@ def sample_station_info():
          "elev": 0, "state": "", "country": None, "priority": 4, "siteType": []},
         {"id": "KTAF", "icaoId": "KTAF", "site": "Taf Only Field", "lat": 40.0, "lon": -80.0,
          "elev": 100, "state": "PA", "country": "US", "priority": 7, "siteType": ["TAF"]},
+        {"id": "KI67", "icaoId": "KI67", "site": "Harrison/West Arpt", "lat": 39.2565, "lon": -84.7753,
+         "elev": 177, "state": "OH", "country": "US", "priority": 7, "siteType": ["METAR"]},
     ]
 
 
@@ -343,6 +345,9 @@ class FakeUpstream:
         self.awc_calls = []
         self.om_calls = []
         self.awc_fail = False
+        # Drop the next METAR call at the socket, the way AWC drops an idle
+        # keep-alive connection; the call after that works.
+        self.awc_drop_once = False
         self.om_fail = False
         # Front-watch knobs: what a bbox query returns ("west_falls" /
         # "east_falls" / "flat" / None = empty body) and whether the forecast
@@ -437,6 +442,9 @@ class FakeUpstream:
             self.awc_calls.append(request)
             if self.awc_fail:
                 return httpx.Response(503, text="blocked")
+            if self.awc_drop_once:
+                self.awc_drop_once = False
+                raise httpx.ReadError("Server disconnected", request=request)
             if request.url.params.get("bbox"):
                 if self.bbox_pattern is None:
                     return httpx.Response(200, text="")

@@ -69,6 +69,14 @@ class StationRegistry:
         async with self._lock:
             self._seen[station.upper()] = self._clock()
 
+    def restore(self, stations: List[str]) -> None:
+        """Seed the registry (after a restart) as if each station had just
+        been asked for. Sync on purpose: called from a constructor."""
+        now = self._clock()
+        for s in stations:
+            if isinstance(s, str) and s:
+                self._seen.setdefault(s.upper(), now)
+
     async def active(self) -> List[str]:
         now = self._clock()
         async with self._lock:

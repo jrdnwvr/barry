@@ -86,6 +86,46 @@ async def test_unknown_station_when_awc_down_degrades_honestly(service, upstream
     assert resp.series == []
 
 
+async def test_dropped_connection_is_retried_once(service, upstream):
+    upstream.awc_drop_once = True
+    resp = await service.get_pressure("KLUK")
+    assert resp.source == "aviationweather.gov" and len(resp.series) > 0
+    assert len(upstream.awc_calls) == 2
+
+
+async def test_degraded_answer_is_cached_only_briefly(service, upstream):
+    import time
+    from app.service import DEGRADED_TTL, PRESSURE_TTL
+    upstream.awc_fail = True
+    await service.get_pressure("KLUK")
+    entry = service.cache._store["pressure:KLUK:24"]
+    assert entry.expires_at - time.monotonic() <= DEGRADED_TTL + 1
+    # Upstream is back: a real answer replaces it and keeps for the full TTL.
+    upstream.awc_fail = False
+    resp = await service.get_pressure("KLUK", use_cache=False)
+    assert resp.source == "aviationweather.gov"
+    assert service.cache._store["pressure:KLUK:24"].expires_at - time.monotonic() > DEGRADED_TTL + 60
+    assert service.cache._store["pressure:KLUK:24"].expires_at - time.monotonic() <= PRESSURE_TTL + 1
+
+
+async def test_fallback_uses_the_directory_for_fields_off_the_small_table(service, upstream):
+    await service.station_info()                    # warmed at startup in production
+    upstream.awc_fail = True
+    resp = await service.get_pressure("KI67")       # not in stations.py
+    assert resp.source == "open-meteo (fallback)"
+    assert resp.name == "Harrison/West Arpt, OH, US" and len(resp.series) > 0
+
+
+async def test_registry_survives_a_restart(client, upstream, tmp_path, monkeypatch):
+    monkeypatch.setenv("BARRY_DATA_DIR", str(tmp_path))
+    service = PressureService(client)
+    for sid in ["KLUK", "KI67"]:
+        await service.registry.touch(sid)
+    await Scheduler(service, interval_seconds=600).refresh_once()   # persists the set
+    fresh = PressureService(client)                                 # "restart"
+    assert await fresh.registry.active() == ["KI67", "KLUK"]
+
+
 async def test_scheduler_batches_active_stations(service, upstream):
     # register several stations
     for sid in ["KLUK", "KCVG", "KILN"]:

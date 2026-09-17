@@ -453,7 +453,8 @@ class ConditionsOut(BaseModel):
     boundary layer, the fog outlook and the storm outlook. All optional,
     each piece degrades independently."""
 
-    densityAltitudeFt: Optional[int] = None   # now, from the latest METAR
+    densityAltitudeFt: Optional[int] = None   # now, the AWOS method (dry air)
+    densityAltitudeHumidFt: Optional[int] = None   # with the dew point's humidity
     fieldElevationFt: Optional[int] = None
     daForecast: List[DAPoint] = Field(default_factory=list)
     boundaryLayerFt: Optional[int] = None     # model layer top now, ft AGL

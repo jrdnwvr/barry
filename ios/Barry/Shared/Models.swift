@@ -251,6 +251,7 @@ struct RideOut: Codable, Hashable {
 
 struct ConditionsOut: Codable, Hashable {
     var densityAltitudeFt: Int?
+    var densityAltitudeHumidFt: Int?   // absent on old backends
     var fieldElevationFt: Int?
     var daForecast: [DAPoint] = []
     var boundaryLayerFt: Int?

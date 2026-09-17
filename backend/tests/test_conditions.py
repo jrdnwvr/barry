@@ -38,6 +38,17 @@ def test_standard_day_at_altitude_reads_field_elevation():
     assert abs(da - elev_m * 3.28084) < 150
 
 
+def test_awos_method_matches_the_broadcast_rule_of_thumb():
+    # Sea level, 35 °C: 20 °C above ISA -> 2,400 ft, dry, no humidity term.
+    assert abs(conditions.density_altitude_awos_ft(1013.25, 35.0) - 2400) < 5
+    assert abs(conditions.density_altitude_awos_ft(1013.25, 15.0)) < 1
+    # Denver-ish field on a standard day reads its own pressure altitude.
+    sp = conditions.station_pressure_hpa(1013.25, 1655.0)
+    pa = conditions.pressure_altitude_ft(sp)
+    assert abs(pa - 1655.0 * 3.28084) < 60
+    assert abs(conditions.density_altitude_awos_ft(sp, 15.0 - 0.0065 * 1655.0) - pa) < 5
+
+
 def test_humidity_always_raises_da():
     dry = conditions.density_altitude_ft(1013.25, 30.0, -20.0)
     humid = conditions.density_altitude_ft(1013.25, 30.0, 24.0)
@@ -135,7 +146,8 @@ async def test_combined_carries_conditions(client, upstream):
     assert c is not None
     # METAR fixture: 27°C / 18°C dew point, altim ~1010 hPa, 147 m elevation.
     assert c.fieldElevationFt == pytest.approx(482, abs=2)
-    assert 2000 <= c.densityAltitudeFt <= 2700
+    assert 1800 <= c.densityAltitudeFt <= 2400          # AWOS method, dry
+    assert c.densityAltitudeHumidFt >= c.densityAltitudeFt   # dew point 18 °C adds a little
     assert len(c.daForecast) >= 6      # forecast hours carry temp/dew/pressure
     # Fixture night is 55% cloud with a widening spread: honest silence.
     assert c.fog is None

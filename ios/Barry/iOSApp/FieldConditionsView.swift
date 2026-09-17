@@ -102,6 +102,25 @@ struct FieldConditionsCard: View {
     /// forecast DA; nothing at all means the card shouldn't exist.
     private var hasDA: Bool { conditions.densityAltitudeFt != nil || peak != nil }
 
+    /// The headline is the AWOS method (dry air, what the field broadcasts
+    /// and what the POH assumes); say what today's humidity would add.
+    private var humidityNote: String {
+        guard let dry = conditions.densityAltitudeFt, let humid = conditions.densityAltitudeHumidFt,
+              humid - dry >= 100 else { return "" }
+        return " · humidity adds \(ft(humid - dry))"
+    }
+
+    /// A trend line that wraps instead of pushing the card past the screen.
+    private func trendLabel(_ text: String, rising: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 3) {
+            Image(systemName: rising ? "arrow.up.right" : "arrow.down.right")
+                .font(.caption2.weight(.semibold))
+            Text(text)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     // MARK: Clouds
 
     private var cur: CurrentObs { combined.pressure.current }
@@ -199,19 +218,15 @@ struct FieldConditionsCard: View {
                             .monospacedDigit()
                     }
                 }
-                HStack {
+                HStack(alignment: .top) {
                     if let elev = conditions.fieldElevationFt {
-                        Text("Field \(ft(elev))")
+                        Text("Field \(ft(elev))" + humidityNote)
                     } else if conditions.densityAltitudeFt == nil {
                         Text("No temperature in this station's report")
                     }
-                    Spacer()
+                    Spacer(minLength: 8)
                     if let line = peakLine {
-                        HStack(spacing: 3) {
-                            Image(systemName: line.rising ? "arrow.up.right" : "arrow.down.right")
-                                .font(.caption2.weight(.semibold))
-                            Text(line.text)
-                        }
+                        trendLabel(line.text, rising: line.rising)
                     }
                 }
                 .font(.caption)
@@ -243,14 +258,15 @@ struct FieldConditionsCard: View {
                     } else if cur.ceilingFt != nil {
                         Text("Ceiling")
                     }
-                    Spacer()
+                    Spacer(minLength: 8)
                     if let t = cloudTrend {
-                        HStack(spacing: 3) {
+                        HStack(alignment: .firstTextBaseline, spacing: 3) {
                             Image(systemName: t.clearing ? "sun.max" : "cloud.fill")
                                 .font(.caption2.weight(.semibold))
                             Text(t.text)
+                                .multilineTextAlignment(.trailing)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        .fixedSize()
                     }
                 }
                 .font(.caption)
@@ -287,14 +303,9 @@ struct FieldConditionsCard: View {
                             .accessibilityLabel("How the ride estimate is made")
                         }
                     }
-                    Spacer()
+                    Spacer(minLength: 8)
                     if let line = blLine {
-                        HStack(spacing: 3) {
-                            Image(systemName: line.rising ? "arrow.up.right" : "arrow.down.right")
-                                .font(.caption2.weight(.semibold))
-                            Text(line.text)
-                        }
-                        .fixedSize()
+                        trendLabel(line.text, rising: line.rising)
                     }
                 }
                 .font(.caption)

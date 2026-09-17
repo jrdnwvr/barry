@@ -93,6 +93,21 @@ def density_altitude_ft(station_hpa: float, t_c: float, td_c: float) -> float:
     return 145442.16 * (1.0 - (rho / 1.225) ** 0.234969)
 
 
+def pressure_altitude_ft(station_hpa: float) -> float:
+    """Standard-atmosphere altitude of a station pressure, feet."""
+    return 145366.45 * (1.0 - (station_hpa / 1013.25) ** 0.190284)
+
+
+def density_altitude_awos_ft(station_hpa: float, t_c: float) -> float:
+    """The number an AWOS/ASOS broadcasts and the POH charts assume: pressure
+    altitude corrected 120 ft per degree C above the ISA temperature at that
+    altitude. Dry air by definition, which is why it reads lower than the
+    physics on a humid day. This is what the field says on the radio."""
+    pa = pressure_altitude_ft(station_hpa)
+    isa_t = 15.0 - 0.0019812 * pa      # ISA lapse, °C per foot
+    return pa + 120.0 * (t_c - isa_t)
+
+
 def _round_ft(ft: float) -> int:
     return int(round(ft / DA_ROUND_FT) * DA_ROUND_FT)
 
@@ -318,14 +333,19 @@ def build(pressure, forecast, now: datetime, taf: Optional[TafOut] = None) -> Op
     None when nothing at all can be computed. Each piece degrades
     independently."""
     da_now = None
+    da_humid = None
     elev_ft = None
     elev_m = pressure.elevM
     cur = pressure.current
     if elev_m is not None:
         elev_ft = int(round(elev_m * 3.28084))
-        if cur.altim is not None and cur.temp is not None and cur.dewpoint is not None:
+        if cur.altim is not None and cur.temp is not None:
             sp = station_pressure_hpa(cur.altim, elev_m)
-            da_now = _round_ft(density_altitude_ft(sp, cur.temp, cur.dewpoint))
+            # Headline = the AWOS method, so it matches the broadcast.
+            da_now = _round_ft(density_altitude_awos_ft(sp, cur.temp))
+            if cur.dewpoint is not None:
+                humid = density_altitude_ft(sp, cur.temp, cur.dewpoint)
+                da_humid = _round_ft(humid)
 
     da_fc: List[DAPoint] = []
     fog = None
@@ -337,12 +357,11 @@ def build(pressure, forecast, now: datetime, taf: Optional[TafOut] = None) -> Op
         for h in forecast.hourly:
             if h.t < now or h.t > horizon:
                 continue
-            if h.surface_pressure is None or h.temperature is None or h.dewpoint is None:
+            if h.surface_pressure is None or h.temperature is None:
                 continue
             da_fc.append(DAPoint(
                 t=h.t,
-                ft=_round_ft(density_altitude_ft(h.surface_pressure,
-                                                 h.temperature, h.dewpoint)),
+                ft=_round_ft(density_altitude_awos_ft(h.surface_pressure, h.temperature)),
             ))
         fog = scan_fog(forecast.hourly, forecast.sun, now)
         bl_now, bl_fc = boundary_layer(forecast.hourly, now)
@@ -353,6 +372,6 @@ def build(pressure, forecast, now: datetime, taf: Optional[TafOut] = None) -> Op
 
     if da_now is None and not da_fc and fog is None and bl_now is None and storm is None:
         return None
-    return ConditionsOut(densityAltitudeFt=da_now, fieldElevationFt=elev_ft,
-                         daForecast=da_fc, boundaryLayerFt=bl_now, blForecast=bl_fc,
+    return ConditionsOut(densityAltitudeFt=da_now, densityAltitudeHumidFt=da_humid,
+                         fieldElevationFt=elev_ft, daForecast=da_fc, boundaryLayerFt=bl_now, blForecast=bl_fc,
                          fog=fog, storm=storm, ride=ride_out)

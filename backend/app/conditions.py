@@ -279,8 +279,12 @@ def scan_storms(hours: Sequence[ForecastHour], taf: Optional[TafOut], now: datet
             detail = f"Moving {_CARDINAL_WORD.get(nearby.moving, nearby.moving)}, away from you."
         elif nearby.moving:
             detail = f"Drifting {_CARDINAL_WORD.get(nearby.moving, nearby.moving)}."
+        elif nearby.source == "metar":
+            # A station's remark says where the lightning is, not where it
+            # is going; claim nothing about motion.
+            detail = f"Reported by {nearby.station}."
         else:
-            detail = "Not moving much."
+            detail = "No clear movement yet."
         return StormOut(risk="observed", start=nearby.etaAt, end=None, capeMax=cape_max,
                         source=nearby.source, detail=detail,
                         distanceMi=nearby.distanceMi, cardinal=where, moving=nearby.moving,

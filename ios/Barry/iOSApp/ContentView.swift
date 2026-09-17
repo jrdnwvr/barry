@@ -102,6 +102,14 @@ struct ContentView: View {
                     .padding(.horizontal)
             }
             .refreshable { await reload() }
+            .navigationDestination(isPresented: $showRadarFullScreen) {
+                if let combined = store.combined,
+                   let rlat = combined.pressure.lat, let rlon = combined.pressure.lon {
+                    RadarScreen(lat: rlat, lon: rlon,
+                                stationName: combined.pressure.name ?? combined.pressure.station,
+                                home: homeMarker(combined))
+                }
+            }
         }
     }
 
@@ -132,6 +140,8 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, minHeight: 320)
         case .loaded(let combined):
             VStack(alignment: .leading, spacing: 20) {
+                // The kneeboard's METAR line, phone-sized.
+                MetarStrip(combined: combined)
                 glanceCards(combined, layout: .phone)
             }
             .padding(.vertical)
@@ -182,12 +192,15 @@ struct ContentView: View {
         // plain wind everywhere else.
         RunwayWindsCard(combined: combined, atAirport: isAtAirport(combined))
 
-        // Radar: the sky itself, as corroboration for the trend. Its own
-        // screen; needs station coords to center on.
+        // Radar: the same embedded map the kneeboard has, phone-sized; the
+        // expand button pushes the full screen. Needs station coords.
         if layout == .phone, let rlat = combined.pressure.lat, let rlon = combined.pressure.lon {
-            RadarRow(lat: rlat, lon: rlon,
-                     stationName: combined.pressure.name ?? combined.pressure.station,
-                     home: homeMarker(combined))
+            RadarPanel(lat: rlat, lon: rlon,
+                       stationName: combined.pressure.name ?? combined.pressure.station,
+                       home: homeMarker(combined),
+                       onExpand: { showRadarFullScreen = true },
+                       embedded: true)
+                .frame(height: 440)
         }
 
         // Sensor vs Station: a compact entry row — the full comparison panel
@@ -474,38 +487,6 @@ private struct MetarStrip: View {
     }
 
     private func fltCatColor(_ cat: String) -> Color { FlightCategory.color(cat) }
-}
-
-private struct RadarRow: View {
-    let lat: Double
-    let lon: Double
-    let stationName: String
-    var home: HomeMarker? = nil
-
-    var body: some View {
-        // Pushed, not presented: the radar is a full screen of its own now.
-        NavigationLink {
-            RadarScreen(lat: lat, lon: lon, stationName: stationName, home: home)
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .font(.subheadline)
-                    .foregroundStyle(.blue)
-                Text("Radar")
-                    .font(.subheadline.weight(.medium))
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 11)
-            .background(Color(.secondarySystemBackground),
-                        in: RoundedRectangle(cornerRadius: 12))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
 }
 
 private struct DataSourceFootnote: View {

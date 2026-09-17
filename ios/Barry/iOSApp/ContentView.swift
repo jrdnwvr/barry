@@ -36,6 +36,10 @@ struct ContentView: View {
             rootContent
             .navigationTitle("Barry")
             .navigationBarTitleDisplayMode(hSizeClass == .regular ? .inline : .automatic)
+            // The kneeboard dashboard drops the title bar: the gear moves
+            // next to the update time and the mark sits bottom-left, so the
+            // row that only said "Barry" gives its height back to the data.
+            .toolbar(isDashboard ? .hidden : .visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showSettings = true } label: {
@@ -79,14 +83,18 @@ struct ContentView: View {
         }
     }
 
+    /// True when the kneeboard dashboard is what's on screen.
+    private var isDashboard: Bool {
+        guard hSizeClass == .regular, case .loaded(let combined) = store.state else { return false }
+        return !combined.pressure.series.isEmpty
+    }
+
     /// Regular width (iPad full screen / large Split View) gets the kneeboard
     /// dashboard — everything visible at once, no navigation. Compact width
     /// (iPhone, iPad slide-over) keeps the scrolling glance layout.
     @ViewBuilder
     private var rootContent: some View {
-        if hSizeClass == .regular,
-           case .loaded(let combined) = store.state,
-           !combined.pressure.series.isEmpty {
+        if isDashboard, case .loaded(let combined) = store.state {
             dashboard(combined)
         } else {
             ScrollView {
@@ -261,7 +269,7 @@ struct ContentView: View {
             let threeColumn = geo.size.width > geo.size.height && geo.size.width >= 1000
 
             VStack(spacing: 12) {
-                MetarStrip(combined: combined)
+                MetarStrip(combined: combined, onSettings: { showSettings = true })
 
                 HStack(alignment: .top, spacing: 16) {
                     glanceRail(combined)
@@ -304,6 +312,18 @@ struct ContentView: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 20) {
                 glanceCards(combined, layout: .dashboard)
+                // The app's name lives here on the dashboard, where the
+                // title bar used to say it.
+                HStack(spacing: 6) {
+                    Image("BarryMark")
+                        .resizable()
+                        .renderingMode(.template)
+                        .frame(width: 20, height: 20)
+                        .foregroundStyle(Color(red: 0.42, green: 0.32, blue: 0.75))
+                    Text("Barry")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .frame(width: 340)
@@ -382,6 +402,8 @@ struct ContentView: View {
 /// language, promoted to the top of the iPad dashboard.
 private struct MetarStrip: View {
     let combined: CombinedResponse
+    /// Opens Settings; the dashboard has no title bar to hold the gear.
+    var onSettings: (() -> Void)? = nil
 
     var body: some View {
         // Plain text hierarchy + hairline rule — no container chrome. Mono is
@@ -407,6 +429,15 @@ private struct MetarStrip: View {
                 Text("Updated \(combined.pressure.cachedAt.formatted(date: .omitted, time: .shortened))")
                     .font(.footnote)
                     .foregroundStyle(.tertiary)
+                if let onSettings {
+                    Button(action: onSettings) {
+                        Image(systemName: "gearshape")
+                            .font(.subheadline)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Settings")
+                }
             }
             Divider()
         }

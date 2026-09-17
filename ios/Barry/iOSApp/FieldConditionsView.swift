@@ -286,27 +286,29 @@ struct FieldConditionsCard: View {
                         .font(.subheadline.weight(.semibold))
                         .monospacedDigit()
                 }
-                HStack(alignment: .top) {
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(rideText)
-                            .foregroundStyle(rideColor)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if conditions.ride != nil {
-                            Button {
-                                withAnimation(.snappy(duration: 0.2)) { showRideInfo.toggle() }
-                            } label: {
-                                Image(systemName: "info.circle")
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("How the ride estimate is made")
+                // The trend on its own line, then the ride sentence at full
+                // width: sharing a row squeezed the sentence into a column.
+                if let line = blLine {
+                    trendLabel(line.text, rising: line.rising)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(rideText)
+                        .foregroundStyle(rideColor)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if conditions.ride != nil {
+                        Button {
+                            withAnimation(.snappy(duration: 0.2)) { showRideInfo.toggle() }
+                        } label: {
+                            Image(systemName: "info.circle")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("How the ride estimate is made")
                     }
-                    Spacer(minLength: 8)
-                    if let line = blLine {
-                        trendLabel(line.text, rising: line.rising)
-                    }
+                    Spacer(minLength: 0)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)

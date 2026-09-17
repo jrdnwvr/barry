@@ -222,7 +222,9 @@ struct FieldConditionsCard: View {
                     if let elev = conditions.fieldElevationFt {
                         Text("Field \(ft(elev))" + humidityNote)
                     } else if conditions.densityAltitudeFt == nil {
-                        Text("No temperature in this station's report")
+                        Text(combined.pressure.current.temp == nil
+                             ? "No temperature in this station's report"
+                             : "No field elevation on file for this station")
                     }
                     Spacer(minLength: 8)
                     if let line = peakLine {
@@ -282,7 +284,10 @@ struct FieldConditionsCard: View {
                     Text("Boundary layer top")
                         .font(.subheadline.weight(.medium))
                     Spacer()
-                    Text(ft(bl + blOffset) + blSuffix)
+                    // MSL chosen but no elevation to add: say so rather
+                    // than quietly showing AGL.
+                    Text(ft(bl + blOffset) + blSuffix
+                         + (blReference == "msl" && !blMSL ? " (no field elevation)" : ""))
                         .font(.subheadline.weight(.semibold))
                         .monospacedDigit()
                 }

@@ -54,6 +54,10 @@ class Scheduler:
         if not active:
             log.info("scheduler: no active stations; skipping cycle")
             return 0
+        try:
+            info = await self._service.station_info()
+        except Exception:
+            info = {}
 
         batches = [
             active[i : i + MAX_IDS_PER_BATCH]
@@ -72,11 +76,18 @@ class Scheduler:
                 if parsed is None:
                     continue
                 tendency = awc.build_tendency(parsed)
+                # Same shape as get_pressure builds: elevation included, or
+                # density altitude and the MSL boundary layer vanish ten
+                # minutes after every restart.
+                elev = parsed.get("elev")
+                if elev is None:
+                    elev = (info.get(sid) or {}).get("elev")
                 resp = PressureResponse(
                     station=sid,
-                    name=parsed.get("name"),
+                    name=parsed.get("name") or (info.get(sid) or {}).get("name"),
                     lat=parsed.get("lat"),
                     lon=parsed.get("lon"),
+                    elevM=elev,
                     series=parsed["series"],
                     current=parsed["current"],
                     tendency=_tendency_out(tendency),

@@ -13,12 +13,7 @@
 
 import SwiftUI
 
-/// How the hero separates its rows. `plain` is the shipped look; the
-/// others are layout studies that can be switched in to compare.
-enum HeroSeparation { case plain, hairlines, cards }
-
 struct HeroView: View {
-    static var separation: HeroSeparation = .plain
     let combined: CombinedResponse
     let unit: PressureUnit
     @ObservedObject var barometer: BarometerManager
@@ -65,45 +60,43 @@ struct HeroView: View {
         return localReading?.slp ?? combined.currentPressure
     }
 
+    /// The words under the number can roll up (a tap on the chevron or the
+    /// bar); the choice sticks. Open by default.
+    @AppStorage("heroWordsExpanded", store: AppConfig.sharedDefaults)
+    private var wordsExpanded: Bool = true
+
     var body: some View {
-        switch Self.separation {
-        case .plain: plainBody
-        case .hairlines: hairlinesBody
-        case .cards: cardsBody
-        }
-    }
-
-    // MARK: - Layout studies
-
-    /// Thin rules between the three bands: station, number, words.
-    private var hairlinesBody: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            statusRow
-            Divider()
-            numberBlock
-            Divider()
-            wordsBlock
-        }
-        .sheet(isPresented: $showGuide) { PressureGuideView() }
-    }
-
-    /// The number in its own soft card; the words hang off a tint bar in
-    /// the tendency's color.
-    private var cardsBody: some View {
         VStack(alignment: .leading, spacing: 14) {
+            // The instrument: station, number, tag, badge, in a soft card.
             VStack(alignment: .leading, spacing: 10) {
                 statusRow
                 numberBlock
             }
-            .padding(14)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
             .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+
+            // The words hang off a bar in the tendency's color. The verdict
+            // always shows; the supporting grey lines roll up behind the
+            // chevron at the top of the bar.
             HStack(alignment: .top, spacing: 10) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(tendency?.cls.color(intensity: tendency?.intensity ?? 0) ?? .secondary)
-                    .frame(width: 3)
+                VStack(spacing: 4) {
+                    Image(systemName: wordsExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 12, height: 12)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(tendency?.cls.color(intensity: tendency?.intensity ?? 0) ?? .secondary)
+                        .frame(width: 3)
+                }
+                .padding(.leading, 2)
+                .contentShape(Rectangle())
+                .onTapGesture { withAnimation(.snappy(duration: 0.25)) { wordsExpanded.toggle() } }
+                .accessibilityLabel(wordsExpanded ? "Hide the reasoning" : "Show the reasoning")
+                .accessibilityAddTraits(.isButton)
                 wordsBlock
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, 2)
         }
         .sheet(isPresented: $showGuide) { PressureGuideView() }
     }
@@ -151,107 +144,28 @@ struct HeroView: View {
             Text(combined.verdict)
                 .font(.headline)
                 .fixedSize(horizontal: false, vertical: true)
+                .onTapGesture { withAnimation(.snappy(duration: 0.25)) { wordsExpanded.toggle() } }
             if combined.lightningNearby == nil, let lt = combined.pressure.current.lightning {
                 Label(lt.sentence, systemImage: lt.status == "distant" ? "bolt" : "bolt.fill")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(lt.status == "thunderstorm" ? Color.red : Color.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if let scale = rateContext {
+            if wordsExpanded, let scale = rateContext {
                 Text(scale)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            if let why = combined.reading?.explanation?.summary, !why.isEmpty {
+            if wordsExpanded, let why = combined.reading?.explanation?.summary, !why.isEmpty {
                 Text(why)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if let note = honestyNote {
+            if wordsExpanded, let note = honestyNote {
                 Text(note).font(.caption).foregroundStyle(.secondary)
             }
         }
-    }
-
-    private var plainBody: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            StatusRow(combined: combined, barometer: barometer, now: now,
-                      barometerEnabled: barometerEnabled, localAt: localReading?.at,
-                      locations: locations, selectedLocationID: selectedLocationID,
-                      onSelectLocation: onSelectLocation)
-
-            // The tag tucks under the number, beside the badge, so it borrows
-            // the badge's height instead of adding a row of its own.
-            HStack(alignment: .top, spacing: 8) {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        if let v = displayValue {
-                            valueLabel(v)
-                        }
-                        Button { showGuide = true } label: {
-                            Image(systemName: "info.circle")
-                                .font(.title3)
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("What do pressure changes mean?")
-                    }
-                    if showsAltimeter {
-                        altimeterRow
-                            .padding(.top, -2)
-                    }
-                }
-                Spacer(minLength: 8)
-                if let t = tendency { TendencyBadge(tendency: t, unit: unit) }
-            }
-
-            // Only user-actionable state lives here: the LOCAL source tag (+ tap to
-            // compare) and the micro-trend — a *weather* signal. Machinery state
-            // (calibration age, drift, Recalibrate) moved to Sensor vs Station:
-            // the engine self-heals at the next report, so it isn't the user's job.
-            if isLocal {
-                provenanceRow
-                if let trend = barometer.microTrend { microLead(trend) }
-            }
-
-            Text(combined.verdict)
-                .font(.headline)
-                .fixedSize(horizontal: false, vertical: true)
-
-            // Lightning nearby gets its own card right under this block
-            // (LightningBanner). The station's own report shows here only
-            // when that search has nothing, e.g. an old backend.
-            if combined.lightningNearby == nil, let lt = combined.pressure.current.lightning {
-                Label(lt.sentence, systemImage: lt.status == "distant" ? "bolt" : "bolt.fill")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(lt.status == "thunderstorm" ? Color.red : Color.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            // The 3 h rate in human terms (C4), only when it's worth a sentence.
-            if let scale = rateContext {
-                Text(scale)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            // What else agrees (observed at the station, or the model's view).
-            // Pressure leads; this is the corroboration, and disagreement is
-            // said out loud.
-            if let why = combined.reading?.explanation?.summary, !why.isEmpty {
-                Text(why)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if let note = honestyNote {
-                Text(note).font(.caption).foregroundStyle(.secondary)
-            }
-
-        }
-        .sheet(isPresented: $showGuide) { PressureGuideView() }
     }
 
     // MARK: - Value (tap to compare)

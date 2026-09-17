@@ -167,3 +167,17 @@ async def test_alphanumeric_identifier_retries_k_form(service):
     resp = await service.get_pressure("I67")
     assert resp.station == "KI67"
     assert len(resp.series) == 4
+
+
+@pytest.mark.asyncio
+async def test_scheduler_refresh_keeps_the_field_elevation(client, upstream):
+    """The ten-minute refresh must build the same response get_pressure does:
+    a missing elevM there erased density altitude after every restart."""
+    from app.scheduler import Scheduler
+    service = PressureService(client)
+    first = await service.get_pressure("KLUK")
+    assert first.elevM == 147.0
+    await Scheduler(service).refresh_once()
+    cached = await service.cache.get("pressure:KLUK:24")
+    assert cached is not None and cached.elevM == 147.0
+    assert cached.name == first.name

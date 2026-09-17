@@ -200,12 +200,19 @@ class PressureService:
             if parsed is None:
                 raise LookupError(f"no METAR data for {station}")
             tendency = awc.build_tendency(parsed)
+            elev = parsed.get("elev")
+            if elev is None:
+                # Some reports omit it; the station directory has it.
+                try:
+                    elev = ((await self.station_info()).get(used_station) or {}).get("elev")
+                except Exception:
+                    elev = None
             resp = PressureResponse(
                 station=used_station,
                 name=parsed.get("name") or (stations.get(used_station) or {}).get("name"),
                 lat=parsed.get("lat"),
                 lon=parsed.get("lon"),
-                elevM=parsed.get("elev"),
+                elevM=elev,
                 series=parsed["series"],
                 current=parsed["current"],
                 tendency=_tendency_out(tendency),

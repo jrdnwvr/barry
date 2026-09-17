@@ -449,9 +449,8 @@ private struct MetarStrip: View {
                         .minimumScaleFactor(0.7)
                 }
                 Spacer()
-                Text("Updated \(combined.pressure.cachedAt.formatted(date: .omitted, time: .shortened))")
-                    .font(.footnote)
-                    .foregroundStyle(.tertiary)
+                // Freshness lives on the hero's station row (report age and
+                // refresh time together); only the gear sits up here.
                 if let onSettings {
                     Button(action: onSettings) {
                         Image(systemName: "gearshape")

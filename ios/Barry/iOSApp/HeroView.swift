@@ -358,9 +358,17 @@ private struct StatusRow: View {
                     .foregroundStyle(status.live ? Color.green : Color.secondary)
             }
         } else {
-            Text(metarAge)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            // Two facts, stacked: how old the report is (the one that
+            // matters in the air) and when Barry last checked for a new one.
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(metarAge)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("refreshed \(combined.pressure.cachedAt.formatted(date: .omitted, time: .shortened))")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .lineLimit(1)
         }
     }
 

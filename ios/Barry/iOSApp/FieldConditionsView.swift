@@ -192,10 +192,8 @@ struct FieldConditionsCard: View {
         let t = { (d: Date) in d.formatted(date: .omitted, time: .shortened) }
         switch st.risk {
         case "observed":
-            if let d = st.distanceMi, d >= 3, let c = st.cardinal {
-                return "Thunderstorms \(d) mi to the \(c)"
-            }
-            return "Thunderstorms at the field"
+            if let d = st.distanceMi, d < 3 { return "Thunderstorms at the field" }
+            return "Thunderstorms in the area"
         case "likely":
             var line = "Thunderstorms likely"
             if let s = st.start { line += " \(t(s))" }
@@ -214,6 +212,10 @@ struct FieldConditionsCard: View {
         let t = { (d: Date) in d.formatted(date: .omitted, time: .shortened) }
         var text = st.detail
         if let eta = st.etaAt { text = text.replacingOccurrences(of: "{eta}", with: t(eta)) }
+        // Where they are leads the detail line: "29 mi to the north. Moving east, away from you."
+        if st.risk == "observed", let d = st.distanceMi, d >= 3, let c = st.cardinal {
+            text = "\(d) mi to the \(c). " + text
+        }
         if st.risk == "observed", let s = st.forecastStart {
             text += " More expected here \(t(s))"
             if let e = st.forecastEnd, e > s { text += " to \(t(e))" }

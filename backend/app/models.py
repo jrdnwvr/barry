@@ -112,6 +112,7 @@ class ForecastHour(BaseModel):
     cape: Optional[float] = None            # J/kg
     weather_code: Optional[int] = None      # WMO code; 95/96/99 = thunderstorm
     boundary_layer: Optional[float] = None  # m AGL
+    cin: Optional[float] = None             # J/kg convective inhibition (negative = capped)
     # Ride estimate inputs
     radiation: Optional[float] = None       # W/m² shortwave at the surface
     temp80m: Optional[float] = None         # °C
@@ -421,15 +422,26 @@ class FogOut(BaseModel):
 
 
 class StormOut(BaseModel):
-    """Thunderstorm outlook for the next hours, from the model's weather
-    code and CAPE plus the TAF. Only present when there is a setup."""
+    """Thunderstorm outlook. Three honest states: storms OBSERVED nearby
+    (lightning within 100 mi, with drift and an arrival estimate), storms
+    LIKELY here later (model thunder code or TAF), or POSSIBLE (energy plus
+    a trigger the model can see). Absent on a merely warm day."""
 
-    risk: str                              # "possible" | "likely"
-    start: Optional[datetime] = None       # first hour with thunder in it
+    risk: str                              # "observed" | "likely" | "possible"
+    start: Optional[datetime] = None       # forecast window start / arrival estimate
     end: Optional[datetime] = None
     capeMax: Optional[int] = None          # J/kg, peak in the window
-    source: str = "model"                  # model | taf | both
+    source: str = "model"                  # model | taf | both | glm | metar
     detail: str
+    # Observed storms: where they are and where they are going.
+    distanceMi: Optional[int] = None
+    cardinal: Optional[str] = None
+    moving: Optional[str] = None
+    towardYou: Optional[bool] = None
+    etaAt: Optional[datetime] = None       # when the cluster reaches you, if it holds
+    # Forecast window when observed storms are also forecast to continue.
+    forecastStart: Optional[datetime] = None
+    forecastEnd: Optional[datetime] = None
 
 
 class RideOut(BaseModel):
@@ -507,6 +519,8 @@ class LightningNearby(BaseModel):
     continuesUntil: Optional[datetime] = None
     source: str = "metar"                  # metar (a station's report) | glm (flashes)
     flashes: Optional[int] = None          # GLM: flashes within 100 mi over the window
+    speedKmh: Optional[float] = None       # GLM: the cluster's drift speed
+    etaAt: Optional[datetime] = None       # GLM: arrival if it keeps coming
 
 
 class Sources(BaseModel):

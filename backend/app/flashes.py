@@ -21,6 +21,8 @@ MAX_CELLS = 2500            # densest / newest cells per slice
 RADIUS_KM = 160.9           # 100 statute miles, same as the METAR search
 MOTION_MIN_FLASHES = 5      # per half-window before a drift is claimed
 MOTION_MIN_KM = 3.0         # centroid must move this far to be called motion
+ETA_MIN_KMH = 8.0           # slower than this and "arrival" is a guess
+ETA_MAX_H = 6.0             # beyond this the cluster will not be the same storm
 _COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 
 
@@ -119,19 +121,29 @@ class FlashStore:
 
         toward: Optional[bool] = None
         moving: Optional[str] = None
+        speed_kmh: Optional[float] = None
+        eta = None
         mid = t_now - WINDOW_S / 2
         old = [f for f, _ in near if f.t < mid]
         new = [f for f, _ in near if f.t >= mid]
         if len(old) >= MOTION_MIN_FLASHES and len(new) >= MOTION_MIN_FLASHES:
             o = (sum(f.lat for f in old) / len(old), sum(f.lon for f in old) / len(old))
             n = (sum(f.lat for f in new) / len(new), sum(f.lon for f in new) / len(new))
-            if _haversine_km(*o, *n) >= MOTION_MIN_KM:
+            moved_km = _haversine_km(*o, *n)
+            if moved_km >= MOTION_MIN_KM:
                 mv = _bearing_deg(*o, *n)
                 moving = cardinal(mv)
                 to_user = _bearing_deg(n[0], n[1], lat, lon)
                 diff = abs((mv - to_user + 540.0) % 360.0 - 180.0)
                 closer = _haversine_km(lat, lon, *n) < _haversine_km(lat, lon, *o)
                 toward = True if (diff <= 45.0 and closer) else (False if diff >= 135.0 else None)
+                # Centroids are half a window apart in time.
+                speed_kmh = round(moved_km / (WINDOW_S / 2 / 3600.0), 1)
+                if toward and speed_kmh >= ETA_MIN_KMH:
+                    hours = _haversine_km(lat, lon, *n) / speed_kmh
+                    if hours <= ETA_MAX_H:
+                        from datetime import timedelta
+                        eta = now + timedelta(hours=hours)
 
         return LightningNearby(
             station="GLM", name="GOES lightning mapper",
@@ -139,5 +151,5 @@ class FlashStore:
             cardinal=cardinal(brg), status="strikes",
             at=datetime.fromtimestamp(best.t, tz=now.tzinfo),
             moving=moving, towardYou=toward, continuesUntil=continues_until,
-            source="glm", flashes=len(near),
+            source="glm", flashes=len(near), speedKmh=speed_kmh, etaAt=eta,
         )

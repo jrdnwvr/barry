@@ -27,7 +27,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import List, Optional, Sequence, Tuple
 
-from .models import ConditionsOut, DAPoint, FogOut, ForecastHour, RideOut, StormOut, SunTimes, TafOut
+from .models import (ConditionsOut, DAPoint, FogOut, ForecastHour, LightningNearby, RideOut,
+                     StormOut, SunTimes, TafOut)
 
 # --- Density altitude tunables -----------------------------------------------
 
@@ -40,8 +41,10 @@ BL_FORECAST_HOURS = 12      # "rising to 6,500 ft by 3 PM"
 BL_ROUND_FT = 100
 STORM_HOURS = 12
 THUNDER_CODES = {95, 96, 99}   # WMO weather codes with a thunderstorm in them
-CAPE_POSSIBLE = 1000.0      # J/kg: enough fuel to say "possible" without a
-                            # thunder code; a moderately unstable afternoon
+SHOWER_CODES = {80, 81, 82}    # rain showers: convection the model can see
+CAPE_POSSIBLE = 1000.0      # J/kg of fuel, AND a trigger in the same hour:
+TRIGGER_PRECIP = 30         #   showers in the code or this much rain chance
+CIN_CAPPED = -50.0          #   with the cap weaker than this (J/kg, negative)
 
 # --- Ride tunables --------------------------------------------------------------
 # Thermals: surface sun (W/m²) and the lapse rate between 2 m and 180 m
@@ -225,41 +228,82 @@ def boundary_layer(hours: Sequence[ForecastHour], now: datetime) -> tuple[Option
 # --- Storm outlook --------------------------------------------------------------
 
 
-def scan_storms(hours: Sequence[ForecastHour], taf: Optional[TafOut],
-                now: datetime) -> Optional[StormOut]:
-    """Thunderstorms in the next STORM_HOURS: the model's weather code says
-    thunder (likely), the TAF carries TS (likely), or CAPE alone is high
-    enough to call it possible. Nothing at all on a quiet day."""
+_CARDINAL_WORD = {"N": "north", "NE": "northeast", "E": "east", "SE": "southeast",
+                  "S": "south", "SW": "southwest", "W": "west", "NW": "northwest"}
+
+
+def _forecast_window(hours: Sequence[ForecastHour], taf: Optional[TafOut], now: datetime):
+    """(start, end, source) of forecast thunder here within STORM_HOURS, or None."""
     horizon = now + timedelta(hours=STORM_HOURS)
     window = [h for h in hours if now - timedelta(hours=1) <= h.t <= horizon]
     thunder = [h for h in window if h.weather_code in THUNDER_CODES]
-    cape_vals = [h.cape for h in window if h.cape is not None]
-    cape_max = int(round(max(cape_vals))) if cape_vals else None
-
     taf_ts = []
     if taf is not None:
         for p in taf.periods:
             if p.wx and "TS" in p.wx and p.timeTo >= now and p.timeFrom <= horizon:
                 taf_ts.append(p)
-
     if thunder and taf_ts:
-        start = min(thunder[0].t, max(now, taf_ts[0].timeFrom))
-        end = max(thunder[-1].t, taf_ts[-1].timeTo)
-        return StormOut(risk="likely", start=start, end=end, capeMax=cape_max, source="both",
-                        detail="The model and the TAF both carry thunderstorms in this window.")
+        return (min(thunder[0].t, max(now, taf_ts[0].timeFrom)),
+                max(thunder[-1].t + timedelta(hours=1), taf_ts[-1].timeTo), "both")
     if taf_ts:
-        return StormOut(risk="likely", start=max(now, taf_ts[0].timeFrom), end=taf_ts[-1].timeTo,
-                        capeMax=cape_max, source="taf",
-                        detail="The TAF carries thunderstorms in this window.")
+        return (max(now, taf_ts[0].timeFrom), taf_ts[-1].timeTo, "taf")
     if thunder:
-        return StormOut(risk="likely", start=thunder[0].t, end=thunder[-1].t,
-                        capeMax=cape_max, source="model",
-                        detail="The model puts thunderstorms in this window.")
-    if cape_max is not None and cape_max >= CAPE_POSSIBLE:
-        peak = max((h for h in window if h.cape is not None), key=lambda h: h.cape)
-        return StormOut(risk="possible", start=peak.t, end=None, capeMax=cape_max, source="model",
-                        detail="Enough energy in the air for storms to build if something sets them off. "
-                               "Nothing in the forecast says they will.")
+        return (thunder[0].t, thunder[-1].t + timedelta(hours=1), "model")
+    return None
+
+
+def scan_storms(hours: Sequence[ForecastHour], taf: Optional[TafOut], now: datetime,
+                nearby: Optional[LightningNearby] = None) -> Optional[StormOut]:
+    """Three states, in order. OBSERVED: lightning within 100 mi right now,
+    with the cluster's drift and an arrival estimate. LIKELY: the model's
+    weather code or the TAF has thunder here in the next STORM_HOURS.
+    POSSIBLE: fuel (CAPE) together with a trigger the model can see in the
+    same hour (showers or a real rain chance) under a weak cap. A warm
+    afternoon with energy and nothing to set it off says nothing."""
+    horizon = now + timedelta(hours=STORM_HOURS)
+    window = [h for h in hours if now - timedelta(hours=1) <= h.t <= horizon]
+    cape_vals = [h.cape for h in window if h.cape is not None]
+    cape_max = int(round(max(cape_vals))) if cape_vals else None
+    fc = _forecast_window(hours, taf, now)
+
+    if nearby is not None and nearby.distanceMi is not None:
+        where = _CARDINAL_WORD.get(nearby.cardinal, nearby.cardinal)
+        if nearby.distanceMi < 3:
+            detail = "Lightning at the field right now."
+        elif nearby.towardYou and nearby.etaAt is not None:
+            detail = (f"Moving {_CARDINAL_WORD.get(nearby.moving, nearby.moving)}, here around "
+                      f"{{eta}} if they hold together.")
+        elif nearby.towardYou:
+            detail = f"Moving {_CARDINAL_WORD.get(nearby.moving, nearby.moving)}, toward you."
+        elif nearby.towardYou is False:
+            detail = f"Moving {_CARDINAL_WORD.get(nearby.moving, nearby.moving)}, away from you."
+        elif nearby.moving:
+            detail = f"Drifting {_CARDINAL_WORD.get(nearby.moving, nearby.moving)}."
+        else:
+            detail = "Not moving much."
+        return StormOut(risk="observed", start=nearby.etaAt, end=None, capeMax=cape_max,
+                        source=nearby.source, detail=detail,
+                        distanceMi=nearby.distanceMi, cardinal=where, moving=nearby.moving,
+                        towardYou=nearby.towardYou, etaAt=nearby.etaAt,
+                        forecastStart=fc[0] if fc else None, forecastEnd=fc[1] if fc else None)
+
+    if fc:
+        start, end, source = fc
+        detail = {"both": "The model and the TAF both carry thunderstorms in this window.",
+                  "taf": "The TAF carries thunderstorms in this window.",
+                  "model": "The model puts thunderstorms in this window."}[source]
+        return StormOut(risk="likely", start=start, end=end, capeMax=cape_max, source=source, detail=detail)
+
+    # Fuel plus a trigger, under a weak cap: "possible" with a time.
+    for h in window:
+        if h.cape is None or h.cape < CAPE_POSSIBLE:
+            continue
+        triggered = (h.weather_code in SHOWER_CODES) or ((h.precip_prob or 0) >= TRIGGER_PRECIP)
+        capped = h.cin is not None and h.cin < CIN_CAPPED
+        if triggered and not capped:
+            return StormOut(risk="possible", start=h.t, end=None, capeMax=cape_max, source="model",
+                            detail="Energy in the air and showers in the forecast to set it off. "
+                                   "Nothing says a thunderstorm for certain.")
     return None
 
 
@@ -328,7 +372,8 @@ def ride(hours: Sequence[ForecastHour], now: datetime) -> Optional[RideOut]:
 # --- Assembly -----------------------------------------------------------------
 
 
-def build(pressure, forecast, now: datetime, taf: Optional[TafOut] = None) -> Optional[ConditionsOut]:
+def build(pressure, forecast, now: datetime, taf: Optional[TafOut] = None,
+          nearby: Optional[LightningNearby] = None) -> Optional[ConditionsOut]:
     """ConditionsOut from a PressureResponse + ForecastResponse (+ TAF), or
     None when nothing at all can be computed. Each piece degrades
     independently."""
@@ -365,10 +410,10 @@ def build(pressure, forecast, now: datetime, taf: Optional[TafOut] = None) -> Op
             ))
         fog = scan_fog(forecast.hourly, forecast.sun, now)
         bl_now, bl_fc = boundary_layer(forecast.hourly, now)
-        storm = scan_storms(forecast.hourly, taf, now)
+        storm = scan_storms(forecast.hourly, taf, now, nearby)
         ride_out = ride(forecast.hourly, now)
-    elif taf is not None:
-        storm = scan_storms([], taf, now)
+    else:
+        storm = scan_storms([], taf, now, nearby)
 
     if da_now is None and not da_fc and fog is None and bl_now is None and storm is None:
         return None

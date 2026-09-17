@@ -845,33 +845,33 @@ class PressureService:
             local_hour_offset=local_offset,
         )
 
-        # Field conditions (DA + fog) are enrichment — never block the response.
-        try:
-            conditions = conditions_mod.build(pressure, forecast, _now(), taf=taf)
-        except Exception:
-            conditions = None
-
-        # Nearest lightning report within 100 mi, off the in-memory bulk
-        # table (no upstream call). Enrichment.
+        # Nearest lightning report within 100 mi: real flashes from orbit
+        # first, a station's own report when the mapper feed is stale or
+        # sees nothing. Off the in-memory tables, no upstream call.
         nearby: Optional[lightning_mod.LightningNearby] = None
         try:
             if f_lat is not None and f_lon is not None:
-                until = None
-                if conditions is not None and conditions.storm is not None \
-                   and conditions.storm.risk == "likely":
-                    until = conditions.storm.end
-                # Real flash positions from orbit first; a station's own
-                # report when the mapper feed is stale or sees nothing.
                 if self.flashes.fresh(_now()):
-                    nearby = self.flashes.nearest(f_lat, f_lon, _now(), continues_until=until)
-                table = None if nearby is not None else await self.metar_bulk()
-                if table:
-                    nearby = lightning_mod.nearest(table, f_lat, f_lon, _now(), continues_until=until)
-                    if nearby is not None and nearby.name is None:
-                        info = await self.station_info()
-                        nearby.name = (info.get(nearby.station) or {}).get("name")
+                    nearby = self.flashes.nearest(f_lat, f_lon, _now())
+                if nearby is None:
+                    table = await self.metar_bulk()
+                    if table:
+                        nearby = lightning_mod.nearest(table, f_lat, f_lon, _now())
+                        if nearby is not None and nearby.name is None:
+                            info = await self.station_info()
+                            nearby.name = (info.get(nearby.station) or {}).get("name")
         except Exception:
             nearby = None
+
+        # Field conditions (DA, clouds, layer, storms, fog) are enrichment —
+        # never block the response. The storm row reads the same lightning.
+        try:
+            conditions = conditions_mod.build(pressure, forecast, _now(), taf=taf, nearby=nearby)
+        except Exception:
+            conditions = None
+        if nearby is not None and conditions is not None and conditions.storm is not None \
+           and conditions.storm.forecastEnd is not None:
+            nearby.continuesUntil = conditions.storm.forecastEnd
 
         sources = Sources(
             observed=pressure.source,

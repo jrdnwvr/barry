@@ -235,12 +235,20 @@ struct FogOut: Codable, Hashable {
 
 /// Thunderstorm outlook for the next hours. Only present when there is a setup.
 struct StormOut: Codable, Hashable {
-    let risk: String       // "possible" | "likely"
+    let risk: String       // "observed" | "likely" | "possible"
     var start: Date?
     var end: Date?
     var capeMax: Int?
     var source: String = "model"
     let detail: String
+    // Observed storms nearby
+    var distanceMi: Int?
+    var cardinal: String?      // already a word: "west"
+    var moving: String?
+    var towardYou: Bool?
+    var etaAt: Date?
+    var forecastStart: Date?
+    var forecastEnd: Date?
 }
 
 /// How bumpy the boundary layer is likely to be: an estimate from what
@@ -606,6 +614,8 @@ struct LightningNearby: Codable, Hashable {
     var continuesUntil: Date?
     var source: String?     // "metar" | "glm"; absent on old backends
     var flashes: Int?
+    var speedKmh: Double?
+    var etaAt: Date?
 
     private static let cardinalWord: [String: String] = [
         "N": "north", "NE": "northeast", "E": "east", "SE": "southeast",
@@ -634,6 +644,9 @@ struct LightningNearby: Codable, Hashable {
     /// The second line: motion relative to you, else whether more is expected.
     func detail(now: Date) -> String? {
         if let t = towardYou {
+            if t, let eta = etaAt, eta > now {
+                return "moving toward you, here around \(eta.formatted(date: .omitted, time: .shortened))"
+            }
             return t ? "moving toward you" : "moving away"
         }
         if let m = moving, let w = Self.cardinalWord[m] {

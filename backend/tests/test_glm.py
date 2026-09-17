@@ -52,6 +52,7 @@ def test_store_bins_prunes_and_finds_the_nearest_with_drift():
     assert n.source == "glm" and n.status == "strikes" and n.flashes == 16
     assert n.cardinal == "NW" and 15 <= n.distanceMi <= 20
     assert n.moving == "SE" and n.towardYou is True
+    assert n.speedKmh is not None and n.speedKmh > 8 and n.etaAt is not None and n.etaAt > NOW
     # Reversed in time: the cluster moves away.
     s2 = fl.FlashStore()
     s2.add([Flash(f.t + 500, f.lat, f.lon, 1.0) for f in old] + [Flash(f.t - 500, f.lat, f.lon, 1.0) for f in new], NOW)

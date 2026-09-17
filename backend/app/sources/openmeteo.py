@@ -31,6 +31,7 @@ HOURLY_FIELDS = [
     "cloud_cover",
     # Storm outlook + the boundary-layer card (same request, no extra call)
     "cape",
+    "convective_inhibition",
     "weather_code",
     "boundary_layer_height",
     # Ride estimate (conditions.ride): sun, near-surface lapse, shear
@@ -63,6 +64,7 @@ def parse_forecast(data: dict) -> List[ForecastHour]:
     cloud = hourly.get("cloud_cover") or []
     sp = hourly.get("surface_pressure") or []
     cape = hourly.get("cape") or []
+    cin = hourly.get("convective_inhibition") or []
     wcode = hourly.get("weather_code") or []
     blh = hourly.get("boundary_layer_height") or []
     rad = hourly.get("shortwave_radiation") or []
@@ -88,6 +90,7 @@ def parse_forecast(data: dict) -> List[ForecastHour]:
                 cloudcover=at(cloud, i),
                 surface_pressure=at(sp, i),
                 cape=at(cape, i),
+                cin=at(cin, i),
                 weather_code=at(wcode, i),
                 boundary_layer=at(blh, i),
                 radiation=at(rad, i),

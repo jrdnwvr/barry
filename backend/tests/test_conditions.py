@@ -183,17 +183,42 @@ def test_boundary_layer_now_and_forecast_in_hundreds_of_feet():
     assert conditions.boundary_layer(_hours(3), T0) == (None, [])
 
 
-def test_storm_outlook_thunder_code_is_likely_and_cape_alone_is_possible():
+def test_storm_outlook_thunder_code_is_likely_and_cape_alone_says_nothing():
     codes = [1] * 12
     codes[5] = 95
     hrs = _hours(12, weather_code=codes, cape=[200.0 + 100.0 * i for i in range(12)])
     st = conditions.scan_storms(hrs, None, T0)
     assert st.risk == "likely" and st.start == T0 + timedelta(hours=5) and st.source == "model"
-    assert st.capeMax == 1300
+    assert st.end == T0 + timedelta(hours=6) and st.capeMax == 1300
+    # A warm afternoon with fuel and nothing to set it off: silence.
     quiet = _hours(12, weather_code=1, cape=[200.0 + 120.0 * i for i in range(12)])
-    st = conditions.scan_storms(quiet, None, T0)
-    assert st.risk == "possible" and st.start == T0 + timedelta(hours=11)
+    assert conditions.scan_storms(quiet, None, T0) is None
+    # Fuel plus showers under a weak cap: possible, at that hour.
+    codes = [1] * 12
+    codes[7] = 80
+    trig = _hours(12, weather_code=codes, cape=1400.0, cin=-10.0)
+    st = conditions.scan_storms(trig, None, T0)
+    assert st.risk == "possible" and st.start == T0 + timedelta(hours=7)
+    # The same hour under a strong cap: nothing.
+    capped = _hours(12, weather_code=codes, cape=1400.0, cin=-120.0)
+    assert conditions.scan_storms(capped, None, T0) is None
     assert conditions.scan_storms(_hours(12, weather_code=1, cape=300.0), None, T0) is None
+
+
+def test_storm_outlook_leads_with_observed_lightning():
+    from app.models import LightningNearby
+    near = LightningNearby(station="GLM", distanceMi=40, bearingDeg=270.0, cardinal="W", status="strikes",
+                           at=T0, moving="E", towardYou=True, source="glm", flashes=120,
+                           speedKmh=40.0, etaAt=T0 + timedelta(hours=1.6))
+    codes = [1] * 12
+    codes[4] = 95
+    hrs = _hours(12, weather_code=codes, cape=900.0)
+    st = conditions.scan_storms(hrs, None, T0, nearby=near)
+    assert st.risk == "observed" and st.distanceMi == 40 and st.cardinal == "west"
+    assert st.etaAt == near.etaAt and st.towardYou is True and st.source == "glm"
+    assert st.forecastStart == T0 + timedelta(hours=4)      # more expected later
+    away = near.model_copy(update={"towardYou": False, "etaAt": None, "moving": "W"})
+    assert "away" in conditions.scan_storms(hrs, None, T0, nearby=away).detail
 
 
 def test_storm_outlook_takes_the_taf_too():

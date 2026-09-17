@@ -186,16 +186,48 @@ struct FieldConditionsCard: View {
         return nil
     }
 
+    /// "Thunderstorms 40 mi to the west" / "Thunderstorms likely 3 PM to
+    /// 7 PM" / "Thunderstorms possible around 4 PM".
     private func stormLine(_ st: StormOut) -> String {
-        var line = st.risk == "likely" ? "Thunderstorms likely" : "Thunderstorms possible"
-        if let s = st.start {
-            line += st.risk == "likely" ? " from \(s.formatted(date: .omitted, time: .shortened))"
-                                        : " around \(s.formatted(date: .omitted, time: .shortened))"
+        let t = { (d: Date) in d.formatted(date: .omitted, time: .shortened) }
+        switch st.risk {
+        case "observed":
+            if let d = st.distanceMi, d >= 3, let c = st.cardinal {
+                return "Thunderstorms \(d) mi to the \(c)"
+            }
+            return "Thunderstorms at the field"
+        case "likely":
+            var line = "Thunderstorms likely"
+            if let s = st.start { line += " \(t(s))" }
+            if let s = st.start, let e = st.end, e > s { line += " to \(t(e))" }
+            return line
+        default:
+            var line = "Thunderstorms possible"
+            if let s = st.start { line += " around \(t(s))" }
+            return line
         }
-        if st.risk == "likely", let e = st.end, let s = st.start, e > s {
-            line += " to \(e.formatted(date: .omitted, time: .shortened))"
+    }
+
+    /// The detail under it: the server's sentence, with the arrival time
+    /// filled in and, for observed storms, the forecast window after.
+    private func stormDetail(_ st: StormOut) -> String {
+        let t = { (d: Date) in d.formatted(date: .omitted, time: .shortened) }
+        var text = st.detail
+        if let eta = st.etaAt { text = text.replacingOccurrences(of: "{eta}", with: t(eta)) }
+        if st.risk == "observed", let s = st.forecastStart {
+            text += " More expected here \(t(s))"
+            if let e = st.forecastEnd, e > s { text += " to \(t(e))" }
+            text += "."
         }
-        return line
+        return text
+    }
+
+    private func stormColor(_ st: StormOut) -> Color {
+        switch st.risk {
+        case "observed": return (st.distanceMi ?? 100) < 3 || st.towardYou == true ? .red : .orange
+        case "likely": return .orange
+        default: return .secondary
+        }
     }
 
     var body: some View {
@@ -329,14 +361,14 @@ struct FieldConditionsCard: View {
             if let st = conditions.storm {
                 if hasDA || hasClouds || conditions.boundaryLayerFt != nil { Divider() }
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: "cloud.bolt.fill")
+                    Image(systemName: st.risk == "observed" ? "bolt.fill" : "cloud.bolt.fill")
                         .font(.subheadline)
-                        .foregroundStyle(st.risk == "likely" ? .orange : .secondary)
+                        .foregroundStyle(stormColor(st))
                     Text(stormLine(st))
                         .font(.subheadline.weight(.medium))
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Text(st.detail)
+                Text(stormDetail(st))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

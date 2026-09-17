@@ -36,9 +36,16 @@ final class PressureStore: ObservableObject {
     /// The device's last known position (nil before the first fix).
     var userLocation: CLLocation? { location.lastLocation }
 
-    /// Set by the phone when the saved selection is an airport. The watch
-    /// has no selection, so there it is only ever the 3 NM rule.
-    @Published var airportSelected = false
+    /// Set by the phone when the saved selection is an airport; the watch
+    /// gets the same flag over WatchConnectivity (PhoneSync).
+    @Published var airportSelected = false {
+        didSet { if airportSelected != oldValue { refreshAirportJudgement() } }
+    }
+
+    /// The one answer to "is the reading for the field I am at": decided
+    /// when data lands and again when a position fix arrives, so the headline,
+    /// the snapshot the complication reads, and the watch page never disagree.
+    @Published private(set) var atAirport = false
 
     /// Within this distance of the station, "here" IS the airport.
     static let airportRadiusMeters = 3 * 1852.0
@@ -54,14 +61,34 @@ final class PressureStore: ObservableObject {
     }
 
     /// Ask for a position without changing the station (the watch, which
-    /// keeps its station but still wants the 3 NM rule).
+    /// keeps its station but still wants the 3 NM rule). A fix that changes
+    /// the airport judgement rewrites the complication's snapshot.
     func refreshLocation() async {
         _ = await location.requestLocation()
+        refreshAirportJudgement()
+    }
+
+    /// Re-decide `atAirport` for the loaded data; when the answer changes,
+    /// hand the complication a snapshot that says the same thing.
+    private func refreshAirportJudgement() {
+        guard let c = combined else { return }
+        let judged = isAtAirport(c)
+        guard judged != atAirport else { return }
+        atAirport = judged
+        var snap = TendencySnapshot(from: c, updatedAt: now, atAirport: judged)
+        if let f = front, f.isActive {
+            snap.frontStatus = f.status
+            snap.frontCardinal = f.cardinal
+            snap.frontBearingDeg = f.bearingDeg
+        }
+        SnapshotStore.save(snap)
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     init(api: BarryAPI = BarryAPI(),
          location: LocationManager? = nil,
-         station: String = SnapshotStore.load()?.station ?? AppConfig.defaultStation) {
+         station: String = AppConfig.sharedDefaults.string(forKey: AppConfig.syncStationKey)
+                           ?? SnapshotStore.load()?.station ?? AppConfig.defaultStation) {
         self.api = api
         // Constructed here (in the @MainActor init body) rather than as a default
         // argument — default args evaluate in a nonisolated context and can't call
@@ -100,9 +127,10 @@ final class PressureStore: ObservableObject {
         do {
             let combined = try await api.combined(station: station, lat: lat, lon: lon)
             state = .loaded(combined)
+            atAirport = isAtAirport(combined)
             // Hand the complication a fresh snapshot and nudge it to redraw.
             SnapshotStore.save(TendencySnapshot(from: combined, updatedAt: now,
-                                                atAirport: isAtAirport(combined)))
+                                                atAirport: atAirport))
             WidgetCenter.shared.reloadAllTimelines()
             #if os(iOS)
             // Front watch rides second so the primary reading never waits on the
@@ -118,7 +146,7 @@ final class PressureStore: ObservableObject {
                 // complication can show the arrow (D7). Cheap: same payload
                 // plus three fields; the widget gets one more nudge.
                 var snap = TendencySnapshot(from: combined, updatedAt: now,
-                                            atAirport: isAtAirport(combined))
+                                            atAirport: atAirport)
                 if f.isActive {
                     snap.frontStatus = f.status
                     snap.frontCardinal = f.cardinal

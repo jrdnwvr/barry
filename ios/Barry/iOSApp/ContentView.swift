@@ -59,6 +59,7 @@ struct ContentView: View {
                 Task { await loadForCurrentMode(silent: false) }
             }
             .task {
+                WatchSync.shared.activate()
                 syncAirportSelection()
                 await initialLoad()
             }
@@ -398,6 +399,11 @@ struct ContentView: View {
         else { store.airportSelected = false }
     }
 
+    /// The watch follows the phone's station and airport choice.
+    private func syncWatch() {
+        WatchSync.shared.send(station: store.station, airportSelected: store.airportSelected)
+    }
+
     private func initialLoad() async {
         if store.combined != nil { return }
         await loadForCurrentMode()
@@ -417,6 +423,7 @@ struct ContentView: View {
             store.station = icao
             await store.load(silent: silent)
         }
+        syncWatch()
     }
 }
 

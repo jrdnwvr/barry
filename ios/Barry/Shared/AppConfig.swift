@@ -31,6 +31,12 @@ enum AppConfig {
 
     /// Default home station if the user hasn't set one and location is unavailable.
     static let defaultStation = "KLUK"
+
+    /// Keys the phone pushes to the watch over WatchConnectivity and the watch
+    /// app writes into its own App Group store, so the watch app and its
+    /// complication agree on the station and on whether an airport is chosen.
+    static let syncStationKey = "homeStation"
+    static let syncAirportSelectedKey = "airportSelected"
 }
 
 /// How Barry chooses the "where am I" coordinates for forecast + station lookup.

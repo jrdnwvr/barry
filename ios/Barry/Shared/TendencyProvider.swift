@@ -69,8 +69,10 @@ struct TendencyProvider: TimelineProvider {
         guard let combined = try? await api.combined(station: station, lat: nil, lon: nil)
         else { return cached }  // offline / backend down → last known, honestly aged
 
-        // The widget has no location; keep the app's last airport judgement.
-        let snap = TendencySnapshot(from: combined, atAirport: cached?.atAirport ?? false)
+        // The widget has no location: a chosen airport (synced from the
+        // phone) counts, otherwise keep the app's last 3 NM judgement.
+        let selected = AppConfig.sharedDefaults.bool(forKey: AppConfig.syncAirportSelectedKey)
+        let snap = TendencySnapshot(from: combined, atAirport: selected || (cached?.atAirport ?? false))
         SnapshotStore.save(snap)
         return snap
     }

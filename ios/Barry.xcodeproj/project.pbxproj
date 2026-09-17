@@ -15,6 +15,7 @@
 		0A97A6AB092391F5F45D58FC /* SharedSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */; };
 		0C6CE77FC97065E5CF6D21D1 /* WindUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E3203C0CBC7B1D5F0A57759 /* WindUnit.swift */; };
 		0DBDAD9882985AF6C51BD205 /* ComplicationViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68D08500DD9FA42C666DFF25 /* ComplicationViews.swift */; };
+		0F0411FE134D2DF658D00A67 /* WatchSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFA4A69E8BBEEF268407FC68 /* WatchSync.swift */; };
 		0F22D62C5D40785243A56CD0 /* PressureUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D967187F3CE6292310A2937 /* PressureUnit.swift */; };
 		0F4644054E93F1968564CD2B /* PressureHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */; };
 		135B9F935421A07D8AEDE093 /* PressureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A60F6C6B6915B13C8CAD3A3 /* PressureStore.swift */; };
@@ -35,6 +36,7 @@
 		3FD01657A6175EE55DF94D91 /* ConfirmationOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A59F4AD2D2CF0AC8FB31B534 /* ConfirmationOverlayView.swift */; };
 		42482AB94F1FE3D8035354D9 /* BarryAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */; };
 		4253341F1F79930A611AD743 /* CardIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0023323B71268E669397009E /* CardIcons.swift */; };
+		429B2C6D5EF4DF4EF52A8A2F /* PhoneSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82E8C122995032DFD8C5C5EC /* PhoneSync.swift */; };
 		483CBC3B0160B52142C82C61 /* TendencyProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A24A6845ECB66698D61771D /* TendencyProvider.swift */; };
 		4841725627A1F0AC607A52BE /* SharedSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */; };
 		4B47718B22FC9723FF410F76 /* BarryWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BB3C628CF8662B6BEF5A73F /* BarryWatchApp.swift */; };
@@ -217,6 +219,7 @@
 		77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryAPI.swift; sourceTree = "<group>"; };
 		7C00F07F019E06DA06E95BD0 /* BarometerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarometerTests.swift; sourceTree = "<group>"; };
 		7CB1EFCBAEC1FFFB0EF24917 /* BackgroundRefresh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundRefresh.swift; sourceTree = "<group>"; };
+		82E8C122995032DFD8C5C5EC /* PhoneSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSync.swift; sourceTree = "<group>"; };
 		830E6CE85533F8C3169A8E97 /* BarryPhoneWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryPhoneWidget.swift; sourceTree = "<group>"; };
 		85C80120E59692CD007DB4FB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		8A60F6C6B6915B13C8CAD3A3 /* PressureStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureStore.swift; sourceTree = "<group>"; };
@@ -235,6 +238,7 @@
 		C1326419A7770149C91B0438 /* PhoneWidgetViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWidgetViews.swift; sourceTree = "<group>"; };
 		CD077DE63D0DE437229C43CC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CF51EF6C7C37D4CEE92CE308 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		CFA4A69E8BBEEF268407FC68 /* WatchSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSync.swift; sourceTree = "<group>"; };
 		DA12AC45B8A41856114FD9A7 /* SensorComparisonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorComparisonView.swift; sourceTree = "<group>"; };
 		E569F3B3B9FAB65C07970B1A /* StormAlerter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StormAlerter.swift; sourceTree = "<group>"; };
 		E5A4A8464736F548F6F72A42 /* WatchContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchContentView.swift; sourceTree = "<group>"; };
@@ -329,6 +333,7 @@
 				1E86B20D35A1249F2520596E /* BarryWatch.entitlements */,
 				2BB3C628CF8662B6BEF5A73F /* BarryWatchApp.swift */,
 				CF51EF6C7C37D4CEE92CE308 /* Info.plist */,
+				82E8C122995032DFD8C5C5EC /* PhoneSync.swift */,
 				E5A4A8464736F548F6F72A42 /* WatchContentView.swift */,
 				F4F0EF3938BA8F192FB71228 /* WatchSettingsView.swift */,
 			);
@@ -392,6 +397,7 @@
 				72812DF1800A9DF0CF5EF2C3 /* SettingsView.swift */,
 				F3DE49EE7CDCB4E59BB8E97F /* StationLayer.swift */,
 				E569F3B3B9FAB65C07970B1A /* StormAlerter.swift */,
+				CFA4A69E8BBEEF268407FC68 /* WatchSync.swift */,
 				39AF53020220091BA0FC5C07 /* WindFlowView.swift */,
 			);
 			path = iOSApp;
@@ -671,6 +677,7 @@
 				20AD2A1B5CC1C7738EAEF8F5 /* StormAlerter.swift in Sources */,
 				7917511FB9F6E4E7614296AA /* Tendency.swift in Sources */,
 				50F708BB96C5BBFE917DE01A /* TendencyProvider.swift in Sources */,
+				0F0411FE134D2DF658D00A67 /* WatchSync.swift in Sources */,
 				56C21F3EA69EB17912672252 /* WindFlowView.swift in Sources */,
 				0C6CE77FC97065E5CF6D21D1 /* WindUnit.swift in Sources */,
 			);
@@ -685,6 +692,7 @@
 				4B47718B22FC9723FF410F76 /* BarryWatchApp.swift in Sources */,
 				B0ED75F3A2F54154E9DC25F8 /* LocationManager.swift in Sources */,
 				501E15BBC91B22998A389E76 /* Models.swift in Sources */,
+				429B2C6D5EF4DF4EF52A8A2F /* PhoneSync.swift in Sources */,
 				B0DD843032BBA29B2C4097D0 /* PressureHistory.swift in Sources */,
 				9F987BE952507B2A891ADC78 /* PressureStore.swift in Sources */,
 				08AE6842CBAF80BC672E193D /* PressureUnit.swift in Sources */,

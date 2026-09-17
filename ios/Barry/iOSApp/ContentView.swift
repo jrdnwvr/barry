@@ -50,9 +50,13 @@ struct ContentView: View {
             // Switching locations (from the hero menu or Settings) reloads for
             // the new selection.
             .onChange(of: savedLocations.selectedID) { _, _ in
+                syncAirportSelection()
                 Task { await loadForCurrentMode(silent: false) }
             }
-            .task { await initialLoad() }
+            .task {
+                syncAirportSelection()
+                await initialLoad()
+            }
             // Keep the reading live while the app is open. Keyed on scenePhase so the
             // loop only runs while frontmost — it stops the moment the app is dimmed
             // away / backgrounded, so the screen still sleeps normally and no work
@@ -139,6 +143,7 @@ struct ContentView: View {
         // The station row doubles as the saved-locations switcher.
         HeroView(combined: combined, unit: unit, barometer: barometer,
                  now: store.now, barometerEnabled: localSensorActive,
+                 atAirport: isAtAirport(combined),
                  locations: savedLocations.locations,
                  selectedLocationID: savedLocations.selectedID,
                  onSelectLocation: { savedLocations.selectedID = $0 })
@@ -319,9 +324,6 @@ struct ContentView: View {
         }
     }
 
-    /// Within this distance of the station, "my location" IS the airport.
-    private static let homeRadiusMeters = 3 * 1852.0   // 3 NM
-
     /// The home station as a map marker: its own barb (with a halo) when the
     /// selection is an airport or the user is within 3 NM of it; otherwise the
     /// pin. Built from /combined so it needs no extra fetch; the radar swaps
@@ -341,19 +343,16 @@ struct ContentView: View {
     }
 
     /// The selection is an airport, or the user is physically within 3 NM of
-    /// the station. Drives the home barb on the map and the runway view of
-    /// the wind card (in its Auto mode).
+    /// the station (PressureStore holds the rule so the watch shares it).
+    /// Drives the altimeter headline, the home barb on the map and the
+    /// runway view of the wind card (in its Auto mode).
     private func isAtAirport(_ combined: CombinedResponse) -> Bool {
-        switch savedLocations.selected.kind {
-        case .airport:
-            return true
-        case .currentLocation:
-            guard let lat = combined.pressure.lat, let lon = combined.pressure.lon,
-                  let here = store.userLocation else { return false }
-            return here.distance(from: CLLocation(latitude: lat, longitude: lon)) <= Self.homeRadiusMeters
-        case .place:
-            return false
-        }
+        store.isAtAirport(combined)
+    }
+
+    private func syncAirportSelection() {
+        if case .airport = savedLocations.selected.kind { store.airportSelected = true }
+        else { store.airportSelected = false }
     }
 
     private func initialLoad() async {

@@ -35,7 +35,11 @@ struct WatchContentView: View {
                     }
                 }
             }
-            .task { if store.combined == nil { await store.load() } }
+            .task {
+                // A position first, so the 3 NM airport rule can apply.
+                await store.refreshLocation()
+                if store.combined == nil { await store.load() }
+            }
         }
     }
 
@@ -48,11 +52,12 @@ struct WatchContentView: View {
                         .font(.title2.weight(.bold))
                         .foregroundStyle(t.cls.color(intensity: t.intensity))
                     VStack(alignment: .leading, spacing: 0) {
-                        if let p = combined.currentPressure {
-                            Text("\(unit.format(p)) \(unit.label)")
+                        let head = combined.headlinePressure(atAirport: store.isAtAirport(combined))
+                        if let h = head {
+                            Text("\(unit.format(h.hPa)) \(unit.label)")
                                 .font(.headline).monospacedDigit()
                         }
-                        Text("\(unit.formatDelta(t.delta3h)) · 3h")
+                        Text((head?.isAltimeter == true ? "altimeter · " : "") + "\(unit.formatDelta(t.delta3h)) · 3h")
                             .font(.caption2).foregroundStyle(.secondary)
                     }
                 }
@@ -95,7 +100,7 @@ private struct SnapshotMini: View {
             HStack {
                 Image(systemName: snapshot.cls.symbolName)
                     .foregroundStyle(snapshot.cls.color(intensity: snapshot.intensity))
-                if let p = snapshot.currentPressureHPa {
+                if let p = snapshot.displayPressureHPa {
                     Text("\(unit.format(p)) \(unit.label)").font(.headline).monospacedDigit()
                 }
             }

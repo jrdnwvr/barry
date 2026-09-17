@@ -36,6 +36,29 @@ final class PressureStore: ObservableObject {
     /// The device's last known position (nil before the first fix).
     var userLocation: CLLocation? { location.lastLocation }
 
+    /// Set by the phone when the saved selection is an airport. The watch
+    /// has no selection, so there it is only ever the 3 NM rule.
+    @Published var airportSelected = false
+
+    /// Within this distance of the station, "here" IS the airport.
+    static let airportRadiusMeters = 3 * 1852.0
+
+    /// An airport is selected, or the device is within 3 NM of the station:
+    /// the headline shows the field's altimeter setting, the map draws the
+    /// home station as its own barb, the wind card goes to runway mode.
+    func isAtAirport(_ combined: CombinedResponse) -> Bool {
+        if airportSelected { return true }
+        guard let lat = combined.pressure.lat, let lon = combined.pressure.lon,
+              let here = userLocation else { return false }
+        return here.distance(from: CLLocation(latitude: lat, longitude: lon)) <= Self.airportRadiusMeters
+    }
+
+    /// Ask for a position without changing the station (the watch, which
+    /// keeps its station but still wants the 3 NM rule).
+    func refreshLocation() async {
+        _ = await location.requestLocation()
+    }
+
     init(api: BarryAPI = BarryAPI(),
          location: LocationManager? = nil,
          station: String = SnapshotStore.load()?.station ?? AppConfig.defaultStation) {
@@ -78,7 +101,8 @@ final class PressureStore: ObservableObject {
             let combined = try await api.combined(station: station, lat: lat, lon: lon)
             state = .loaded(combined)
             // Hand the complication a fresh snapshot and nudge it to redraw.
-            SnapshotStore.save(TendencySnapshot(from: combined, updatedAt: now))
+            SnapshotStore.save(TendencySnapshot(from: combined, updatedAt: now,
+                                                atAirport: isAtAirport(combined)))
             WidgetCenter.shared.reloadAllTimelines()
             #if os(iOS)
             // Front watch rides second so the primary reading never waits on the
@@ -93,7 +117,8 @@ final class PressureStore: ObservableObject {
                 // Second snapshot with the front watch on it, so the
                 // complication can show the arrow (D7). Cheap: same payload
                 // plus three fields; the widget gets one more nudge.
-                var snap = TendencySnapshot(from: combined, updatedAt: now)
+                var snap = TendencySnapshot(from: combined, updatedAt: now,
+                                            atAirport: isAtAirport(combined))
                 if f.isActive {
                     snap.frontStatus = f.status
                     snap.frontCardinal = f.cardinal

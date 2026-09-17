@@ -19,6 +19,9 @@ struct HeroView: View {
     @ObservedObject var barometer: BarometerManager
     let now: Date
     var barometerEnabled: Bool
+    /// An airport is selected or the user is within 3 NM: headline the
+    /// field's altimeter setting instead of the sea-level pressure.
+    var atAirport: Bool = false
     /// Saved-locations switcher (the station row becomes a menu when 2+ exist).
     var locations: [SavedLocation] = []
     var selectedLocationID: UUID? = nil
@@ -47,8 +50,15 @@ struct HeroView: View {
         return (sameMetarPeriod && notAncient) ? r : nil
     }
 
-    private var isLocal: Bool { localReading != nil }
-    private var displayValue: Double? { localReading?.slp ?? combined.currentPressure }
+    /// The reported altimeter setting wins at the airport; it is the number
+    /// a pilot actually uses there, and it must not be blended with the
+    /// phone's sea-level calibration.
+    private var showsAltimeter: Bool { atAirport && combined.pressure.current.altim != nil }
+    private var isLocal: Bool { localReading != nil && !showsAltimeter }
+    private var displayValue: Double? {
+        if showsAltimeter { return combined.pressure.current.altim }
+        return localReading?.slp ?? combined.currentPressure
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -76,6 +86,9 @@ struct HeroView: View {
             // compare) and the micro-trend — a *weather* signal. Machinery state
             // (calibration age, drift, Recalibrate) moved to Sensor vs Station:
             // the engine self-heals at the next report, so it isn't the user's job.
+            if showsAltimeter {
+                altimeterRow
+            }
             if isLocal {
                 provenanceRow
                 if let trend = barometer.microTrend { microLead(trend) }
@@ -151,6 +164,33 @@ struct HeroView: View {
         case .hPa:  dp = live ? 1 : 0
         }
         return String(format: "%.\(dp)f", unit.convert(hPa))
+    }
+
+    // MARK: - Altimeter tag
+
+    /// "ALTIMETER · as reported at KLUK · sea level 30.24": says which number
+    /// this is, and keeps the trend's own baseline one glance away.
+    private var altimeterRow: some View {
+        HStack(spacing: 8) {
+            Text("ALTIMETER")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.blue)
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(Color.blue.opacity(0.14), in: Capsule())
+            Text(altimeterCaption)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+    }
+
+    private var altimeterCaption: String {
+        var t = "as reported at \(combined.pressure.station)"
+        if let slp = combined.currentPressure {
+            t += " · sea level \(valueString(slp, live: false))"
+        }
+        return t
     }
 
     // MARK: - Provenance / comparison

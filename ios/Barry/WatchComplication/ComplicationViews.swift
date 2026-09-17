@@ -19,7 +19,7 @@ struct ComplicationView: View {
     private var cls: TendencyClass { entry.snapshot?.cls ?? .steady }
     private var intensity: Double { entry.snapshot?.intensity ?? 0 }
     private var delta: Double { entry.snapshot?.delta3h ?? 0 }
-    private var currentHPa: Double? { entry.snapshot?.currentPressureHPa }
+    private var currentHPa: Double? { entry.snapshot?.displayPressureHPa }
     private var feature: String? { entry.snapshot?.feature }
     private var fltCat: String? { entry.snapshot?.fltCat }
     /// Front watch, only while it has something to say and the data is live.

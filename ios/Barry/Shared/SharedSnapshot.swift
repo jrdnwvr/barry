@@ -41,6 +41,14 @@ struct TendencySnapshot: Codable, Hashable {
     var ceilingFt: Int? = nil
     var ceilingCover: String? = nil
     var fltCat: String? = nil
+    /// The field's altimeter setting (hPa) and whether the writer judged
+    /// the wearer to be at the airport; together they pick the headline.
+    var altimeterHPa: Double? = nil
+    var atAirport: Bool? = nil
+
+    /// Altimeter at an airport, sea-level pressure elsewhere.
+    var displayPressureHPa: Double? { (atAirport == true ? altimeterHPa : nil) ?? currentPressureHPa }
+    var showsAltimeter: Bool { atAirport == true && altimeterHPa != nil }
     /// Front watch (D7): status when active (approaching | passing | passed |
     /// forecast) and the direction the change is coming from. Filled in after
     /// /front answers; nil on quiet days or before it does.
@@ -50,8 +58,10 @@ struct TendencySnapshot: Codable, Hashable {
     /// Observed pressure, last ~12 h, at most one point per hour.
     var spark: [SparkPoint]? = nil
 
-    init(from combined: CombinedResponse, updatedAt: Date = Date()) {
+    init(from combined: CombinedResponse, updatedAt: Date = Date(), atAirport: Bool = false) {
         let t = combined.tendency
+        self.altimeterHPa = combined.pressure.current.altim
+        self.atAirport = atAirport
         self.station = combined.pressure.station
         self.stationName = combined.pressure.name
         self.currentPressureHPa = combined.currentPressure

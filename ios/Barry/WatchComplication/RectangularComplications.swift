@@ -49,7 +49,7 @@ struct GraphComplicationView: View {
     }
 
     private var pressureShort: String {
-        guard let hPa = snap?.currentPressureHPa else { return "—" }
+        guard let hPa = snap?.displayPressureHPa else { return "—" }
         return String(format: unit == .hPa ? "%.0f" : "%.2f", unit.convert(hPa))
     }
 
@@ -222,7 +222,7 @@ struct MetarComplicationView: View {
     // MARK: strings
 
     private var pressureText: String {
-        guard let hPa = snap?.currentPressureHPa else { return "—" }
+        guard let hPa = snap?.displayPressureHPa else { return "—" }
         let v = String(format: unit == .hPa ? "%.0f" : "%.2f", unit.convert(hPa))
         return "\(v)\(unit.label)"
     }

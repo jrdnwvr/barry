@@ -41,7 +41,7 @@ struct DialComplicationView: View {
     }
 
     private var pressureText: String {
-        guard let hPa = snap?.currentPressureHPa else { return "—" }
+        guard let hPa = snap?.displayPressureHPa else { return "—" }
         return String(format: unit == .hPa ? "%.0f" : "%.2f", unit.convert(hPa))
     }
 

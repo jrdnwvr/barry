@@ -640,6 +640,14 @@ extension CombinedResponse {
         pressure.current.slp ?? pressure.series.last?.pressure
     }
 
+    /// The number to headline. At an airport (selected, or within 3 NM) it
+    /// is the field's reported altimeter setting, the value a pilot dials
+    /// in; elsewhere the sea-level pressure the trend is measured on.
+    func headlinePressure(atAirport: Bool) -> (hPa: Double, isAltimeter: Bool)? {
+        if atAirport, let a = pressure.current.altim { return (a, true) }
+        return currentPressure.map { ($0, false) }
+    }
+
     /// Observed points that have a usable pressure value, oldest -> newest.
     var observedSeries: [SeriesPoint] {
         pressure.series.filter { $0.pressure != nil }

@@ -21,3 +21,4 @@ New in this build:
 ## Log
 
 - Build 82 (2026-09-17): first use of the template.
+- Build 83 (2026-09-17, 9c5a4c6): storm row wording, ride info copy, wind card DA callout removed.

@@ -86,6 +86,11 @@ struct RadarPanel: View {
     @AppStorage("radarWindStyle", store: AppConfig.sharedDefaults)
     private var windStyle: String = "flow"
 
+    /// Loop on open (the default) or hold the newest frame (Settings).
+    static let autoplayKey = "radarAutoplay"
+    @AppStorage(RadarPanel.autoplayKey, store: AppConfig.sharedDefaults)
+    private var autoplay: Bool = true
+
     @State private var showFrontRow = false
     @State private var showKey = false
     @State private var showMore = false
@@ -138,6 +143,7 @@ struct RadarPanel: View {
         }
         .task {
             await model.load()
+            model.playing = autoplay
             if showWind {
                 await model.fetchField(region: model.lastRegion ?? initialRegion)
             }

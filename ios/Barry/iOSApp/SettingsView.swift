@@ -30,6 +30,8 @@ struct SettingsView: View {
     private var runwayWindsRaw: String = RunwayWindsMode.auto.rawValue
     @AppStorage(FieldConditionsCard.blReferenceKey, store: AppConfig.sharedDefaults)
     private var blReference: String = "agl"
+    @AppStorage(RadarPanel.autoplayKey, store: AppConfig.sharedDefaults)
+    private var radarAutoplay: Bool = true
 
     @State private var newICAO: String = ""
     /// Live matches from /stations/search while the airport field has text.
@@ -101,6 +103,20 @@ struct SettingsView: View {
                     Text("Wind card")
                 } footer: {
                     Text(RunwayWindsMode(rawValue: runwayWindsRaw)?.footer ?? "")
+                }
+
+                Section {
+                    Picker("When the radar opens", selection: $radarAutoplay) {
+                        Text("Play the last hour").tag(true)
+                        Text("Hold on the latest").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Radar")
+                } footer: {
+                    Text(radarAutoplay
+                         ? "The loop runs on its own when the radar opens. Tap pause to hold a frame."
+                         : "The radar opens on the newest frame and stays there. Tap play to run the loop.")
                 }
 
                 Section {

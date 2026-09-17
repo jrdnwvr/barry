@@ -81,30 +81,18 @@ struct HeroView: View {
                 if let trend = barometer.microTrend { microLead(trend) }
             }
 
-            // Lightning nearby outranks the pressure verdict: it takes the
-            // headline spot and the verdict drops to the line under it. The
-            // chart keeps its own small feature pin either way.
-            if let near = combined.lightningNearby {
-                Label(near.sentence(now: now), systemImage: "bolt.fill")
-                    .font(.headline)
-                    .foregroundStyle(near.distanceMi < 3 ? Color.red : Color.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(combined.verdict)
+            Text(combined.verdict)
+                .font(.headline)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // Lightning nearby gets its own card right under this block
+            // (LightningBanner). The station's own report shows here only
+            // when that search has nothing, e.g. an old backend.
+            if combined.lightningNearby == nil, let lt = combined.pressure.current.lightning {
+                Label(lt.sentence, systemImage: lt.status == "distant" ? "bolt" : "bolt.fill")
                     .font(.subheadline.weight(.medium))
+                    .foregroundStyle(lt.status == "thunderstorm" ? Color.red : Color.orange)
                     .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text(combined.verdict)
-                    .font(.headline)
-                    .fixedSize(horizontal: false, vertical: true)
-                // The station's own report, when the nearby search has
-                // nothing (an old backend, or a field with a sensor but no
-                // report within the search's freshness window).
-                if let lt = combined.pressure.current.lightning {
-                    Label(lt.sentence, systemImage: lt.status == "distant" ? "bolt" : "bolt.fill")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(lt.status == "thunderstorm" ? Color.red : Color.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
             }
 
             // The 3 h rate in human terms (C4), only when it's worth a sentence.

@@ -82,6 +82,7 @@
 		967511152A1EBB2D602F2B9A /* SavedLocations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */; };
 		971C47371255C41380413D3E /* SavedLocations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */; };
 		98A632AA5A2B036CFA27697A /* PressureGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6978CE026B8EEE1A560877C0 /* PressureGuideView.swift */; };
+		9B711DD69DC404927EE59946 /* LightningBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB955C8C1263A03BA2C97A2F /* LightningBanner.swift */; };
 		9F987BE952507B2A891ADC78 /* PressureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A60F6C6B6915B13C8CAD3A3 /* PressureStore.swift */; };
 		A11B605E76613C43AC5FE11E /* BarryAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */; };
 		A13AA88D91661ADCE95D6B34 /* PressureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A60F6C6B6915B13C8CAD3A3 /* PressureStore.swift */; };
@@ -229,6 +230,7 @@
 		B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureHistory.swift; sourceTree = "<group>"; };
 		B98E77604746429DE78EF9C4 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		BAFA9596978A2666CDFADAB4 /* RectangularComplications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RectangularComplications.swift; sourceTree = "<group>"; };
+		BB955C8C1263A03BA2C97A2F /* LightningBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightningBanner.swift; sourceTree = "<group>"; };
 		C0EBA6519DD65A01DF98B527 /* RadarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarView.swift; sourceTree = "<group>"; };
 		C1326419A7770149C91B0438 /* PhoneWidgetViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWidgetViews.swift; sourceTree = "<group>"; };
 		CD077DE63D0DE437229C43CC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -374,6 +376,7 @@
 				01599505777741EA095092C0 /* HeroView.swift */,
 				EB906A0DF0FCEFBE609EBF06 /* HorizontalDragGesture.swift */,
 				F4C5676D3E1E52D59CDFED12 /* Info.plist */,
+				BB955C8C1263A03BA2C97A2F /* LightningBanner.swift */,
 				252EE81999FF16293FA0CF7A /* LightningOverlay.swift */,
 				B98E77604746429DE78EF9C4 /* OnboardingView.swift */,
 				778E430DEB72ECE6B1DB5CCA /* PressureChartView.swift */,
@@ -642,6 +645,7 @@
 				70D7BA6937527AE4D263FF9A /* FrontsOverlay.swift in Sources */,
 				4ED2D56EC1DA59D7FBBD779D /* HeroView.swift in Sources */,
 				69FA11493C9F04A3A79384A3 /* HorizontalDragGesture.swift in Sources */,
+				9B711DD69DC404927EE59946 /* LightningBanner.swift in Sources */,
 				9267F000F0820CEB0BF3D9CC /* LightningOverlay.swift in Sources */,
 				8C7B2F5AFF63137EA0451EA1 /* LocationManager.swift in Sources */,
 				63129BEFD89CFA743A98860E /* Models.swift in Sources */,

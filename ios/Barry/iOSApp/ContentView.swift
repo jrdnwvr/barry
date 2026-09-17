@@ -143,9 +143,10 @@ struct ContentView: View {
                  selectedLocationID: savedLocations.selectedID,
                  onSelectLocation: { savedLocations.selectedID = $0 })
 
-        // Front watch: absent on quiet days, one row when the regional
-        // field shows a pattern. Everything deeper lives in its sheet.
-        frontBanner(combined)
+        // Lightning nearby: the breakout card the front banner used to be.
+        // The front watch itself still runs (the watch complication uses
+        // it); its map and compass are on the radar now.
+        lightningBanner(combined)
 
         // The focused trend: window toggle + chart + the honest caveat.
         if layout == .phone {
@@ -184,14 +185,14 @@ struct ContentView: View {
         DataSourceFootnote(combined: combined)
     }
 
-    /// The front-watch banner, shared by both layouts. Guarded three ways: the
-    /// analysis must exist, must have something to say, and must belong to the
-    /// station on screen (a stale result from the previous selection stays hidden
-    /// while the new one loads).
+    /// Lightning within 100 miles, as a card that opens the radar.
     @ViewBuilder
-    private func frontBanner(_ combined: CombinedResponse) -> some View {
-        if let f = store.front, f.isActive, f.station == combined.pressure.station {
-            FrontBanner(front: f)
+    private func lightningBanner(_ combined: CombinedResponse) -> some View {
+        if let near = combined.lightningNearby,
+           let lat = combined.pressure.lat, let lon = combined.pressure.lon {
+            LightningBanner(near: near, now: store.now, lat: lat, lon: lon,
+                            stationName: combined.pressure.name ?? combined.pressure.station,
+                            home: homeMarker(combined))
         }
     }
 

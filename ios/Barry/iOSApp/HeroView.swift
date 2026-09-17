@@ -13,7 +13,12 @@
 
 import SwiftUI
 
+/// How the hero separates its rows. `plain` is the shipped look; the
+/// others are layout studies that can be switched in to compare.
+enum HeroSeparation { case plain, hairlines, cards }
+
 struct HeroView: View {
+    static var separation: HeroSeparation = .plain
     let combined: CombinedResponse
     let unit: PressureUnit
     @ObservedObject var barometer: BarometerManager
@@ -61,6 +66,115 @@ struct HeroView: View {
     }
 
     var body: some View {
+        switch Self.separation {
+        case .plain: plainBody
+        case .hairlines: hairlinesBody
+        case .cards: cardsBody
+        }
+    }
+
+    // MARK: - Layout studies
+
+    /// Thin rules between the three bands: station, number, words.
+    private var hairlinesBody: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            statusRow
+            Divider()
+            numberBlock
+            Divider()
+            wordsBlock
+        }
+        .sheet(isPresented: $showGuide) { PressureGuideView() }
+    }
+
+    /// The number in its own soft card; the words hang off a tint bar in
+    /// the tendency's color.
+    private var cardsBody: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 10) {
+                statusRow
+                numberBlock
+            }
+            .padding(14)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+            HStack(alignment: .top, spacing: 10) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(tendency?.cls.color(intensity: tendency?.intensity ?? 0) ?? .secondary)
+                    .frame(width: 3)
+                wordsBlock
+            }
+            .padding(.horizontal, 4)
+        }
+        .sheet(isPresented: $showGuide) { PressureGuideView() }
+    }
+
+    private var statusRow: some View {
+        StatusRow(combined: combined, barometer: barometer, now: now,
+                  barometerEnabled: barometerEnabled, localAt: localReading?.at,
+                  locations: locations, selectedLocationID: selectedLocationID,
+                  onSelectLocation: onSelectLocation)
+    }
+
+    private var numberBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        if let v = displayValue {
+                            valueLabel(v)
+                        }
+                        Button { showGuide = true } label: {
+                            Image(systemName: "info.circle")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("What do pressure changes mean?")
+                    }
+                    if showsAltimeter {
+                        altimeterRow
+                            .padding(.top, -2)
+                    }
+                }
+                Spacer(minLength: 8)
+                if let t = tendency { TendencyBadge(tendency: t, unit: unit) }
+            }
+            if isLocal {
+                provenanceRow
+                if let trend = barometer.microTrend { microLead(trend) }
+            }
+        }
+    }
+
+    private var wordsBlock: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(combined.verdict)
+                .font(.headline)
+                .fixedSize(horizontal: false, vertical: true)
+            if combined.lightningNearby == nil, let lt = combined.pressure.current.lightning {
+                Label(lt.sentence, systemImage: lt.status == "distant" ? "bolt" : "bolt.fill")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(lt.status == "thunderstorm" ? Color.red : Color.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let scale = rateContext {
+                Text(scale)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if let why = combined.reading?.explanation?.summary, !why.isEmpty {
+                Text(why)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let note = honestyNote {
+                Text(note).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var plainBody: some View {
         VStack(alignment: .leading, spacing: 10) {
             StatusRow(combined: combined, barometer: barometer, now: now,
                       barometerEnabled: barometerEnabled, localAt: localReading?.at,

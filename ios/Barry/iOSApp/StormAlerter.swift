@@ -19,6 +19,13 @@ enum StormAlerter {
     static let cooldown: TimeInterval = 3 * 3600
 
     /// AppStorage key for the user-facing toggle (shared suite).
+    /// "3.2 hPa" or "0.09 inHg": the 3 h change in the unit the user chose.
+    static func magnitude(_ deltaHPa: Double) -> String {
+        let unit = PressureUnit(rawValue: AppConfig.sharedDefaults.string(forKey: "pressureUnit") ?? "") ?? .inHg
+        let v = abs(unit.convertDelta(deltaHPa))
+        return String(format: unit == .hPa ? "%.1f %@" : "%.2f %@", v, unit.label)
+    }
+
     static let enabledKey = "stormAlertsEnabled"
 
     private static let lastClassKey = "stormAlert.lastClass"
@@ -69,7 +76,7 @@ enum StormAlerter {
     static func sendTestAlert() {
         let c = UNMutableNotificationContent()
         c.title = "⚠️ Pressure dropping fast"
-        c.body = "Down 3.2 hPa in 3h at your station. Storm may be approaching. (Test alert)"
+        c.body = "Down \(Self.magnitude(-3.2)) in 3h at your station. Storm may be approaching. (Test alert)"
         c.sound = .default
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false)
         let req = UNNotificationRequest(identifier: "storm_alert_test", content: c, trigger: trigger)
@@ -101,14 +108,14 @@ enum StormAlerter {
                                     combined: CombinedResponse) -> UNMutableNotificationContent {
         let c = UNMutableNotificationContent()
         let place = combined.pressure.name ?? combined.pressure.station
-        let mag = String(format: "%.1f", abs(tendency.delta3h))
+        let mag = Self.magnitude(tendency.delta3h)
         switch cls {
         case .fallingFast:
             c.title = "⚠️ Pressure dropping fast"
-            c.body = "Down \(mag) hPa in 3h at \(place). \(combined.verdict)"
+            c.body = "Down \(mag) in 3h at \(place). \(combined.verdict)"
         case .risingFast:
             c.title = "Pressure rising sharply"
-            c.body = "Up \(mag) hPa in 3h at \(place). \(combined.verdict)"
+            c.body = "Up \(mag) in 3h at \(place). \(combined.verdict)"
         default:
             c.title = "Pressure change"
             c.body = combined.verdict

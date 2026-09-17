@@ -3,10 +3,11 @@
 //
 //  First-run flow, shown once (hasOnboarded flag in the shared suite):
 //    1. The thesis — change matters, not the number.
-//    2. Units — writes straight to the same keys Settings uses.
-//    3. Local readings opt-in — sets phoneBarometerEnabled; iOS permission
+//    2. What's inside — where the station comes from, and the cockpit tools.
+//    3. Units — writes straight to the same keys Settings uses.
+//    4. Local readings opt-in — sets phoneBarometerEnabled; iOS permission
 //       prompts then fire naturally when the sensor starts.
-//    4. Storm alerts opt-in — flips the flag and requests notification
+//    5. Storm alerts opt-in — flips the flag and requests notification
 //       permission right at the moment of stated intent.
 //  Skip (bottom right, every page) bails out of the whole flow: marks
 //  onboarding done, keeps defaults, enables nothing. The ghost buttons on
@@ -27,7 +28,9 @@ struct OnboardingView: View {
     private var stormAlertsEnabled: Bool = false
 
     @State private var page = 0
-    private let pageCount = 4
+    private let pageCount = 5
+
+    private var unit: PressureUnit { PressureUnit(rawValue: unitRaw) ?? .inHg }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -42,9 +45,10 @@ struct OnboardingView: View {
 
             TabView(selection: $page) {
                 ideaPage.tag(0)
-                unitsPage.tag(1)
-                sensorPage.tag(2)
-                alertsPage.tag(3)
+                insidePage.tag(1)
+                unitsPage.tag(2)
+                sensorPage.tag(3)
+                alertsPage.tag(4)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
 
@@ -79,6 +83,32 @@ struct OnboardingView: View {
                 .padding(.vertical, 8)
                 .background(TendencyClass.amberToRed(0).opacity(0.18),
                             in: RoundedRectangle(cornerRadius: 8))
+        } buttons: {
+            primaryButton("Continue") { advance() }
+        }
+    }
+
+    private var insidePage: some View {
+        pageLayout {
+            Image(systemName: "airplane")
+                .font(.system(size: 30))
+                .foregroundStyle(.blue)
+            Text("Built for the cockpit")
+                .font(.title2.weight(.semibold))
+                .multilineTextAlignment(.center)
+            Text("Barry finds the nearest reporting airport from your location. Pick any airport, or save a place, in Settings.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            VStack(alignment: .leading, spacing: 6) {
+                checkRow("At an airport, the big number is the field's altimeter setting")
+                checkRow("Runway winds on a compass, density altitude, clouds, and the ride below the boundary layer")
+                checkRow("Radar with fronts, station barbs, and live lightning from NOAA's satellites")
+                checkRow("What else agrees with the pressure: the model, the TAF, the stations around you")
+            }
+            .padding(12)
+            .background(Color(.secondarySystemBackground),
+                        in: RoundedRectangle(cornerRadius: 10))
         } buttons: {
             primaryButton("Continue") { advance() }
         }
@@ -170,7 +200,7 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Pressure dropping fast")
                     .font(.footnote.weight(.semibold))
-                Text("Down 3.2 hPa in 3h at your station. Storm may be approaching.")
+                Text("Down \(unit == .hPa ? "3.2 hPa" : "0.09 inHg") in 3h at your station. Storm may be approaching.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -209,13 +239,14 @@ struct OnboardingView: View {
     }
 
     private func checkRow(_ text: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             Image(systemName: "checkmark")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.green)
             Text(text)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

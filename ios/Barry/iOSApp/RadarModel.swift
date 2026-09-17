@@ -116,6 +116,12 @@ final class RadarModel: ObservableObject {
     private var frontAnimTask: Task<Void, Never>?
     private var frontVersion = 0
 
+    /// Which parts of the chart to draw (map options). Changing it
+    /// re-renders the field in place.
+    var frontStyle = FrontStyle() {
+        didSet { if frontStyle != oldValue { updateFrontState() } }
+    }
+
     func fetchFronts() async {
         guard let resp = try? await BarryAPI().fronts() else { return }
         frontFrames = resp.frames.sorted { $0.hours < $1.hours }
@@ -138,6 +144,8 @@ final class RadarModel: ObservableObject {
         } else {
             next = .empty
         }
+        next.style = frontStyle
+        if !frontStyle.centers { next.centers = [] }
         frontVersion += 1
         next.version = frontVersion
         frontState = next

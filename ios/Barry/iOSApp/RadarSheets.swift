@@ -180,11 +180,31 @@ struct RadarMoreSheet: View {
     @Binding var windStyle: String
     @Binding var stationStyle: String
     var onStationStyleChange: (String) -> Void
+    @Binding var frontLines: Bool
+    @Binding var frontPips: Bool
+    @Binding var frontTroughs: Bool
+    @Binding var frontWeak: Bool
+    @Binding var frontCenters: Bool
 
     var body: some View {
+        ScrollView {
         VStack(alignment: .leading, spacing: 18) {
             Text("Map options")
                 .font(.title3.weight(.semibold))
+
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Fronts", systemImage: "line.diagonal")
+                    .font(.subheadline.weight(.semibold))
+                Toggle("Front lines", isOn: $frontLines)
+                Toggle("Cold and warm symbols", isOn: $frontPips)
+                Toggle("Troughs (dashed)", isOn: $frontTroughs)
+                Toggle("Fronts marked weak", isOn: $frontWeak)
+                Toggle("H and L pressure centers", isOn: $frontCenters)
+                Text("All on is the classic surface chart. Symbols sit on the side the front is moving toward.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .font(.subheadline)
 
             VStack(alignment: .leading, spacing: 6) {
                 Label("Wind style", systemImage: "wind")
@@ -213,9 +233,9 @@ struct RadarMoreSheet: View {
                     .foregroundStyle(.secondary)
             }
 
-            Spacer()
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }

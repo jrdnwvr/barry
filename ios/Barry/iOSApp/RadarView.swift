@@ -85,6 +85,22 @@ struct RadarPanel: View {
     /// "flow" (animated streaks, the default) or "arrows" (the static grid).
     @AppStorage("radarWindStyle", store: AppConfig.sharedDefaults)
     private var windStyle: String = "flow"
+    // How the fronts draw (map options): all on is the classic chart.
+    @AppStorage("radarFrontLines", store: AppConfig.sharedDefaults)
+    private var frontLines: Bool = true
+    @AppStorage("radarFrontPips", store: AppConfig.sharedDefaults)
+    private var frontPips: Bool = true
+    @AppStorage("radarFrontTroughs", store: AppConfig.sharedDefaults)
+    private var frontTroughs: Bool = true
+    @AppStorage("radarFrontWeak", store: AppConfig.sharedDefaults)
+    private var frontWeak: Bool = true
+    @AppStorage("radarFrontCenters", store: AppConfig.sharedDefaults)
+    private var frontCenters: Bool = true
+
+    private var frontStyle: FrontStyle {
+        FrontStyle(lines: frontLines, pips: frontPips, troughs: frontTroughs,
+                   weak: frontWeak, centers: frontCenters)
+    }
 
     /// Loop on open (the default) or hold the newest frame (Settings).
     static let autoplayKey = "radarAutoplay"
@@ -146,6 +162,7 @@ struct RadarPanel: View {
             }
         }
         .task {
+            model.frontStyle = frontStyle
             await model.load()
             model.playing = autoplay
             if showWind {
@@ -209,8 +226,11 @@ struct RadarPanel: View {
             RadarMoreSheet(windStyle: $windStyle, stationStyle: $stationStyleLast,
                            onStationStyleChange: { style in
                                if stationsOn { stationStyleRaw = style }
-                           })
-                .presentationDetents([.medium])
+                           },
+                           frontLines: $frontLines, frontPips: $frontPips,
+                           frontTroughs: $frontTroughs, frontWeak: $frontWeak,
+                           frontCenters: $frontCenters)
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
         .onChange(of: stationStyleRaw) { _, raw in
@@ -241,6 +261,9 @@ struct RadarPanel: View {
             if on {
                 Task { await model.fetchField(region: model.lastRegion ?? initialRegion) }
             }
+        }
+        .onChange(of: frontStyle) { _, style in
+            model.frontStyle = style
         }
     }
 

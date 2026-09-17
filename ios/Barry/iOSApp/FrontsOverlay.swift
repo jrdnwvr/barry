@@ -96,8 +96,9 @@ enum FrontGlyphs {
     /// `scale` converts screen points to that space (1/zoomScale on the map, 1
     /// in the key). The pips sit on the left of travel = direction of motion.
     static func draw(kind: FrontKind, weak: Bool, points: [CGPoint],
-                     scale: CGFloat, alpha: CGFloat, in ctx: CGContext) {
-        guard points.count >= 2 else { return }
+                     scale: CGFloat, alpha: CGFloat, in ctx: CGContext,
+                     lines: Bool = true, pips: Bool = true) {
+        guard points.count >= 2, lines || pips else { return }
         let path = smoothed(points)
         let lineWidth = 2.6 * scale
         let pipSize = 8.0 * scale
@@ -109,18 +110,20 @@ enum FrontGlyphs {
         ctx.setLineJoin(.round)
 
         // The line
-        ctx.setStrokeColor(kind.lineColor.cgColor)
-        ctx.setLineWidth(lineWidth)
-        if kind == .trof || weak {
-            ctx.setLineDash(phase: 0, lengths: [6 * scale, 5 * scale])
+        if lines {
+            ctx.setStrokeColor(kind.lineColor.cgColor)
+            ctx.setLineWidth(lineWidth)
+            if kind == .trof || weak {
+                ctx.setLineDash(phase: 0, lengths: [6 * scale, 5 * scale])
+            }
+            ctx.beginPath()
+            ctx.move(to: path[0])
+            for p in path.dropFirst() { ctx.addLine(to: p) }
+            ctx.strokePath()
+            ctx.setLineDash(phase: 0, lengths: [])
         }
-        ctx.beginPath()
-        ctx.move(to: path[0])
-        for p in path.dropFirst() { ctx.addLine(to: p) }
-        ctx.strokePath()
-        ctx.setLineDash(phase: 0, lengths: [])
 
-        guard kind != .trof else { ctx.restoreGState(); return }
+        guard kind != .trof, pips else { ctx.restoreGState(); return }
 
         // The pips, spaced by arc length along the smoothed line
         var carry = spacing * 0.5
@@ -217,9 +220,19 @@ struct RenderedCenter: Equatable {
     let alpha: CGFloat
 }
 
+/// What of the chart to draw. All on is the classic surface chart.
+struct FrontStyle: Equatable {
+    var lines = true      // the front line itself
+    var pips = true       // the cold / warm / occluded symbols
+    var troughs = true    // dashed trough lines
+    var weak = true       // fronts WPC marks weak
+    var centers = true    // the H and L
+}
+
 struct FrontRenderState {
     var fronts: [RenderedFront] = []
     var centers: [RenderedCenter] = []
+    var style = FrontStyle()
     /// Bumped by the model on every change so the map redraws only when the
     /// field actually moved, not on every SwiftUI update tick.
     var version: Int = 0
@@ -368,7 +381,10 @@ final class FrontFieldRenderer: MKOverlayRenderer {
         // Only fronts that come anywhere near this tile (generous padding for pips).
         let pad = 40 * scale
         let visible = mapRect.insetBy(dx: -pad, dy: -pad)
+        let style = overlay.state.style
         for f in overlay.state.fronts {
+            if f.kind == .trof, !style.troughs { continue }
+            if f.weak, !style.weak { continue }
             let mapPts = f.coordinates.map { MKMapPoint($0) }
             let touches = mapPts.contains { visible.contains($0) }
                 || zip(mapPts, mapPts.dropFirst()).contains { a, b in
@@ -378,7 +394,8 @@ final class FrontFieldRenderer: MKOverlayRenderer {
             guard touches else { continue }
             let pts = mapPts.map { point(for: $0) }
             FrontGlyphs.draw(kind: f.kind, weak: f.weak, points: pts,
-                             scale: scale, alpha: f.alpha, in: ctx)
+                             scale: scale, alpha: f.alpha, in: ctx,
+                             lines: style.lines, pips: style.pips)
         }
     }
 }

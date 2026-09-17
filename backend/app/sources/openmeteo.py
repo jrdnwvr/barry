@@ -33,6 +33,11 @@ HOURLY_FIELDS = [
     "cape",
     "weather_code",
     "boundary_layer_height",
+    # Ride estimate (conditions.ride): sun, near-surface lapse, shear
+    "shortwave_radiation",
+    "temperature_80m",
+    "temperature_180m",
+    "wind_speed_80m",
 ]
 
 # Sunrise/sunset bound the fog-risk night window and the burn-off estimate.
@@ -60,6 +65,10 @@ def parse_forecast(data: dict) -> List[ForecastHour]:
     cape = hourly.get("cape") or []
     wcode = hourly.get("weather_code") or []
     blh = hourly.get("boundary_layer_height") or []
+    rad = hourly.get("shortwave_radiation") or []
+    t80 = hourly.get("temperature_80m") or []
+    t180 = hourly.get("temperature_180m") or []
+    w80 = hourly.get("wind_speed_80m") or []
 
     def at(seq, i):
         return seq[i] if i < len(seq) else None
@@ -81,6 +90,10 @@ def parse_forecast(data: dict) -> List[ForecastHour]:
                 cape=at(cape, i),
                 weather_code=at(wcode, i),
                 boundary_layer=at(blh, i),
+                radiation=at(rad, i),
+                temp80m=at(t80, i),
+                temp180m=at(t180, i),
+                wind80m=at(w80, i),
             )
         )
     return out

@@ -197,3 +197,36 @@ def test_storm_outlook_takes_the_taf_too():
     old = TafOut(station="KLUK", periods=[
         TafPeriod(timeFrom=T0 - timedelta(hours=6), timeTo=T0 - timedelta(hours=2), change="TEMPO", wx="TSRA")])
     assert conditions.scan_storms(_hours(12, weather_code=1, cape=300.0), old, T0) is None
+
+
+# ---- ride estimate --------------------------------------------------------------
+
+
+def test_summer_afternoon_is_bumpy_thermal_and_settles_at_dusk():
+    # Strong sun, superadiabatic lowest layer, deep layer, light wind until
+    # hour 6; then the sun goes and the lapse flips to an inversion.
+    hrs = _hours(12,
+                 radiation=[700.0] * 6 + [50.0] * 6,
+                 temperature=[31.0] * 6 + [24.0] * 6,
+                 temp180m=[28.5] * 6 + [25.0] * 6,          # 14 °C/km, then inversion
+                 boundary_layer=[1800.0] * 6 + [200.0] * 6,
+                 windspeed=8.0, windgust=15.0, wind80m=12.0)
+    r = conditions.ride(hrs, T0)
+    assert r.band == "bumpy" and r.kind == "thermal" and r.topFt == 5900
+    assert r.changeBand == "smooth" and r.changeAt == T0 + timedelta(hours=6)
+
+
+def test_windy_winter_day_is_chop_from_wind_not_thermals():
+    hrs = _hours(12, radiation=120.0, temperature=2.0, temp180m=1.5,     # 2.8 °C/km: stable
+                 boundary_layer=900.0, windspeed=30.0, windgust=48.0, wind80m=52.0)
+    r = conditions.ride(hrs, T0)
+    assert r.kind == "wind" and r.band in ("chop", "bumpy") and r.thermal == 0.0
+    assert r.changeBand is None
+
+
+def test_calm_night_is_smooth_and_missing_inputs_give_nothing():
+    hrs = _hours(12, radiation=0.0, temperature=10.0, temp180m=12.0, boundary_layer=150.0,
+                 windspeed=5.0, windgust=8.0, wind80m=9.0)
+    r = conditions.ride(hrs, T0)
+    assert r.band == "smooth" and r.score == 0.0
+    assert conditions.ride(_hours(12, windspeed=5.0), T0) is None or conditions.ride(_hours(12), T0) is None

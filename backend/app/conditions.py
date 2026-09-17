@@ -27,7 +27,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import List, Optional, Sequence, Tuple
 
-from .models import ConditionsOut, DAPoint, FogOut, ForecastHour, StormOut, SunTimes, TafOut
+from .models import ConditionsOut, DAPoint, FogOut, ForecastHour, RideOut, StormOut, SunTimes, TafOut
 
 # --- Density altitude tunables -----------------------------------------------
 
@@ -42,6 +42,19 @@ STORM_HOURS = 12
 THUNDER_CODES = {95, 96, 99}   # WMO weather codes with a thunderstorm in them
 CAPE_POSSIBLE = 1000.0      # J/kg: enough fuel to say "possible" without a
                             # thunder code; a moderately unstable afternoon
+
+# --- Ride tunables --------------------------------------------------------------
+# Thermals: surface sun (W/m²) and the lapse rate between 2 m and 180 m
+# (°C/km; dry adiabatic is 9.8, steeper is superadiabatic and thermals
+# trigger easily), scaled by layer depth (w* grows with the cube root of
+# depth). Mechanical: gusts at 10 m and the 10 m -> 80 m speed difference.
+RIDE_SUN_LO, RIDE_SUN_HI = 100.0, 550.0        # W/m²: none .. strong
+RIDE_LAPSE_LO, RIDE_LAPSE_HI = 4.0, 10.0       # °C/km: stable .. superadiabatic
+RIDE_DEPTH_REF_M = 1500.0
+RIDE_GUST_LO, RIDE_GUST_HI = 25.0, 60.0        # km/h (~13 .. 32 kt)
+RIDE_SHEAR_LO, RIDE_SHEAR_HI = 10.0, 35.0      # km/h between 10 m and 80 m
+RIDE_CHOP, RIDE_BUMPY = 0.25, 0.6              # score thresholds
+RIDE_HOURS = 12
 
 # --- Fog tunables -------------------------------------------------------------
 
@@ -235,6 +248,68 @@ def scan_storms(hours: Sequence[ForecastHour], taf: Optional[TafOut],
     return None
 
 
+# --- Ride estimate ---------------------------------------------------------------
+
+
+def _unit(v: float, lo: float, hi: float) -> float:
+    return max(0.0, min(1.0, (v - lo) / (hi - lo)))
+
+
+def ride_terms(h: ForecastHour) -> Optional[Tuple[float, float]]:
+    """(thermal, mechanical) for one hour, each roughly 0..1. None when
+    the hour lacks the inputs for both."""
+    thermal = None
+    if h.radiation is not None and h.temperature is not None and h.temp180m is not None:
+        lapse = (h.temperature - h.temp180m) / 0.178      # °C per km, 2 m -> 180 m
+        depth = max(0.4, min(1.3, ((h.boundary_layer or 500.0) / RIDE_DEPTH_REF_M) ** (1.0 / 3.0)))
+        thermal = _unit(h.radiation, RIDE_SUN_LO, RIDE_SUN_HI) * _unit(lapse, RIDE_LAPSE_LO, RIDE_LAPSE_HI) * depth
+    mech = None
+    if h.windgust is not None or (h.wind80m is not None and h.windspeed is not None):
+        g = _unit(h.windgust or 0.0, RIDE_GUST_LO, RIDE_GUST_HI)
+        sh = _unit((h.wind80m or 0.0) - (h.windspeed or 0.0), RIDE_SHEAR_LO, RIDE_SHEAR_HI) \
+            if h.wind80m is not None and h.windspeed is not None else 0.0
+        mech = max(0.0, min(1.0, 0.7 * g + 0.5 * sh))
+    if thermal is None and mech is None:
+        return None
+    return (thermal or 0.0, mech or 0.0)
+
+
+def _band(score: float) -> str:
+    return "bumpy" if score >= RIDE_BUMPY else ("chop" if score >= RIDE_CHOP else "smooth")
+
+
+def _kind(thermal: float, mech: float) -> str:
+    if thermal >= mech * 1.3:
+        return "thermal"
+    if mech >= thermal * 1.3:
+        return "wind"
+    return "mixed"
+
+
+def ride(hours: Sequence[ForecastHour], now: datetime) -> Optional[RideOut]:
+    """The band for the current hour and the next different band within
+    RIDE_HOURS ("Settling down after 6 PM")."""
+    window = [h for h in hours if now - timedelta(hours=1) <= h.t <= now + timedelta(hours=RIDE_HOURS)]
+    scored = [(h, t) for h in window if (t := ride_terms(h)) is not None]
+    if not scored:
+        return None
+    cur_h, (th, me) = min(scored, key=lambda ht: abs((ht[0].t - now).total_seconds()))
+    score = max(th, me)
+    band = _band(score)
+    change_band, change_at = None, None
+    for h, (t2, m2) in scored:
+        if h.t <= cur_h.t:
+            continue
+        b = _band(max(t2, m2))
+        if b != band:
+            change_band, change_at = b, h.t
+            break
+    top = int(round(cur_h.boundary_layer * 3.28084 / BL_ROUND_FT) * BL_ROUND_FT) if cur_h.boundary_layer is not None else None
+    return RideOut(band=band, kind=_kind(th, me) if band != "smooth" else ("thermal" if th >= me else "wind"),
+                   topFt=top, score=round(score, 2), thermal=round(th, 2), mechanical=round(me, 2),
+                   changeBand=change_band, changeAt=change_at)
+
+
 # --- Assembly -----------------------------------------------------------------
 
 
@@ -255,6 +330,7 @@ def build(pressure, forecast, now: datetime, taf: Optional[TafOut] = None) -> Op
     da_fc: List[DAPoint] = []
     fog = None
     storm = None
+    ride_out = None
     bl_now, bl_fc = None, []
     if forecast is not None:
         horizon = now + timedelta(hours=DA_FORECAST_HOURS)
@@ -271,6 +347,7 @@ def build(pressure, forecast, now: datetime, taf: Optional[TafOut] = None) -> Op
         fog = scan_fog(forecast.hourly, forecast.sun, now)
         bl_now, bl_fc = boundary_layer(forecast.hourly, now)
         storm = scan_storms(forecast.hourly, taf, now)
+        ride_out = ride(forecast.hourly, now)
     elif taf is not None:
         storm = scan_storms([], taf, now)
 
@@ -278,4 +355,4 @@ def build(pressure, forecast, now: datetime, taf: Optional[TafOut] = None) -> Op
         return None
     return ConditionsOut(densityAltitudeFt=da_now, fieldElevationFt=elev_ft,
                          daForecast=da_fc, boundaryLayerFt=bl_now, blForecast=bl_fc,
-                         fog=fog, storm=storm)
+                         fog=fog, storm=storm, ride=ride_out)

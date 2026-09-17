@@ -110,6 +110,11 @@ class ForecastHour(BaseModel):
     cape: Optional[float] = None            # J/kg
     weather_code: Optional[int] = None      # WMO code; 95/96/99 = thunderstorm
     boundary_layer: Optional[float] = None  # m AGL
+    # Ride estimate inputs
+    radiation: Optional[float] = None       # W/m² shortwave at the surface
+    temp80m: Optional[float] = None         # °C
+    temp180m: Optional[float] = None        # °C
+    wind80m: Optional[float] = None         # km/h
 
 
 class SunTimes(BaseModel):
@@ -424,6 +429,22 @@ class StormOut(BaseModel):
     detail: str
 
 
+class RideOut(BaseModel):
+    """How bumpy the boundary layer is likely to be, estimated from what
+    drives turbulence (sun and near-surface lapse rate for thermals, gusts
+    and low-level shear for mechanical chop). An estimate from the model,
+    never a measurement and never a pilot report."""
+
+    band: str                              # smooth | chop | bumpy
+    kind: str                              # thermal | wind | mixed
+    topFt: Optional[int] = None            # the layer top now, ft AGL
+    score: float                           # 0..1+, for tuning
+    thermal: float                         # the two terms, for tuning
+    mechanical: float
+    changeBand: Optional[str] = None       # the next different band within 12 h
+    changeAt: Optional[datetime] = None
+
+
 class ConditionsOut(BaseModel):
     """Field conditions (conditions.py): density altitude now + forecast, the
     boundary layer, the fog outlook and the storm outlook. All optional,
@@ -436,6 +457,7 @@ class ConditionsOut(BaseModel):
     blForecast: List[DAPoint] = Field(default_factory=list)
     fog: Optional[FogOut] = None
     storm: Optional[StormOut] = None
+    ride: Optional[RideOut] = None
 
 
 class LightningCell(BaseModel):

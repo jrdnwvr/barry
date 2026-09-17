@@ -147,6 +147,10 @@ struct ForecastHour: Codable, Identifiable, Hashable {
     var cape: Double?
     var weather_code: Int?
     var boundary_layer: Double?
+    var radiation: Double?
+    var temp80m: Double?
+    var temp180m: Double?
+    var wind80m: Double?
 
     var id: Date { t }
     /// WMO weather codes with a thunderstorm in them.
@@ -231,6 +235,19 @@ struct StormOut: Codable, Hashable {
     let detail: String
 }
 
+/// How bumpy the boundary layer is likely to be: an estimate from what
+/// drives turbulence, never a measurement or a pilot report.
+struct RideOut: Codable, Hashable {
+    let band: String          // smooth | chop | bumpy
+    let kind: String          // thermal | wind | mixed
+    var topFt: Int?
+    let score: Double
+    let thermal: Double
+    let mechanical: Double
+    var changeBand: String?
+    var changeAt: Date?
+}
+
 struct ConditionsOut: Codable, Hashable {
     var densityAltitudeFt: Int?
     var fieldElevationFt: Int?
@@ -239,6 +256,7 @@ struct ConditionsOut: Codable, Hashable {
     var blForecast: [DAPoint] = []
     var fog: FogOut?
     var storm: StormOut?
+    var ride: RideOut?
 
     /// Anything worth a card at all.
     var hasContent: Bool {

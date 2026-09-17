@@ -25,6 +25,45 @@ struct FieldConditionsCard: View {
     private var blOffset: Int { blMSL ? (conditions.fieldElevationFt ?? 0) : 0 }
     private var blSuffix: String { blMSL ? " MSL" : " AGL" }
 
+    @State private var showRideInfo = false
+
+    /// The ride sentence: which kind of bumps, how high, and when it changes.
+    /// Falls back to the static explainer on an old backend.
+    private var rideText: String {
+        guard let r = conditions.ride else {
+            return "Bumpy, hazy air mixes below it, smoother air above."
+        }
+        let top = (r.topFt ?? conditions.boundaryLayerFt).map { ft($0 + blOffset) }
+        let below = top.map { " below \($0)" } ?? ""
+        var line: String
+        switch (r.band, r.kind) {
+        case ("bumpy", "thermal"): line = "Bumpy\(below), strong thermals."
+        case ("bumpy", "wind"):    line = "Rough\(below), gusty wind and shear."
+        case ("bumpy", _):         line = "Bumpy\(below), thermals and wind together."
+        case ("chop", "thermal"):  line = "Light thermal bumps\(below)."
+        case ("chop", "wind"):     line = "Light chop\(below), mostly wind."
+        case ("chop", _):          line = "Light chop\(below), some thermals, some wind."
+        default:                   line = r.thermal >= r.mechanical
+                                        ? "Smooth, shallow layer and weak thermals."
+                                        : "Smooth, little wind to stir it."
+        }
+        if let next = r.changeBand, let at = r.changeAt {
+            let when = at.formatted(date: .omitted, time: .shortened)
+            let rank = ["smooth": 0, "chop": 1, "bumpy": 2]
+            let easing = (rank[next] ?? 0) < (rank[r.band] ?? 0)
+            line += easing ? " Settling down after \(when)." : " Getting bumpier after \(when)."
+        }
+        return line
+    }
+
+    private var rideColor: Color {
+        switch conditions.ride?.band {
+        case "bumpy": return .orange
+        case "chop": return .primary
+        default: return .secondary
+        }
+    }
+
     private static let ftFormat: NumberFormatter = {
         let f = NumberFormatter()
         f.numberStyle = .decimal
@@ -231,8 +270,23 @@ struct FieldConditionsCard: View {
                         .font(.subheadline.weight(.semibold))
                         .monospacedDigit()
                 }
-                HStack {
-                    Text("Bumpy, hazy air mixes below it, smoother air above.")
+                HStack(alignment: .top) {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(rideText)
+                            .foregroundStyle(rideColor)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if conditions.ride != nil {
+                            Button {
+                                withAnimation(.snappy(duration: 0.2)) { showRideInfo.toggle() }
+                            } label: {
+                                Image(systemName: "info.circle")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("How the ride estimate is made")
+                        }
+                    }
                     Spacer()
                     if let line = blLine {
                         HStack(spacing: 3) {
@@ -245,6 +299,13 @@ struct FieldConditionsCard: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                if showRideInfo {
+                    Text("An estimate from the forecast, not a measurement: the sun, the temperature drop through the lowest few hundred feet, the layer's depth, gusts, and the wind change between the surface and 250 ft. Pilot reports are not part of it; there are rarely enough to be useful.")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .transition(.opacity)
+                }
             }
 
             if let st = conditions.storm {

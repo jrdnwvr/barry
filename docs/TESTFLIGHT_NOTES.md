@@ -19,3 +19,4 @@ This build:
 
 - Build 82 (2026-09-17): first use of the long template (retired).
 - Build 83 (2026-09-17, 9c5a4c6): cancelled before archive; more work queued first.
+- Build 84 (2026-09-17, 78ef98f): storm row, watch sync + 6 h chart, shorter copy, I67 fix. First build on the short template.

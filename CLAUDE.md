@@ -163,8 +163,12 @@ card) now, not the map. **Lightning** (`backend/app/lightning.py`) is decoded
 from the METARs themselves (TS/VCTS + LTG remarks): `StationObs.lightning`,
 `CurrentObs.lightning`, `/combined.lightningNearby` (nearest fresh report
 within 100 mi with motion relative to the user), `ConditionsOut.storm`
-(model weather_code/CAPE + TAF). No new data source. Absent lightning means
-"nothing reported", never "no lightning".
+(model weather_code/CAPE + TAF). Absent lightning means "nothing reported",
+never "no lightning". **Strike positions** come from NOAA's GOES lightning
+mapper (`backend/app/sources/glm.py`, public S3, anonymous, polled per
+minute by the scheduler; `flashes.py` holds 15 min; `/lightning` slices
+0.02° bins; `LightningOverlay.swift` draws them). Fixed server cost, zero
+per user; `BARRY_GLM=0` disables the poll.
 
 Parked, fully built: **forecast radar** (HRRR via Iowa Mesonet, +6 h model
 frames) behind `RadarModel.modelFramesEnabled = false` — flip one Bool to ship;

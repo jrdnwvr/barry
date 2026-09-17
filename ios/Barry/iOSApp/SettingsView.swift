@@ -28,6 +28,8 @@ struct SettingsView: View {
     private var stormAlertsEnabled: Bool = false
     @AppStorage(RunwayWindsMode.key, store: AppConfig.sharedDefaults)
     private var runwayWindsRaw: String = RunwayWindsMode.auto.rawValue
+    @AppStorage(FieldConditionsCard.blReferenceKey, store: AppConfig.sharedDefaults)
+    private var blReference: String = "agl"
 
     @State private var newICAO: String = ""
     /// Live matches from /stations/search while the airport field has text.
@@ -99,6 +101,20 @@ struct SettingsView: View {
                     Text("Wind card")
                 } footer: {
                     Text(RunwayWindsMode(rawValue: runwayWindsRaw)?.footer ?? "")
+                }
+
+                Section {
+                    Picker("Boundary layer height", selection: $blReference) {
+                        Text("Above ground").tag("agl")
+                        Text("Above sea level").tag("msl")
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Boundary layer")
+                } footer: {
+                    Text(blReference == "msl"
+                         ? "The layer top as an altitude, field elevation included, to match the altimeter."
+                         : "The layer top as a height above the field.")
                 }
 
                 Section {

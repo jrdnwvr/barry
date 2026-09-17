@@ -92,6 +92,8 @@ struct RadarPanel: View {
     @State private var selectedStation: StationObs?
 
     private let ticker = Timer.publish(every: 0.55, on: .main, in: .common).autoconnect()
+    /// The flash slice ages a minute at a time; the server polls NOAA per minute.
+    private let lightningTicker = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     private var base: RadarBase { RadarBase(rawValue: baseRaw) ?? .radar }
     private var stationStyle: StationLayerStyle { StationLayerStyle(rawValue: stationStyleRaw) ?? .off }
@@ -145,9 +147,16 @@ struct RadarPanel: View {
             if wantsStations {
                 await model.fetchStations(center: initialRegion.center)
             }
+            if showStorms {
+                await model.fetchLightning(center: initialRegion.center)
+            }
             if base != .radar {
                 await model.fetchPressureField(region: model.lastRegion ?? initialRegion)
             }
+        }
+        .onReceive(lightningTicker) { _ in
+            guard showStorms else { return }
+            Task { await model.fetchLightning(center: model.lastRegion?.center ?? initialRegion.center, force: true) }
         }
         .onReceive(ticker) { _ in
             guard base == .radar, model.playing, !model.frames.isEmpty else { return }
@@ -181,7 +190,8 @@ struct RadarPanel: View {
             RadarKeySheet(base: base, wind: showWind, windStyle: windStyle, fronts: showFronts,
                           frontValidText: frontValidText, stations: stationsOn,
                           stationStyle: stationStyle, storms: showStorms,
-                          pressureStations: model.pressureField?.stations ?? 0)
+                          pressureStations: model.pressureField?.stations ?? 0,
+                          lightningCoverage: model.lightning.response?.coverage)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
@@ -200,7 +210,10 @@ struct RadarPanel: View {
         }
         .onChange(of: showStorms) { _, on in
             if on {
-                Task { await model.fetchStations(center: model.lastRegion?.center ?? initialRegion.center) }
+                Task {
+                    await model.fetchStations(center: model.lastRegion?.center ?? initialRegion.center)
+                    await model.fetchLightning(center: model.lastRegion?.center ?? initialRegion.center)
+                }
             }
         }
         .onChange(of: showFronts) { _, on in
@@ -235,6 +248,7 @@ struct RadarPanel: View {
                      stations: model.stationObs,
                      stationStyle: stationStyle,
                      showStorms: showStorms,
+                     lightning: model.lightning,
                      onSelectStation: { selectedStation = $0 },
                      home: home,
                      pressureState: pressureState,
@@ -242,7 +256,8 @@ struct RadarPanel: View {
                          model.scheduleFieldReload(for: region,
                                                    wind: showWind,
                                                    stations: wantsStations,
-                                                   pressure: base != .radar)
+                                                   pressure: base != .radar,
+                                                   storms: showStorms)
                      })
     }
 
@@ -323,7 +338,7 @@ struct RadarPanel: View {
     }
 
     private var attribution: some View {
-        Text("Radar RainViewer · NOAA NEXRAD · Wind Open-Meteo · Fronts NWS WPC · Stations AWC")
+        Text("Radar RainViewer · NOAA NEXRAD · Lightning NOAA GOES · Wind Open-Meteo · Fronts NWS WPC · Stations AWC")
             .font(.system(size: 8))
             .foregroundStyle(.tertiary)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -420,6 +435,18 @@ struct RadarPanel: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
         }
         windCalmNote
+        stormsNote
+    }
+
+    /// Storms on but the server's mapper feed is stale: say so, or an empty
+    /// map reads as "no lightning".
+    @ViewBuilder private var stormsNote: some View {
+        if showStorms, let r = model.lightning.response, !r.coverage {
+            Text("Lightning feed is catching up; flashes may be missing for a few minutes.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private func baseCaption(_ text: String) -> some View {

@@ -16,6 +16,7 @@ import httpx
 
 from . import conditions as conditions_mod
 from . import explain
+from . import flashes as flashes_mod
 from . import lightning as lightning_mod
 from . import persist
 from . import pressure_field
@@ -27,6 +28,7 @@ from .cache import StationRegistry, TTLCache
 from .interpreter import Sample, interpret
 from .models import (
     FieldGridResponse,
+    LightningResponse,
     PressureFieldResponse,
     TrackRecordOut,
     TafOut,
@@ -46,6 +48,7 @@ from .models import (
     TendencyOut,
 )
 from .sources import aviationweather as awc
+from .sources import glm
 from .sources import iem
 from .sources import openmeteo as om
 from .sources import rainviewer as rv
@@ -61,6 +64,9 @@ HRRR_TTL = 10 * 60.0      # HRRR runs land hourly; re-probing IEM every 10 min
                           # keeps the run fresh at ~8 tiny tile requests/hour
 FRONTS_TTL = 30 * 60.0    # WPC redraws the chart every 3 h; 30 min is plenty
 STATIONS_TTL = 10 * 60.0  # radar station layer: METARs are hourly, specials aside
+LIGHTNING_TTL = 60.0      # map slice of GLM flashes; the feed itself is polled per minute
+GLM_LOOKBACK = timedelta(seconds=flashes_mod.WINDOW_S + 60)
+GLM_CONCURRENCY = 4       # parallel file downloads per poll
 BULK_TTL = 5 * 60.0       # AWC's whole-world METAR cache: one 250 KB pull serves everyone
 FIELD_TTL = 10 * 60.0     # radar wind/BL grid: model updates hourly; one call per region cell
 FRAMES_TTL = 2 * 60.0     # RainViewer adds a frame every 10 min; 2 min keeps the newest near-live
@@ -160,6 +166,8 @@ class PressureService:
         self._bulk_history: List[tuple] = self._load_history()
         # {station: [call dicts]} — Barry's own trend calls, scored later.
         self._track_log: Dict[str, List[dict]] = persist.load("track_log") or {}
+        # GLM flashes (sources/glm.py), fed by the scheduler's minute poll.
+        self.flashes = flashes_mod.FlashStore()
 
     # ---- pressure (observed) -------------------------------------------------
 
@@ -700,6 +708,63 @@ class PressureService:
         await self.cache.set(cache_key, resp, ttl=FIELD_TTL)
         return resp
 
+    # ---- GOES GLM lightning ---------------------------------------------------
+
+    async def poll_lightning(self) -> int:
+        """Pull every GLM file newer than the last one seen, per satellite,
+        into the flash store. Returns files fetched. Never raises: an
+        outage just means the store goes stale (coverage=False)."""
+        import asyncio
+        now = _now()
+        store = self.flashes
+        fetched = 0
+        sem = asyncio.Semaphore(GLM_CONCURRENCY)
+
+        async def grab(bucket, key, sat):
+            nonlocal fetched
+            async with sem:
+                try:
+                    fls = await glm.fetch_file(self._client, bucket, key)
+                except Exception as exc:
+                    log.warning("glm: %s failed: %s", key, exc)
+                    return None
+            fetched += 1
+            own = glm.OWNED_SIDE[sat]
+            return [f for f in fls if own(f.lon)]
+
+        any_ok = False
+        for sat, bucket in glm.BUCKETS.items():
+            try:
+                keys = await glm.list_recent(self._client, bucket, now, GLM_LOOKBACK)
+            except Exception as exc:
+                log.warning("glm: listing %s failed: %s", bucket, exc)
+                continue
+            any_ok = True
+            last = store.seen.get(sat)
+            todo = [k for k in keys if last is None or k > last]
+            results = await asyncio.gather(*(grab(bucket, k, sat) for k in todo))
+            batch = [f for r in results if r for f in r]
+            store.add(batch, now)
+            if todo:
+                store.seen[sat] = max(todo)
+        store.prune(now)
+        if any_ok:
+            store.last_fetch = now
+            store.files += fetched
+        return fetched
+
+    async def get_lightning(self, lat: float, lon: float, half: float = 3.0) -> LightningResponse:
+        """Binned GLM flashes around a point for the map's Storms overlay.
+        Served from memory; quantized so nearby users share the slice."""
+        half = max(0.5, min(6.0, half))
+        key = f"lightning:{round(lat * 5) / 5}:{round(lon * 5) / 5}:{half}"
+        cached = await self.cache.get(key)
+        if cached is not None:
+            return cached
+        resp = self.flashes.response(lat, lon, half, _now())
+        await self.cache.set(key, resp, ttl=LIGHTNING_TTL)
+        return resp
+
     # ---- WPC surface fronts --------------------------------------------------
 
     async def get_fronts(self) -> FrontsResponse:
@@ -784,12 +849,16 @@ class PressureService:
         nearby: Optional[lightning_mod.LightningNearby] = None
         try:
             if f_lat is not None and f_lon is not None:
-                table = await self.metar_bulk()
+                until = None
+                if conditions is not None and conditions.storm is not None \
+                   and conditions.storm.risk == "likely":
+                    until = conditions.storm.end
+                # Real flash positions from orbit first; a station's own
+                # report when the mapper feed is stale or sees nothing.
+                if self.flashes.fresh(_now()):
+                    nearby = self.flashes.nearest(f_lat, f_lon, _now(), continues_until=until)
+                table = None if nearby is not None else await self.metar_bulk()
                 if table:
-                    until = None
-                    if conditions is not None and conditions.storm is not None \
-                       and conditions.storm.risk == "likely":
-                        until = conditions.storm.end
                     nearby = lightning_mod.nearest(table, f_lat, f_lon, _now(), continues_until=until)
                     if nearby is not None and nearby.name is None:
                         info = await self.station_info()

@@ -18,6 +18,7 @@ struct RadarKeySheet: View {
     let stationStyle: StationLayerStyle
     let storms: Bool
     let pressureStations: Int
+    var lightningCoverage: Bool? = nil
 
     var body: some View {
         ScrollView {
@@ -59,8 +60,25 @@ struct RadarKeySheet: View {
                     }
                 }
 
+                if storms {
+                    section("Strikes", icon: "sparkles") {
+                        HStack(spacing: 10) {
+                            dotKey(Color(red: 1.0, green: 0.95, blue: 0.55), "new")
+                            dotKey(Color(red: 1.0, green: 0.80, blue: 0.20), "5 min")
+                            dotKey(Color(red: 1.0, green: 0.55, blue: 0.10), "10 min")
+                            dotKey(Color(red: 0.85, green: 0.25, blue: 0.15).opacity(0.7), "15 min")
+                        }
+                        .font(.caption)
+                        Text("Flashes seen from orbit by NOAA's GOES lightning mapper over the last 15 minutes, bigger dots where more fell. A minute or two behind real time; the mapper sees cloud tops, so a few ground strikes under thick cloud are missed.")
+                        if lightningCoverage == false {
+                            Text("The feed is catching up right now, so flashes may be missing.")
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                }
+
                 if storms || stations {
-                    section("Lightning", icon: "bolt.fill") {
+                    section("Station lightning", icon: "bolt.fill") {
                         HStack(spacing: 14) {
                             boltKey("bolt.fill", LightningInk.color("thunderstorm"), "at the field")
                             boltKey("bolt.fill", LightningInk.color("vicinity"), "close by")
@@ -71,7 +89,7 @@ struct RadarKeySheet: View {
                     }
                 }
 
-                Text("Radar by RainViewer from NOAA NEXRAD. Wind and pressure fields from Open-Meteo. Stations from aviationweather.gov. Fronts from the NWS Weather Prediction Center.")
+                Text("Radar by RainViewer from NOAA NEXRAD. Lightning from NOAA's GOES satellites. Wind and pressure fields from Open-Meteo. Stations from aviationweather.gov. Fronts from the NWS Weather Prediction Center.")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -125,6 +143,13 @@ struct RadarKeySheet: View {
             RoundedRectangle(cornerRadius: 2)
                 .fill(color)
                 .frame(width: 16, height: 9)
+            Text(label)
+        }
+    }
+
+    private func dotKey(_ color: Color, _ label: String) -> some View {
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 9, height: 9)
             Text(label)
         }
     }

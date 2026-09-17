@@ -527,38 +527,10 @@ struct PressureChartView: View {
         }
     }
 
-    // MARK: - Lightning bug (nearest report within 100 mi)
-
-    /// When lightning is being reported nearby, the top of the "now" line
-    /// carries it instead of the feature pin: distance, direction, age, and
-    /// whether the storm is coming this way. A storm beats a trough label.
-    @ChartContentBuilder private var lightningContent: some ChartContent {
-        if let n = combined.lightningNearby {
-            let ink: Color = n.status == "thunderstorm" && n.distanceMi < 3 ? .red : .orange
-            RuleMark(x: .value("Now", now))
-                .foregroundStyle(.clear)
-                .annotation(position: .top, alignment: .center, spacing: 2) {
-                    VStack(spacing: 0) {
-                        Label(n.headline(now: now), systemImage: "bolt.fill")
-                            .font(.system(size: 9, weight: .semibold))
-                        if let d = n.detail(now: now) {
-                            Text(d)
-                                .font(.system(size: 8))
-                                .opacity(0.8)
-                        }
-                    }
-                    .foregroundStyle(ink)
-                    .fixedSize()
-                }
-        }
-    }
-
     @ChartContentBuilder private var featureContent: some ChartContent {
         // Interpreter feature pin (§4.3): a dashed purple guide at the detected /
         // forecast feature time (the verdict's "trough at 6pm" on the curve).
-        // The lightning bug takes its place while lightning is nearby.
-        if combined.lightningNearby == nil,
-           let reading = combined.reading,
+        if let reading = combined.reading,
            let ft = reading.featureTime,
            ft >= domainBounds.0, ft <= domainBounds.1,
            let label = featureChartLabel(reading.feature) {
@@ -655,7 +627,6 @@ struct PressureChartView: View {
             forecastLineContent
             phoneContent
             featureContent
-            lightningContent
             overlayContent
         }
         .chartYScale(domain: yDomain)

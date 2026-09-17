@@ -77,6 +77,7 @@
 		8C6BCDDE909F4DDEBB5F16AA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72812DF1800A9DF0CF5EF2C3 /* SettingsView.swift */; };
 		8C7B2F5AFF63137EA0451EA1 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0094727B647701DDDCF17BD2 /* LocationManager.swift */; };
 		8F156D0C3F3371A2376F2394 /* BarometerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02CC4610E9A811E4A3554DCB /* BarometerManager.swift */; };
+		9267F000F0820CEB0BF3D9CC /* LightningOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 252EE81999FF16293FA0CF7A /* LightningOverlay.swift */; };
 		93B3BCD445531D00C4959583 /* PressureHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */; };
 		967511152A1EBB2D602F2B9A /* SavedLocations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */; };
 		971C47371255C41380413D3E /* SavedLocations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */; };
@@ -184,6 +185,7 @@
 		1666B232D9C24406F937CCE8 /* RadarSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarSheets.swift; sourceTree = "<group>"; };
 		1A24A6845ECB66698D61771D /* TendencyProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TendencyProvider.swift; sourceTree = "<group>"; };
 		1E86B20D35A1249F2520596E /* BarryWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BarryWatch.entitlements; sourceTree = "<group>"; };
+		252EE81999FF16293FA0CF7A /* LightningOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightningOverlay.swift; sourceTree = "<group>"; };
 		2542DA2C850B2399B31A9069 /* Tendency.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tendency.swift; sourceTree = "<group>"; };
 		292532F4A2C2D5C39CC797B1 /* CoreMotion.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMotion.framework; path = System/Library/Frameworks/CoreMotion.framework; sourceTree = SDKROOT; };
 		2AF1347518FFA7C2430E8A95 /* BarometerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarometerEngine.swift; sourceTree = "<group>"; };
@@ -372,6 +374,7 @@
 				01599505777741EA095092C0 /* HeroView.swift */,
 				EB906A0DF0FCEFBE609EBF06 /* HorizontalDragGesture.swift */,
 				F4C5676D3E1E52D59CDFED12 /* Info.plist */,
+				252EE81999FF16293FA0CF7A /* LightningOverlay.swift */,
 				B98E77604746429DE78EF9C4 /* OnboardingView.swift */,
 				778E430DEB72ECE6B1DB5CCA /* PressureChartView.swift */,
 				763CE62FEE3C1CA173ABA1C3 /* PressureFieldOverlay.swift */,
@@ -639,6 +642,7 @@
 				70D7BA6937527AE4D263FF9A /* FrontsOverlay.swift in Sources */,
 				4ED2D56EC1DA59D7FBBD779D /* HeroView.swift in Sources */,
 				69FA11493C9F04A3A79384A3 /* HorizontalDragGesture.swift in Sources */,
+				9267F000F0820CEB0BF3D9CC /* LightningOverlay.swift in Sources */,
 				8C7B2F5AFF63137EA0451EA1 /* LocationManager.swift in Sources */,
 				63129BEFD89CFA743A98860E /* Models.swift in Sources */,
 				57240D7CD7B6FC81EE382681 /* OnboardingView.swift in Sources */,

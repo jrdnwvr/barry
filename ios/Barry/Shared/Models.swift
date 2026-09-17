@@ -415,6 +415,26 @@ struct PressureFieldResponse: Codable, Hashable {
     let cachedAt: Date
 }
 
+// MARK: - GLM lightning (flashes seen from orbit)
+
+struct LightningCell: Codable, Hashable {
+    let lat: Double
+    let lon: Double
+    let count: Int
+    let ageSec: Int
+}
+
+struct LightningResponse: Codable, Hashable {
+    var cells: [LightningCell] = []
+    var windowSec: Int = 900
+    var binDeg: Double = 0.02
+    /// False when the server's feed is stale: an empty map then means
+    /// "unknown", never "no lightning".
+    var coverage: Bool = false
+    var source: String?
+    let cachedAt: Date
+}
+
 // MARK: - WPC surface fronts
 
 /// One front off the WPC chart: type cold|warm|stnry|ocfnt|trof and points
@@ -550,6 +570,8 @@ struct LightningNearby: Codable, Hashable {
     var moving: String?
     var towardYou: Bool?
     var continuesUntil: Date?
+    var source: String?     // "metar" | "glm"; absent on old backends
+    var flashes: Int?
 
     private static let cardinalWord: [String: String] = [
         "N": "north", "NE": "northeast", "E": "east", "SE": "southeast",
@@ -562,6 +584,17 @@ struct LightningNearby: Codable, Hashable {
         let age = m < 60 ? "\(m)m ago" : "\(m / 60)h \(m % 60)m ago"
         let where_ = distanceMi < 3 ? "at the field" : "\(distanceMi) mi \(cardinal)"
         return "Lightning \(where_) · \(age)"
+    }
+
+    /// One sentence for the hero card: "Lightning 17 mi to the north, 10 min
+    /// ago, moving toward you." / "Lightning at the field, 3 min ago."
+    func sentence(now: Date) -> String {
+        let m = max(0, Int(now.timeIntervalSince(at) / 60))
+        let age = m < 1 ? "just now" : (m < 60 ? "\(m) min ago" : "\(m / 60) h \(m % 60) min ago")
+        let where_ = distanceMi < 3 ? "at the field" : "\(distanceMi) mi to the \(Self.cardinalWord[cardinal] ?? cardinal)"
+        var t = "Lightning \(where_), \(age)"
+        if let d = detail(now: now) { t += ", \(d)" }
+        return t + "."
     }
 
     /// The second line: motion relative to you, else whether more is expected.

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -33,9 +34,11 @@ class Scheduler:
         self._service = service
         self._interval = interval_seconds
         self._task: Optional[asyncio.Task] = None
+        self._glm_task: Optional[asyncio.Task] = None
         self._stop = asyncio.Event()
         self.cycles = 0
         self.last_request_count = 0
+        self.glm_cycles = 0
 
     async def refresh_once(self) -> int:
         """Refresh all active stations in batched calls. Returns #upstream calls."""
@@ -106,14 +109,36 @@ class Scheduler:
             except asyncio.TimeoutError:
                 pass
 
+    # GLM files land every 20 s; a minute poll keeps the map within about
+    # a minute of real time at a fixed cost no user count can change.
+    GLM_INTERVAL = 60.0
+
+    async def _run_glm(self) -> None:
+        while not self._stop.is_set():
+            try:
+                await self._service.poll_lightning()
+                self.glm_cycles += 1
+            except Exception:
+                log.exception("scheduler: glm poll error")
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=self.GLM_INTERVAL)
+            except asyncio.TimeoutError:
+                pass
+
     def start(self) -> None:
         if self._task is None:
             self._stop.clear()
             self._task = asyncio.create_task(self._run())
             log.info("scheduler: started, interval=%.0fs", self._interval)
+        if self._glm_task is None and os.environ.get("BARRY_GLM", "1") != "0":
+            self._glm_task = asyncio.create_task(self._run_glm())
+            log.info("scheduler: glm poll started, interval=%.0fs", self.GLM_INTERVAL)
 
     async def stop(self) -> None:
         self._stop.set()
         if self._task is not None:
             await self._task
             self._task = None
+        if self._glm_task is not None:
+            await self._glm_task
+            self._glm_task = None

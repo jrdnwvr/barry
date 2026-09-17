@@ -12,6 +12,16 @@ import SwiftUI
 struct FieldConditionsCard: View {
     let conditions: ConditionsOut
 
+    /// "agl" (the model's own height above ground) or "msl" (field
+    /// elevation added, so the number reads like an altimeter).
+    static let blReferenceKey = "boundaryLayerReference"
+    @AppStorage(FieldConditionsCard.blReferenceKey, store: AppConfig.sharedDefaults)
+    private var blReference: String = "agl"
+
+    private var blMSL: Bool { blReference == "msl" && conditions.fieldElevationFt != nil }
+    private var blOffset: Int { blMSL ? (conditions.fieldElevationFt ?? 0) : 0 }
+    private var blSuffix: String { blMSL ? " MSL" : " AGL" }
+
     private static let ftFormat: NumberFormatter = {
         let f = NumberFormatter()
         f.numberStyle = .decimal
@@ -58,10 +68,10 @@ struct FieldConditionsCard: View {
         let fc = conditions.blForecast
         guard let hi = fc.max(by: { $0.ft < $1.ft }), let lo = fc.min(by: { $0.ft < $1.ft }) else { return nil }
         if hi.ft - now >= 1000 {
-            return ("Rising to \(ft(hi.ft)) around \(hi.t.formatted(date: .omitted, time: .shortened))", true)
+            return ("Rising to \(ft(hi.ft + blOffset)) around \(hi.t.formatted(date: .omitted, time: .shortened))", true)
         }
         if now - lo.ft >= 1000 {
-            return ("Down to \(ft(lo.ft)) by \(lo.t.formatted(date: .omitted, time: .shortened))", false)
+            return ("Down to \(ft(lo.ft + blOffset)) by \(lo.t.formatted(date: .omitted, time: .shortened))", false)
         }
         return nil
     }
@@ -126,7 +136,7 @@ struct FieldConditionsCard: View {
                     Text("Boundary layer top")
                         .font(.subheadline.weight(.medium))
                     Spacer()
-                    Text(ft(bl) + " AGL")
+                    Text(ft(bl + blOffset) + blSuffix)
                         .font(.subheadline.weight(.semibold))
                         .monospacedDigit()
                 }

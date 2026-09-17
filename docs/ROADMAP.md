@@ -259,9 +259,18 @@ top bug in place of the feature pin. Open-Meteo `cape` + `weather_code` +
 the chart, `ConditionsOut.storm` gives a likely/possible outlook (model,
 TAF, or CAPE alone).
 
-**G8. Strike positions.** (L) Not started. GOES GLM on NOAA's public AWS
-buckets (keyless, public domain, 20 s files, ~8 km) is the only free
-source of real flash positions; needs a netCDF reader in the image.
+**G8. Strike positions.** (L) DONE 2026-09-16: `sources/glm.py` polls
+NOAA's public GOES buckets (GOES-East G19 + GOES-West G18, anonymous S3,
+public domain) once a minute from the scheduler, reads the netCDF flash
+variables with h5py in memory, and `flashes.py` keeps 15 minutes of
+flashes. `/lightning?lat&lon` serves 0.02° bins for the Storms overlay
+(`LightningOverlay.swift`, dots aging white to red); `/combined.lightningNearby`
+prefers the mapper (nearest flash, count within 100 mi, drift from the
+centroid of the newer half against the older half) over a station's report.
+Cost is fixed at the server: about 2 to 3 GB a day regardless of users.
+`BARRY_GLM=0` turns the poll off. Not done: an app-side flash count badge
+on the Storms chip; the West satellite's Pacific coverage is kept only west
+of 106° W so the overlap is not double counted.
 
 ## F. Efficiency check (current state, for the record)
 

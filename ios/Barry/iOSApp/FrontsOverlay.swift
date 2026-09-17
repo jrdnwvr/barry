@@ -428,7 +428,10 @@ final class PressureCenterView: MKAnnotationView {
         let tint = c.isHigh ? FrontKind.cold_ : FrontKind.warm_
         letter.textColor = tint
         disc.layer.borderColor = tint.withAlphaComponent(0.8).cgColor
-        value.text = "\(c.pressure) hPa"
+        // WPC gives whole hPa; show it in the unit the rest of the app uses.
+        let unit = PressureUnit(rawValue: AppConfig.sharedDefaults.string(forKey: "pressureUnit") ?? "") ?? .inHg
+        value.text = unit == .hPa ? "\(c.pressure) hPa"
+                                  : String(format: "%.2f inHg", unit.convert(Double(c.pressure)))
         alpha = c.alpha
     }
 }

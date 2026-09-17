@@ -59,6 +59,24 @@ final class RadarModel: ObservableObject {
         stationObs = resp.stations
     }
 
+    /// GLM flashes for the Storms overlay (backend memory; polled per minute).
+    @Published var lightning: LightningState = LightningState()
+    private var lightningTask: Task<Void, Never>?
+    private var lightningFetchedAround: CLLocationCoordinate2D?
+
+    /// Fetch the flash slice around a center. Cheap on the server (memory),
+    /// so re-fetch on a real move (~1.5°) and on the minute tick.
+    func fetchLightning(center: CLLocationCoordinate2D, force: Bool = false) async {
+        if !force, let prev = lightningFetchedAround,
+           abs(prev.latitude - center.latitude) < 1.5, abs(prev.longitude - center.longitude) < 1.5,
+           lightning.response != nil {
+            return
+        }
+        guard let resp = try? await BarryAPI().lightning(lat: center.latitude, lon: center.longitude) else { return }
+        lightningFetchedAround = center
+        lightning = LightningState(response: resp, version: lightning.version + 1)
+    }
+
     /// Last region the map reported — used when a toggle flips on.
     var lastRegion: MKCoordinateRegion?
     private var fieldTask: Task<Void, Never>?
@@ -243,8 +261,17 @@ final class RadarModel: ObservableObject {
 
     /// Debounced reload — pans/zooms fire this; only the last one within ~0.7 s wins.
     func scheduleFieldReload(for region: MKCoordinateRegion, wind: Bool,
-                             stations: Bool = false, pressure: Bool = false) {
+                             stations: Bool = false, pressure: Bool = false,
+                             storms: Bool = false) {
         lastRegion = region
+        if storms {
+            lightningTask?.cancel()
+            lightningTask = Task {
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                guard !Task.isCancelled else { return }
+                await fetchLightning(center: region.center)
+            }
+        }
         if pressure {
             pressureTask?.cancel()
             pressureTask = Task {

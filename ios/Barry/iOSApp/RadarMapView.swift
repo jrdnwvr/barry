@@ -32,6 +32,8 @@ struct RadarMapView: UIViewRepresentable {
     /// Bolts at stations reporting lightning. With the station layer on the
     /// barbs carry the bolt themselves; this adds standalone markers otherwise.
     var showStorms: Bool = false
+    /// GLM flash cells for the Storms overlay; nil draws nothing.
+    var lightning: LightningState? = nil
     var onSelectStation: ((StationObs) -> Void)? = nil
     /// nil: the red pin marks the station and the map shows the user's own
     /// blue dot. Otherwise the home station is drawn as itself (see HomeMarker).
@@ -167,6 +169,24 @@ struct RadarMapView: UIViewRepresentable {
             }
             pressureOverlay?.state = state
             if let o = pressureOverlay, let r = map.renderer(for: o) { r.setNeedsDisplay() }
+        }
+        var lightningOverlay: LightningOverlay?
+        var shownLightning: LightningState?
+
+        func syncLightning(_ state: LightningState?, on map: MKMapView) {
+            guard state != shownLightning else { return }
+            shownLightning = state
+            guard let state, state.response != nil else {
+                if let o = lightningOverlay { map.removeOverlay(o); lightningOverlay = nil }
+                return
+            }
+            if lightningOverlay == nil {
+                let o = LightningOverlay()
+                lightningOverlay = o
+                map.addOverlay(o, level: .aboveLabels)   // strikes over everything
+            }
+            lightningOverlay?.state = state
+            if let o = lightningOverlay, let r = map.renderer(for: o) { r.setNeedsDisplay() }
         }
         var frontRenderer: FrontFieldRenderer?
         var lastFrontVersion = -1
@@ -312,6 +332,9 @@ struct RadarMapView: UIViewRepresentable {
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
             if let p = overlay as? PressureFieldOverlay {
                 return PressureFieldRenderer(overlay: p)
+            }
+            if let l = overlay as? LightningOverlay {
+                return LightningRenderer(overlay: l)
             }
             if let field = overlay as? FrontFieldOverlay {
                 let r = FrontFieldRenderer(overlay: field)
@@ -572,6 +595,7 @@ struct RadarMapView: UIViewRepresentable {
         context.coordinator.syncFlow(windFlow, on: map)
         context.coordinator.syncStations(stations, style: stationStyle, on: map)
         context.coordinator.syncStorms(stations, show: showStorms, stationsOn: stationStyle != .off, on: map)
+        context.coordinator.syncLightning(showStorms ? lightning : nil, on: map)
         context.coordinator.setRadarHidden(!radarVisible)
 
         guard frames.indices.contains(index) else { return }

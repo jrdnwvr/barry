@@ -75,6 +75,9 @@ async def healthz():
     return {
         "status": "ok",
         "scheduler_cycles": sched.cycles,
+        "glm_cycles": sched.glm_cycles,
+        "glm_flashes": len(get_service().flashes),
+        "glm_last_fetch": get_service().flashes.last_fetch,
         "last_request_count": sched.last_request_count,
     }
 
@@ -160,6 +163,18 @@ async def radar_pressure(
     region, contoured from Barry's own station table. No upstream call."""
     resp = await get_service().get_pressure_field(lat, lon, latSpan, lonSpan)
     return resp.model_dump(mode="json", by_alias=True)
+
+
+@app.get("/lightning")
+async def get_lightning(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    half: float = Query(3.0, ge=0.5, le=6.0),
+):
+    """GOES GLM flashes over the last 15 minutes around a point, binned to
+    0.02° cells, from the server's own memory (NOAA is polled once a
+    minute regardless of users). coverage=false means the feed is stale."""
+    return await get_service().get_lightning(lat, lon, half)
 
 
 @app.get("/radar/frames")

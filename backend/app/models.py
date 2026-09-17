@@ -429,6 +429,30 @@ class ConditionsOut(BaseModel):
     storm: Optional[StormOut] = None
 
 
+class LightningCell(BaseModel):
+    """One map cell of GLM flashes: centre, flashes in the window, and the
+    age of the newest one (seconds)."""
+
+    lat: float
+    lon: float
+    count: int
+    ageSec: int
+
+
+class LightningResponse(BaseModel):
+    """Flashes seen from orbit over the last `windowSec`, binned to
+    `binDeg` cells, inside the requested box. `coverage` is False when the
+    feed has not been read recently (an empty map then means "unknown",
+    not "no lightning")."""
+
+    cells: List[LightningCell] = Field(default_factory=list)
+    windowSec: int = 900
+    binDeg: float = 0.02
+    coverage: bool = False
+    source: str = "NOAA GOES Geostationary Lightning Mapper"
+    cachedAt: datetime
+
+
 class LightningNearby(BaseModel):
     """The nearest station reporting lightning within LIGHTNING_RADIUS_KM of
     the user's station, from the bulk METAR table: how far, which way, how
@@ -441,11 +465,13 @@ class LightningNearby(BaseModel):
     distanceMi: int
     bearingDeg: float
     cardinal: str
-    status: str                            # thunderstorm | vicinity | distant
-    at: datetime                           # the report's observation time
+    status: str                            # thunderstorm | vicinity | distant | strikes
+    at: datetime                           # the report's observation time (GLM: newest flash)
     moving: Optional[str] = None           # the storm's reported motion (toward)
     towardYou: Optional[bool] = None       # None = unknown or sideways
     continuesUntil: Optional[datetime] = None
+    source: str = "metar"                  # metar (a station's report) | glm (flashes)
+    flashes: Optional[int] = None          # GLM: flashes within 100 mi over 15 min
 
 
 class Sources(BaseModel):

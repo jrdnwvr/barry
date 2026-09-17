@@ -89,6 +89,18 @@ struct BarryAPI {
         return try await get(comps?.url)
     }
 
+    /// GOES lightning-mapper flashes over the last 15 minutes around a
+    /// point, binned, from the server's memory (it polls NOAA, not the phone).
+    func lightning(lat: Double, lon: Double) async throws -> LightningResponse {
+        var comps = URLComponents(url: baseURL.appendingPathComponent("lightning"),
+                                  resolvingAgainstBaseURL: false)
+        comps?.queryItems = [
+            URLQueryItem(name: "lat", value: String(lat)),
+            URLQueryItem(name: "lon", value: String(lon)),
+        ]
+        return try await get(comps?.url)
+    }
+
     /// WPC surface fronts: analysis + forecast positions. Failure just means
     /// the fronts layer stays empty.
     func fronts() async throws -> FrontsResponse {

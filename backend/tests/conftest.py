@@ -295,6 +295,47 @@ def sample_taf(sid="KLUK"):
     }]
 
 
+def sample_glm_file(start, flashes, quality=None):
+    """A minimal GLM L2 LCFA file in memory, with the real variable names,
+    dtypes and scaling: float32 lat/lon, unsigned int16 time offsets with
+    scale/offset against a 'seconds since' base, int16 energy."""
+    import io
+    import h5py
+    import numpy as np
+    buf = io.BytesIO()
+    with h5py.File(buf, "w") as f:
+        f.create_dataset("product_time", data=np.float64((start - datetime(2000, 1, 1, 12, tzinfo=timezone.utc)).total_seconds()))
+        f.create_dataset("flash_lat", data=np.array([x[0] for x in flashes], dtype="float32"))
+        f.create_dataset("flash_lon", data=np.array([x[1] for x in flashes], dtype="float32"))
+        scale, offset = 0.00038148, -5.0
+        raw = np.array([round((x[2] - offset) / scale) for x in flashes], dtype="uint16").view("int16")
+        t = f.create_dataset("flash_time_offset_of_first_event", data=raw)
+        t.attrs["scale_factor"] = np.array([scale], dtype="float32")
+        t.attrs["add_offset"] = np.array([offset], dtype="float32")
+        t.attrs["_Unsigned"] = np.bytes_(b"true")
+        t.attrs["units"] = np.bytes_(start.strftime("seconds since %Y-%m-%d %H:%M:%S.000").encode())
+        e = f.create_dataset("flash_energy", data=np.array([100] * len(flashes), dtype="int16"))
+        e.attrs["scale_factor"] = np.array([9.99996e-16], dtype="float32")
+        e.attrs["add_offset"] = np.array([2.8515e-16], dtype="float32")
+        f.create_dataset("flash_quality_flag", data=np.array(quality or [0] * len(flashes), dtype="int16"))
+    return buf.getvalue()
+
+
+def _glm_key(sat, start):
+    doy = start.strftime("%Y%j%H%M%S")
+    end = (start + timedelta(seconds=20)).strftime("%Y%j%H%M%S")
+    return (f"GLM-L2-LCFA/{start:%Y/%j/%H}/OR_GLM-L2-LCFA_{sat}_s{doy}0_e{end}0_c{end}6.nc")
+
+
+def sample_s3_listing(now, sat="G19"):
+    """ListObjectsV2 XML with two 20 s files ending two minutes before now."""
+    keys = [_glm_key(sat, now - timedelta(minutes=2)), _glm_key(sat, now - timedelta(minutes=2) + timedelta(seconds=20))]
+    items = "".join(f"<Contents><Key>{k}</Key><LastModified>2026-09-17T00:00:31.000Z</LastModified>"
+                    f"<Size>361915</Size></Contents>" for k in keys)
+    return ('<?xml version="1.0" encoding="UTF-8"?><ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">'
+            f'<Name>noaa-goes19</Name><KeyCount>2</KeyCount>{items}</ListBucketResult>')
+
+
 class FakeUpstream:
     """Records calls and serves canned AWC / Open-Meteo responses."""
 
@@ -325,6 +366,24 @@ class FakeUpstream:
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         url = str(request.url)
+        if "s3.amazonaws.com" in url:
+            # NOAA's public GOES buckets: a listing per hour, then the files.
+            if getattr(self, "s3_fail", False):
+                return httpx.Response(503, text="down")
+            now = datetime.now(timezone.utc)
+            sat = "G18" if "goes18" in url else "G19"
+            if "list-type=2" in url:
+                self.s3_lists = getattr(self, "s3_lists", 0) + 1
+                prefix = request.url.params.get("prefix", "")
+                if prefix != f"GLM-L2-LCFA/{now:%Y/%j/%H}/":
+                    return httpx.Response(200, text=sample_s3_listing(now, sat).split("<Contents>")[0] + "</ListBucketResult>")
+                return httpx.Response(200, text=sample_s3_listing(now, sat))
+            self.s3_files = getattr(self, "s3_files", 0) + 1
+            start = now - timedelta(minutes=2)
+            pts = ([(39.30, -84.65, 1.0), (39.31, -84.66, 2.0), (39.60, -84.90, 3.0)] if sat == "G19"
+                   else [(39.30, -84.65, 1.0), (44.0, -120.0, 2.0)])   # East also sees the West's side; split drops dupes
+            return httpx.Response(200, content=sample_glm_file(start, pts),
+                                  headers={"content-type": "application/x-netcdf"})
         if "afos/retrieve.py" in url:
             # WPC coded front bulletins (text). Trimmed from real 2026-09-14
             # products so the parser is tested against the genuine format.

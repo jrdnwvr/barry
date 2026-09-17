@@ -2,16 +2,18 @@
 //  Barry — iOS
 //
 //  The wind-component picture pilots already read: a compass rose (degrees
-//  true, matching both the METAR and the runway headings), the field's
-//  runways drawn to their real orientation in the middle, and the wind as a
-//  barb sitting on the ring at the direction it comes from, staff outward,
-//  speed flags on it. Nothing here needs data the card doesn't already have.
+//  true, matching both the METAR and the runway headings), the chosen runway
+//  drawn to its real orientation in the middle when there is one, and the
+//  wind as a barb sitting on the ring at the direction it comes from, staff
+//  outward, speed flags on it. Without a runway it is simply the wind on
+//  the rose. Nothing here needs data the card doesn't already have.
 
 import SwiftUI
 
 struct RunwayWindDial: View {
     let runways: [Runway]
-    let bestIdent: String
+    /// nil = no runway to draw (the plain wind rose).
+    let bestIdent: String?
     let windDirDeg: Double?
     let windKt: Double
     let gustKt: Double?
@@ -35,8 +37,9 @@ struct RunwayWindDial: View {
     }
 
     private var accessibilityText: String {
-        guard let d = windDirDeg, windKt >= 1 else { return "Wind calm. Runway \(bestIdent)." }
-        return "Wind from \(Int(d)) degrees at \(Int(windKt)) knots\(gustKt.map { ", gusting \(Int($0))" } ?? ""). Best runway \(bestIdent)."
+        let rwy = bestIdent.map { " Best runway \($0)." } ?? ""
+        guard let d = windDirDeg, windKt >= 1 else { return "Wind calm." + rwy }
+        return "Wind from \(Int(d)) degrees at \(Int(windKt)) knots\(gustKt.map { ", gusting \(Int($0))" } ?? "")." + rwy
     }
 
     // MARK: - Pieces
@@ -68,7 +71,8 @@ struct RunwayWindDial: View {
     private func drawRunways(_ ctx: GraphicsContext, _ c: CGPoint, _ r: CGFloat) {
         // Only the selected runway: the one the sentence is about, drawn to
         // its true heading with both end numbers, the chosen end in blue.
-        guard let rw = runways.first(where: { $0.le == bestIdent || $0.he == bestIdent }) else { return }
+        guard let bestIdent,
+              let rw = runways.first(where: { $0.le == bestIdent || $0.he == bestIdent }) else { return }
         let half = r * 0.62
         let a = point(c, half, deg: rw.leHeading + 180)   // the "le" end sits opposite its heading
         let b = point(c, half, deg: rw.leHeading)

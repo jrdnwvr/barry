@@ -221,6 +221,48 @@ and calibration state. A single SQLite file on the Unraid volume for
 history and the last-good copies of each upstream (already done for
 forecasts, ad hoc) makes deploys invisible to users.
 
+## G. Radar cleanup and lightning (2026-09-16)
+
+**G1. Two-tier layers.** (M) DONE 2026-09-16: `RadarBase` (Radar / Pressure /
+Change, exclusive; Pressure = isobars + shading, Change = isallobars +
+shading) and overlays Wind / Fronts / Stations / Storms. Boundary-layer
+top left the map and lives on the main page under density altitude
+(`ConditionsOut.boundaryLayerFt` + 12 h forecast, from the same Open-Meteo call).
+
+**G2. Chip bar.** (M) DONE 2026-09-16: one scrollable row (segmented base,
+overlay chips, More) replaces the Layers panel and the iPad's two compact
+rows. Wind style and station style moved to `RadarMoreSheet`.
+
+**G3. One timeline.** (S) DONE 2026-09-16: the radar scrubber shows only with
+the Radar base; the front Now/+12h/+24h row folds behind a time chip next
+to the Fronts chip.
+
+**G4. A key that reflects the screen.** (S) DONE 2026-09-16: `RadarKeySheet`
+lists only what is on (rain swatches, pressure or change ramp, front
+symbols, category dots, bolt colors) with the explainer sentences; the
+corner front key is gone.
+
+**G5. Declutter.** (S) DONE 2026-09-16: station ids only inside a 2.2° span
+(home always named); boundary-layer labels gone.
+
+**G6. Presets.** (S) Not done; the chip bar reads fine without them.
+
+**G7. Lightning from data we already have.** (M) DONE 2026-09-16, no new
+source: `lightning.py` decodes TS/VCTS and the LTG remarks (frequency,
+IC/CC/CG, OHD/VC/DSNT, directions, MOV, TSB/TSE, TSNO) on every bulk row and
+the home station. Shows as bolts on the station layer and the Storms
+overlay, a line on the hero card and station sheet, a lightning signal in
+the explanation, and `/combined.lightningNearby` (nearest fresh report within
+100 mi: distance, direction, age, moving toward you or away) as the chart's
+top bug in place of the feature pin. Open-Meteo `cape` + `weather_code` +
+`boundary_layer_height` were added to the forecast call: thunder hours band
+the chart, `ConditionsOut.storm` gives a likely/possible outlook (model,
+TAF, or CAPE alone).
+
+**G8. Strike positions.** (L) Not started. GOES GLM on NOAA's public AWS
+buckets (keyless, public domain, 20 s files, ~8 km) is the only free
+source of real flash positions; needs a netCDF reader in the image.
+
 ## F. Efficiency check (current state, for the record)
 
 - `/combined` and the scheduler share the pressure cache; no double fetch.

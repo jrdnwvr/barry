@@ -15,7 +15,7 @@ async def test_grid_is_7x5_from_one_call_with_current_hour_bl(client, upstream):
     assert len(upstream.om_calls) == 1
     req = upstream.om_calls[0]
     assert req.url.params["current"] == "wind_speed_10m,wind_direction_10m"
-    assert req.url.params["hourly"] == "boundary_layer_height"
+    assert req.url.params["hourly"] == "boundary_layer_height,cape"
     p = resp.points[0]
     assert p.windKmh == 10.0 and p.windDeg == 240.0
     assert p.blM == 900.0                      # the current hour, not another

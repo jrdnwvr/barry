@@ -27,12 +27,21 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import List, Optional, Sequence, Tuple
 
-from .models import ConditionsOut, DAPoint, FogOut, ForecastHour, SunTimes
+from .models import ConditionsOut, DAPoint, FogOut, ForecastHour, StormOut, SunTimes, TafOut
 
 # --- Density altitude tunables -----------------------------------------------
 
 DA_FORECAST_HOURS = 15      # enough to cover "this morning vs this afternoon"
 DA_ROUND_FT = 50            # model-derived numbers shouldn't pretend to 1 ft
+
+# --- Boundary layer + storm tunables -------------------------------------------
+
+BL_FORECAST_HOURS = 12      # "rising to 6,500 ft by 3 PM"
+BL_ROUND_FT = 100
+STORM_HOURS = 12
+THUNDER_CODES = {95, 96, 99}   # WMO weather codes with a thunderstorm in them
+CAPE_POSSIBLE = 1000.0      # J/kg: enough fuel to say "possible" without a
+                            # thunder code; a moderately unstable afternoon
 
 # --- Fog tunables -------------------------------------------------------------
 
@@ -164,12 +173,75 @@ def scan_fog(hours: Sequence[ForecastHour], sun: Optional[SunTimes],
     return None
 
 
+# --- Boundary layer -----------------------------------------------------------
+
+
+def _bl_ft(m: float) -> int:
+    return int(round(m * 3.28084 / BL_ROUND_FT) * BL_ROUND_FT)
+
+
+def boundary_layer(hours: Sequence[ForecastHour], now: datetime) -> tuple[Optional[int], List[DAPoint]]:
+    """Model boundary-layer top now (the hour containing `now`) and for the
+    next BL_FORECAST_HOURS, in feet AGL rounded to 100."""
+    with_bl = [h for h in hours if h.boundary_layer is not None]
+    if not with_bl:
+        return None, []
+    cur = min((h for h in with_bl if abs((h.t - now).total_seconds()) <= 3600),
+              key=lambda h: abs((h.t - now).total_seconds()), default=None)
+    now_ft = _bl_ft(cur.boundary_layer) if cur is not None else None
+    horizon = now + timedelta(hours=BL_FORECAST_HOURS)
+    fc = [DAPoint(t=h.t, ft=_bl_ft(h.boundary_layer)) for h in with_bl if now <= h.t <= horizon]
+    return now_ft, fc
+
+
+# --- Storm outlook --------------------------------------------------------------
+
+
+def scan_storms(hours: Sequence[ForecastHour], taf: Optional[TafOut],
+                now: datetime) -> Optional[StormOut]:
+    """Thunderstorms in the next STORM_HOURS: the model's weather code says
+    thunder (likely), the TAF carries TS (likely), or CAPE alone is high
+    enough to call it possible. Nothing at all on a quiet day."""
+    horizon = now + timedelta(hours=STORM_HOURS)
+    window = [h for h in hours if now - timedelta(hours=1) <= h.t <= horizon]
+    thunder = [h for h in window if h.weather_code in THUNDER_CODES]
+    cape_vals = [h.cape for h in window if h.cape is not None]
+    cape_max = int(round(max(cape_vals))) if cape_vals else None
+
+    taf_ts = []
+    if taf is not None:
+        for p in taf.periods:
+            if p.wx and "TS" in p.wx and p.timeTo >= now and p.timeFrom <= horizon:
+                taf_ts.append(p)
+
+    if thunder and taf_ts:
+        start = min(thunder[0].t, max(now, taf_ts[0].timeFrom))
+        end = max(thunder[-1].t, taf_ts[-1].timeTo)
+        return StormOut(risk="likely", start=start, end=end, capeMax=cape_max, source="both",
+                        detail="The model and the TAF both carry thunderstorms in this window.")
+    if taf_ts:
+        return StormOut(risk="likely", start=max(now, taf_ts[0].timeFrom), end=taf_ts[-1].timeTo,
+                        capeMax=cape_max, source="taf",
+                        detail="The TAF carries thunderstorms in this window.")
+    if thunder:
+        return StormOut(risk="likely", start=thunder[0].t, end=thunder[-1].t,
+                        capeMax=cape_max, source="model",
+                        detail="The model puts thunderstorms in this window.")
+    if cape_max is not None and cape_max >= CAPE_POSSIBLE:
+        peak = max((h for h in window if h.cape is not None), key=lambda h: h.cape)
+        return StormOut(risk="possible", start=peak.t, end=None, capeMax=cape_max, source="model",
+                        detail="Enough energy in the air for storms to build if something sets them off. "
+                               "Nothing in the forecast says they will.")
+    return None
+
+
 # --- Assembly -----------------------------------------------------------------
 
 
-def build(pressure, forecast, now: datetime) -> Optional[ConditionsOut]:
-    """ConditionsOut from a PressureResponse + ForecastResponse, or None when
-    nothing at all can be computed. Each piece degrades independently."""
+def build(pressure, forecast, now: datetime, taf: Optional[TafOut] = None) -> Optional[ConditionsOut]:
+    """ConditionsOut from a PressureResponse + ForecastResponse (+ TAF), or
+    None when nothing at all can be computed. Each piece degrades
+    independently."""
     da_now = None
     elev_ft = None
     elev_m = pressure.elevM
@@ -182,6 +254,8 @@ def build(pressure, forecast, now: datetime) -> Optional[ConditionsOut]:
 
     da_fc: List[DAPoint] = []
     fog = None
+    storm = None
+    bl_now, bl_fc = None, []
     if forecast is not None:
         horizon = now + timedelta(hours=DA_FORECAST_HOURS)
         for h in forecast.hourly:
@@ -195,8 +269,13 @@ def build(pressure, forecast, now: datetime) -> Optional[ConditionsOut]:
                                                  h.temperature, h.dewpoint)),
             ))
         fog = scan_fog(forecast.hourly, forecast.sun, now)
+        bl_now, bl_fc = boundary_layer(forecast.hourly, now)
+        storm = scan_storms(forecast.hourly, taf, now)
+    elif taf is not None:
+        storm = scan_storms([], taf, now)
 
-    if da_now is None and not da_fc and fog is None:
+    if da_now is None and not da_fc and fog is None and bl_now is None and storm is None:
         return None
     return ConditionsOut(densityAltitudeFt=da_now, fieldElevationFt=elev_ft,
-                         daForecast=da_fc, fog=fog)
+                         daForecast=da_fc, boundaryLayerFt=bl_now, blForecast=bl_fc,
+                         fog=fog, storm=storm)

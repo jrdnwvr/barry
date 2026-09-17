@@ -25,6 +25,59 @@ struct SeriesPoint: Codable, Identifiable, Hashable {
     var pressure: Double? { slp ?? altim }
 }
 
+/// Thunderstorm / lightning state decoded from one METAR by the backend.
+/// Absent means "nothing reported", never "no lightning": a field without a
+/// sensor says nothing at all.
+struct LightningOut: Codable, Hashable {
+    let status: String            // thunderstorm | vicinity | distant
+    var frequency: String?        // occasional | frequent | continuous
+    var types: [String] = []      // IC, CC, CG
+    var directions: [String] = [] // "SW", "W-NW", "ALQDS"
+    var moving: String?
+    var since: Date?
+
+    private static let cardinal: [String: String] = [
+        "N": "north", "NE": "northeast", "E": "east", "SE": "southeast",
+        "S": "south", "SW": "southwest", "W": "west", "NW": "northwest",
+    ]
+
+    private var whereText: String {
+        let named = directions.compactMap { d -> String? in
+            if let c = Self.cardinal[d] { return c }
+            let parts = d.split(separator: "-").compactMap { Self.cardinal[String($0)] }
+            return parts.count == 2 ? "\(parts[0]) to \(parts[1])" : nil
+        }
+        if !named.isEmpty { return " to the " + named.prefix(2).joined(separator: " and ") }
+        if directions.contains("ALQDS") { return " all around" }
+        return ""
+    }
+
+    /// One calm sentence for the hero card and the station sheet.
+    var sentence: String {
+        switch status {
+        case "thunderstorm":
+            var t = "Thunderstorm at the field"
+            if let s = since { t += " since \(s.formatted(date: .omitted, time: .shortened))" }
+            if let m = moving, let c = Self.cardinal[m] { t += ", moving \(c)" }
+            return t + "."
+        case "vicinity":
+            let lead = frequency == "frequent" || frequency == "continuous" ? "Frequent lightning" : "Lightning"
+            return "\(lead) close by\(whereText)."
+        default:
+            return "Lightning in the distance\(whereText)."
+        }
+    }
+
+    /// Short label for map badges and chips.
+    var shortLabel: String {
+        switch status {
+        case "thunderstorm": return "TS"
+        case "vicinity": return "LTG"
+        default: return "DSNT"
+        }
+    }
+}
+
 struct CurrentObs: Codable, Hashable {
     let slp: Double?
     let presTend: Double?
@@ -44,6 +97,8 @@ struct CurrentObs: Codable, Hashable {
     var ceilingFt: Int?
     var ceilingCover: String?
     var fltCat: String?
+    var wx: String?
+    var lightning: LightningOut?
 }
 
 struct TendencyOut: Codable, Hashable {
@@ -83,8 +138,13 @@ struct ForecastHour: Codable, Identifiable, Hashable {
     var dewpoint: Double?
     var cloudcover: Double?
     var surface_pressure: Double?
+    var cape: Double?
+    var weather_code: Int?
+    var boundary_layer: Double?
 
     var id: Date { t }
+    /// WMO weather codes with a thunderstorm in them.
+    var isThunder: Bool { [95, 96, 99].contains(weather_code ?? 0) }
 }
 
 struct SunTimes: Codable, Hashable {
@@ -155,11 +215,30 @@ struct FogOut: Codable, Hashable {
     let detail: String
 }
 
+/// Thunderstorm outlook for the next hours. Only present when there is a setup.
+struct StormOut: Codable, Hashable {
+    let risk: String       // "possible" | "likely"
+    var start: Date?
+    var end: Date?
+    var capeMax: Int?
+    var source: String = "model"
+    let detail: String
+}
+
 struct ConditionsOut: Codable, Hashable {
     var densityAltitudeFt: Int?
     var fieldElevationFt: Int?
     var daForecast: [DAPoint] = []
+    var boundaryLayerFt: Int?
+    var blForecast: [DAPoint] = []
     var fog: FogOut?
+    var storm: StormOut?
+
+    /// Anything worth a card at all.
+    var hasContent: Bool {
+        densityAltitudeFt != nil || !daForecast.isEmpty || boundaryLayerFt != nil
+            || fog != nil || storm != nil
+    }
 }
 
 // MARK: - Station wind layer
@@ -180,6 +259,8 @@ struct StationObs: Codable, Hashable, Identifiable {
     var temp: Double?
     var dewpoint: Double?
     var altim: Double?
+    var wx: String?
+    var lightning: LightningOut?
     var raw: String?
 }
 
@@ -191,6 +272,33 @@ struct Runway: Codable, Hashable {
     let leHeading: Double
     let heHeading: Double
     var lengthFt: Int?
+
+    /// "18L" -> "18": the number alone. Barry cannot pick between parallels,
+    /// so it never pretends to.
+    static func base(_ ident: String) -> String {
+        var s = Substring(ident)
+        while let last = s.last, "LRCW".contains(last), s.count > 1 { s = s.dropLast() }
+        return String(s)
+    }
+
+    /// Parallel runways collapsed to one per direction (the longest kept),
+    /// with the L/R/C letters dropped from the idents.
+    static func merged(_ runways: [Runway]) -> [Runway] {
+        var out: [Runway] = []
+        var index: [String: Int] = [:]
+        for r in runways {
+            let key = [base(r.le), base(r.he)].sorted().joined(separator: "/")
+            let stripped = Runway(le: base(r.le), he: base(r.he), leHeading: r.leHeading,
+                                  heHeading: r.heHeading, lengthFt: r.lengthFt)
+            if let i = index[key] {
+                if (r.lengthFt ?? 0) > (out[i].lengthFt ?? 0) { out[i] = stripped }
+            } else {
+                index[key] = out.count
+                out.append(stripped)
+            }
+        }
+        return out
+    }
 }
 
 struct StationsResponse: Codable, Hashable {
@@ -206,6 +314,7 @@ struct FieldPoint: Codable, Hashable {
     let windKmh: Double
     let windDeg: Double
     var blM: Double?
+    var capeJkg: Double?
 }
 
 struct FieldGridResponse: Codable, Hashable {
@@ -428,6 +537,48 @@ struct FrontResponse: Codable, Hashable {
     var isActive: Bool { status != "none" }
 }
 
+/// The nearest station reporting lightning within 100 miles: how far, which
+/// way, how old the report is, and whether the storm is coming this way.
+struct LightningNearby: Codable, Hashable {
+    let station: String
+    var name: String?
+    let distanceMi: Int
+    let bearingDeg: Double
+    let cardinal: String
+    let status: String
+    let at: Date
+    var moving: String?
+    var towardYou: Bool?
+    var continuesUntil: Date?
+
+    private static let cardinalWord: [String: String] = [
+        "N": "north", "NE": "northeast", "E": "east", "SE": "southeast",
+        "S": "south", "SW": "southwest", "W": "west", "NW": "northwest",
+    ]
+
+    /// "Lightning 34 mi NW · 12m ago" / "Lightning at the field · 5m ago"
+    func headline(now: Date) -> String {
+        let m = max(0, Int(now.timeIntervalSince(at) / 60))
+        let age = m < 60 ? "\(m)m ago" : "\(m / 60)h \(m % 60)m ago"
+        let where_ = distanceMi < 3 ? "at the field" : "\(distanceMi) mi \(cardinal)"
+        return "Lightning \(where_) · \(age)"
+    }
+
+    /// The second line: motion relative to you, else whether more is expected.
+    func detail(now: Date) -> String? {
+        if let t = towardYou {
+            return t ? "moving toward you" : "moving away"
+        }
+        if let m = moving, let w = Self.cardinalWord[m] {
+            return "moving \(w)"
+        }
+        if let u = continuesUntil, u > now {
+            return "more expected through \(u.formatted(date: .omitted, time: .shortened))"
+        }
+        return nil
+    }
+}
+
 struct CombinedResponse: Codable, Hashable {
     let pressure: PressureResponse
     let forecast: ForecastResponse?
@@ -436,6 +587,7 @@ struct CombinedResponse: Codable, Hashable {
     var runways: [Runway]?   // optional: absent on old backends
     var taf: TafOut?         // optional: none issued, or an old backend
     var trackRecord: TrackRecordOut?
+    var lightningNearby: LightningNearby?   // optional: absent on old backends
     let sources: Sources?
     let verdict: String
 }

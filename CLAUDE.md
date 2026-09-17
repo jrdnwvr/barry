@@ -155,11 +155,21 @@ rebuild with `tools/build_runways.py`) on `/combined.runways`, and
 `RunwayWindsView.swift` projects the METAR wind onto each runway end.
 `/privacy` and `/support` are the App Store URLs (app/static/).
 
+Radar layers (2026-09-16) are two-tier: one BASE (`RadarBase`: Radar,
+Pressure = isobars + shading, Change = isallobars + shading) plus overlays
+Wind / Fronts / Stations / Storms on a chip bar; `RadarKeySheet` lists only
+what is on. Boundary-layer top lives on the main page (density altitude
+card) now, not the map. **Lightning** (`backend/app/lightning.py`) is decoded
+from the METARs themselves (TS/VCTS + LTG remarks): `StationObs.lightning`,
+`CurrentObs.lightning`, `/combined.lightningNearby` (nearest fresh report
+within 100 mi with motion relative to the user), `ConditionsOut.storm`
+(model weather_code/CAPE + TAF). No new data source. Absent lightning means
+"nothing reported", never "no lightning".
+
 Parked, fully built: **forecast radar** (HRRR via Iowa Mesonet, +6 h model
 frames) behind `RadarModel.modelFramesEnabled = false` — flip one Bool to ship;
 while false the app makes zero IEM / `/radar/hrrr` requests.
 
-Not yet: density altitude + fog risk (agreed next build batch), TestFlight bump
-(project.yml still 1.0 build 3 — testers lack everything since ~July), courtesy
-emails to RainViewer + IEM before public App Store, privacy policy URL + iPad
-screenshots for submission, verdict track record, APNs push.
+Not yet: courtesy emails to RainViewer + IEM before public App Store, App
+Store listing copy, verdict track record (built, hidden until rescored),
+real strike positions (GOES GLM would be the source), APNs push.

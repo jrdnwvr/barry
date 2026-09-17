@@ -15,6 +15,7 @@ through the Cloudflare tunnel), so treat them as order-of-magnitude.
 | D3 (2026-09-15) | TAF | not fetched | `/combined.taf`: 1 AWC TAF call per station per 30 min (~1.5 KB decoded) | New upstream, deliberately per active station only (not bulk): TAFs matter for the home field, not the map. |
 | C5/D6 (2026-09-15) | Track record | none | `/combined.trackRecord` (~40 B); log persisted in ./state (a few KB per station) | Upstream: none. Scores use the 24 h series already fetched. |
 | Pressure map (2026-09-16) | Isobars, isallobars, shaded fields | not available | `/radar/pressure`: ~13 KB per region (lines + two 41×41 grids); 20 ms to contour 65 stations locally; cached per quantized region for the bulk table's lifetime | Upstream: none. Isobars every 4 hPa (2 on flat days); 3 h change from the server's own snapshot history. |
+| G7 (2026-09-16) | Lightning | not available | `/combined`: +~0.4 KB (`current.lightning`, `lightningNearby`, `conditions.storm/boundaryLayerFt`); `/metars`: +~60 B per station reporting lightning; the nearest-lightning scan is a haversine pass over the bulk table (~5,000 rows, ~3 ms) | Upstream: none. Open-Meteo forecast call carries three more hourly fields (cape, weather_code, boundary_layer_height) in the same request; `/radar/field` hourly is now `boundary_layer_height,cape`. 23 of 209 stations around Cincinnati reported lightning on the evening this shipped, all decoded. |
 
 Notes
 - A1 quantization: three slightly different regions from one iPad session

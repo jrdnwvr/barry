@@ -2,8 +2,8 @@
 //  Barry — iOS
 //
 //  State for the radar screen: RainViewer frames and playback, the model
-//  wind + boundary-layer grid, WPC fronts with their morphing timeline, and
-//  the station layer. All data comes through the Barry backend.
+//  wind grid, WPC fronts with their morphing timeline, the station layer and
+//  the pressure field. All data comes through the Barry backend.
 
 import Combine
 import SwiftUI
@@ -30,13 +30,6 @@ struct WindArrow: Equatable {
     let fromDeg: Double
 }
 
-/// One boundary-layer-top sample (meters AGL, from the model).
-struct BLPoint: Equatable {
-    let lat: Double
-    let lon: Double
-    let meters: Double
-}
-
 @MainActor
 final class RadarModel: ObservableObject {
     @Published var frames: [RadarFrame] = []
@@ -47,7 +40,6 @@ final class RadarModel: ObservableObject {
     @Published var windArrows: [WindArrow] = []
     /// The whole wind grid, calm points included — the flow layer's field.
     @Published var windField: [WindArrow] = []
-    @Published var blPoints: [BLPoint] = []
     /// Reporting stations with their latest wind (barb / speed layer).
     @Published var stationObs: [StationObs] = []
     private var stationTask: Task<Void, Never>?
@@ -247,10 +239,10 @@ final class RadarModel: ObservableObject {
         frames += model
     }
 
-    // MARK: Field overlays (wind arrows, boundary layer top)
+    // MARK: Field overlays (wind)
 
     /// Debounced reload — pans/zooms fire this; only the last one within ~0.7 s wins.
-    func scheduleFieldReload(for region: MKCoordinateRegion, wind: Bool, boundaryLayer: Bool,
+    func scheduleFieldReload(for region: MKCoordinateRegion, wind: Bool,
                              stations: Bool = false, pressure: Bool = false) {
         lastRegion = region
         if pressure {
@@ -269,7 +261,7 @@ final class RadarModel: ObservableObject {
                 await fetchStations(center: region.center)
             }
         }
-        if wind || boundaryLayer {
+        if wind {
             fieldTask?.cancel()
             fieldTask = Task {
                 try? await Task.sleep(nanoseconds: 700_000_000)
@@ -279,10 +271,9 @@ final class RadarModel: ObservableObject {
         }
     }
 
-    /// Wind and boundary-layer top for the region in ONE backend call (the
-    /// server samples its 7×5 grid and shares one Open-Meteo request per
-    /// region cell across users). Both layers update from the same response,
-    /// so toggling either on costs nothing extra while the other is showing.
+    /// The model wind for the region in ONE backend call (the server samples
+    /// its 7×5 grid and shares one Open-Meteo request per region cell across
+    /// users).
     func fetchField(region: MKCoordinateRegion) async {
         guard let resp = try? await BarryAPI().fieldGrid(
             lat: region.center.latitude, lon: region.center.longitude,
@@ -294,8 +285,5 @@ final class RadarModel: ObservableObject {
         windField = all
         windArrows = all.filter { $0.speedKmh >= Self.minArrowKmh }
         windSampled = true
-        blPoints = resp.points.compactMap { p in
-            p.blM.map { BLPoint(lat: p.lat, lon: p.lon, meters: $0) }
-        }
     }
 }

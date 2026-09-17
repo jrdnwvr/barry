@@ -128,3 +128,21 @@ def test_taf_evidence_is_timed_against_the_barometer():
     r2 = Reading("rising", 1.0, 0.9, "none", None, 0.9, ())
     out2 = explain.build(r2, None, [], base, taf=taf)
     assert [x.kind for x in out2.conflicting] == ["taf_wx", "taf_category"]
+
+
+def test_lightning_leads_the_evidence_and_thunder_replaces_rain():
+    from app.models import CurrentObs, LightningOut
+    cur = CurrentObs(lightning=LightningOut(status="distant", directions=["SW-W"]))
+    r = Reading("falling_mod", -2.0, 0.9, "front_knee", NOW + timedelta(hours=2), 0.7, ())
+    fc = []
+    for i in range(8):
+        fc.append(ForecastHour(t=NOW + timedelta(hours=i), pressure_msl=1010.0, windspeed=10.0, winddir=200.0,
+                               precip_prob=60 if i >= 2 else 10, weather_code=95 if i == 4 else 61))
+    out = explain.build(r, fc, [], NOW, current=cur)
+    assert out.supporting[0].kind == "lightning"
+    assert "distant lightning to the southwest to west" in out.supporting[0].text
+    kinds = [x.kind for x in out.supporting]
+    assert "model_thunder" in kinds and "rain" not in kinds
+    assert out.summary.startswith("There is distant lightning to the southwest to west and the model has thunderstorms")
+    conf, _ = explain.adjust_confidence(0.7, out)
+    assert conf == 0.9                                   # two strong supports

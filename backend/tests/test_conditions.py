@@ -139,3 +139,50 @@ async def test_combined_carries_conditions(client, upstream):
     assert len(c.daForecast) >= 6      # forecast hours carry temp/dew/pressure
     # Fixture night is 55% cloud with a widening spread: honest silence.
     assert c.fog is None
+
+
+# ---- boundary layer + storm outlook -------------------------------------------
+
+
+def _hours(n, **kw):
+    out = []
+    for i in range(n):
+        vals = {k: (v[i] if isinstance(v, list) else v) for k, v in kw.items()}
+        out.append(ForecastHour(t=T0 + timedelta(hours=i), **vals))
+    return out
+
+
+def test_boundary_layer_now_and_forecast_in_hundreds_of_feet():
+    hrs = _hours(16, boundary_layer=[300.0 + 150.0 * i for i in range(16)])
+    now_ft, fc = conditions.boundary_layer(hrs, T0 + timedelta(minutes=20))
+    assert now_ft == 1000                          # 300 m -> 984 ft -> 1000
+    assert len(fc) == 12 and fc[-1].ft == 6900     # 12 h window, 100 ft steps
+    assert conditions.boundary_layer(_hours(3), T0) == (None, [])
+
+
+def test_storm_outlook_thunder_code_is_likely_and_cape_alone_is_possible():
+    codes = [1] * 12
+    codes[5] = 95
+    hrs = _hours(12, weather_code=codes, cape=[200.0 + 100.0 * i for i in range(12)])
+    st = conditions.scan_storms(hrs, None, T0)
+    assert st.risk == "likely" and st.start == T0 + timedelta(hours=5) and st.source == "model"
+    assert st.capeMax == 1300
+    quiet = _hours(12, weather_code=1, cape=[200.0 + 120.0 * i for i in range(12)])
+    st = conditions.scan_storms(quiet, None, T0)
+    assert st.risk == "possible" and st.start == T0 + timedelta(hours=11)
+    assert conditions.scan_storms(_hours(12, weather_code=1, cape=300.0), None, T0) is None
+
+
+def test_storm_outlook_takes_the_taf_too():
+    from app.models import TafOut, TafPeriod
+    taf = TafOut(station="KLUK", periods=[
+        TafPeriod(timeFrom=T0 + timedelta(hours=3), timeTo=T0 + timedelta(hours=6),
+                  change="TEMPO", wx="TSRA"),
+    ])
+    st = conditions.scan_storms(_hours(12, weather_code=1, cape=300.0), taf, T0)
+    assert st.risk == "likely" and st.source == "taf"
+    assert st.start == T0 + timedelta(hours=3) and st.end == T0 + timedelta(hours=6)
+    # A TAF thunderstorm that already ended says nothing.
+    old = TafOut(station="KLUK", periods=[
+        TafPeriod(timeFrom=T0 - timedelta(hours=6), timeTo=T0 - timedelta(hours=2), change="TEMPO", wx="TSRA")])
+    assert conditions.scan_storms(_hours(12, weather_code=1, cape=300.0), old, T0) is None

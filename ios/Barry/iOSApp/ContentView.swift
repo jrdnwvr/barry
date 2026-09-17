@@ -157,13 +157,12 @@ struct ContentView: View {
 
         // Field conditions: DA now + trend, fog outlook when one exists.
         // Only when there's something to say — never an empty card.
-        if let cond = combined.conditions,
-           cond.densityAltitudeFt != nil || !cond.daForecast.isEmpty || cond.fog != nil {
+        if let cond = combined.conditions, cond.hasContent {
             FieldConditionsCard(conditions: cond)
         }
 
-        // Crosswind per runway from the METAR wind; nothing when calm
-        // or the field has no runway data.
+        // The wind on the compass: crosswind per runway at an airport, the
+        // plain wind everywhere else.
         RunwayWindsCard(combined: combined)
 
         // Radar: the sky itself, as corroboration for the trend. Its own

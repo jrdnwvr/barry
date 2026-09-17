@@ -39,6 +39,7 @@
 		4841725627A1F0AC607A52BE /* SharedSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */; };
 		4B47718B22FC9723FF410F76 /* BarryWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BB3C628CF8662B6BEF5A73F /* BarryWatchApp.swift */; };
 		4BBFD392779CDC66E4252928 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C59EF4878E06062DC20D1D7 /* AppConfig.swift */; };
+		4DC0A2667AD32E4946FA8106 /* RadarSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1666B232D9C24406F937CCE8 /* RadarSheets.swift */; };
 		4ED2D56EC1DA59D7FBBD779D /* HeroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01599505777741EA095092C0 /* HeroView.swift */; };
 		501E15BBC91B22998A389E76 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918B4D14CC966B0E820FC1AC /* Models.swift */; };
 		5093AC139AE85DC8A14E0859 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 05E57A0FA0B17718D5FB1D5D /* Assets.xcassets */; };
@@ -180,6 +181,7 @@
 		05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedSnapshot.swift; sourceTree = "<group>"; };
 		05E57A0FA0B17718D5FB1D5D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		078B13121EBACB3059A82BC9 /* BarryPhoneWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = BarryPhoneWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		1666B232D9C24406F937CCE8 /* RadarSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarSheets.swift; sourceTree = "<group>"; };
 		1A24A6845ECB66698D61771D /* TendencyProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TendencyProvider.swift; sourceTree = "<group>"; };
 		1E86B20D35A1249F2520596E /* BarryWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BarryWatch.entitlements; sourceTree = "<group>"; };
 		2542DA2C850B2399B31A9069 /* Tendency.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tendency.swift; sourceTree = "<group>"; };
@@ -376,6 +378,7 @@
 				6978CE026B8EEE1A560877C0 /* PressureGuideView.swift */,
 				6662DFD4A743261C8134B535 /* RadarMapView.swift */,
 				8C448DCCFE61D866C777918A /* RadarModel.swift */,
+				1666B232D9C24406F937CCE8 /* RadarSheets.swift */,
 				C0EBA6519DD65A01DF98B527 /* RadarView.swift */,
 				63055B6BCAEBB22C1F0B5177 /* RunwayWindDial.swift */,
 				F83C3064588614F2B8DEAA34 /* RunwayWindsView.swift */,
@@ -647,6 +650,7 @@
 				0F22D62C5D40785243A56CD0 /* PressureUnit.swift in Sources */,
 				1440BAB18BF4B5F3EE776457 /* RadarMapView.swift in Sources */,
 				5204621388C2B94B99BE1CCF /* RadarModel.swift in Sources */,
+				4DC0A2667AD32E4946FA8106 /* RadarSheets.swift in Sources */,
 				06E7445D9EF69D7CD6C141EE /* RadarView.swift in Sources */,
 				2FC7F63C72023A1812F99D63 /* RangeAnalysis.swift in Sources */,
 				671235BD08B2C03DA62FCCB7 /* RunwayWindDial.swift in Sources */,

@@ -16,6 +16,7 @@ import httpx
 
 from . import conditions as conditions_mod
 from . import explain
+from . import lightning as lightning_mod
 from . import persist
 from . import pressure_field
 from . import track
@@ -756,7 +757,8 @@ class PressureService:
             try:
                 reading_out.explanation = explain.build(
                     interp, forecast.hourly if forecast else None, pressure.series,
-                    _now(), local_hour_offset=local_offset, taf=taf)
+                    _now(), local_hour_offset=local_offset, taf=taf,
+                    current=pressure.current)
                 reading_out.confidence, extra = explain.adjust_confidence(
                     reading_out.confidence, reading_out.explanation)
                 reading_out.caveats = list(reading_out.caveats) + extra
@@ -773,9 +775,27 @@ class PressureService:
 
         # Field conditions (DA + fog) are enrichment — never block the response.
         try:
-            conditions = conditions_mod.build(pressure, forecast, _now())
+            conditions = conditions_mod.build(pressure, forecast, _now(), taf=taf)
         except Exception:
             conditions = None
+
+        # Nearest lightning report within 100 mi, off the in-memory bulk
+        # table (no upstream call). Enrichment.
+        nearby: Optional[lightning_mod.LightningNearby] = None
+        try:
+            if f_lat is not None and f_lon is not None:
+                table = await self.metar_bulk()
+                if table:
+                    until = None
+                    if conditions is not None and conditions.storm is not None \
+                       and conditions.storm.risk == "likely":
+                        until = conditions.storm.end
+                    nearby = lightning_mod.nearest(table, f_lat, f_lon, _now(), continues_until=until)
+                    if nearby is not None and nearby.name is None:
+                        info = await self.station_info()
+                        nearby.name = (info.get(nearby.station) or {}).get("name")
+        except Exception:
+            nearby = None
 
         sources = Sources(
             observed=pressure.source,
@@ -803,6 +823,7 @@ class PressureService:
             runways=runways.for_station(station),
             taf=taf,
             trackRecord=track_out,
+            lightningNearby=nearby,
             sources=sources,
             verdict=verdict,
         )

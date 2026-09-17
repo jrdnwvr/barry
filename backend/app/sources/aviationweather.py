@@ -21,6 +21,7 @@ from typing import Dict, List, Optional, Sequence
 
 import httpx
 
+from .. import lightning as ltg
 from ..models import StationObs, CurrentObs, SeriesPoint, TafOut, TafPeriod
 from ..tendency import resolve_tendency
 
@@ -130,6 +131,9 @@ def _current_obs(newest: dict) -> CurrentObs:
         ceilingFt=ceiling_ft,
         ceilingCover=ceiling_cover,
         fltCat=newest.get("fltCat") or _flight_category(vis, ceiling_ft),
+        wx=newest.get("wxString") or None,
+        lightning=ltg.parse(newest.get("rawOb"), newest.get("wxString") or None,
+                            newest.get("t")),
     )
 
 
@@ -183,6 +187,7 @@ def parse_records(records: Sequence[dict]) -> Dict[str, dict]:
                     "visib": r.get("visib"),
                     "clouds": r.get("clouds"),
                     "fltCat": r.get("fltCat"),
+                    "wxString": r.get("wxString"),
                     "rawOb": r.get("rawOb"),
                 }
             )
@@ -366,6 +371,8 @@ def parse_metar_cache(text: str) -> List[StationObs]:
             altim=round(altim_inhg * 33.8639, 1) if altim_inhg is not None else None,
             slp=_f(cell(row, "sea_level_pressure_mb")),
             presTend=_f(cell(row, "three_hr_pressure_tendency_mb")),
+            wx=(cell(row, "wx_string") or None),
+            lightning=ltg.parse(cell(row, "raw_text"), cell(row, "wx_string"), obs),
             raw=(cell(row, "raw_text") or None),
         ))
     return out

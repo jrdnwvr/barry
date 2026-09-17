@@ -496,10 +496,69 @@ struct PressureChartView: View {
         }
     }
 
+    // MARK: - Thunder hours (model weather code)
+
+    /// Runs of forecast hours the model marks as thunderstorms, as faint
+    /// orange bands with a bolt. Only inside the visible window.
+    private var thunderSpans: [(Date, Date)] {
+        guard let hours = combined.forecast?.hourly else { return [] }
+        let (lo, hi) = domainBounds
+        var spans: [(Date, Date)] = []
+        for h in hours where h.isThunder && h.t >= lo && h.t <= hi {
+            let end = min(h.t.addingTimeInterval(3600), hi)
+            if let last = spans.last, last.1 >= h.t {
+                spans[spans.count - 1].1 = end
+            } else {
+                spans.append((h.t, end))
+            }
+        }
+        return spans
+    }
+
+    @ChartContentBuilder private var thunderContent: some ChartContent {
+        ForEach(Array(thunderSpans.enumerated()), id: \.offset) { _, span in
+            RectangleMark(xStart: .value("From", span.0), xEnd: .value("To", span.1))
+                .foregroundStyle(.orange.opacity(0.10))
+                .annotation(position: .overlay, alignment: .bottomLeading, spacing: 2) {
+                    Image(systemName: "cloud.bolt.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.orange)
+                }
+        }
+    }
+
+    // MARK: - Lightning bug (nearest report within 100 mi)
+
+    /// When lightning is being reported nearby, the top of the "now" line
+    /// carries it instead of the feature pin: distance, direction, age, and
+    /// whether the storm is coming this way. A storm beats a trough label.
+    @ChartContentBuilder private var lightningContent: some ChartContent {
+        if let n = combined.lightningNearby {
+            let ink: Color = n.status == "thunderstorm" && n.distanceMi < 3 ? .red : .orange
+            RuleMark(x: .value("Now", now))
+                .foregroundStyle(.clear)
+                .annotation(position: .top, alignment: .center, spacing: 2) {
+                    VStack(spacing: 0) {
+                        Label(n.headline(now: now), systemImage: "bolt.fill")
+                            .font(.system(size: 9, weight: .semibold))
+                        if let d = n.detail(now: now) {
+                            Text(d)
+                                .font(.system(size: 8))
+                                .opacity(0.8)
+                        }
+                    }
+                    .foregroundStyle(ink)
+                    .fixedSize()
+                }
+        }
+    }
+
     @ChartContentBuilder private var featureContent: some ChartContent {
         // Interpreter feature pin (§4.3): a dashed purple guide at the detected /
         // forecast feature time (the verdict's "trough at 6pm" on the curve).
-        if let reading = combined.reading,
+        // The lightning bug takes its place while lightning is nearby.
+        if combined.lightningNearby == nil,
+           let reading = combined.reading,
            let ft = reading.featureTime,
            ft >= domainBounds.0, ft <= domainBounds.1,
            let label = featureChartLabel(reading.feature) {
@@ -590,11 +649,13 @@ struct PressureChartView: View {
     private var chartView: some View {
         Chart {
             trendBandContent
+            thunderContent
             tafContent
             observedLineContent
             forecastLineContent
             phoneContent
             featureContent
+            lightningContent
             overlayContent
         }
         .chartYScale(domain: yDomain)

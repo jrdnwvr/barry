@@ -28,6 +28,20 @@ class SeriesPoint(BaseModel):
     fltCat: Optional[str] = None
 
 
+class LightningOut(BaseModel):
+    """Thunderstorm / lightning state decoded from one METAR (lightning.py).
+    Absent means "nothing reported", never "no lightning": a field without
+    a sensor says nothing. `status` is thunderstorm (at the field, ~5 NM),
+    vicinity (5 to 10 NM) or distant (10 to 30 NM)."""
+
+    status: str
+    frequency: Optional[str] = None        # occasional | frequent | continuous
+    types: List[str] = Field(default_factory=list)   # IC, CC, CG
+    directions: List[str] = Field(default_factory=list)   # SW, "W-NW", ALQDS
+    moving: Optional[str] = None           # direction the storm is moving toward
+    since: Optional[datetime] = None       # TSB time, when the storm is here
+
+
 class CurrentObs(BaseModel):
     slp: Optional[float] = None
     presTend: Optional[float] = None
@@ -46,6 +60,8 @@ class CurrentObs(BaseModel):
     ceilingCover: Optional[str] = None     # cover of that layer (BKN/OVC), or the
                                            # lowest layer / CLR when no ceiling
     fltCat: Optional[str] = None           # VFR / MVFR / IFR / LIFR
+    wx: Optional[str] = None               # present weather ("-TSRA BR")
+    lightning: Optional[LightningOut] = None
 
 
 class TendencyOut(BaseModel):
@@ -81,6 +97,10 @@ class ForecastHour(BaseModel):
     dewpoint: Optional[float] = None        # °C at 2 m
     cloudcover: Optional[float] = None      # %
     surface_pressure: Optional[float] = None  # hPa at model ground level
+    # Convection + mixing (storm outlook, boundary layer card)
+    cape: Optional[float] = None            # J/kg
+    weather_code: Optional[int] = None      # WMO code; 95/96/99 = thunderstorm
+    boundary_layer: Optional[float] = None  # m AGL
 
 
 class SunTimes(BaseModel):
@@ -229,6 +249,8 @@ class StationObs(BaseModel):
     altim: Optional[float] = None       # hPa
     slp: Optional[float] = None         # sea-level pressure, hPa (when reported)
     presTend: Optional[float] = None    # station-reported 3 h tendency, hPa
+    wx: Optional[str] = None            # present weather ("-TSRA BR")
+    lightning: Optional[LightningOut] = None
     raw: Optional[str] = None           # the METAR as transmitted
 
 
@@ -241,6 +263,7 @@ class FieldPoint(BaseModel):
     windKmh: float
     windDeg: float
     blM: Optional[float] = None
+    capeJkg: Optional[float] = None     # convective energy this hour
 
 
 class FieldGridResponse(BaseModel):
@@ -380,14 +403,49 @@ class FogOut(BaseModel):
     detail: str
 
 
+class StormOut(BaseModel):
+    """Thunderstorm outlook for the next hours, from the model's weather
+    code and CAPE plus the TAF. Only present when there is a setup."""
+
+    risk: str                              # "possible" | "likely"
+    start: Optional[datetime] = None       # first hour with thunder in it
+    end: Optional[datetime] = None
+    capeMax: Optional[int] = None          # J/kg, peak in the window
+    source: str = "model"                  # model | taf | both
+    detail: str
+
+
 class ConditionsOut(BaseModel):
-    """Field conditions (conditions.py): density altitude now + forecast, and
-    the fog outlook. All optional — each piece degrades independently."""
+    """Field conditions (conditions.py): density altitude now + forecast, the
+    boundary layer, the fog outlook and the storm outlook. All optional,
+    each piece degrades independently."""
 
     densityAltitudeFt: Optional[int] = None   # now, from the latest METAR
     fieldElevationFt: Optional[int] = None
     daForecast: List[DAPoint] = Field(default_factory=list)
+    boundaryLayerFt: Optional[int] = None     # model layer top now, ft AGL
+    blForecast: List[DAPoint] = Field(default_factory=list)
     fog: Optional[FogOut] = None
+    storm: Optional[StormOut] = None
+
+
+class LightningNearby(BaseModel):
+    """The nearest station reporting lightning within LIGHTNING_RADIUS_KM of
+    the user's station, from the bulk METAR table: how far, which way, how
+    old the report is, and whether the storm's reported motion brings it
+    toward the user. `continuesUntil` is the storm outlook's end when the
+    forecast keeps thunder going."""
+
+    station: str
+    name: Optional[str] = None
+    distanceMi: int
+    bearingDeg: float
+    cardinal: str
+    status: str                            # thunderstorm | vicinity | distant
+    at: datetime                           # the report's observation time
+    moving: Optional[str] = None           # the storm's reported motion (toward)
+    towardYou: Optional[bool] = None       # None = unknown or sideways
+    continuesUntil: Optional[datetime] = None
 
 
 class Sources(BaseModel):
@@ -408,5 +466,6 @@ class CombinedResponse(BaseModel):
     runways: List[Runway] = Field(default_factory=list)
     taf: Optional[TafOut] = None
     trackRecord: Optional[TrackRecordOut] = None
+    lightningNearby: Optional[LightningNearby] = None
     sources: Optional[Sources] = None
     verdict: str

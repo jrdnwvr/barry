@@ -29,6 +29,10 @@ HOURLY_FIELDS = [
     "temperature_2m",
     "dew_point_2m",
     "cloud_cover",
+    # Storm outlook + the boundary-layer card (same request, no extra call)
+    "cape",
+    "weather_code",
+    "boundary_layer_height",
 ]
 
 # Sunrise/sunset bound the fog-risk night window and the burn-off estimate.
@@ -53,6 +57,9 @@ def parse_forecast(data: dict) -> List[ForecastHour]:
     dewp = hourly.get("dew_point_2m") or []
     cloud = hourly.get("cloud_cover") or []
     sp = hourly.get("surface_pressure") or []
+    cape = hourly.get("cape") or []
+    wcode = hourly.get("weather_code") or []
+    blh = hourly.get("boundary_layer_height") or []
 
     def at(seq, i):
         return seq[i] if i < len(seq) else None
@@ -71,6 +78,9 @@ def parse_forecast(data: dict) -> List[ForecastHour]:
                 dewpoint=at(dewp, i),
                 cloudcover=at(cloud, i),
                 surface_pressure=at(sp, i),
+                cape=at(cape, i),
+                weather_code=at(wcode, i),
+                boundary_layer=at(blh, i),
             )
         )
     return out
@@ -137,16 +147,19 @@ def parse_field_grid(data, now: datetime) -> List[FieldPoint]:
         spd, deg = cur.get("wind_speed_10m"), cur.get("wind_direction_10m")
         if spd is None or deg is None:
             continue
-        bl = None
+        bl = cape = None
         hourly = it.get("hourly") or {}
         times = hourly.get("time") or []
         vals = hourly.get("boundary_layer_height") or []
+        capes = hourly.get("cape") or []
         for i, t in enumerate(times):
             if t.startswith(hour_key):
                 bl = vals[i] if i < len(vals) else None
+                cape = capes[i] if i < len(capes) else None
                 break
         out.append(FieldPoint(lat=it["latitude"], lon=it["longitude"],
-                              windKmh=float(spd), windDeg=float(deg), blM=bl))
+                              windKmh=float(spd), windDeg=float(deg), blM=bl,
+                              capeJkg=cape))
     return out
 
 
@@ -156,7 +169,7 @@ async def fetch_field_grid(lats, lons, client: httpx.AsyncClient, *, now: dateti
         "latitude": ",".join(f"{v:.3f}" for v in lats),
         "longitude": ",".join(f"{v:.3f}" for v in lons),
         "current": "wind_speed_10m,wind_direction_10m",
-        "hourly": "boundary_layer_height",
+        "hourly": "boundary_layer_height,cape",
         "forecast_days": "1",
         "timezone": "UTC",
     }

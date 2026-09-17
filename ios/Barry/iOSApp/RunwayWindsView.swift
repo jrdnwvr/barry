@@ -1,10 +1,15 @@
 //  RunwayWindsView.swift
 //  Barry — iOS
 //
-//  Crosswind readout. The METAR wind is a real measurement; runway headings
-//  come from OurAirports via the backend. Both are degrees true, so the
-//  components are a straight projection. Positive crosswind = from the right
-//  when looking down the runway.
+//  The wind on a compass. At an airport with runway data it is the crosswind
+//  readout: the METAR wind projected onto the runway, best end first.
+//  Everywhere else (a saved place, a field without runway data) it is the
+//  plain wind on the same rose. Both are degrees true, so the components
+//  are a straight projection. Positive crosswind = from the right when
+//  looking down the runway.
+//
+//  Parallel runways are collapsed to their number ("18", not "18L"): the
+//  wind is the same on both and Barry has no basis for choosing between them.
 
 import SwiftUI
 
@@ -43,18 +48,21 @@ enum RunwayWinds {
     }
 }
 
-/// Main-page card: the best runway end and its components, with the rest a
-/// tap away. Renders nothing when the wind is calm or the field is unknown.
+/// Main-page card: the wind on the rose, with the runway components when the
+/// field has runway data and the wind is blowing. Renders nothing only when
+/// the station reports no wind at all.
 struct RunwayWindsCard: View {
     let combined: CombinedResponse
     @State private var expanded = false
 
+    private var runways: [Runway] { Runway.merged(combined.runways ?? []) }
+
+    private var windKt: Double { (combined.pressure.current.windspeed ?? 0) / 1.852 }
+    private var gustKt: Double? { combined.pressure.current.windgust.map { $0 / 1.852 } }
+    private var windDir: Double? { combined.pressure.current.winddir }
+
     private var winds: [RunwayWind] {
-        let cur = combined.pressure.current
-        let kt = (cur.windspeed ?? 0) / 1.852
-        let gust = cur.windgust.map { $0 / 1.852 }
-        return RunwayWinds.compute(runways: combined.runways ?? [],
-                                   windDirDeg: cur.winddir, windKt: kt, gustKt: gust)
+        RunwayWinds.compute(runways: runways, windDirDeg: windDir, windKt: windKt, gustKt: gustKt)
     }
 
     /// The next hours on the best runway end: peak crosswind, and when another
@@ -62,7 +70,7 @@ struct RunwayWindsCard: View {
     private struct Outlook { let peakKt: Int; let peakAt: Date; let switchTo: String?; let switchAt: Date? }
 
     private func outlook(best: RunwayWind, now: Date) -> Outlook? {
-        guard let hours = combined.forecast?.hourly, let runways = combined.runways, !runways.isEmpty else { return nil }
+        guard let hours = combined.forecast?.hourly, !runways.isEmpty else { return nil }
         let window = hours.filter { $0.t > now && $0.t <= now.addingTimeInterval(12 * 3600) && $0.windspeed != nil }
         guard window.count >= 3 else { return nil }
         var peak: (Int, Date)? = nil
@@ -93,6 +101,36 @@ struct RunwayWindsCard: View {
         return t + "."
     }
 
+    /// The plain-wind outlook: where the model takes the wind over the next
+    /// hours (a shift of 30° or more, or a real change in speed).
+    private var windOutlookText: String? {
+        guard let hours = combined.forecast?.hourly else { return nil }
+        let now = Date()
+        let window = hours.filter { $0.t > now && $0.t <= now.addingTimeInterval(12 * 3600) && $0.windspeed != nil }
+        guard window.count >= 3 else { return nil }
+        let peak = window.max { ($0.windgust ?? $0.windspeed ?? 0) < ($1.windgust ?? $1.windspeed ?? 0) }
+        var parts: [String] = []
+        if let p = peak {
+            let kt = Int(((p.windgust ?? p.windspeed ?? 0) / 1.852).rounded())
+            let nowKt = Int((gustKt ?? windKt).rounded())
+            if kt - nowKt >= 5 {
+                parts.append("building to \(kt) kt around \(p.t.formatted(date: .omitted, time: .shortened))")
+            } else if nowKt - kt >= 5 {
+                parts.append("easing to \(kt) kt by \(p.t.formatted(date: .omitted, time: .shortened))")
+            }
+        }
+        if let dir = windDir, let shift = window.first(where: { h in
+            guard let d = h.winddir, (h.windspeed ?? 0) / 1.852 >= 5 else { return false }
+            let delta = abs((d - dir + 540).truncatingRemainder(dividingBy: 360) - 180)
+            return delta >= 30
+        }), let d = shift.winddir {
+            parts.append("swinging to \(String(format: "%03d°", Int(d.rounded()))) by \(shift.t.formatted(date: .omitted, time: .shortened))")
+        }
+        guard !parts.isEmpty else { return nil }
+        let joined = parts.joined(separator: ", ")
+        return "Next 12 h: " + joined + "."
+    }
+
     /// Density altitude belongs where the takeoff decision is made.
     private var daCallout: String? {
         guard let c = combined.conditions, let da = c.densityAltitudeFt,
@@ -100,42 +138,73 @@ struct RunwayWindsCard: View {
         return "Density altitude \(da.formatted()) ft (field \(field.formatted()) ft)."
     }
 
+    /// "From 240° at 12 kt, gusts 18." / "Calm."
+    private var windSentence: String {
+        guard windKt >= 1 else { return "Calm." }
+        let dir = windDir.map { String(format: "from %03d°", Int($0.rounded())) } ?? "variable"
+        var t = "Wind \(dir) at \(Int(windKt.rounded())) kt"
+        if let g = gustKt { t += ", gusts \(Int(g.rounded()))" }
+        return t + "."
+    }
+
     var body: some View {
-        let list = winds
-        if let best = list.first {
+        if combined.pressure.current.windspeed != nil {
+            let list = winds
+            let best = list.first
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline) {
                     Label {
-                        Text("Runway winds")
+                        Text(best == nil ? "Wind" : "Runway winds")
                     } icon: {
-                        RunwayIcon()
-                            .frame(height: 15)
-                            .foregroundStyle(.blue)
+                        if best == nil {
+                            Image(systemName: "wind").foregroundStyle(.blue)
+                        } else {
+                            RunwayIcon()
+                                .frame(height: 15)
+                                .foregroundStyle(.blue)
+                        }
                     }
                     .font(.subheadline.weight(.semibold))
                     Spacer()
-                    Text("Rwy \(best.ident)")
-                        .font(.title3.weight(.semibold))
+                    if let best {
+                        Text("Rwy \(best.ident)")
+                            .font(.title3.weight(.semibold))
+                    } else if windKt >= 1 {
+                        Text(windDir.map { String(format: "%03d°", Int($0.rounded())) } ?? "VRB")
+                            .font(.title3.weight(.semibold))
+                            .monospacedDigit()
+                    }
                 }
                 // The picture on the left, the words on the right: the rose
-                // with the field's runways and the wind bug on the ring.
+                // with the runway (when there is one) and the wind bug on
+                // the ring.
                 HStack(alignment: .top, spacing: 12) {
-                    let cur = combined.pressure.current
-                    RunwayWindDial(runways: combined.runways ?? [], bestIdent: best.ident,
-                                   windDirDeg: cur.winddir,
-                                   windKt: (cur.windspeed ?? 0) / 1.852,
-                                   gustKt: cur.windgust.map { $0 / 1.852 })
+                    RunwayWindDial(runways: runways, bestIdent: best?.ident,
+                                   windDirDeg: windDir, windKt: windKt, gustKt: gustKt)
                         .frame(width: 150, height: 150)
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(sentence(best))
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if let o = outlook(best: best, now: Date()) {
-                            Text(outlookText(o))
-                                .font(.caption)
+                        if let best {
+                            Text(sentence(best))
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
+                            if let o = outlook(best: best, now: Date()) {
+                                Text(outlookText(o))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        } else {
+                            Text(windSentence)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if let o = windOutlookText {
+                                Text(o)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                     }
                 }

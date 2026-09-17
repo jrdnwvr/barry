@@ -85,6 +85,15 @@ struct HeroView: View {
                 .font(.headline)
                 .fixedSize(horizontal: false, vertical: true)
 
+            // Lightning is the one observed signal worth its own line: the
+            // station's own report, decoded, nothing inferred.
+            if let lt = combined.pressure.current.lightning {
+                Label(lt.sentence, systemImage: lt.status == "distant" ? "bolt" : "bolt.fill")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(lt.status == "thunderstorm" ? Color.red : Color.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             // The 3 h rate in human terms (C4), only when it's worth a sentence.
             if let scale = rateContext {
                 Text(scale)

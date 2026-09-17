@@ -49,6 +49,37 @@ struct HomeMarker: Equatable {
     let asBarb: Bool
 }
 
+/// Bolt colors by how close the lightning is: at the field, close by, distant.
+enum LightningInk {
+    static func uiColor(_ status: String) -> UIColor {
+        switch status {
+        case "thunderstorm": return .systemRed
+        case "vicinity": return .systemOrange
+        default: return UIColor(red: 0.85, green: 0.65, blue: 0.0, alpha: 1)
+        }
+    }
+
+    static func color(_ status: String) -> Color { Color(uiColor: uiColor(status)) }
+
+    /// A small bolt image view, hidden until a station reports lightning.
+    static func makeBadge() -> UIImageView {
+        let v = UIImageView()
+        v.contentMode = .scaleAspectFit
+        v.isHidden = true
+        v.isUserInteractionEnabled = false
+        return v
+    }
+
+    static func apply(_ lt: LightningOut?, to badge: UIImageView) {
+        guard let lt else { badge.isHidden = true; return }
+        let cfg = UIImage.SymbolConfiguration(pointSize: 11, weight: .bold)
+        badge.image = UIImage(systemName: lt.status == "distant" ? "bolt" : "bolt.fill",
+                              withConfiguration: cfg)?
+            .withTintColor(uiColor(lt.status), renderingMode: .alwaysOriginal)
+        badge.isHidden = false
+    }
+}
+
 /// The blue "you are here" ring drawn behind the home station's glyph.
 private func makeHalo(diameter: CGFloat) -> UIView {
     let v = UIView(frame: CGRect(x: 0, y: 0, width: diameter, height: diameter))
@@ -154,6 +185,12 @@ final class WindBarbView: MKAnnotationView {
     private let glyph = BarbGlyph(frame: CGRect(x: 0, y: 0, width: 50, height: 50))
     private let idLabel = UILabel()
     private let halo = makeHalo(diameter: 34)
+    private let bolt = LightningInk.makeBadge()
+    private var isHome = false
+
+    /// Station ids only past a zoom threshold (the map declutter rule);
+    /// the home station always keeps its name.
+    var showsID = true { didSet { idLabel.isHidden = !(showsID || isHome) } }
 
     override init(annotation: MKAnnotation?, reuseIdentifier: String?) {
         super.init(annotation: annotation, reuseIdentifier: reuseIdentifier)
@@ -172,6 +209,8 @@ final class WindBarbView: MKAnnotationView {
         idLabel.frame = CGRect(x: -17, y: 34, width: 60, height: 11)
         addSubview(glyph)
         addSubview(idLabel)
+        bolt.frame = CGRect(x: 18, y: -14, width: 14, height: 14)
+        addSubview(bolt)
         isEnabled = true        // tappable: opens the station detail sheet
         displayPriority = .defaultHigh
         collisionMode = .circle
@@ -185,6 +224,9 @@ final class WindBarbView: MKAnnotationView {
         glyph.ink = FlightCategory.uiColor(a.obs.fltCat)
         glyph.setNeedsDisplay()
         idLabel.text = a.obs.id
+        isHome = a.isHome
+        idLabel.isHidden = !(showsID || a.isHome)
+        LightningInk.apply(a.obs.lightning, to: bolt)
         halo.isHidden = !a.isHome
         idLabel.font = .monospacedDigitSystemFont(ofSize: 8.5, weight: a.isHome ? .bold : .medium)
         // Home never loses a collision; it's the one station that must show.
@@ -198,6 +240,10 @@ final class SpeedLabelView: MKAnnotationView {
     private let label = UILabel()
     private let idLabel = UILabel()
     private let halo = makeHalo(diameter: 30)
+    private let bolt = LightningInk.makeBadge()
+    private var isHome = false
+
+    var showsID = true { didSet { idLabel.isHidden = !(showsID || isHome) } }
 
     override init(annotation: MKAnnotation?, reuseIdentifier: String?) {
         super.init(annotation: annotation, reuseIdentifier: reuseIdentifier)
@@ -213,6 +259,7 @@ final class SpeedLabelView: MKAnnotationView {
         idLabel.textAlignment = .center
         addSubview(label)
         addSubview(idLabel)
+        addSubview(bolt)
         isEnabled = true        // tappable: opens the station detail sheet
         // Speed labels rank below barbs and centers: a number that mostly
         // matches its neighbors shouldn't cover anything.
@@ -241,16 +288,60 @@ final class SpeedLabelView: MKAnnotationView {
         label.frame.size.height += 4
         label.frame.size.width += 2
         idLabel.text = o.id
+        isHome = a.isHome
+        idLabel.isHidden = !(showsID || a.isHome)
         // Bounds = the speed pill only (its collision footprint); the id label
         // hangs below, outside the bounds, and never causes a collision.
         bounds = CGRect(x: 0, y: 0, width: label.bounds.width, height: label.bounds.height)
         label.frame.origin = .zero
         idLabel.frame = CGRect(x: (bounds.width - 60) / 2, y: bounds.height + 1, width: 60, height: 11)
+        bolt.frame = CGRect(x: bounds.width + 1, y: (bounds.height - 12) / 2, width: 12, height: 12)
+        LightningInk.apply(o.lightning, to: bolt)
         centerOffset = CGPoint(x: 0, y: -bounds.height / 2 - 4)
         // The ring sits on the station point itself (below the pill).
         halo.center = CGPoint(x: bounds.width / 2, y: bounds.height + 4 + bounds.height / 2)
         halo.isHidden = !a.isHome
         displayPriority = a.isHome ? .required : .defaultLow
+    }
+}
+
+// MARK: - Storm marker (the Storms overlay with the station layer off)
+
+final class LightningAnnotation: MKPointAnnotation {
+    var obs = StationObs(id: "", lat: 0, lon: 0)
+}
+
+/// A bolt with the station id under it: where lightning is being reported
+/// right now. Tappable, like a station.
+final class LightningMarkerView: MKAnnotationView {
+    private let bolt = UIImageView()
+    private let idLabel = UILabel()
+
+    override init(annotation: MKAnnotation?, reuseIdentifier: String?) {
+        super.init(annotation: annotation, reuseIdentifier: reuseIdentifier)
+        bounds = CGRect(x: 0, y: 0, width: 22, height: 22)
+        bolt.frame = bounds
+        bolt.contentMode = .scaleAspectFit
+        idLabel.font = .monospacedDigitSystemFont(ofSize: 8.5, weight: .medium)
+        idLabel.textColor = .secondaryLabel
+        idLabel.textAlignment = .center
+        idLabel.frame = CGRect(x: -19, y: 22, width: 60, height: 11)
+        addSubview(bolt)
+        addSubview(idLabel)
+        isEnabled = true
+        displayPriority = .defaultHigh
+        collisionMode = .circle
+    }
+
+    required init?(coder: NSCoder) { fatalError("unused") }
+
+    func configure(_ a: LightningAnnotation) {
+        guard let lt = a.obs.lightning else { return }
+        let cfg = UIImage.SymbolConfiguration(pointSize: 16, weight: .bold)
+        bolt.image = UIImage(systemName: lt.status == "distant" ? "bolt" : "bolt.fill",
+                             withConfiguration: cfg)?
+            .withTintColor(LightningInk.uiColor(lt.status), renderingMode: .alwaysOriginal)
+        idLabel.text = a.obs.id
     }
 }
 
@@ -286,6 +377,13 @@ struct StationDetailSheet: View {
                     .padding(.top, -10)
             }
 
+            if let lt = obs.lightning {
+                Label(lt.sentence, systemImage: lt.status == "distant" ? "bolt" : "bolt.fill")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(LightningInk.color(lt.status))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading),
                                 GridItem(.flexible(), alignment: .leading)],
                       alignment: .leading, spacing: 10) {
@@ -294,6 +392,9 @@ struct StationDetailSheet: View {
                 fact("Ceiling", ceilingText, icon: "cloud")
                 fact("Temp / dew", tempText, icon: "thermometer.medium")
                 fact("Altimeter", altimText, icon: "barometer")
+                if let wx = obs.wx {
+                    fact("Weather", wx, icon: "cloud.rain")
+                }
             }
 
             if let raw = obs.raw {

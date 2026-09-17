@@ -2,9 +2,9 @@
 //  Barry — iOS
 //
 //  The MapKit bridge: tile overlays for radar frames, the front-field
-//  overlay, wind arrows, boundary-layer labels, station barbs/speeds, and the
-//  particle flow subview. The coordinator owns the diffing so SwiftUI updates
-//  only add or remove what changed.
+//  overlay, the pressure field, wind arrows, station barbs/speeds, storm
+//  bolts, and the particle flow subview. The coordinator owns the diffing so
+//  SwiftUI updates only add or remove what changed.
 
 import SwiftUI
 import MapKit
@@ -17,17 +17,21 @@ struct RadarMapView: UIViewRepresentable {
     let host: String
     let frames: [RadarFrame]
     let index: Int
+    /// False when another base layer (pressure, change) replaces the radar:
+    /// the tiles stay loaded but draw at zero alpha.
+    var radarVisible: Bool = true
     let center: CLLocationCoordinate2D
     var windArrows: [WindArrow] = []
     var showWind: Bool = false
     /// nil = flow layer off; otherwise the full wind grid to animate.
     var windFlow: [WindArrow]? = nil
-    var blPoints: [BLPoint] = []
-    var showBL: Bool = false
     /// nil = fronts layer off; otherwise the field to draw (morphs included).
     var frontState: FrontRenderState? = nil
     var stations: [StationObs] = []
     var stationStyle: StationLayerStyle = .off
+    /// Bolts at stations reporting lightning. With the station layer on the
+    /// barbs carry the bolt themselves; this adds standalone markers otherwise.
+    var showStorms: Bool = false
     var onSelectStation: ((StationObs) -> Void)? = nil
     /// nil: the red pin marks the station and the map shows the user's own
     /// blue dot. Otherwise the home station is drawn as itself (see HomeMarker).
@@ -108,43 +112,6 @@ struct RadarMapView: UIViewRepresentable {
         var fromDeg: Double = 0
     }
 
-    final class BLAnnotation: MKPointAnnotation {
-        var meters: Double = 0
-    }
-
-    /// A small readable height pill ("5.6k") for boundary-layer-top samples.
-    final class BLLabelView: MKAnnotationView {
-        private let label = UILabel()
-
-        override init(annotation: MKAnnotation?, reuseIdentifier: String?) {
-            super.init(annotation: annotation, reuseIdentifier: reuseIdentifier)
-            label.font = .monospacedDigitSystemFont(ofSize: 10, weight: .semibold)
-            label.textColor = .label
-            label.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.72)
-            label.textAlignment = .center
-            label.layer.cornerRadius = 4
-            label.layer.masksToBounds = true
-            addSubview(label)
-            isEnabled = false
-            displayPriority = .defaultLow
-            // Sit below the wind arrow when both layers are on.
-            centerOffset = CGPoint(x: 0, y: 14)
-        }
-
-        required init?(coder: NSCoder) { fatalError("unused") }
-
-        func set(feet: Double) {
-            label.text = feet >= 1000
-                ? String(format: " %.1fk ", feet / 1000)
-                : " \(Int((feet / 100).rounded()) * 100) "
-            label.sizeToFit()
-            label.frame.size.height += 3
-            label.frame.size.width += 2
-            bounds = label.bounds
-            label.frame = bounds
-        }
-    }
-
     final class Coordinator: NSObject, MKMapViewDelegate {
         var overlays: [Int: RadarTileOverlay] = [:]
         var renderers: [Int: MKTileOverlayRenderer] = [:]
@@ -168,14 +135,18 @@ struct RadarMapView: UIViewRepresentable {
         /// A station tap opens its detail sheet; the annotation is deselected
         /// right away so the same station can be tapped again after dismissal.
         func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
-            guard let st = view.annotation as? StationAnnotation else { return }
-            mapView.deselectAnnotation(st, animated: false)
-            onSelectStation?(st.obs)
+            if let st = view.annotation as? StationAnnotation {
+                mapView.deselectAnnotation(st, animated: false)
+                onSelectStation?(st.obs)
+            } else if let lt = view.annotation as? LightningAnnotation {
+                mapView.deselectAnnotation(lt, animated: false)
+                onSelectStation?(lt.obs)
+            }
         }
         var shownArrows: [WindArrow] = []
         var arrowAnnotations: [WindArrowAnnotation] = []
-        var shownBL: [BLPoint] = []
-        var blAnnotations: [BLAnnotation] = []
+        var stormAnnotations: [LightningAnnotation] = []
+        var shownStorms: [StationObs] = []
         var frontOverlay: FrontFieldOverlay?
         var pressureOverlay: PressureFieldOverlay?
         var shownPressure: PressureFieldState?
@@ -256,7 +227,62 @@ struct RadarMapView: UIViewRepresentable {
                 return a
             }
             map.addAnnotations(stationAnnotations)
-            applyBL(on: map)
+            applyDeclutter(on: map)
+        }
+
+        /// Standalone bolts for stations reporting lightning, only while the
+        /// station layer is off (the barbs badge themselves otherwise). The
+        /// home barb badges itself too, so it is left out as well.
+        func syncStorms(_ obs: [StationObs], show: Bool, stationsOn: Bool, on map: MKMapView) {
+            let homeID = homeBarb?.obs.id
+            let want = (show && !stationsOn) ? obs.filter { $0.lightning != nil && $0.id != homeID } : []
+            guard want != shownStorms else { return }
+            shownStorms = want
+            map.removeAnnotations(stormAnnotations)
+            stormAnnotations = want.map { o in
+                let a = LightningAnnotation()
+                a.coordinate = CLLocationCoordinate2D(latitude: o.lat, longitude: o.lon)
+                a.obs = o
+                return a
+            }
+            map.addAnnotations(stormAnnotations)
+        }
+
+        // MARK: Declutter
+
+        /// Station ids only once the map is zoomed in past this span; the
+        /// home station always keeps its name (see the annotation views).
+        static let idLabelMaxSpan: CLLocationDegrees = 2.2
+        private var showsIDs = true
+
+        func applyDeclutter(on map: MKMapView) {
+            let show = map.region.span.latitudeDelta < Self.idLabelMaxSpan
+            guard show != showsIDs else { return }
+            showsIDs = show
+            for a in stationAnnotations + [homeBarb].compactMap({ $0 }) {
+                if let v = map.view(for: a) as? WindBarbView { v.showsID = show }
+                else if let v = map.view(for: a) as? SpeedLabelView { v.showsID = show }
+            }
+        }
+
+        /// Radar tiles hidden while another base layer is showing. Frames
+        /// keep loading in the background so switching back is instant.
+        private var radarHidden = false
+
+        func setRadarHidden(_ hidden: Bool) {
+            guard hidden != radarHidden else { return }
+            radarHidden = hidden
+            if hidden {
+                displayLink?.invalidate()
+                displayLink = nil
+                fadeFrom = nil
+                fadeTo = nil
+                for r in renderers.values { r.alpha = 0 }
+            } else {
+                let t = currentTime
+                currentTime = -1
+                setCurrent(t)
+            }
         }
 
         func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
@@ -294,7 +320,7 @@ struct RadarMapView: UIViewRepresentable {
             }
             if let tile = overlay as? RadarTileOverlay {
                 let r = MKTileOverlayRenderer(tileOverlay: tile)
-                r.alpha = tile.frameTime == currentTime ? Self.visibleAlpha : Self.idleAlpha
+                r.alpha = radarHidden ? 0 : (tile.frameTime == currentTime ? Self.visibleAlpha : Self.idleAlpha)
                 renderers[tile.frameTime] = r
                 return r
             }
@@ -303,7 +329,7 @@ struct RadarMapView: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
             onRegionChange?(mapView.region)
-            applyBL(on: mapView)
+            applyDeclutter(on: mapView)
             flowView?.mapDidMove()
         }
 
@@ -314,6 +340,7 @@ struct RadarMapView: UIViewRepresentable {
                     let view = (mapView.dequeueReusableAnnotationView(withIdentifier: id) as? SpeedLabelView)
                         ?? SpeedLabelView(annotation: st, reuseIdentifier: id)
                     view.annotation = st
+                    view.showsID = showsIDs
                     view.configure(st)
                     return view
                 }
@@ -321,7 +348,16 @@ struct RadarMapView: UIViewRepresentable {
                 let view = (mapView.dequeueReusableAnnotationView(withIdentifier: id) as? WindBarbView)
                     ?? WindBarbView(annotation: st, reuseIdentifier: id)
                 view.annotation = st
+                view.showsID = showsIDs
                 view.configure(st)
+                return view
+            }
+            if let lt = annotation as? LightningAnnotation {
+                let id = "lightning"
+                let view = (mapView.dequeueReusableAnnotationView(withIdentifier: id) as? LightningMarkerView)
+                    ?? LightningMarkerView(annotation: lt, reuseIdentifier: id)
+                view.annotation = lt
+                view.configure(lt)
                 return view
             }
             if let center = annotation as? PressureCenterAnnotation {
@@ -330,14 +366,6 @@ struct RadarMapView: UIViewRepresentable {
                     ?? PressureCenterView(annotation: center, reuseIdentifier: id)
                 view.annotation = center
                 view.configure(center)
-                return view
-            }
-            if let bl = annotation as? BLAnnotation {
-                let id = "blLabel"
-                let view = (mapView.dequeueReusableAnnotationView(withIdentifier: id) as? BLLabelView)
-                    ?? BLLabelView(annotation: bl, reuseIdentifier: id)
-                view.annotation = bl
-                view.set(feet: bl.meters * 3.281)
                 return view
             }
             guard let wind = annotation as? WindArrowAnnotation else {
@@ -386,42 +414,6 @@ struct RadarMapView: UIViewRepresentable {
                 return ann
             }
             map.addAnnotations(arrowAnnotations)
-        }
-
-        /// Same equality-guarded sync for the boundary-layer labels.
-        /// Boundary-layer heights are the least informative numbers on the map
-        /// (neighbors agree with them), so they keep clear of everything that
-        /// matters: any label within `keepClearPt` of a station marker or the
-        /// home marker on screen is simply not shown. Re-applied whenever the
-        /// stations, the home marker, or the zoom change.
-        static let keepClearPt: CGFloat = 46
-        private var wantedBL: [BLPoint] = []
-
-        func syncBL(_ points: [BLPoint], on map: MKMapView) {
-            guard points != shownBL else { return }
-            shownBL = points
-            wantedBL = points
-            applyBL(on: map)
-        }
-
-        func applyBL(on map: MKMapView) {
-            let occupied = (stationAnnotations.map(\.coordinate) + [homeBarb?.coordinate].compactMap { $0 })
-                .map { map.convert($0, toPointTo: map) }
-            let r = Coordinator.keepClearPt
-            let keep = wantedBL.filter { p in
-                let sp = map.convert(CLLocationCoordinate2D(latitude: p.lat, longitude: p.lon), toPointTo: map)
-                return !occupied.contains { abs($0.x - sp.x) < r && abs($0.y - sp.y) < r }
-            }
-            let current = blAnnotations.map { BLPoint(lat: $0.coordinate.latitude, lon: $0.coordinate.longitude, meters: $0.meters) }
-            guard keep != current else { return }
-            map.removeAnnotations(blAnnotations)
-            blAnnotations = keep.map { p in
-                let ann = BLAnnotation()
-                ann.coordinate = CLLocationCoordinate2D(latitude: p.lat, longitude: p.lon)
-                ann.meters = p.meters
-                return ann
-            }
-            map.addAnnotations(blAnnotations)
         }
 
         /// The fronts layer: one world-sized overlay whose renderer reads a state
@@ -477,6 +469,7 @@ struct RadarMapView: UIViewRepresentable {
             guard time != currentTime else { return }
             let old = renderers[currentTime]
             currentTime = time
+            guard !radarHidden else { return }
             displayLink?.invalidate()
             displayLink = nil
             // Park everything that isn't part of this transition.
@@ -574,11 +567,12 @@ struct RadarMapView: UIViewRepresentable {
         context.coordinator.onSelectStation = onSelectStation
         context.coordinator.syncHome(home, center: center, on: map)
         context.coordinator.syncArrows(showWind ? windArrows : [], on: map)
-        context.coordinator.syncBL(showBL ? blPoints : [], on: map)
         context.coordinator.syncFronts(frontState, on: map)
         context.coordinator.syncPressure(pressureState, on: map)
         context.coordinator.syncFlow(windFlow, on: map)
         context.coordinator.syncStations(stations, style: stationStyle, on: map)
+        context.coordinator.syncStorms(stations, show: showStorms, stationsOn: stationStyle != .off, on: map)
+        context.coordinator.setRadarHidden(!radarVisible)
 
         guard frames.indices.contains(index) else { return }
         context.coordinator.setCurrent(frames[index].time)

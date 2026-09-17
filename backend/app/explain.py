@@ -13,7 +13,8 @@ from typing import List, Optional, Sequence
 
 from . import signals as sig
 from .interpreter import Reading
-from .models import ExplanationOut, ForecastHour, SeriesPoint, SignalOut, TafOut
+from .conditions import THUNDER_CODES
+from .models import CurrentObs, ExplanationOut, ForecastHour, SeriesPoint, SignalOut, TafOut
 from .verdict import CALM_WIND_MAX_KMH, PRECIP_THRESHOLD, _fmt_local_hour, forecast_stays_calm
 
 LOOK_AHEAD_H = 12.0
@@ -46,6 +47,36 @@ def _phrase_observed(s: sig.Signal, fmt) -> str:
 
 
 CAT_ORDER = {"VFR": 0, "MVFR": 1, "IFR": 2, "LIFR": 3}
+
+_CARDINAL = {"N": "north", "NE": "northeast", "E": "east", "SE": "southeast",
+             "S": "south", "SW": "southwest", "W": "west", "NW": "northwest"}
+
+
+def _lightning_signal(cur: Optional[CurrentObs], at: datetime) -> Optional[SignalOut]:
+    """The station's own lightning report as evidence: a thunderstorm at the
+    field, lightning nearby, or distant lightning with its direction."""
+    if cur is None or cur.lightning is None:
+        return None
+    lt = cur.lightning
+    where = ""
+    named: List[str] = []
+    for d in lt.directions:
+        if d in _CARDINAL:
+            named.append(_CARDINAL[d])
+        elif "-" in d and all(p in _CARDINAL for p in d.split("-")):
+            a, b = d.split("-", 1)
+            named.append(f"{_CARDINAL[a]} to {_CARDINAL[b]}")   # "SW-W"
+    if named:
+        where = " to the " + " and ".join(named[:2])
+    elif "ALQDS" in lt.directions:
+        where = " all around"
+    if lt.status == "thunderstorm":
+        text = "a thunderstorm is at the field right now"
+    elif lt.status == "vicinity":
+        text = f"lightning is close by{where}"
+    else:
+        text = f"there is distant lightning{where}"
+    return SignalOut(kind="lightning", at=lt.since or at, text=text, source="metar")
 
 
 def _taf_signals(taf: Optional[TafOut], now: datetime, fmt, reading: Reading) -> List[SignalOut]:
@@ -91,7 +122,8 @@ def _taf_signals(taf: Optional[TafOut], now: datetime, fmt, reading: Reading) ->
 
 def build(reading: Optional[Reading], forecast: Optional[Sequence[ForecastHour]],
           series: Sequence[SeriesPoint], now: datetime,
-          local_hour_offset: float = 0.0, taf: Optional[TafOut] = None) -> Optional[ExplanationOut]:
+          local_hour_offset: float = 0.0, taf: Optional[TafOut] = None,
+          current: Optional[CurrentObs] = None) -> Optional[ExplanationOut]:
     if reading is None:
         return None
     fmt = lambda t: _fmt_local_hour(t, local_hour_offset)
@@ -107,12 +139,21 @@ def build(reading: Optional[Reading], forecast: Optional[Sequence[ForecastHour]]
         item = SignalOut(kind=s.kind, at=s.at, text=_phrase_observed(s, fmt), source="metar")
         worse = s.kind == "category_change" and not s.detail.get("worse")
         (conflicting if (worse and falling) else supporting).append(item)
+    # Lightning is the loudest observed signal there is; it leads the list.
+    if (lt := _lightning_signal(current, now)) is not None:
+        supporting.insert(0, lt)
 
     # The model's view of the coming hours.
     window = [h for h in (forecast or []) if now <= h.t <= now + timedelta(hours=LOOK_AHEAD_H)]
     if window:
         rain = next((h for h in window if (h.precip_prob or 0) >= PRECIP_THRESHOLD), None)
-        if rain is not None:
+        thunder = next((h for h in window if h.weather_code in THUNDER_CODES), None)
+        if thunder is not None:
+            # Thunder says more than rain; one item, not both.
+            item = SignalOut(kind="model_thunder", at=thunder.t, source="model",
+                             text=f"the model has thunderstorms around {fmt(thunder.t)}")
+            (conflicting if rising else supporting).append(item)
+        elif rain is not None:
             item = SignalOut(kind="rain", at=rain.t, source="model",
                              text=f"the model puts rain in from {fmt(rain.t)}")
             (conflicting if rising else supporting).append(item)
@@ -135,7 +176,7 @@ def build(reading: Optional[Reading], forecast: Optional[Sequence[ForecastHour]]
                 text=f"the model has gusts to {_kt(gusty.windgust)} kt around {fmt(gusty.t)}"))
 
         has_model_gusts = any(i.kind == "model_gusts" for i in supporting)
-        if falling and rain is None and not has_model_gusts and forecast_stays_calm(window):
+        if falling and rain is None and thunder is None and not has_model_gusts and forecast_stays_calm(window):
             conflicting.append(SignalOut(
                 kind="model_calm", at=window[0].t, source="model",
                 text="the model keeps the next hours dry and calm"))
@@ -168,8 +209,8 @@ def build(reading: Optional[Reading], forecast: Optional[Sequence[ForecastHour]]
 
 # ---- Confidence from agreement (C3) ----------------------------------------
 
-STRONG_SUPPORT = {"rain", "model_wind_shift", "model_gusts", "wind_shift", "gust_onset", "temp_drop",
-                  "taf_wind_shift", "taf_wx"}
+STRONG_SUPPORT = {"rain", "model_thunder", "model_wind_shift", "model_gusts", "wind_shift", "gust_onset",
+                  "temp_drop", "lightning", "taf_wind_shift", "taf_wx"}
 
 
 def adjust_confidence(confidence: float, ex: Optional[ExplanationOut]) -> tuple[float, List[str]]:

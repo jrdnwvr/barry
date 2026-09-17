@@ -50,6 +50,34 @@ struct FieldConditionsCard: View {
     /// forecast DA; nothing at all means the card shouldn't exist.
     private var hasDA: Bool { conditions.densityAltitudeFt != nil || peak != nil }
 
+    /// Where the boundary layer is headed over the next hours: the top of the
+    /// bumpy, hazy air. Rising through the day is the normal story; the line
+    /// only appears when it moves a real amount.
+    private var blLine: (text: String, rising: Bool)? {
+        guard let now = conditions.boundaryLayerFt else { return nil }
+        let fc = conditions.blForecast
+        guard let hi = fc.max(by: { $0.ft < $1.ft }), let lo = fc.min(by: { $0.ft < $1.ft }) else { return nil }
+        if hi.ft - now >= 1000 {
+            return ("Rising to \(ft(hi.ft)) around \(hi.t.formatted(date: .omitted, time: .shortened))", true)
+        }
+        if now - lo.ft >= 1000 {
+            return ("Down to \(ft(lo.ft)) by \(lo.t.formatted(date: .omitted, time: .shortened))", false)
+        }
+        return nil
+    }
+
+    private func stormLine(_ st: StormOut) -> String {
+        var line = st.risk == "likely" ? "Thunderstorms likely" : "Thunderstorms possible"
+        if let s = st.start {
+            line += st.risk == "likely" ? " from \(s.formatted(date: .omitted, time: .shortened))"
+                                        : " around \(s.formatted(date: .omitted, time: .shortened))"
+        }
+        if st.risk == "likely", let e = st.end, let s = st.start, e > s {
+            line += " to \(e.formatted(date: .omitted, time: .shortened))"
+        }
+        return line
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if hasDA {
@@ -89,8 +117,53 @@ struct FieldConditionsCard: View {
                 .foregroundStyle(.secondary)
             }
 
-            if let fog = conditions.fog {
+            if let bl = conditions.boundaryLayerFt {
                 if hasDA { Divider() }
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    AirLayersIcon()
+                        .frame(height: 12)
+                        .foregroundStyle(.blue)
+                    Text("Boundary layer top")
+                        .font(.subheadline.weight(.medium))
+                    Spacer()
+                    Text(ft(bl) + " AGL")
+                        .font(.subheadline.weight(.semibold))
+                        .monospacedDigit()
+                }
+                HStack {
+                    Text("Bumpy, hazy air mixes below it, smoother air above.")
+                    Spacer()
+                    if let line = blLine {
+                        HStack(spacing: 3) {
+                            Image(systemName: line.rising ? "arrow.up.right" : "arrow.down.right")
+                                .font(.caption2.weight(.semibold))
+                            Text(line.text)
+                        }
+                        .fixedSize()
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            if let st = conditions.storm {
+                if hasDA || conditions.boundaryLayerFt != nil { Divider() }
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: "cloud.bolt.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(st.risk == "likely" ? .orange : .secondary)
+                    Text(stormLine(st))
+                        .font(.subheadline.weight(.medium))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text(st.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let fog = conditions.fog {
+                if hasDA || conditions.boundaryLayerFt != nil || conditions.storm != nil { Divider() }
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Image(systemName: "cloud.fog.fill")
                         .font(.subheadline)

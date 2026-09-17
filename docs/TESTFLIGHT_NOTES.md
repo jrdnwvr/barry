@@ -1,24 +1,21 @@
-# TestFlight "What to Test" template
+# TestFlight "What to Test"
 
-The first block goes on every build, word for word. Below it, a short list of
-what changed in this build. Keep the whole thing under 4,000 characters.
+Short. Plain. Sounds like a text from Jordan, not a release announcement.
+Opening line every time, then three or four bullets at most, no bullet longer
+than one line. No em dashes, no exclamation marks, no feature names in
+quotes, no "we're excited". If a change needs a paragraph, it goes in a
+conversation with the tester instead.
 
 ---
 
-Thanks for flying with Barry. Here's what I always want to hear about:
+Thanks for testing. Send me anything that looks off, numbers that don't match the AWOS or ForeFlight, or anything that made you stop and think. A screenshot and a sentence is plenty.
 
-- Anything that looks broken: text cut off at the edge, labels on top of each other, buttons that don't respond, dark mode weirdness.
-- Numbers that don't match what you'd trust. If the AWOS, ForeFlight, or your own altimeter says something different, tell me what it said.
-- Anything slow, blank, or that makes you wait.
-- Anything confusing. If you had to think about what a screen meant, that counts.
-
-A screenshot with a sentence is perfect. Shake the phone or use the TestFlight screenshot button and it comes straight to me.
-
-New in this build:
+This build:
+- ...
 
 ---
 
 ## Log
 
-- Build 82 (2026-09-17): first use of the template.
+- Build 82 (2026-09-17): first use of the long template (retired).
 - Build 83 (2026-09-17, 9c5a4c6): cancelled before archive; more work queued first.

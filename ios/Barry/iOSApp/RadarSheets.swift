@@ -31,15 +31,15 @@ struct RadarKeySheet: View {
                 if wind {
                     section("Wind", icon: "wind") {
                         Text(windStyle == "arrows"
-                             ? "Arrows point where the model's 10 m wind is blowing, and grow with speed from about 3 kt."
-                             : "Streaks drift with the model's 10 m wind. Faster wind, longer and brighter streaks.")
+                             ? "Arrows follow the model's 10 m wind and scale with speed."
+                             : "Streaks drift with the model's 10 m wind.")
                     }
                 }
 
                 if fronts {
                     section("Fronts", icon: "line.diagonal") {
                         FrontKeyView(validText: frontValidText, compact: false)
-                        Text("Pips sit on the side the front is moving toward. Positions from the NWS Weather Prediction Center, good to about 50 miles.")
+                        Text("Pips sit on the side the front is moving toward. NWS positions, good to about 50 miles.")
                     }
                 }
 
@@ -69,8 +69,8 @@ struct RadarKeySheet: View {
                             dotKey(Color(red: 0.45, green: 0.25, blue: 0.70).opacity(0.7), "20 min")
                         }
                         .font(.caption)
-                        Text("Each dot is a flash seen by NOAA's GOES satellites over the last 20 minutes, bigger where more fell, fading as they age. The radar dims a little while this layer is on so the dots stay readable.")
-                        Text("How a satellite sees lightning: from 22,000 miles up, the mapper watches for the burst of light a stroke throws onto the top of its cloud. It sees lightning inside a cloud and strikes to the ground alike, and cannot tell them apart. A dot marks where the cloud lit up, good to about 5 miles, not where a bolt touched down. A stroke buried under a thick anvil, or a weak one in bright daylight, can be missed, and dots arrive a minute or two after the flash.")
+                        Text("Flashes seen by NOAA's GOES satellites in the last 20 minutes. Bigger where more fell, fading with age.")
+                        Text("The satellite sees the light a stroke throws onto the cloud top, in-cloud and ground strikes alike. A dot is where the cloud lit up, good to about 5 miles, a minute or two late.")
                         if lightningCoverage == false {
                             Text("The feed is catching up right now, so flashes may be missing.")
                                 .foregroundStyle(.orange)
@@ -86,7 +86,7 @@ struct RadarKeySheet: View {
                             boltKey("bolt", LightningInk.color("distant"), "distant")
                         }
                         .font(.caption)
-                        Text("What each station reports in its own METAR. A station with no bolt may simply have no lightning sensor.")
+                        Text("Lightning as reported in each station's METAR.")
                     }
                 }
 
@@ -115,14 +115,14 @@ struct RadarKeySheet: View {
                 ramp([Color(red: 0.45, green: 0.2, blue: 0.7), Color(red: 0.2, green: 0.45, blue: 0.9),
                       Color(red: 0.2, green: 0.7, blue: 0.5), Color(red: 0.85, green: 0.8, blue: 0.2),
                       Color(red: 0.95, green: 0.5, blue: 0.15)], low: "lower", high: "higher")
-                Text("Sea-level pressure from \(pressureStations) reporting stations, gridded by Barry. Isobars every 4 hPa, or 2 on a flat day. The shading is stretched over this area's own range, so it shows structure even when the whole map is within a few hPa.")
+                Text("Sea-level pressure from \(pressureStations) stations, gridded. Isobars every 4 hPa, or 2 on a flat day.")
             }
         case .change:
             section("Pressure change", icon: "arrow.down.right.circle") {
                 ramp([Color(red: 0.9, green: 0.35, blue: 0.15), Color(red: 0.9, green: 0.35, blue: 0.15).opacity(0.15),
                       Color(red: 0.15, green: 0.43, blue: 0.9).opacity(0.15), Color(red: 0.15, green: 0.43, blue: 0.9)],
                      low: "falling", high: "rising")
-                Text("How much the pressure moved over the last 3 h at each station, gridded. Solid lines are rises, dashed lines are falls, one line per hPa. H and L mark the strongest rise and fall. Pressure falling toward a front is the change to watch.")
+                Text("3 h pressure change at each station, gridded. Solid rising, dashed falling, one line per hPa. H and L mark the strongest.")
             }
         }
     }
@@ -200,7 +200,7 @@ struct RadarMoreSheet: View {
                 Toggle("Troughs (dashed)", isOn: $frontTroughs)
                 Toggle("Fronts marked weak", isOn: $frontWeak)
                 Toggle("H and L pressure centers", isOn: $frontCenters)
-                Text("All on is the classic surface chart. Symbols sit on the side the front is moving toward.")
+                Text("Symbols sit on the side the front is moving toward.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -214,7 +214,7 @@ struct RadarMoreSheet: View {
                     Text("Arrows").tag("arrows")
                 }
                 .pickerStyle(.segmented)
-                Text("Streaks and arrows start at about 3 kt. Where the model wind is lighter than that, the map stays blank on purpose. Station barbs show calm as an open circle.")
+                Text("Wind under 3 kt is not drawn. Station barbs show calm as an open circle.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

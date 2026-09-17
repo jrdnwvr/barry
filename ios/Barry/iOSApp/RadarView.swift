@@ -500,7 +500,7 @@ struct RadarPanel: View {
         case .radar:
             radarControls
         case .pressure:
-            baseCaption("Isobars from Barry's own station table, every 4 hPa (2 on a flat day).")
+            baseCaption("Isobars every 4 hPa, 2 on a flat day.")
         case .change:
             baseCaption("Pressure change over the last 3 h. Solid rising, dashed falling, H and L at the strongest.")
         }
@@ -516,7 +516,7 @@ struct RadarPanel: View {
     /// empty map reads as "no lightning".
     @ViewBuilder private var stormsNote: some View {
         if showStorms, let r = model.lightning.response, !r.coverage {
-            Text("Lightning feed is catching up; flashes may be missing for a few minutes.")
+            Text("Lightning feed catching up.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -579,7 +579,7 @@ struct RadarPanel: View {
     /// A toggled-on layer that draws nothing must say why, or it reads as broken.
     @ViewBuilder private var windCalmNote: some View {
         if showWind, model.windSampled, model.windArrows.isEmpty {
-            Text("Winds under 3 kt across the map right now, so there is no wind to draw.")
+            Text("Wind under 3 kt across the map.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .frame(maxWidth: .infinity, alignment: .leading)

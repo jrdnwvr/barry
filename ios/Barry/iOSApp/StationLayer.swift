@@ -378,7 +378,7 @@ struct StationDetailSheet: View {
             }
 
             if obs.fltCatDerived == true, let cat = obs.fltCat {
-                Text("\(obs.id) does not report a flight category. \(cat) is derived from the ceiling and visibility it does report.")
+                Text("\(obs.id) reports no flight category. \(cat) is derived from ceiling and visibility.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

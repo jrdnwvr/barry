@@ -295,12 +295,8 @@ struct HeroView: View {
         let mag = abs(r.rate3h)                       // hPa per 3 h
         guard mag >= 1.5 else { return nil }
         let perHour = unit.formatDelta(r.rate3h / 3).replacingOccurrences(of: "+", with: "")
-        let scale: String
-        switch mag {
-        case 3.0...: scale = "a strong front or storm system"
-        default:     scale = "what a passing front usually does"
-        }
-        return "That is \(perHour) per hour, \(scale)."
+        let scale = mag >= 3.0 ? "storm pace" : "front pace"
+        return "\(perHour) per hour, \(scale)."
     }
 
     /// Surface non-obvious interpreter caveats (low confidence, sparse data).
@@ -315,7 +311,7 @@ struct HeroView: View {
             || r.caveats.contains("short_window")
             || r.caveats.contains("sparse")
             || r.confidence < 0.5
-        return loosely ? "Use this as part of a wider weather picture." : nil
+        return loosely ? "Low confidence." : nil
     }
 }
 

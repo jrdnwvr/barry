@@ -193,11 +193,9 @@ def scan_fog(hours: Sequence[ForecastHour], sun: Optional[SunTimes],
             None,
         )
         detail = (
-            "The temperature and dew point close up overnight with light wind "
-            "and a mostly clear sky. Classic radiation fog setup."
+            "Temperature and dew point close up overnight with light wind and clear sky."
             if risk == "likely" else
-            "The spread gets close overnight. If the wind stays down and the "
-            "sky stays clear, patchy fog is on the table."
+            "Spread gets close overnight. Patchy fog if the wind stays down."
         )
         return FogOut(risk=risk, onset=best_run[0].t, clearing=clearing,
                       detail=detail)
@@ -272,7 +270,7 @@ def scan_storms(hours: Sequence[ForecastHour], taf: Optional[TafOut], now: datet
             detail = "Lightning at the field right now."
         elif nearby.towardYou and nearby.etaAt is not None:
             detail = (f"Moving {_CARDINAL_WORD.get(nearby.moving, nearby.moving)}, here around "
-                      f"{{eta}} if they hold together.")
+                      f"{{eta}}.")
         elif nearby.towardYou:
             detail = f"Moving {_CARDINAL_WORD.get(nearby.moving, nearby.moving)}, toward you."
         elif nearby.towardYou is False:
@@ -293,9 +291,9 @@ def scan_storms(hours: Sequence[ForecastHour], taf: Optional[TafOut], now: datet
 
     if fc:
         start, end, source = fc
-        detail = {"both": "The model and the TAF both carry thunderstorms in this window.",
-                  "taf": "The TAF carries thunderstorms in this window.",
-                  "model": "The model puts thunderstorms in this window."}[source]
+        detail = {"both": "Model and TAF both have thunderstorms in this window.",
+                  "taf": "TAF has thunderstorms in this window.",
+                  "model": "Model has thunderstorms in this window."}[source]
         return StormOut(risk="likely", start=start, end=end, capeMax=cape_max, source=source, detail=detail)
 
     # Fuel plus a trigger, under a weak cap: "possible" with a time.
@@ -306,8 +304,7 @@ def scan_storms(hours: Sequence[ForecastHour], taf: Optional[TafOut], now: datet
         capped = h.cin is not None and h.cin < CIN_CAPPED
         if triggered and not capped:
             return StormOut(risk="possible", start=h.t, end=None, capeMax=cape_max, source="model",
-                            detail="Energy in the air and showers in the forecast to set it off. "
-                                   "Nothing says a thunderstorm for certain.")
+                            detail="Energy in the air and showers forecast to set it off.")
     return None
 
 

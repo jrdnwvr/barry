@@ -32,8 +32,8 @@ enum RunwayWindsMode: String, CaseIterable, Identifiable {
     var footer: String {
         switch self {
         case .always: return "Runway components whenever the station has runway data."
-        case .auto: return "Runway components when an airport is selected or you are within 3 NM of one. The plain wind rose elsewhere."
-        case .compass: return "The wind on the compass rose, never the runway."
+        case .auto: return "Runway components at a selected airport or within 3 NM of one. Wind rose elsewhere."
+        case .compass: return "Wind on the compass rose only."
         }
     }
 }

@@ -48,7 +48,7 @@ struct SettingsView: View {
             Form {
                 Section {
                     Toggle("Live phone sensor", isOn: $phoneBarometerEnabled)
-                    Text("Uses your phone's barometer for live readings between station reports. It calibrates itself against the station and ignores readings from elevators and driving.")
+                    Text("Live readings between station reports, calibrated against the station.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } header: {
@@ -57,7 +57,7 @@ struct SettingsView: View {
 
                 Section {
                     Toggle("Storm alerts", isOn: $stormAlertsEnabled)
-                    Text("Sends a notification when pressure changes fast. A sharp drop usually means a storm, and a sharp rise can mean gusty wind. iOS decides when background checks run, so alerts won't be instant.")
+                    Text("A notification when pressure moves fast. Timing depends on iOS background checks.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if notifDenied {
@@ -115,8 +115,8 @@ struct SettingsView: View {
                     Text("Radar")
                 } footer: {
                     Text(radarAutoplay
-                         ? "The loop runs on its own when the radar opens. Tap pause to hold a frame."
-                         : "The radar opens on the newest frame and stays there. Tap play to run the loop.")
+                         ? "Loops on open. Tap pause to hold a frame."
+                         : "Opens on the newest frame. Tap play to loop.")
                 }
 
                 Section {
@@ -129,8 +129,8 @@ struct SettingsView: View {
                     Text("Boundary layer")
                 } footer: {
                     Text(blReference == "msl"
-                         ? "The layer top as an altitude, field elevation included, to match the altimeter."
-                         : "The layer top as a height above the field.")
+                         ? "Altitude, field elevation included."
+                         : "Height above the field.")
                 }
 
                 Section {
@@ -221,7 +221,7 @@ struct SettingsView: View {
                         Text(err).font(.caption).foregroundStyle(.red)
                     }
 
-                    Text("Tap to switch. Swipe to remove. My location stays pinned and is the only place the phone's own barometer applies.")
+                    Text("Tap to switch, swipe to remove. My location stays pinned.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } header: {
@@ -288,7 +288,7 @@ struct SettingsView: View {
                 // KCVG); save the canonical form it reports back.
                 let combined = try await BarryAPI().combined(station: icao, lat: nil, lon: nil)
                 if combined.pressure.series.isEmpty {
-                    icaoError = "\(icao) doesn't report weather. Try a nearby reporting airport, or add it as a place and Barry will use the nearest station."
+                    icaoError = "\(icao) doesn't report weather. Pick a nearby reporting airport, or save it as a place."
                     return
                 }
                 savedLocations.add(SavedLocation(kind: .airport(icao: combined.pressure.station)))

@@ -84,7 +84,7 @@ def test_direction_suppressed_when_untracked_and_incoherent(monkeypatch):
     assert resp.status == "approaching"  # detection unaffected
     assert resp.bearingDeg is None
     assert resp.cardinal is None
-    assert "isn't clear" in resp.detail
+    assert "not clear" in resp.detail
 
 
 def test_flat_field_is_none():
@@ -102,7 +102,7 @@ def test_rising_behind_falls_downstream_reads_as_passed():
                    reading=reading(), now=NOW)
     assert resp.status == "passed"
     assert resp.cardinal == "east"
-    assert "rising here" in resp.detail
+    assert "Rising here" in resp.detail
 
 
 def test_model_trough_without_obs_is_forecast_only():

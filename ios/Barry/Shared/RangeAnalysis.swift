@@ -51,7 +51,7 @@ struct RangeAnalysis: Equatable {
         guard pts.count >= 3, durationH >= 2 else {
             return RangeAnalysis(
                 title: "Too short to read",
-                detail: "Not much to learn from a window this small. Select a few hours or more.",
+                detail: "Select a few hours or more.",
                 netHPa: net, spreadHPa: 0, steepest3hHPa: 0, steepestAt: nil,
                 start: first.0, end: last.0, includesForecast: includesForecast)
         }
@@ -194,11 +194,11 @@ struct RangeAnalysis: Equatable {
         if moving.isEmpty {
             if tideAmp >= tideMinAmplitude {
                 return ("The atmosphere breathing",
-                        "This is the daily pressure tide, swinging about \(mag(tideAmp)) either way with peaks near 10 AM and 10 PM. Seeing it this clearly means nothing bigger is moving through. Stable air, and tomorrow will probably look a lot like today.")
+                        "The daily pressure tide, about \(mag(tideAmp)) either way, peaking near 10 AM and 10 PM. Nothing bigger is moving through.")
             }
             if spread < 0.8 {
                 return ("Dead calm",
-                        "Pressure barely moved here. High pressure is parked overhead and nothing is pushing on it. Expect conditions to hold.")
+                        "Pressure barely moved. High pressure overhead; conditions should hold.")
             }
             return ("No single story",
                     "Pressure wandered without a clear trend. Weak systems and the daily tide trading places.")
@@ -227,10 +227,10 @@ struct RangeAnalysis: Equatable {
         let title: String
         if let troughAt = adjacency(kinds, .falling, .rising) {
             title = "A trough passed"
-            sentences.insert("Pressure bottomed out around \(clock(phases[troughAt].end)), usually a front, with the roughest conditions near the low point.", at: 0)
+            sentences.insert("Pressure bottomed out around \(clock(phases[troughAt].end)), usually a front.", at: 0)
         } else if let ridgeAt = adjacency(kinds, .rising, .falling) {
             title = "A ridge peaked"
-            sentences.insert("Pressure topped out around \(clock(phases[ridgeAt].end)). Fair conditions at the peak, giving way after.", at: 0)
+            sentences.insert("Pressure topped out around \(clock(phases[ridgeAt].end)). Fair at the peak, easing after.", at: 0)
         } else if moving.count == 1, let m = moving.first {
             let sharp = abs(m.netHPa / max(m.hours, 0.5) * 3) >= 2.5
             let ledQuiet = phases.first?.kind == .steady && (phases.first?.hours ?? 0) >= 3
@@ -238,7 +238,7 @@ struct RangeAnalysis: Equatable {
             case .falling:
                 title = ledQuiet ? "Quiet, then a fall" : (sharp ? "A sharp fall" : "A steady fall")
                 if sharp {
-                    sentences.append("A pace like that usually means an organized system moving in.")
+                    sentences.append("A pace like that usually means an organized system.")
                 }
             case .rising:
                 title = ledQuiet ? "Quiet, then a rise" : (sharp ? "A sharp rise" : "A steady rise")

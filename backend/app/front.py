@@ -263,8 +263,7 @@ def _join(ids: Sequence[str]) -> str:
 # Honest odds line, from the backtest (backend/backtest/RESULTS.md): in a year
 # of Ohio Valley replay, ~6 in 10 of these calls preceded a real pressure dip
 # within a day. One region, one year — hence "roughly".
-_ODDS = ("In testing, roughly six of ten patterns like this brought a real "
-         "pressure dip within a day. The rest slid past or fizzled.")
+_ODDS = "About six in ten of these bring a real dip within a day."
 
 
 def _copy(status: str, direction: Optional[str], strongest: Sequence[str]) -> Tuple[Optional[str], Optional[str]]:
@@ -273,33 +272,27 @@ def _copy(status: str, direction: Optional[str], strongest: Sequence[str]) -> Tu
         if direction:
             return (
                 f"Change moving in from the {direction}",
-                f"Pressure is falling here and{at}. The pattern is sliding in "
-                f"roughly from the {direction}. {_ODDS}",
+                f"Falling here and{at}, sliding in roughly from the {direction}. {_ODDS}",
             )
         return (
             "Pressure falling across the area",
-            f"Pressure is falling here and{at}, but which way the pattern is "
-            f"moving isn't clear from the station field yet. {_ODDS}",
+            f"Falling here and{at}; direction not clear yet. {_ODDS}",
         )
     if status == "passed":
         where = f" to the {direction}" if direction else " downstream"
         return (
             "The change moved through",
-            f"Pressure is rising here while stations{where} are still falling. "
-            "Whatever came through looks to be moving away.",
+            f"Rising here while stations{where} are still falling.",
         )
     if status == "passing":
         return (
             "Low point is on you",
-            "Pressure here is bottoming out now. Wind shifts and any weather "
-            "usually ride through with the trough over the next few hours.",
+            "Bottoming out now. Wind shifts and any weather ride through with the trough.",
         )
     if status == "forecast":
         return (
             "Trough in the forecast",
-            "The model expects a pressure dip here, but nearby stations aren't "
-            "showing coherent falls yet. Treat the timing as a guess until the "
-            "falls show up.",
+            "The model expects a dip here; nearby stations aren't showing it yet.",
         )
     return None, None
 

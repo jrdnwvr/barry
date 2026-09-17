@@ -139,7 +139,7 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
                 Text("\(store.station) isn't reporting weather")
                     .font(.headline)
-                Text("This field may not have a weather station. Try a nearby reporting airport, or add this spot as a place in Settings and Barry will use the nearest station.")
+                Text("No weather station here. Pick a nearby reporting airport, or save this spot as a place in Settings.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

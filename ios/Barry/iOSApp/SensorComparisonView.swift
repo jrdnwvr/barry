@@ -225,7 +225,7 @@ struct SensorComparisonView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("No phone readings yet")
                 .font(.subheadline.weight(.medium))
-            Text("Once the phone barometer calibrates and the phone is still, Barry logs its own pressure here to compare against the station.")
+            Text("Phone readings appear here once calibrated and still.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -270,7 +270,7 @@ struct SensorStationDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Your phone's readings (orange) against the station's hourly reports (blue). When they split apart, the phone is catching a change before the next report.")
+                Text("Phone (orange) against the station's hourly reports (blue).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -301,7 +301,7 @@ struct SensorStationDetailView: View {
                 .font(.headline)
 
             if barometer.lastResetWasAltitude {
-                Label("Elevation changed. Barry recalibrates at the next station report.",
+                Label("Elevation changed. Recalibrates at the next station report.",
                       systemImage: "arrow.up.arrow.down")
                     .font(.caption)
                     .foregroundStyle(.orange)
@@ -312,11 +312,11 @@ struct SensorStationDetailView: View {
                     .font(.caption)
                     .foregroundStyle(calibrationStale ? Color.orange : Color.secondary)
             } else if barometer.isProvisional {
-                Text("Approximate, based on GPS altitude. It sharpens up at the first station report while the phone is still. Trends are already accurate.")
+                Text("Approximate until the first station report. Trends are already accurate.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                Text("Not calibrated yet. This happens on its own once the phone is still and a station report arrives.")
+                Text("Not calibrated yet. It happens on its own once the phone is still.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -331,7 +331,7 @@ struct SensorStationDetailView: View {
                 .font(.caption.weight(.medium))
                 .buttonStyle(.bordered)
 
-            Text("Calibration pins the phone's sensor to the station and maintains itself. You shouldn't need this button unless a reading looks clearly wrong.")
+            Text("Calibration maintains itself. Use this only if a reading looks wrong.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }

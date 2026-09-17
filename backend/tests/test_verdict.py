@@ -76,7 +76,7 @@ def test_approaching_trough_includes_time_and_forecast_hedge():
     out = build_verdict("falling_mod", None, reading=r)
     assert "forecast to bottom out" in out
     assert "10 PM" in out
-    assert "improving after" in out
+    assert "A front looks likely" in out
 
 
 def test_approaching_trough_with_local_offset():
@@ -91,22 +91,22 @@ def test_approaching_trough_with_local_offset():
 def test_trough_passing_phrasing():
     r = _reading("trough_passing", trend="falling", featureTime=datetime(2026, 6, 28, 18, tzinfo=timezone.utc))
     out = build_verdict("falling", None, reading=r)
-    assert "at/near bottom" in out
-    assert "front passing now" in out
+    assert "bottoming out" in out
+    assert "Front passing now" in out
 
 
 def test_rapid_fall_uses_storm_phrasing():
     r = _reading("rapid_fall", trend="falling_fast")
     out = build_verdict("falling_fast", None, reading=r)
     assert "Storm system likely" in out
-    assert "Secure loose items" in out
+    assert "falling fast" in out.lower()
 
 
 def test_rapid_rise_warns_of_gusty_winds():
     r = _reading("rapid_rise", trend="rising_fast")
     out = build_verdict("rising_fast", None, reading=r)
     assert "rising fast" in out.lower()
-    assert "Gusty winds" in out
+    assert "Gusty wind" in out
 
 
 def test_front_knee_phrasing():
@@ -132,7 +132,7 @@ def test_ridge_peak_distinguishes_observed_vs_forecast():
 def test_diurnal_only_defers_to_steady_base():
     r = _reading("diurnal_only", trend="steady")
     out = build_verdict("steady", None, reading=r)
-    assert out == "Holding steady. Conditions stable."
+    assert out == "Holding steady."
 
 
 # --- calm-forecast softening ------------------------------------------------
@@ -149,7 +149,7 @@ def test_rapid_fall_feature_also_softens():
     r = _reading("rapid_fall", trend="falling_fast")
     forecast = [_fc_wind(h, 5, 8.0) for h in range(10, 16)]
     out = build_verdict("falling_fast", forecast, reading=r)
-    assert "Secure loose items" not in out
+    assert "Storm system likely" not in out
     assert "calm and dry" in out
 
 

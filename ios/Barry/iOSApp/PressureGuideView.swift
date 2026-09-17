@@ -32,7 +32,7 @@ struct PressureGuideView: View {
         Movement(cls: .fallingMod, intensity: 0.5, title: "Falling",
                  detail: "Falling pressure means a low or a front is headed your way. Expect more cloud and a better chance of rain."),
         Movement(cls: .steady, intensity: 0, title: "Steady",
-                 detail: "Little change expected soon. Whatever it's doing now will probably keep doing it for a while."),
+                 detail: "Little change expected soon."),
         Movement(cls: .rising, intensity: 0, title: "Rising",
                  detail: "Rising pressure means high pressure is building in. Expect drier, more settled weather."),
         Movement(cls: .risingFast, intensity: 0, title: "Rising fast",
@@ -86,7 +86,7 @@ struct PressureGuideView: View {
         NavigationStack {
             List {
                 Section {
-                    Text("Barry watches how fast the pressure is changing over the last few hours. That shift matters more than the number itself. It's what hints at the weather to come.")
+                    Text("Barry reads how fast pressure has changed over the last few hours. The shift, not the number, hints at what's coming.")
                         .font(.subheadline)
                         .listRowSeparator(.hidden)
                 }
@@ -114,7 +114,7 @@ struct PressureGuideView: View {
                 }
 
                 Section("A big change isn't a guarantee") {
-                    Text("Pressure can move a lot without any dramatic weather. Dry fronts pass with little more than a wind shift, and some swings are just the atmosphere rebalancing. Read the trend along with the sky and the wind and rain forecast below the chart. If it already looks bad out, the trend is your best clue for timing and intensity. If the forecast stays calm and dry, a big move might just mean a breezy change.")
+                    Text("Pressure can move a lot without much weather. Dry fronts pass with a wind shift. Read the trend with the sky and the forecast below the chart.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -130,7 +130,7 @@ struct PressureGuideView: View {
                 }
 
                 Section {
-                    Text("These are general tendencies, not guarantees. Terrain, season, and the specific system all shape what actually happens. Treat the trend as a nudge, not a certainty.")
+                    Text("General tendencies. Terrain, season, and the system itself shape what actually happens.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

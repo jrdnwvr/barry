@@ -17,12 +17,12 @@ from .interpreter import Reading
 from .models import ForecastHour
 
 BASE_VERDICTS = {
-    "falling_fast": "Sharp drop. Storm system likely approaching. Secure loose items.",
-    "falling_mod": "Pressure falling steadily. Unsettled weather likely in the coming hours.",
-    "falling": "Slight fall. Keep an eye out, nothing imminent.",
-    "steady": "Holding steady. Conditions stable.",
-    "rising": "Rising and steady. Clearing, fair conditions holding.",
-    "rising_fast": "Rising sharply. Clearing, but gusty winds likely.",
+    "falling_fast": "Sharp drop. Storm system likely approaching.",
+    "falling_mod": "Falling steadily. Unsettled weather likely in the coming hours.",
+    "falling": "Slight fall. Nothing imminent.",
+    "steady": "Holding steady.",
+    "rising": "Rising. Fair conditions holding.",
+    "rising_fast": "Rising sharply. Clearing, gusty wind likely.",
 }
 
 # precip probability (%) above which we call out likely rain
@@ -41,13 +41,11 @@ CALM_WIND_MAX_KMH = 20.0  # km/h at/below which the window counts as calm
 # carry specific information (trough timing, front passage) are never replaced.
 CALM_SOFTENINGS = {
     "falling_fast": (
-        "Sharp drop, but the forecast stays calm and dry. This may pass with "
-        "little more than a wind shift. If the sky looks bad, use the trend "
-        "for timing."
+        "Sharp drop, but the forecast stays calm and dry. Likely little more "
+        "than a wind shift."
     ),
     "falling_mod": (
-        "Pressure falling steadily, but the forecast stays calm and dry. "
-        "Not every fall brings weather. Watch the sky."
+        "Falling steadily, but the forecast stays calm and dry."
     ),
 }
 
@@ -99,28 +97,28 @@ def _feature_sentence(reading: Reading, *, local_hour_offset: float) -> Optional
         if t is not None:
             time_str = _fmt_local_hour(t, local_hour_offset)
             lead = "forecast to bottom out" if forecast_derived else "dropping toward a trough"
-            return f"Pressure {lead} around {time_str}. A front looks likely, improving after."
+            return f"Pressure {lead} around {time_str}. A front looks likely."
         return "Pressure dropping toward a low. A front looks likely."
 
     if f == "trough_passing":
-        return "Pressure at/near bottom, front passing now. Conditions worst right now."
+        return "Pressure bottoming out. Front passing now."
 
     if f == "post_trough_recovery":
         return "Pressure rising off a low. Conditions improving."
 
     if f == "ridge_peak":
         if forecast_derived:
-            return "Pressure forecast to peak soon. Fair conditions easing later."
-        return "Pressure at a ridge top. Fair conditions starting to ease."
+            return "Pressure forecast to peak soon. Fair, easing later."
+        return "Pressure at a ridge top. Fair, starting to ease."
 
     if f == "front_knee":
-        return "Sharp turn down in pressure. A front edge just arrived."
+        return "Sharp turn down. A front edge just arrived."
 
     if f == "rapid_fall":
-        return "Pressure falling fast. Storm system likely approaching. Secure loose items."
+        return "Pressure falling fast. Storm system likely approaching."
 
     if f == "rapid_rise":
-        return "Pressure rising fast. Gusty winds likely, from a gust front or strong clearing behind a front."
+        return "Pressure rising fast. Gusty wind likely behind a front."
 
     return None
 
@@ -136,7 +134,7 @@ def build_verdict(
     feature-specific phrasing; otherwise fall back to the trend class."""
     effective_class = reading.trend if reading is not None else tendency_class
     if effective_class is None:
-        return "Not enough recent data to read the trend yet."
+        return "Not enough recent data yet."
 
     sentence: Optional[str] = None
     if reading is not None:

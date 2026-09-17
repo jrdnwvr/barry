@@ -74,7 +74,7 @@ final class RadarModel: ObservableObject {
         }
         guard let resp = try? await BarryAPI().lightning(lat: center.latitude, lon: center.longitude) else { return }
         lightningFetchedAround = center
-        lightning = LightningState(response: resp, version: lightning.version + 1)
+        lightning = LightningState(response: resp, version: lightning.version + 1, receivedAt: Date())
     }
 
     /// Last region the map reported — used when a toggle flips on.

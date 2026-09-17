@@ -6,7 +6,7 @@
 //
 //  Layers come in two tiers, the way Windy and Apple's map do it. One BASE at
 //  a time (Radar, Pressure, Change) picked from a segmented control, and thin
-//  OVERLAYS (Wind, Fronts, Stations, Storms) that stack on it as chips. One
+//  OVERLAYS (Wind, Fronts, Stations, Lightning) that stack on it as chips. One
 //  timeline, and it belongs to the base: the radar scrubber shows only when
 //  radar is the base; the front chips fold behind the Fronts chip. The key
 //  and the source notes live in a sheet that lists only what's on screen.
@@ -374,7 +374,7 @@ struct RadarPanel: View {
                 chip("Stations", icon: "flag", isOn: Binding(
                     get: { stationsOn },
                     set: { stationStyleRaw = $0 ? stationStyleLast : "off" }))
-                chip("Storms", icon: "bolt.fill", isOn: $showStorms)
+                chip("Lightning", icon: "bolt.fill", isOn: $showStorms)
 
                 Button { showMore = true } label: {
                     Image(systemName: "ellipsis.circle")
@@ -444,8 +444,8 @@ struct RadarPanel: View {
         stormsNote
     }
 
-    /// Storms on but the server's mapper feed is stale: say so, or an empty
-    /// map reads as "no lightning".
+    /// Lightning on but the server's mapper feed is stale: say so, or an
+    /// empty map reads as "no lightning".
     @ViewBuilder private var stormsNote: some View {
         if showStorms, let r = model.lightning.response, !r.coverage {
             Text("Lightning feed is catching up; flashes may be missing for a few minutes.")

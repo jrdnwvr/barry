@@ -61,15 +61,16 @@ struct RadarKeySheet: View {
                 }
 
                 if storms {
-                    section("Strikes", icon: "sparkles") {
+                    section("Lightning from orbit", icon: "sparkles") {
                         HStack(spacing: 10) {
-                            dotKey(Color(red: 1.0, green: 0.95, blue: 0.55), "new")
-                            dotKey(Color(red: 1.0, green: 0.80, blue: 0.20), "5 min")
-                            dotKey(Color(red: 1.0, green: 0.55, blue: 0.10), "10 min")
-                            dotKey(Color(red: 0.85, green: 0.25, blue: 0.15).opacity(0.7), "15 min")
+                            dotKey(.white, "new", halo: true)
+                            dotKey(Color(red: 0.90, green: 0.82, blue: 1.0), "5 min")
+                            dotKey(Color(red: 0.68, green: 0.42, blue: 0.95), "10 min")
+                            dotKey(Color(red: 0.45, green: 0.25, blue: 0.70).opacity(0.7), "20 min")
                         }
                         .font(.caption)
-                        Text("Flashes seen from orbit by NOAA's GOES lightning mapper over the last 15 minutes, bigger dots where more fell. A minute or two behind real time; the mapper sees cloud tops, so a few ground strikes under thick cloud are missed.")
+                        Text("Each dot is a flash seen by NOAA's GOES satellites over the last 20 minutes, bigger where more fell, fading as they age. The radar dims a little while this layer is on so the dots stay readable.")
+                        Text("How a satellite sees lightning: from 22,000 miles up, the mapper watches for the burst of light a stroke throws onto the top of its cloud. It sees lightning inside a cloud and strikes to the ground alike, and cannot tell them apart. A dot marks where the cloud lit up, good to about 5 miles, not where a bolt touched down. A stroke buried under a thick anvil, or a weak one in bright daylight, can be missed, and dots arrive a minute or two after the flash.")
                         if lightningCoverage == false {
                             Text("The feed is catching up right now, so flashes may be missing.")
                                 .foregroundStyle(.orange)
@@ -147,9 +148,11 @@ struct RadarKeySheet: View {
         }
     }
 
-    private func dotKey(_ color: Color, _ label: String) -> some View {
+    private func dotKey(_ color: Color, _ label: String, halo: Bool = false) -> some View {
         HStack(spacing: 4) {
-            Circle().fill(color).frame(width: 9, height: 9)
+            Circle().fill(color)
+                .overlay(Circle().stroke(Color.black.opacity(halo ? 0.55 : 0.25), lineWidth: 1))
+                .frame(width: 9, height: 9)
             Text(label)
         }
     }

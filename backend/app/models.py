@@ -446,7 +446,7 @@ class LightningResponse(BaseModel):
     not "no lightning")."""
 
     cells: List[LightningCell] = Field(default_factory=list)
-    windowSec: int = 900
+    windowSec: int = 1200
     binDeg: float = 0.02
     coverage: bool = False
     source: str = "NOAA GOES Geostationary Lightning Mapper"
@@ -471,7 +471,7 @@ class LightningNearby(BaseModel):
     towardYou: Optional[bool] = None       # None = unknown or sideways
     continuesUntil: Optional[datetime] = None
     source: str = "metar"                  # metar (a station's report) | glm (flashes)
-    flashes: Optional[int] = None          # GLM: flashes within 100 mi over 15 min
+    flashes: Optional[int] = None          # GLM: flashes within 100 mi over the window
 
 
 class Sources(BaseModel):

@@ -171,7 +171,7 @@ async def get_lightning(
     lon: float = Query(..., ge=-180, le=180),
     half: float = Query(3.0, ge=0.5, le=6.0),
 ):
-    """GOES GLM flashes over the last 15 minutes around a point, binned to
+    """GOES GLM flashes over the last 20 minutes around a point, binned to
     0.02° cells, from the server's own memory (NOAA is polled once a
     minute regardless of users). coverage=false means the feed is stale."""
     return await get_service().get_lightning(lat, lon, half)

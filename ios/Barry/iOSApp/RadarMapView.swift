@@ -31,6 +31,7 @@ struct RadarMapView: UIViewRepresentable {
     var stationStyle: StationLayerStyle = .off
     /// Bolts at stations reporting lightning. With the station layer on the
     /// barbs carry the bolt themselves; this adds standalone markers otherwise.
+    /// Also dims the radar a notch so the strike dots read over the rain.
     var showStorms: Bool = false
     /// GLM flash cells for the Storms overlay; nil draws nothing.
     var lightning: LightningState? = nil
@@ -122,8 +123,19 @@ struct RadarMapView: UIViewRepresentable {
         /// draws them, so every frame's tiles load and cache up front. Kills the
         /// blank pop-in on the first loop.
         static let idleAlpha: CGFloat = 0.02
-        static let visibleAlpha: CGFloat = 0.75
+        static let fullAlpha: CGFloat = 0.75
+        /// A notch lower while the lightning layer is on: the strike dots
+        /// need contrast more than the rain needs its last 20% of ink.
+        static let dimmedAlpha: CGFloat = 0.55
+        private(set) var visibleAlpha: CGFloat = 0.75
         private static let fadeDuration: CFTimeInterval = 0.3
+
+        func setRadarDimmed(_ dimmed: Bool) {
+            let target = dimmed ? Self.dimmedAlpha : Self.fullAlpha
+            guard target != visibleAlpha else { return }
+            visibleAlpha = target
+            if !radarHidden, displayLink == nil, let r = renderers[currentTime] { r.alpha = target }
+        }
 
         private(set) var currentTime: Int = -1
         private var displayLink: CADisplayLink?
@@ -172,6 +184,9 @@ struct RadarMapView: UIViewRepresentable {
         }
         var lightningOverlay: LightningOverlay?
         var shownLightning: LightningState?
+        private var pulseLink: CADisplayLink?
+        private var pulseUntil: CFTimeInterval = 0
+        private weak var pulseMap: MKMapView?
 
         func syncLightning(_ state: LightningState?, on map: MKMapView) {
             guard state != shownLightning else { return }
@@ -187,6 +202,25 @@ struct RadarMapView: UIViewRepresentable {
             }
             lightningOverlay?.state = state
             if let o = lightningOverlay, let r = map.renderer(for: o) { r.setNeedsDisplay() }
+            // Run the arrival pulse for about a second after a new slice.
+            pulseMap = map
+            pulseUntil = CACurrentMediaTime() + LightningRenderer.pulseDuration + 0.1
+            if pulseLink == nil {
+                let link = CADisplayLink(target: self, selector: #selector(stepPulse))
+                link.preferredFrameRateRange = CAFrameRateRange(minimum: 20, maximum: 30, preferred: 30)
+                link.add(to: .main, forMode: .common)
+                pulseLink = link
+            }
+        }
+
+        @objc private func stepPulse() {
+            if let o = lightningOverlay, let map = pulseMap, let r = map.renderer(for: o) {
+                r.setNeedsDisplay()
+            }
+            if CACurrentMediaTime() > pulseUntil {
+                pulseLink?.invalidate()
+                pulseLink = nil
+            }
         }
         var frontRenderer: FrontFieldRenderer?
         var lastFrontVersion = -1
@@ -343,7 +377,7 @@ struct RadarMapView: UIViewRepresentable {
             }
             if let tile = overlay as? RadarTileOverlay {
                 let r = MKTileOverlayRenderer(tileOverlay: tile)
-                r.alpha = radarHidden ? 0 : (tile.frameTime == currentTime ? Self.visibleAlpha : Self.idleAlpha)
+                r.alpha = radarHidden ? 0 : (tile.frameTime == currentTime ? visibleAlpha : Self.idleAlpha)
                 renderers[tile.frameTime] = r
                 return r
             }
@@ -513,8 +547,8 @@ struct RadarMapView: UIViewRepresentable {
 
         @objc private func stepFade() {
             let p = CGFloat(min(1, (CACurrentMediaTime() - fadeStart) / Self.fadeDuration))
-            fadeTo?.alpha = Self.idleAlpha + (Self.visibleAlpha - Self.idleAlpha) * p
-            fadeFrom?.alpha = Self.visibleAlpha - (Self.visibleAlpha - Self.idleAlpha) * p
+            fadeTo?.alpha = Self.idleAlpha + (visibleAlpha - Self.idleAlpha) * p
+            fadeFrom?.alpha = visibleAlpha - (visibleAlpha - Self.idleAlpha) * p
             if p >= 1 {
                 displayLink?.invalidate()
                 displayLink = nil
@@ -596,6 +630,7 @@ struct RadarMapView: UIViewRepresentable {
         context.coordinator.syncStations(stations, style: stationStyle, on: map)
         context.coordinator.syncStorms(stations, show: showStorms, stationsOn: stationStyle != .off, on: map)
         context.coordinator.syncLightning(showStorms ? lightning : nil, on: map)
+        context.coordinator.setRadarDimmed(showStorms)
         context.coordinator.setRadarHidden(!radarVisible)
 
         guard frames.indices.contains(index) else { return }

@@ -1,4 +1,4 @@
-"""The last quarter hour of lightning flashes, in memory, and what can be
+"""The last twenty minutes of lightning flashes, in memory, and what can be
 read off it: a binned slice for the map, and the nearest flash to a point
 with the storm's drift.
 
@@ -15,7 +15,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from .models import LightningCell, LightningNearby, LightningResponse
 from .sources.glm import Flash
 
-WINDOW_S = 900.0            # 15 minutes of flashes
+WINDOW_S = 1200.0           # 20 minutes of flashes
 BIN_DEG = 0.02              # ~2 km cells on the map
 MAX_CELLS = 2500            # densest / newest cells per slice
 RADIUS_KM = 160.9           # 100 statute miles, same as the METAR search

@@ -488,9 +488,11 @@ struct PressureChartView: View {
                 RectangleMark(xStart: .value("From", p.timeFrom), xEnd: .value("To", min(p.timeTo, domainBounds.1)))
                     .foregroundStyle(.teal.opacity(0.07))
                     .annotation(position: .overlay, alignment: .topLeading, spacing: 2) {
+                        // A narrow TEMPO band must not wrap its label mid-word.
                         Text("\(p.change ?? "") \(p.wx ?? p.fltCat ?? "")")
                             .font(.system(size: 8, weight: .semibold))
                             .foregroundStyle(.teal)
+                            .fixedSize()
                     }
             }
         }

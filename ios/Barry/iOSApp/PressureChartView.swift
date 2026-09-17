@@ -622,7 +622,6 @@ struct PressureChartView: View {
     // literal the Swift type-checker times out.
     private var chartView: some View {
         Chart {
-            trendBandContent
             thunderContent
             tafContent
             observedLineContent
@@ -817,10 +816,6 @@ struct PressureChartView: View {
                          label: "deeper = faster change")
             if !visiblePhone.isEmpty {
                 legendSwatch(colors: [.orange, .orange], label: "local")
-            }
-            if trendFit != nil {
-                legendSwatch(colors: [.blue.opacity(0.25), .blue.opacity(0.25)],
-                             label: "scatter around the 3 h trend")
             }
             if !visibleTafPeriods.isEmpty {
                 legendSwatch(colors: [.teal, .teal], label: "TAF changes")

@@ -41,13 +41,20 @@ struct LightningOut: Codable, Hashable {
         "S": "south", "SW": "southwest", "W": "west", "NW": "northwest",
     ]
 
+    /// " to the northwest", ", west through north" (a range), " all around".
     private var whereText: String {
-        let named = directions.compactMap { d -> String? in
-            if let c = Self.cardinal[d] { return c }
-            let parts = d.split(separator: "-").compactMap { Self.cardinal[String($0)] }
-            return parts.count == 2 ? "\(parts[0]) to \(parts[1])" : nil
+        var singles: [String] = []
+        var ranges: [String] = []
+        for d in directions {
+            if let c = Self.cardinal[d] {
+                singles.append(c)
+            } else {
+                let parts = d.split(separator: "-").compactMap { Self.cardinal[String($0)] }
+                if parts.count == 2 { ranges.append("\(parts[0]) through \(parts[1])") }
+            }
         }
-        if !named.isEmpty { return " to the " + named.prefix(2).joined(separator: " and ") }
+        if let r = ranges.first { return ", \(r)" }
+        if !singles.isEmpty { return " to the " + singles.prefix(2).joined(separator: " and ") }
         if directions.contains("ALQDS") { return " all around" }
         return ""
     }

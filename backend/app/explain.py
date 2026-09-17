@@ -59,15 +59,18 @@ def _lightning_signal(cur: Optional[CurrentObs], at: datetime) -> Optional[Signa
         return None
     lt = cur.lightning
     where = ""
-    named: List[str] = []
+    singles: List[str] = []
+    ranges: List[str] = []
     for d in lt.directions:
         if d in _CARDINAL:
-            named.append(_CARDINAL[d])
+            singles.append(_CARDINAL[d])
         elif "-" in d and all(p in _CARDINAL for p in d.split("-")):
             a, b = d.split("-", 1)
-            named.append(f"{_CARDINAL[a]} to {_CARDINAL[b]}")   # "SW-W"
-    if named:
-        where = " to the " + " and ".join(named[:2])
+            ranges.append(f"{_CARDINAL[a]} through {_CARDINAL[b]}")   # "W-N": west through north
+    if ranges:
+        where = ", " + ranges[0]
+    elif singles:
+        where = " to the " + " and ".join(singles[:2])
     elif "ALQDS" in lt.directions:
         where = " all around"
     if lt.status == "thunderstorm":

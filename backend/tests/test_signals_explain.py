@@ -140,9 +140,9 @@ def test_lightning_leads_the_evidence_and_thunder_replaces_rain():
                                precip_prob=60 if i >= 2 else 10, weather_code=95 if i == 4 else 61))
     out = explain.build(r, fc, [], NOW, current=cur)
     assert out.supporting[0].kind == "lightning"
-    assert "distant lightning to the southwest to west" in out.supporting[0].text
+    assert "distant lightning, southwest through west" in out.supporting[0].text
     kinds = [x.kind for x in out.supporting]
     assert "model_thunder" in kinds and "rain" not in kinds
-    assert out.summary.startswith("There is distant lightning to the southwest to west and the model has thunderstorms")
+    assert out.summary.startswith("There is distant lightning, southwest through west and the model has thunderstorms")
     conf, _ = explain.adjust_confidence(0.7, out)
     assert conf == 0.9                                   # two strong supports

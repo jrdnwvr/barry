@@ -395,27 +395,29 @@ struct RadarPanel: View {
                 chip("Lightning", icon: "bolt.fill", isOn: $showStorms)
 
                 Button { showMore = true } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.system(size: 15, weight: .semibold))
-                        .padding(.horizontal, 2)
+                    Image(systemName: "ellipsis")
+                        .font(.caption.weight(.semibold))
+                        .frame(minWidth: 18)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(ChipStyle(on: false))
                 .accessibilityLabel("More options")
             }
         }
     }
 
+    /// An overlay chip: solid accent when on, the segmented control's gray
+    /// when off, so the state reads at a glance in either appearance.
     private func chip(_ title: String, icon: String, isOn: Binding<Bool>) -> some View {
-        Toggle(isOn: isOn) {
+        Button {
+            isOn.wrappedValue.toggle()
+        } label: {
             Label(title, systemImage: icon)
-                .font(.caption)
+                .font(.caption.weight(.medium))
                 .lineLimit(1)
                 .fixedSize()  // never wrap the title mid-word under compression
         }
-        .toggleStyle(.button)
-        .buttonStyle(.bordered)
-        .controlSize(.small)
+        .buttonStyle(ChipStyle(on: isOn.wrappedValue))
+        .accessibilityAddTraits(isOn.wrappedValue ? .isSelected : [])
     }
 
     /// Sits next to the Fronts chip when the chart has forecast positions:
@@ -429,12 +431,10 @@ struct RadarPanel: View {
                 Image(systemName: showFrontRow ? "chevron.up" : "chevron.down")
                     .font(.system(size: 8, weight: .bold))
             }
-            .font(.caption)
+            .font(.caption.weight(.medium))
             .fixedSize()
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        .tint(showFrontRow ? .accentColor : .secondary)
+        .buttonStyle(ChipStyle(on: showFrontRow))
         .accessibilityLabel("Front forecast time")
     }
 
@@ -584,5 +584,22 @@ struct RadarPanel: View {
         let mins = Int((Date().timeIntervalSince1970 - Double(f.time)) / 60)
         if f.nowcast { return "+\(max(0, -mins))m forecast" }
         return mins <= 1 ? "now" : "\(mins)m ago"
+    }
+}
+
+
+/// Chip look for the map's overlay toggles: filled accent when on, the
+/// same quiet gray the segmented base picker uses when off.
+struct ChipStyle: ButtonStyle {
+    let on: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .foregroundStyle(on ? Color.white : Color.primary)
+            .background(on ? Color.accentColor : Color(.tertiarySystemFill), in: Capsule())
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .contentShape(Capsule())
     }
 }

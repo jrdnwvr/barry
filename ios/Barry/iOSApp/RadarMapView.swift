@@ -41,6 +41,9 @@ struct RadarMapView: UIViewRepresentable {
     var home: HomeMarker? = nil
     /// nil hides the pressure layer entirely.
     var pressureState: PressureFieldState? = nil
+    /// Bumped by the recenter button: glide back to the home station at
+    /// the opening zoom.
+    var recenterToken: Int = 0
     var onRegionChange: ((MKCoordinateRegion) -> Void)? = nil
 
     final class RadarTileOverlay: MKTileOverlay {
@@ -229,6 +232,7 @@ struct RadarMapView: UIViewRepresentable {
         var homeBarb: StationAnnotation?
         var shownHome: HomeMarker?
         var centeredOn: CLLocationCoordinate2D?
+        var lastRecenterToken = 0
         var flowView: WindFlowView?
         var stationAnnotations: [StationAnnotation] = []
         var shownStations: [StationObs] = []
@@ -619,6 +623,12 @@ struct RadarMapView: UIViewRepresentable {
             tile.minimumZ = 1
             context.coordinator.overlays[f.time] = tile
             map.addOverlay(tile, level: .aboveRoads)
+        }
+        if recenterToken != context.coordinator.lastRecenterToken {
+            context.coordinator.lastRecenterToken = recenterToken
+            map.setRegion(MKCoordinateRegion(
+                center: center,
+                span: MKCoordinateSpan(latitudeDelta: 3.2, longitudeDelta: 3.2)), animated: true)
         }
         context.coordinator.onRegionChange = onRegionChange
         context.coordinator.onSelectStation = onSelectStation

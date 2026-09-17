@@ -107,6 +107,7 @@ struct RadarPanel: View {
     @AppStorage(RadarPanel.autoplayKey, store: AppConfig.sharedDefaults)
     private var autoplay: Bool = true
 
+    @State private var recenterToken = 0
     @State private var showFrontRow = false
     /// The dashboard embed keeps the chip bar behind a button: the layers
     /// are shared with the full screen (same stored settings), so the small
@@ -285,6 +286,7 @@ struct RadarPanel: View {
                      onSelectStation: { selectedStation = $0 },
                      home: home,
                      pressureState: pressureState,
+                     recenterToken: recenterToken,
                      onRegionChange: { region in
                          model.scheduleFieldReload(for: region,
                                                    wind: showWind,
@@ -310,11 +312,32 @@ struct RadarPanel: View {
 
                 Spacer(minLength: 0)
 
+                HStack {
+                    Spacer()
+                    recenterButton
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+
                 bottomCard
                     .padding(.horizontal, 12)
                     .padding(.bottom, 10)
             }
         }
+    }
+
+    /// The Maps convention: a location arrow that glides the map back to
+    /// the home station at the opening zoom.
+    private var recenterButton: some View {
+        Button { recenterToken += 1 } label: {
+            Image(systemName: "location")
+                .font(.system(size: 15, weight: .semibold))
+                .frame(width: 20, height: 20)
+                .padding(9)
+                .background(.thinMaterial, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Back to my station")
     }
 
     /// The iPad dashboard embed: map in a rounded card, the same chip bar
@@ -323,6 +346,10 @@ struct RadarPanel: View {
         VStack(spacing: 10) {
             mapView
                 .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(alignment: .bottomTrailing) {
+                    recenterButton
+                        .padding(10)
+                }
                 .overlay(alignment: .topTrailing) {
                     HStack(spacing: 8) {
                         Button {

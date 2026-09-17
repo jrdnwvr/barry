@@ -67,18 +67,28 @@ struct HeroView: View {
                       locations: locations, selectedLocationID: selectedLocationID,
                       onSelectLocation: onSelectLocation)
 
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                if let v = displayValue {
-                    valueLabel(v)
+            // The tag tucks under the number, beside the badge, so it borrows
+            // the badge's height instead of adding a row of its own.
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        if let v = displayValue {
+                            valueLabel(v)
+                        }
+                        Button { showGuide = true } label: {
+                            Image(systemName: "info.circle")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("What do pressure changes mean?")
+                    }
+                    if showsAltimeter {
+                        altimeterRow
+                            .padding(.top, -2)
+                    }
                 }
-                Button { showGuide = true } label: {
-                    Image(systemName: "info.circle")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("What do pressure changes mean?")
-                Spacer()
+                Spacer(minLength: 8)
                 if let t = tendency { TendencyBadge(tendency: t, unit: unit) }
             }
 
@@ -86,9 +96,6 @@ struct HeroView: View {
             // compare) and the micro-trend — a *weather* signal. Machinery state
             // (calibration age, drift, Recalibrate) moved to Sensor vs Station:
             // the engine self-heals at the next report, so it isn't the user's job.
-            if showsAltimeter {
-                altimeterRow
-            }
             if isLocal {
                 provenanceRow
                 if let trend = barometer.microTrend { microLead(trend) }

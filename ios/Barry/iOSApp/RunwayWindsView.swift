@@ -23,7 +23,7 @@ enum RunwayWindsMode: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .always: return "Always"
+        case .always: return "Runway"
         case .auto: return "Auto"
         case .compass: return "Compass only"
         }

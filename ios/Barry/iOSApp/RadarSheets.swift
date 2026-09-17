@@ -194,6 +194,9 @@ struct RadarMoreSheet: View {
                     Text("Arrows").tag("arrows")
                 }
                 .pickerStyle(.segmented)
+                Text("Streaks and arrows start at about 3 kt. Where the model wind is lighter than that, the map stays blank on purpose. Station barbs show calm as an open circle.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 6) {

@@ -42,6 +42,14 @@ class LightningOut(BaseModel):
     since: Optional[datetime] = None       # TSB time, when the storm is here
 
 
+class CloudLayer(BaseModel):
+    """One sky layer from the METAR: cover (FEW/SCT/BKN/OVC/VV, or CLR/SKC
+    with no base) and its base in feet AGL."""
+
+    cover: str
+    baseFt: Optional[int] = None
+
+
 class CurrentObs(BaseModel):
     slp: Optional[float] = None
     presTend: Optional[float] = None
@@ -62,6 +70,7 @@ class CurrentObs(BaseModel):
     fltCat: Optional[str] = None           # VFR / MVFR / IFR / LIFR
     wx: Optional[str] = None               # present weather ("-TSRA BR")
     lightning: Optional[LightningOut] = None
+    clouds: List[CloudLayer] = Field(default_factory=list)   # every layer, lowest first
 
 
 class TendencyOut(BaseModel):

@@ -139,6 +139,17 @@ async def test_combined_carries_conditions(client, upstream):
     assert len(c.daForecast) >= 6      # forecast hours carry temp/dew/pressure
     # Fixture night is 55% cloud with a widening spread: honest silence.
     assert c.fog is None
+    # Every sky layer rides along for the clouds row, lowest first.
+    layers = [(l.cover, l.baseFt) for l in resp.pressure.current.clouds]
+    assert layers == [("SCT", 2500), ("BKN", 4500)]
+
+
+def test_clear_sky_is_a_layer_not_an_absence():
+    from app.sources.aviationweather import _cloud_layers
+    raw = "METAR KLUK 170053Z 00000KT 10SM CLR 26/23 A3026 RMK AO2 LTG DSNT NW"
+    assert [l.cover for l in _cloud_layers([], raw)] == ["CLR"]        # AWC sends [] for CLR
+    assert _cloud_layers([], "METAR KXYZ 170053Z 00000KT 10SM 26/23 A3026") == []
+    assert [(l.cover, l.baseFt) for l in _cloud_layers([{"cover": "OVC", "base": 800}], raw)] == [("OVC", 800)]
 
 
 # ---- boundary layer + storm outlook -------------------------------------------

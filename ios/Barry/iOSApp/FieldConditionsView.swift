@@ -11,6 +11,9 @@ import SwiftUI
 
 struct FieldConditionsCard: View {
     let conditions: ConditionsOut
+    /// The METAR (cloud layers) and the forecast (cloud cover trend).
+    let combined: CombinedResponse
+    let now: Date
 
     /// "agl" (the model's own height above ground) or "msl" (field
     /// elevation added, so the number reads like an altimeter).
@@ -59,6 +62,55 @@ struct FieldConditionsCard: View {
     /// A station without temp/dew point (some AWOS fields) still gets the
     /// forecast DA; nothing at all means the card shouldn't exist.
     private var hasDA: Bool { conditions.densityAltitudeFt != nil || peak != nil }
+
+    // MARK: Clouds
+
+    private var cur: CurrentObs { combined.pressure.current }
+
+    /// Layers from the METAR, falling back to the ceiling fields on an old
+    /// backend. Empty means the station said nothing about the sky.
+    private var cloudLayers: [CloudLayer] {
+        if let layers = cur.clouds, !layers.isEmpty { return layers }
+        if let cover = cur.ceilingCover { return [CloudLayer(cover: cover, baseFt: cur.ceilingFt)] }
+        return []
+    }
+
+    private var hasClouds: Bool { !cloudLayers.isEmpty || cloudTrend != nil }
+
+    /// "BKN 4,500 ft" (the ceiling), else the lowest layer, else "Clear".
+    private var cloudValue: String {
+        if let ft = cur.ceilingFt {
+            return "\(cur.ceilingCover ?? "CIG") \(ft.formatted()) ft"
+        }
+        if let first = cloudLayers.first {
+            if ["CLR", "SKC", "CAVOK", "NSC"].contains(first.cover) { return "Clear" }
+            if let b = first.baseFt { return "\(first.cover) \(b.formatted()) ft" }
+            return first.cover
+        }
+        return "No report"
+    }
+
+    /// Every layer in METAR shorthand: "SCT 2,500 · BKN 4,500 · OVC 12,000".
+    private var cloudLayersText: String? {
+        let named = cloudLayers.filter { $0.baseFt != nil }
+        guard named.count > 1 || (named.count == 1 && cur.ceilingFt == nil) else { return nil }
+        return named.map { "\($0.cover) \(($0.baseFt ?? 0).formatted())" }.joined(separator: " · ")
+    }
+
+    /// Where the model takes the cloud cover over the next 12 h: the first
+    /// hour that differs from now by 40 points or more, else "holds".
+    private var cloudTrend: (text: String, clearing: Bool)? {
+        guard let hours = combined.forecast?.hourly else { return nil }
+        let window = hours.filter { $0.t >= now && $0.t <= now.addingTimeInterval(12 * 3600) && $0.cloudcover != nil }
+        guard let first = window.first, let nowCover = first.cloudcover, window.count >= 3 else { return nil }
+        if let turn = window.first(where: { abs(($0.cloudcover ?? nowCover) - nowCover) >= 40 }),
+           let c = turn.cloudcover {
+            let when = turn.t.formatted(date: .omitted, time: .shortened)
+            return c < nowCover ? ("Clearing to \(Int(c))% around \(when)", true)
+                                : ("Thickening to \(Int(c))% by \(when)", false)
+        }
+        return ("Cover holds near \(Int(nowCover))% through the next 12 h", nowCover < 50)
+    }
 
     /// Where the boundary layer is headed over the next hours: the top of the
     /// bumpy, hazy air. Rising through the day is the normal story; the line
@@ -127,8 +179,47 @@ struct FieldConditionsCard: View {
                 .foregroundStyle(.secondary)
             }
 
-            if let bl = conditions.boundaryLayerFt {
+            if hasClouds {
                 if hasDA { Divider() }
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: cur.ceilingFt != nil ? "cloud.fill" : "cloud")
+                        .font(.subheadline)
+                        .foregroundStyle(.blue)
+                    Text("Clouds")
+                        .font(.subheadline.weight(.medium))
+                    if let cat = cur.fltCat {
+                        Text(cat)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(FlightCategory.color(cat))
+                    }
+                    Spacer()
+                    Text(cloudValue)
+                        .font(.subheadline.weight(.semibold))
+                        .monospacedDigit()
+                }
+                HStack {
+                    if let layers = cloudLayersText {
+                        Text(layers)
+                            .monospacedDigit()
+                    } else if cur.ceilingFt != nil {
+                        Text("Ceiling")
+                    }
+                    Spacer()
+                    if let t = cloudTrend {
+                        HStack(spacing: 3) {
+                            Image(systemName: t.clearing ? "sun.max" : "cloud.fill")
+                                .font(.caption2.weight(.semibold))
+                            Text(t.text)
+                        }
+                        .fixedSize()
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            if let bl = conditions.boundaryLayerFt {
+                if hasDA || hasClouds { Divider() }
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     AirLayersIcon()
                         .frame(height: 12)
@@ -157,7 +248,7 @@ struct FieldConditionsCard: View {
             }
 
             if let st = conditions.storm {
-                if hasDA || conditions.boundaryLayerFt != nil { Divider() }
+                if hasDA || hasClouds || conditions.boundaryLayerFt != nil { Divider() }
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Image(systemName: "cloud.bolt.fill")
                         .font(.subheadline)
@@ -173,7 +264,7 @@ struct FieldConditionsCard: View {
             }
 
             if let fog = conditions.fog {
-                if hasDA || conditions.boundaryLayerFt != nil || conditions.storm != nil { Divider() }
+                if hasDA || hasClouds || conditions.boundaryLayerFt != nil || conditions.storm != nil { Divider() }
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Image(systemName: "cloud.fog.fill")
                         .font(.subheadline)

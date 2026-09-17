@@ -22,7 +22,7 @@ from typing import Dict, List, Optional, Sequence
 import httpx
 
 from .. import lightning as ltg
-from ..models import StationObs, CurrentObs, SeriesPoint, TafOut, TafPeriod
+from ..models import CloudLayer, StationObs, CurrentObs, SeriesPoint, TafOut, TafPeriod
 from ..tendency import resolve_tendency
 
 BASE_URL = "https://aviationweather.gov/api/data/metar"
@@ -115,6 +115,29 @@ def _flight_category(vis_sm: Optional[float], ceiling_ft: Optional[int]) -> Opti
     return "VFR"
 
 
+def _cloud_layers(clouds, raw: Optional[str] = None) -> List[CloudLayer]:
+    """Every reported layer, lowest first. AWC decodes a clear sky as an
+    EMPTY list, so the raw METAR's CLR/SKC/CAVOK is checked to tell "clear"
+    from "no sky group at all"."""
+    if not isinstance(clouds, list):
+        clouds = []
+    if not clouds and raw:
+        body = raw.split(" RMK ")[0].split()
+        for word in ("CLR", "SKC", "CAVOK", "NSC"):
+            if word in body:
+                return [CloudLayer(cover=word)]
+        return []
+    out = []
+    for c in clouds:
+        cover = c.get("cover")
+        if not cover:
+            continue
+        base = c.get("base")
+        out.append(CloudLayer(cover=str(cover), baseFt=int(base) if base is not None else None))
+    out.sort(key=lambda l: (l.baseFt is None, l.baseFt or 0))
+    return out
+
+
 def _current_obs(newest: dict) -> CurrentObs:
     vis = _visibility_sm(newest.get("visib"))
     ceiling_ft, ceiling_cover = _ceiling(newest.get("clouds"))
@@ -134,6 +157,7 @@ def _current_obs(newest: dict) -> CurrentObs:
         wx=newest.get("wxString") or None,
         lightning=ltg.parse(newest.get("rawOb"), newest.get("wxString") or None,
                             newest.get("t")),
+        clouds=_cloud_layers(newest.get("clouds"), newest.get("rawOb")),
     )
 
 

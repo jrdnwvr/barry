@@ -78,6 +78,11 @@ struct LightningOut: Codable, Hashable {
     }
 }
 
+struct CloudLayer: Codable, Hashable {
+    let cover: String
+    var baseFt: Int?
+}
+
 struct CurrentObs: Codable, Hashable {
     let slp: Double?
     let presTend: Double?
@@ -99,6 +104,7 @@ struct CurrentObs: Codable, Hashable {
     var fltCat: String?
     var wx: String?
     var lightning: LightningOut?
+    var clouds: [CloudLayer]? = nil   // every layer, lowest first; absent on old backends
 }
 
 struct TendencyOut: Codable, Hashable {

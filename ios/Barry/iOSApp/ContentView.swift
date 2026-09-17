@@ -153,13 +153,16 @@ struct ContentView: View {
             trendSection(combined)
         }
 
-        // Secondary: wind + rain confirmation, always expanded.
-        ConfirmationOverlayView(combined: combined, now: store.now)
+        // Secondary: wind + rain confirmation, always expanded. The iPad
+        // dashboard puts it under the chart instead.
+        if layout == .phone {
+            ConfirmationOverlayView(combined: combined, now: store.now)
+        }
 
-        // Field conditions: DA now + trend, fog outlook when one exists.
-        // Only when there's something to say — never an empty card.
+        // Field conditions: DA now + trend, clouds, boundary layer, storm
+        // and fog outlooks when they exist. Never an empty card.
         if let cond = combined.conditions, cond.hasContent {
-            FieldConditionsCard(conditions: cond)
+            FieldConditionsCard(conditions: cond, combined: combined, now: store.now)
         }
 
         // The wind on the compass: crosswind per runway at an airport, the
@@ -258,10 +261,14 @@ struct ContentView: View {
                 HStack(alignment: .top, spacing: 16) {
                     glanceRail(combined)
 
+                    // The chart runs shorter here than on the phone so the
+                    // rain + wind card fits under it in the same column.
                     if threeColumn {
-                        VStack(spacing: 12) {
-                            trendSection(combined, chartHeight: 280)
-                            Spacer(minLength: 0)
+                        ScrollView(showsIndicators: false) {
+                            VStack(spacing: 12) {
+                                trendSection(combined, chartHeight: 200)
+                                ConfirmationOverlayView(combined: combined, now: store.now)
+                            }
                         }
                         .frame(maxWidth: .infinity)
 
@@ -269,7 +276,8 @@ struct ContentView: View {
                             .frame(width: max(320, geo.size.width * 0.30))
                     } else {
                         VStack(spacing: 12) {
-                            trendSection(combined, chartHeight: 280)
+                            trendSection(combined, chartHeight: 200)
+                            ConfirmationOverlayView(combined: combined, now: store.now)
                             radarColumn(combined)
                         }
                         .frame(maxWidth: .infinity)

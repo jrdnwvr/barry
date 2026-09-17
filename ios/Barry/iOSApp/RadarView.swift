@@ -92,6 +92,10 @@ struct RadarPanel: View {
     private var autoplay: Bool = true
 
     @State private var showFrontRow = false
+    /// The dashboard embed keeps the chip bar behind a button: the layers
+    /// are shared with the full screen (same stored settings), so the small
+    /// map follows whatever was chosen there and rarely needs its own bar.
+    @State private var showEmbeddedChips = false
     @State private var showKey = false
     @State private var showMore = false
     @State private var selectedStation: StationObs?
@@ -298,6 +302,17 @@ struct RadarPanel: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(alignment: .topTrailing) {
                     HStack(spacing: 8) {
+                        Button {
+                            withAnimation(.snappy(duration: 0.2)) { showEmbeddedChips.toggle() }
+                        } label: {
+                            Image(systemName: "square.3.layers.3d")
+                                .font(.system(size: 14, weight: .semibold))
+                                .frame(width: 20, height: 20)
+                                .padding(9)
+                                .background(.thinMaterial, in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(showEmbeddedChips ? "Hide layers" : "Layers")
                         keyButton
                         if let onExpand {
                             Button(action: onExpand) {
@@ -313,7 +328,10 @@ struct RadarPanel: View {
                     .padding(10)
                 }
 
-            chipBar
+            if showEmbeddedChips {
+                chipBar
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
             timeline
             attribution
         }

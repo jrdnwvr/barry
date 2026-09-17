@@ -350,7 +350,7 @@ struct FieldConditionsCard: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 if showRideInfo {
-                    Text("Worked out from the forecast, not from anyone's ride. Barry reads the sun, the temperature drop through the lowest few hundred feet, the depth of the mixed layer, the gusts, and the wind change from the surface to 250 ft, and turns them into the kind of air to expect. No observations or pilot reports go into it.")
+                    Text("Based on available meteorological data. For advisement only, not a replacement for PIREPs.")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)

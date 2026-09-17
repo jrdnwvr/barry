@@ -13,6 +13,31 @@
 
 import SwiftUI
 
+/// When the wind card shows runway components instead of the plain rose.
+/// Auto = an airport is selected, or you are within 3 NM of the station
+/// (the same rule that draws the home station as its own barb).
+enum RunwayWindsMode: String, CaseIterable, Identifiable {
+    case always, auto, compass
+    static let key = "runwayWindsMode"
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .always: return "Always"
+        case .auto: return "Auto"
+        case .compass: return "Compass only"
+        }
+    }
+
+    var footer: String {
+        switch self {
+        case .always: return "Runway components whenever the station has runway data."
+        case .auto: return "Runway components when an airport is selected or you are within 3 NM of one. The plain wind rose elsewhere."
+        case .compass: return "The wind on the compass rose, never the runway."
+        }
+    }
+}
+
 struct RunwayWind: Identifiable {
     let ident: String
     let heading: Double
@@ -53,9 +78,23 @@ enum RunwayWinds {
 /// the station reports no wind at all.
 struct RunwayWindsCard: View {
     let combined: CombinedResponse
+    /// An airport is selected, or the user is within 3 NM of the station.
+    var atAirport: Bool = true
     @State private var expanded = false
+    @AppStorage(RunwayWindsMode.key, store: AppConfig.sharedDefaults)
+    private var modeRaw: String = RunwayWindsMode.auto.rawValue
 
-    private var runways: [Runway] { Runway.merged(combined.runways ?? []) }
+    private var mode: RunwayWindsMode { RunwayWindsMode(rawValue: modeRaw) ?? .auto }
+
+    private var useRunways: Bool {
+        switch mode {
+        case .always: return true
+        case .auto: return atAirport
+        case .compass: return false
+        }
+    }
+
+    private var runways: [Runway] { useRunways ? Runway.merged(combined.runways ?? []) : [] }
 
     private var windKt: Double { (combined.pressure.current.windspeed ?? 0) / 1.852 }
     private var gustKt: Double? { combined.pressure.current.windgust.map { $0 / 1.852 } }

@@ -26,6 +26,8 @@ struct SettingsView: View {
     private var phoneBarometerEnabled: Bool = false
     @AppStorage(StormAlerter.enabledKey, store: AppConfig.sharedDefaults)
     private var stormAlertsEnabled: Bool = false
+    @AppStorage(RunwayWindsMode.key, store: AppConfig.sharedDefaults)
+    private var runwayWindsRaw: String = RunwayWindsMode.auto.rawValue
 
     @State private var newICAO: String = ""
     /// Live matches from /stations/search while the airport field has text.
@@ -84,6 +86,19 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                }
+
+                Section {
+                    Picker("Runway winds", selection: $runwayWindsRaw) {
+                        ForEach(RunwayWindsMode.allCases) { m in
+                            Text(m.label).tag(m.rawValue)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Wind card")
+                } footer: {
+                    Text(RunwayWindsMode(rawValue: runwayWindsRaw)?.footer ?? "")
                 }
 
                 Section {

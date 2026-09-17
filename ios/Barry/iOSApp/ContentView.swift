@@ -163,7 +163,7 @@ struct ContentView: View {
 
         // The wind on the compass: crosswind per runway at an airport, the
         // plain wind everywhere else.
-        RunwayWindsCard(combined: combined)
+        RunwayWindsCard(combined: combined, atAirport: isAtAirport(combined))
 
         // Radar: the sky itself, as corroboration for the trend. Its own
         // screen; needs station coords to center on.
@@ -328,17 +328,23 @@ struct ContentView: View {
                              visibilitySM: cur.visibilitySM, ceilingFt: cur.ceilingFt,
                              ceilingCover: cur.ceilingCover, temp: cur.temp,
                              dewpoint: cur.dewpoint, altim: cur.altim, raw: nil)
-        let asBarb: Bool
+        return HomeMarker(obs: obs, asBarb: isAtAirport(combined))
+    }
+
+    /// The selection is an airport, or the user is physically within 3 NM of
+    /// the station. Drives the home barb on the map and the runway view of
+    /// the wind card (in its Auto mode).
+    private func isAtAirport(_ combined: CombinedResponse) -> Bool {
         switch savedLocations.selected.kind {
         case .airport:
-            asBarb = true
+            return true
         case .currentLocation:
-            let here = store.userLocation
-            asBarb = here.map { $0.distance(from: CLLocation(latitude: lat, longitude: lon)) <= Self.homeRadiusMeters } ?? false
+            guard let lat = combined.pressure.lat, let lon = combined.pressure.lon,
+                  let here = store.userLocation else { return false }
+            return here.distance(from: CLLocation(latitude: lat, longitude: lon)) <= Self.homeRadiusMeters
         case .place:
-            asBarb = false
+            return false
         }
-        return HomeMarker(obs: obs, asBarb: asBarb)
     }
 
     private func initialLoad() async {

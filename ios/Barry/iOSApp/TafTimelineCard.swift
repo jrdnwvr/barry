@@ -109,7 +109,7 @@ struct TafTimelineCard: View {
             let last = hs.last { $0.tempo == cat }?.t ?? tempo.t
             s += ". Chance of \(cat) \(clock(tempo.t)) to \(clock(last.addingTimeInterval(3600)))"
         }
-        if let obs = observedMismatch { return "Now \(obs). TAF: " + s.prefix(1).lowercased() + s.dropFirst() + "." }
+        if let obs = observedMismatch { return "Now \(obs). TAF: \(s)." }
         return s + "."
     }
 
@@ -148,7 +148,7 @@ struct TafTimelineCard: View {
         return TafStrip(hours: hours, overlays: overlayWindows, start: start, end: end, now: now,
                         nights: nights, sunMarks: sunMarks,
                         tafEnds: taf?.validTo.flatMap { $0 < start.addingTimeInterval(24 * 3600) ? $0 : nil })
-            .frame(height: 96)
+            .frame(height: 112)
     }
 
     /// TEMPO and PROB windows as drawn: (from, to, category, isProb).
@@ -196,7 +196,9 @@ struct TafStrip: View {
 
     private let barTop: CGFloat = 22
     private let barHeight: CGFloat = 40
-    private let axisTop: CGFloat = 70
+    /// Sunset and sunrise clock times sit just under the bar, above the hour labels.
+    private let sunLabelTop: CGFloat = 66
+    private let axisTop: CGFloat = 86
 
     private func x(_ d: Date, _ w: CGFloat) -> CGFloat {
         let f = d.timeIntervalSince(start) / max(1, end.timeIntervalSince(start))
@@ -278,6 +280,13 @@ struct TafStrip: View {
                     var nowLine = Path()
                     nowLine.move(to: CGPoint(x: x(now, w), y: barTop - 8)); nowLine.addLine(to: CGPoint(x: x(now, w), y: barTop + barHeight + 8))
                     ctx.stroke(nowLine, with: .color(.primary.opacity(0.5)), style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
+                    // Sunset and sunrise times under their lines, above the hour labels.
+                    for m in sunMarks {
+                        let label = Text(m.0.formatted(date: .omitted, time: .shortened))
+                            .font(.system(size: 9, weight: .semibold)).foregroundColor(.orange)
+                        let cx = min(max(x(m.0, w), 22), w - 22)
+                        ctx.draw(ctx.resolve(label), at: CGPoint(x: cx, y: sunLabelTop), anchor: .top)
+                    }
                     // Hour ticks and labels along the bottom.
                     let cal = Calendar.current
                     var t = cal.date(bySetting: .minute, value: 0, of: start) ?? start

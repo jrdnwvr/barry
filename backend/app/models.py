@@ -486,6 +486,17 @@ class LightningCell(BaseModel):
     ageSec: int
 
 
+class LightningCluster(BaseModel):
+    """A group of touching flash cells: the electrified part of one storm.
+    `points` is a closed outline (lat, lon pairs), `flashes` the count in
+    the window, `recent` the count in the last five minutes."""
+
+    points: List[List[float]]
+    flashes: int
+    recent: int
+    newestAgeSec: int
+
+
 class LightningResponse(BaseModel):
     """Flashes seen from orbit over the last `windowSec`, binned to
     `binDeg` cells, inside the requested box. `coverage` is False when the
@@ -493,6 +504,7 @@ class LightningResponse(BaseModel):
     not "no lightning")."""
 
     cells: List[LightningCell] = Field(default_factory=list)
+    clusters: List[LightningCluster] = Field(default_factory=list)
     windowSec: int = 1200
     binDeg: float = 0.02
     coverage: bool = False

@@ -12,13 +12,15 @@ import math
 from datetime import datetime
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from .models import LightningCell, LightningNearby, LightningResponse
+from .models import LightningCell, LightningCluster, LightningNearby, LightningResponse
 from .sources.glm import Flash
 
 WINDOW_S = 1200.0           # 20 minutes of flashes
 BIN_DEG = 0.02              # ~2 km cells on the map
 MAX_CELLS = 2500            # densest / newest cells per slice
 RADIUS_KM = 160.9           # 100 statute miles, same as the METAR search
+CLUSTER_MIN_FLASHES = 3     # smaller groups are noise, not a storm
+CLUSTER_RECENT_S = 300.0    # "recent" flashes: the last five minutes
 MOTION_MIN_FLASHES = 5      # per half-window before a drift is claimed
 MOTION_MIN_KM = 3.0         # centroid must move this far to be called motion
 ETA_MIN_KMH = 8.0           # slower than this and "arrival" is a guess
@@ -43,6 +45,29 @@ def _bearing_deg(lat1, lon1, lat2, lon2) -> float:
 
 def cardinal(deg: float) -> str:
     return _COMPASS[int(((deg + 22.5) % 360) // 45)]
+
+
+def _convex_hull(points: Sequence[Tuple[float, float]]) -> List[Tuple[float, float]]:
+    """Andrew's monotone chain; the result is closed (first point repeated)."""
+    pts = sorted(set(points))
+    if len(pts) <= 2:
+        return list(pts) + list(pts[:1])
+
+    def cross(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    lower: List[Tuple[float, float]] = []
+    for p in pts:
+        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
+            lower.pop()
+        lower.append(p)
+    upper: List[Tuple[float, float]] = []
+    for p in reversed(pts):
+        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
+            upper.pop()
+        upper.append(p)
+    hull = lower[:-1] + upper[:-1]
+    return hull + hull[:1]
 
 
 class FlashStore:
@@ -95,8 +120,45 @@ class FlashStore:
             out = out[:MAX_CELLS]
         return out
 
+    def clusters(self, cells: Sequence[LightningCell], now: datetime) -> List[LightningCluster]:
+        """Touching cells (8-neighbourhood on the bin grid) grouped into
+        storms, each wrapped in the convex hull of its cells' corners so the
+        outline sits just outside the flashes."""
+        by_key = {(int(round(c.lat / BIN_DEG - 0.5)), int(round(c.lon / BIN_DEG - 0.5))): c for c in cells}
+        seen: set = set()
+        out: List[LightningCluster] = []
+        for start in by_key:
+            if start in seen:
+                continue
+            stack, group = [start], []
+            seen.add(start)
+            while stack:
+                k = stack.pop()
+                group.append(k)
+                for di in (-1, 0, 1):
+                    for dj in (-1, 0, 1):
+                        n = (k[0] + di, k[1] + dj)
+                        if n in by_key and n not in seen:
+                            seen.add(n)
+                            stack.append(n)
+            flashes = sum(by_key[k].count for k in group)
+            if flashes < CLUSTER_MIN_FLASHES:
+                continue
+            corners = []
+            for (i, j) in group:
+                for (a, b) in ((0, 0), (0, 1), (1, 0), (1, 1)):
+                    corners.append(((i + a) * BIN_DEG, (j + b) * BIN_DEG))
+            hull = _convex_hull(corners)
+            recent = sum(by_key[k].count for k in group if by_key[k].ageSec <= CLUSTER_RECENT_S)
+            newest = min(by_key[k].ageSec for k in group)
+            out.append(LightningCluster(points=[[round(p[0], 4), round(p[1], 4)] for p in hull],
+                                        flashes=flashes, recent=recent, newestAgeSec=newest))
+        out.sort(key=lambda c: -c.flashes)
+        return out
+
     def response(self, lat: float, lon: float, half: float, now: datetime) -> LightningResponse:
-        return LightningResponse(cells=self.cells(lat, lon, half, now), windowSec=int(WINDOW_S),
+        cells = self.cells(lat, lon, half, now)
+        return LightningResponse(cells=cells, clusters=self.clusters(cells, now), windowSec=int(WINDOW_S),
                                  binDeg=BIN_DEG, coverage=self.fresh(now), cachedAt=now)
 
     # ---- Nearest flash + drift -----------------------------------------------

@@ -47,6 +47,12 @@ def test_store_bins_prunes_and_finds_the_nearest_with_drift():
     assert len(s) == 17
     cells = s.cells(39.103, -84.419, 3.0, NOW)
     assert sum(c.count for c in cells) == 16
+    # The two halves of the drifting cluster are far enough apart to be two
+    # storms; the lone far flash is below the cluster floor.
+    clusters = s.clusters(cells, NOW)
+    assert len(clusters) == 2 and all(c.flashes == 8 for c in clusters)
+    assert all(c.points[0] == c.points[-1] and len(c.points) >= 4 for c in clusters)
+    assert clusters[0].recent >= 0 and s.response(39.103, -84.419, 3.0, NOW).clusters
     assert min(c.ageSec for c in cells) <= 200
     n = s.nearest(39.103, -84.419, NOW)
     assert n.source == "glm" and n.status == "strikes" and n.flashes == 16

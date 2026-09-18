@@ -72,7 +72,10 @@ struct TendencyProvider: TimelineProvider {
         // The widget has no location: a chosen airport (synced from the
         // phone) counts, otherwise keep the app's last 3 NM judgement.
         let selected = AppConfig.sharedDefaults.bool(forKey: AppConfig.syncAirportSelectedKey)
-        let snap = TendencySnapshot(from: combined, atAirport: selected || (cached?.atAirport ?? false))
+        var snap = TendencySnapshot(from: combined, atAirport: selected || (cached?.atAirport ?? false))
+        // The widget has no sensor either; carry the app's last local reading.
+        snap.localDisplayHPa = cached?.localDisplayHPa
+        snap.localAt = cached?.localAt
         SnapshotStore.save(snap)
         return snap
     }

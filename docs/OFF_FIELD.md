@@ -20,6 +20,10 @@ Written 2026-09-18. Companion to ROADMAP section H.
 
 ## 2. Watch barometer: integration plan
 
+Status 2026-09-18: W1 through W8 built (`WatchApp/WatchBarometer.swift`,
+`PhoneSync`/`WatchSync` carry `selectionPhysical`, `ManualAltimeterView`).
+Untested on a real watch; the simulator has no barometer.
+
 The case it serves: a cellular watch with no phone in range, at a strip with
 no station. Everything below keeps the sensor foreground-only, which is what
 watchOS allows without a workout session.
@@ -78,6 +82,9 @@ Order: W1, W3 (context field, phone side), W2 + W4, W6 + W7, W5, W8. About a
 day and a half. Nothing here needs the backend.
 
 ## 3. The local pressure model: what to change
+
+Status 2026-09-18: M1 and M2 done (calibration to the altimeter setting,
+lapse from the reported temperature). M3 to M5 open.
 
 **M1. Calibrate to the altimeter setting, not sea-level pressure.** Every
 METAR carries an altimeter setting; only some carry SLP, and rural AWOS

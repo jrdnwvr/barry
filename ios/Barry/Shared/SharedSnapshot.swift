@@ -46,8 +46,21 @@ struct TendencySnapshot: Codable, Hashable {
     var altimeterHPa: Double? = nil
     var atAirport: Bool? = nil
 
-    /// Altimeter at an airport, sea-level pressure elsewhere.
-    var displayPressureHPa: Double? { (atAirport == true ? altimeterHPa : nil) ?? currentPressureHPa }
+    /// The device barometer's reading, already in the station's kind of
+    /// number, and when it was taken. Written by the app that has a sensor.
+    var localDisplayHPa: Double? = nil
+    var localAt: Date? = nil
+
+    /// Altimeter at an airport; elsewhere the local sensor while it is fresh
+    /// (under two hours), otherwise the station's sea-level pressure.
+    var displayPressureHPa: Double? {
+        if atAirport == true, let a = altimeterHPa { return a }
+        if let l = localDisplayHPa, let at = localAt, updatedAt.timeIntervalSince(at) < 2 * 3600 { return l }
+        return currentPressureHPa
+    }
+    var showsLocal: Bool {
+        atAirport != true && localDisplayHPa != nil && localAt.map { updatedAt.timeIntervalSince($0) < 2 * 3600 } == true
+    }
     var showsAltimeter: Bool { atAirport == true && altimeterHPa != nil }
     /// Front watch (D7): status when active (approaching | passing | passed |
     /// forecast) and the direction the change is coming from. Filled in after

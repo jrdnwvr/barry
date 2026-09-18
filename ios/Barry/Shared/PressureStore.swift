@@ -42,6 +42,10 @@ final class PressureStore: ObservableObject {
         didSet { if airportSelected != oldValue { refreshAirportJudgement() } }
     }
 
+    /// The phone's selection is "My location" (synced to the watch), so the
+    /// station is where the wearer physically is. Gates sensor calibration.
+    @Published var selectionPhysical = false
+
     /// The one answer to "is the reading for the field I am at": decided
     /// when data lands and again when a position fix arrives, so the headline,
     /// the snapshot the complication reads, and the watch page never disagree.

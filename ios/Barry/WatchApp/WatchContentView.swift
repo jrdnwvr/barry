@@ -15,10 +15,14 @@ import Charts
 
 struct WatchContentView: View {
     @EnvironmentObject var store: PressureStore
+    @EnvironmentObject var barometer: WatchBarometer
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("pressureUnit", store: AppConfig.sharedDefaults)
     private var unitRaw: String = PressureUnit.inHg.rawValue
+    @AppStorage("watchBarometerEnabled", store: AppConfig.sharedDefaults)
+    private var barometerEnabled: Bool = false
     private var unit: PressureUnit { PressureUnit(rawValue: unitRaw) ?? .inHg }
+    @State private var lastLocalSnapshotAt: Date = .distantPast
 
     /// Data older than this is refreshed when the app comes to the front, so
     /// the page never trails the complication (which refreshes every ~20 min).
@@ -50,52 +54,118 @@ struct WatchContentView: View {
             .task {
                 // The phone's station and airport choice, now and whenever
                 // it changes while the app is open.
-                PhoneSync.shared.onUpdate = { station, selected in
+                PhoneSync.shared.onUpdate = { station, selected, physical in
                     store.station = station
                     store.airportSelected = selected
+                    store.selectionPhysical = physical
                     Task { await store.load(silent: true) }
                 }
                 PhoneSync.shared.activate()
                 if let stored = PhoneSync.stored {
                     store.station = stored.station
                     store.airportSelected = stored.airportSelected
+                    store.selectionPhysical = stored.physical
                 }
                 // A position first, so the 3 NM airport rule can apply.
                 await store.refreshLocation()
+                await followOwnPositionIfAlone()
                 if store.combined == nil { await store.load() }
+                if barometerEnabled { barometer.start() }
             }
             .onChange(of: scenePhase) { _, phase in
-                guard phase == .active, store.combined != nil else { return }
-                Task {
-                    await store.refreshLocation()
-                    if Date().timeIntervalSince(store.now) > Self.refreshAfter {
-                        await store.load(silent: true)
+                if phase == .active {
+                    if barometerEnabled { barometer.start() }
+                    guard store.combined != nil else { return }
+                    Task {
+                        await store.refreshLocation()
+                        await followOwnPositionIfAlone()
+                        if Date().timeIntervalSince(store.now) > Self.refreshAfter {
+                            await store.load(silent: true)
+                        }
                     }
+                } else {
+                    barometer.stop()
                 }
             }
+            .onChange(of: barometerEnabled) { _, on in
+                if on { barometer.start() } else { barometer.stop() }
+            }
+            // Each fresh report from the field the wearer is at is a
+            // calibration point; a remote station never is.
+            .onChange(of: store.combined) { _, combined in
+                guard let combined, store.selectionPhysical || store.atAirport,
+                      let ref = combined.calibrationReference else { return }
+                barometer.attemptCalibration(stationAltim: ref, tempC: combined.pressure.current.temp,
+                                             observedAt: combined.observedSeries.last?.t)
+            }
+            // The complication shows the same local number, once a minute at most.
+            .onChange(of: barometer.latestLocalAltim) { _, _ in
+                guard let combined = store.combined, let r = barometer.lastLocalReading,
+                      barometer.isCalibrated,
+                      Date().timeIntervalSince(lastLocalSnapshotAt) > 60 else { return }
+                lastLocalSnapshotAt = Date()
+                var snap = TendencySnapshot(from: combined, updatedAt: store.now, atAirport: store.atAirport)
+                snap.localDisplayHPa = combined.displayValue(fromLocalAltim: r.altim)
+                snap.localAt = r.at
+                SnapshotStore.save(snap)
+            }
         }
+    }
+
+    /// With the phone out of reach and the selection "My location", the
+    /// watch finds its own nearest station instead of the one the phone last
+    /// sent. A cellular watch left behind still lands on the right field.
+    private func followOwnPositionIfAlone() async {
+        guard store.selectionPhysical, !PhoneSync.shared.isPhoneReachable else { return }
+        let before = store.station
+        await store.resolveStationFromLocation()
+        if store.station != before { await store.load(silent: store.combined != nil) }
+    }
+
+    /// The local sensor reading in the station's kind of number, when it is
+    /// calibrated and no older than the last report or an hour.
+    private func localReading(_ combined: CombinedResponse) -> (value: Double, at: Date)? {
+        guard barometerEnabled, barometer.isCalibrated || barometer.isProvisional,
+              let r = barometer.lastLocalReading else { return nil }
+        let lastMetar = combined.observedSeries.last?.t ?? .distantPast
+        guard r.at >= lastMetar || store.now.timeIntervalSince(r.at) <= 3600 else { return nil }
+        return (combined.displayValue(fromLocalAltim: r.altim), r.at)
     }
 
     @ViewBuilder
     private func loaded(_ combined: CombinedResponse) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             if let t = combined.tendency {
+                let head = combined.headlinePressure(atAirport: store.atAirport)
+                let local = head?.isAltimeter == true ? nil : localReading(combined)
                 HStack {
                     Image(systemName: t.cls.symbolName)
                         .font(.title2.weight(.bold))
                         .foregroundStyle(t.cls.color(intensity: t.intensity))
                     VStack(alignment: .leading, spacing: 0) {
-                        let head = combined.headlinePressure(atAirport: store.atAirport)
-                        if let h = head {
-                            Text("\(unit.format(h.hPa)) \(unit.label)")
-                                .font(.headline).monospacedDigit()
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            if let l = local {
+                                Text("\(unit.format(l.value)) \(unit.label)")
+                                    .font(.headline).monospacedDigit()
+                                Circle().fill(.orange).frame(width: 6, height: 6)
+                            } else if let h = head {
+                                Text("\(unit.format(h.hPa)) \(unit.label)")
+                                    .font(.headline).monospacedDigit()
+                            }
                         }
                         // Unit is on the headline; the delta stays short so
                         // "altimeter" fits on the same line.
-                        Text((head?.isAltimeter == true ? "altimeter · " : "") + "\(deltaShort(t.delta3h)) · 3h")
+                        let lead = head?.isAltimeter == true ? "altimeter · " : (local != nil ? "sensor · " : "")
+                        Text(lead + "\(deltaShort(t.delta3h)) · 3h")
                             .font(.caption2).foregroundStyle(.secondary)
                             .lineLimit(1).minimumScaleFactor(0.8)
                     }
+                }
+                if local != nil, let r = barometer.lastLocalReading {
+                    // Off-field: the setting to dial, and how fresh the calibration is.
+                    Text("altimeter here ≈ \(unit.format(r.altim))" + calibrationAge)
+                        .font(.caption2).foregroundStyle(.secondary)
+                        .lineLimit(1).minimumScaleFactor(0.8)
                 }
             }
             WatchChart6h(combined: combined, unit: unit, now: store.now)
@@ -108,6 +178,12 @@ struct WatchContentView: View {
                 .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 4)
+    }
+
+    private var calibrationAge: String {
+        guard let at = barometer.calibratedAt else { return barometer.isProvisional ? " · rough" : "" }
+        let m = max(0, Int(Date().timeIntervalSince(at) / 60))
+        return m < 60 ? " · cal \(m) min ago" : " · cal \(m / 60) h ago"
     }
 
     private func deltaShort(_ hPa: Double) -> String {

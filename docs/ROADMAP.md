@@ -274,6 +274,8 @@ of 106° W so the overlap is not double counted.
 
 ## H. Altimeter setting off-field (framed 2026-09-17, not started)
 
+Detail, the watch plan, and the model review: docs/OFF_FIELD.md.
+
 The headline is a field's own altimeter setting only at an airport (selected
 or within 3 NM). Everywhere else the pilot has no local setting. This is the
 plan for an estimated one, kept honest.

@@ -63,10 +63,17 @@ struct HomeLayout: Codable, Equatable {
 
     static let everything = HomeLayout(order: HomeCard.allCases, hidden: [])
 
+    /// Cards that start hidden until someone turns them on: the TAF strip,
+    /// since a pilot already knows the home field's category at a glance.
+    static let offByDefault: Set<HomeCard> = [.taf]
+
+    /// A fresh install: everything, minus the cards that start hidden.
+    static let initial = HomeLayout(order: HomeCard.allCases, hidden: offByDefault)
+
     /// A pilot's day: the field first, the phone sensor out of the way.
     static let pilot = HomeLayout(
         order: [.lightning, .chart, .taf, .conditions, .wind, .strip, .rainWind, .radar, .sensor, .sources],
-        hidden: [.sensor])
+        hidden: [.sensor, .taf])
 
     /// Weather first: the map and the sky, no runway talk.
     static let weather = HomeLayout(
@@ -76,11 +83,16 @@ struct HomeLayout: Codable, Equatable {
     func isVisible(_ card: HomeCard) -> Bool { !hidden.contains(card) || !card.canHide }
 
     /// Bring a stored layout up to date: drop ids that no longer exist,
-    /// append cards added since it was saved, never hide the chart.
+    /// append cards added since it was saved (hidden when they start that
+    /// way), never hide the chart.
     func normalized() -> HomeLayout {
         var seen = Set<HomeCard>()
         var order = self.order.filter { seen.insert($0).inserted }
-        for c in HomeCard.allCases where !seen.contains(c) { order.append(c) }
+        var hidden = self.hidden
+        for c in HomeCard.allCases where !seen.contains(c) {
+            order.append(c)
+            if Self.offByDefault.contains(c) { hidden.insert(c) }
+        }
         return HomeLayout(order: order, hidden: hidden.filter { $0.canHide })
     }
 }
@@ -98,7 +110,7 @@ final class HomeLayoutStore: ObservableObject {
            let stored = try? JSONDecoder().decode(HomeLayout.self, from: data) {
             layout = stored.normalized()
         } else {
-            layout = .everything
+            layout = .initial
         }
     }
 

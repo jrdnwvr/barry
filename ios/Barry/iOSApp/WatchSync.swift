@@ -25,11 +25,14 @@ final class WatchSync: NSObject, WCSessionDelegate {
 
     /// Tell the watch which station the phone is on and whether it is a
     /// chosen airport. Safe to call often: an unchanged context is a no-op.
-    func send(station: String, airportSelected: Bool, physical: Bool) {
+    func send(station: String, airportSelected: Bool, physical: Bool,
+              backcountry: Bool, watchSensor: Bool) {
         guard WCSession.isSupported() else { return }
         let ctx: [String: Any] = [AppConfig.syncStationKey: station,
                                   AppConfig.syncAirportSelectedKey: airportSelected,
-                                  AppConfig.syncPhysicalKey: physical]
+                                  AppConfig.syncPhysicalKey: physical,
+                                  AppConfig.syncBackcountryKey: backcountry,
+                                  AppConfig.syncWatchSensorKey: watchSensor]
         let s = WCSession.default
         guard s.activationState == .activated, s.isPaired, s.isWatchAppInstalled else {
             pending = ctx
@@ -38,7 +41,9 @@ final class WatchSync: NSObject, WCSessionDelegate {
         let current = s.applicationContext
         if current[AppConfig.syncStationKey] as? String == station,
            current[AppConfig.syncAirportSelectedKey] as? Bool == airportSelected,
-           current[AppConfig.syncPhysicalKey] as? Bool == physical {
+           current[AppConfig.syncPhysicalKey] as? Bool == physical,
+           current[AppConfig.syncBackcountryKey] as? Bool == backcountry,
+           current[AppConfig.syncWatchSensorKey] as? Bool == watchSensor {
             return
         }
         try? s.updateApplicationContext(ctx)

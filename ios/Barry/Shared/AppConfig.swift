@@ -40,6 +40,10 @@ enum AppConfig {
     /// True when the phone's selection is "My location": the station is where
     /// the wearer physically is, so the watch barometer may calibrate against it.
     static let syncPhysicalKey = "selectionPhysical"
+    /// The phone's Backcountry switch and its "use watch sensor" choice,
+    /// applied to the watch's own settings keys on arrival.
+    static let syncBackcountryKey = "backcountryEnabled"
+    static let syncWatchSensorKey = "watchBarometerEnabled"
 }
 
 /// How Barry chooses the "where am I" coordinates for forecast + station lookup.

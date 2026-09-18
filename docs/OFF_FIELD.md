@@ -130,6 +130,16 @@ calibration distance, not the sensor.
 
 ## 4. Making the reading useful off-field and at rural strips
 
+Status 2026-09-18: built as the Strip card (`iOSApp/Backcountry.swift`)
+under two rules. Situation: the card exists only off-field (not at an
+airport). Toggle: the nearest-station facts show for everyone; the
+estimates (altimeter setting with ±, panel check, strip density altitude,
+model wind) join only with Settings > Backcountry on, after a one-time
+acknowledgement, every line marked "est." The station's report is never
+replaced. The model source needs a station that reports both SLP and the
+altimeter setting; at an AWOS with altimeter only, the estimate rests on
+the station and the sensor. R7 (the backtest) is still open.
+
 What a pilot at a private strip actually lacks, in order: an altimeter
 setting, a way to check it, the wind and density altitude at the strip, and a
 sense of what is coming. Barry can give all four with data it already has.

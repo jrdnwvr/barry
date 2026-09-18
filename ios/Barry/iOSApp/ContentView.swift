@@ -18,6 +18,10 @@ struct ContentView: View {
     @AppStorage("chartWindow", store: AppConfig.sharedDefaults)
     private var chartWindowRaw: String = ChartWindow.hours6.rawValue
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(Backcountry.enabledKey, store: AppConfig.sharedDefaults)
+    private var backcountryEnabled: Bool = false
+    @AppStorage(Backcountry.useWatchSensorKey, store: AppConfig.sharedDefaults)
+    private var backcountryUseWatch: Bool = true
     @Environment(\.horizontalSizeClass) private var hSizeClass
     @State private var showSettings = false
     @State private var showRadarFullScreen = false
@@ -63,6 +67,8 @@ struct ContentView: View {
                 syncAirportSelection()
                 await initialLoad()
             }
+            .onChange(of: backcountryEnabled) { _, _ in syncWatch() }
+            .onChange(of: backcountryUseWatch) { _, _ in syncWatch() }
             // Keep the reading live while the app is open. Keyed on scenePhase so the
             // loop only runs while frontmost — it stops the moment the app is dimmed
             // away / backgrounded, so the screen still sleeps normally and no work
@@ -195,6 +201,14 @@ struct ContentView: View {
         // and fog outlooks when they exist. Never an empty card.
         if let cond = combined.conditions, cond.hasContent {
             FieldConditionsCard(conditions: cond, combined: combined, now: store.now)
+        }
+
+        // Off-field only: the nearest station as a fact for everyone, the
+        // estimates when Backcountry is on. Never at an airport.
+        if !isAtAirport(combined) {
+            StripCard(combined: combined, now: store.now, unit: unit,
+                      here: hereCoordinate, physical: isPhysicalSelection,
+                      barometer: barometer, sensorEnabled: localSensorActive)
         }
 
         // The wind on the compass: crosswind per runway at an airport, the
@@ -396,6 +410,16 @@ struct ContentView: View {
         store.isAtAirport(combined)
     }
 
+    /// Where "here" is for the Strip card: the device for My location, the
+    /// saved place otherwise, nothing for an airport.
+    private var hereCoordinate: CLLocationCoordinate2D? {
+        switch savedLocations.selected.kind {
+        case .currentLocation: return store.userLocation?.coordinate
+        case .place(let lat, let lon, _): return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+        case .airport: return nil
+        }
+    }
+
     private func syncAirportSelection() {
         if case .airport = savedLocations.selected.kind { store.airportSelected = true }
         else { store.airportSelected = false }
@@ -404,7 +428,8 @@ struct ContentView: View {
     /// The watch follows the phone's station and airport choice.
     private func syncWatch() {
         WatchSync.shared.send(station: store.station, airportSelected: store.airportSelected,
-                              physical: savedLocations.selected.isPhysical)
+                              physical: savedLocations.selected.isPhysical,
+                              backcountry: backcountryEnabled, watchSensor: backcountryEnabled && backcountryUseWatch)
     }
 
     private func initialLoad() async {

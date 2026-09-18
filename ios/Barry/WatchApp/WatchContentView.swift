@@ -21,6 +21,8 @@ struct WatchContentView: View {
     private var unitRaw: String = PressureUnit.inHg.rawValue
     @AppStorage("watchBarometerEnabled", store: AppConfig.sharedDefaults)
     private var barometerEnabled: Bool = false
+    @AppStorage("backcountryEnabled", store: AppConfig.sharedDefaults)
+    private var backcountryEnabled: Bool = false
     private var unit: PressureUnit { PressureUnit(rawValue: unitRaw) ?? .inHg }
     @State private var lastLocalSnapshotAt: Date = .distantPast
 
@@ -161,9 +163,10 @@ struct WatchContentView: View {
                             .lineLimit(1).minimumScaleFactor(0.8)
                     }
                 }
-                if local != nil, let r = barometer.lastLocalReading {
-                    // Off-field: the setting to dial, and how fresh the calibration is.
-                    Text("altimeter here ≈ \(unit.format(r.altim))" + calibrationAge)
+                if backcountryEnabled, local != nil, let r = barometer.lastLocalReading {
+                    // Off-field, Backcountry on: the setting to dial, marked as
+                    // an estimate, and how fresh the calibration is.
+                    Text("altimeter here \(unit.format(r.altim)) est." + calibrationAge)
                         .font(.caption2).foregroundStyle(.secondary)
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }

@@ -426,6 +426,14 @@ final class BarometerManager: ObservableObject {
         }
     }
 
+    /// The device's altitude for the Strip card's panel check: fused absolute
+    /// altitude when it is good, a GPS vertical fix otherwise, nil when neither
+    /// meets the 8 m gate.
+    func currentAltitude() async -> (meters: Double, accuracy: Double)? {
+        guard let fix = await sampleAltitude() else { return nil }
+        return (fix.meters, fix.accuracy)
+    }
+
     /// Re-stamp the calibration's altitude datum (call after adding a METAR point).
     private func updateReferenceAltitude() async {
         guard let fix = await sampleAltitude() else { return }

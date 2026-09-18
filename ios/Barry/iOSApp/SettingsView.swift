@@ -30,6 +30,15 @@ struct SettingsView: View {
     private var runwayWindsRaw: String = RunwayWindsMode.auto.rawValue
     @AppStorage(FieldConditionsCard.blReferenceKey, store: AppConfig.sharedDefaults)
     private var blReference: String = "agl"
+    @AppStorage(Backcountry.enabledKey, store: AppConfig.sharedDefaults)
+    private var backcountryEnabled: Bool = false
+    @AppStorage(Backcountry.acknowledgedKey, store: AppConfig.sharedDefaults)
+    private var backcountryAcknowledged: Bool = false
+    @AppStorage(Backcountry.usePhoneSensorKey, store: AppConfig.sharedDefaults)
+    private var backcountryUsePhone: Bool = true
+    @AppStorage(Backcountry.useWatchSensorKey, store: AppConfig.sharedDefaults)
+    private var backcountryUseWatch: Bool = true
+    @State private var showBackcountryAck = false
     @AppStorage(RadarPanel.autoplayKey, store: AppConfig.sharedDefaults)
     private var radarAutoplay: Bool = true
 
@@ -53,6 +62,32 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 } header: {
                     Text("Phone barometer")
+                }
+
+                Section {
+                    Toggle("Backcountry", isOn: $backcountryEnabled)
+                    if backcountryEnabled {
+                        Toggle("Use phone sensor", isOn: $backcountryUsePhone)
+                        Toggle("Use watch sensor", isOn: $backcountryUseWatch)
+                    }
+                    Text("Away from a reporting field, adds an estimated altimeter setting and strip conditions below the station's report. Estimates never replace it.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("Backcountry")
+                }
+                .onChange(of: backcountryEnabled) { _, on in
+                    // First time on: the disclaimer, once, before anything shows.
+                    if on, !backcountryAcknowledged {
+                        backcountryEnabled = false
+                        showBackcountryAck = true
+                    }
+                }
+                .sheet(isPresented: $showBackcountryAck) {
+                    BackcountryAckSheet {
+                        backcountryAcknowledged = true
+                        backcountryEnabled = true
+                    }
                 }
 
                 Section {

@@ -48,6 +48,9 @@ final class PhoneSync: NSObject, WCSessionDelegate {
         d.set(station, forKey: AppConfig.syncStationKey)
         d.set(selected, forKey: AppConfig.syncAirportSelectedKey)
         d.set(physical, forKey: AppConfig.syncPhysicalKey)
+        // Settings the phone owns; the watch's own switches read these keys.
+        if let b = ctx[AppConfig.syncBackcountryKey] as? Bool { d.set(b, forKey: AppConfig.syncBackcountryKey) }
+        if let w = ctx[AppConfig.syncWatchSensorKey] as? Bool { d.set(w, forKey: AppConfig.syncWatchSensorKey) }
         if changed { onUpdate?(station, selected, physical) }
     }
 

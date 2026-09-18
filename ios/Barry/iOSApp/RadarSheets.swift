@@ -69,6 +69,12 @@ struct RadarKeySheet: View {
                             dotKey(Color(red: 0.45, green: 0.25, blue: 0.70).opacity(0.7), "20 min")
                         }
                         .font(.caption)
+                        HStack(spacing: 6) {
+                            RoundedRectangle(cornerRadius: 3)
+                                .stroke(Color(red: 0.62, green: 0.30, blue: 0.95), lineWidth: 2)
+                                .frame(width: 22, height: 12)
+                            Text("outline: a cell the satellite has seen fire")
+                        }
                         Text("Flashes seen by NOAA's GOES satellites in the last 20 minutes. Bigger where more fell, fading with age.")
                         Text("The satellite sees the light a stroke throws onto the cloud top, in-cloud and ground strikes alike. A dot is where the cloud lit up, good to about 5 miles, a minute or two late.")
                         if lightningCoverage == false {
@@ -103,12 +109,17 @@ struct RadarKeySheet: View {
         switch base {
         case .radar:
             section("Radar", icon: "antenna.radiowaves.left.and.right") {
-                HStack(spacing: 14) {
-                    swatch(Color(red: 0.55, green: 0.75, blue: 0.95), "Light")
-                    swatch(Color(red: 0.13, green: 0.42, blue: 0.82), "Moderate")
-                    swatch(Color(red: 0.94, green: 0.65, blue: 0.15), "Heavy")
+                HStack(spacing: 10) {
+                    swatch(Color(red: 0.50, green: 0.72, blue: 0.99), "Light")
+                    swatch(Color(red: 0.24, green: 0.45, blue: 0.90), "Moderate")
+                    swatch(Color(red: 0.22, green: 0.18, blue: 0.68), "Heavy")
                 }
-                Text("Observed frames every 10 minutes; the last two (orange time) are a short nowcast.")
+                HStack(spacing: 10) {
+                    swatch(Color(red: 1.00, green: 0.60, blue: 0.16), "Convective 45+")
+                    swatch(Color(red: 0.84, green: 0.13, blue: 0.13), "Severe 55+")
+                    swatch(Color(red: 0.90, green: 0.16, blue: 0.86), "Hail likely 60+")
+                }
+                Text("Blues are rain. Orange is where an echo stops being just rain, in dBZ. Frames every 10 minutes; the last two (orange time) are a short nowcast.")
             }
         case .pressure:
             section("Pressure", icon: "circle.circle") {

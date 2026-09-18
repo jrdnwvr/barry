@@ -466,8 +466,18 @@ struct LightningCell: Codable, Hashable {
     let ageSec: Int
 }
 
+/// A group of touching flash cells: the electrified part of one storm,
+/// as a closed outline of (lat, lon) pairs.
+struct LightningCluster: Codable, Hashable {
+    let points: [[Double]]
+    let flashes: Int
+    let recent: Int
+    let newestAgeSec: Int
+}
+
 struct LightningResponse: Codable, Hashable {
     var cells: [LightningCell] = []
+    var clusters: [LightningCluster] = []
     var windowSec: Int = 900
     var binDeg: Double = 0.02
     /// False when the server's feed is stale: an empty map then means

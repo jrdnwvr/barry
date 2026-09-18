@@ -52,6 +52,7 @@
 		50F708BB96C5BBFE917DE01A /* TendencyProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A24A6845ECB66698D61771D /* TendencyProvider.swift */; };
 		5204621388C2B94B99BE1CCF /* RadarModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C448DCCFE61D866C777918A /* RadarModel.swift */; };
 		54E71FA035FE1F8FF06685BA /* Backcountry.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDA74BE38B6BB03051B074EF /* Backcountry.swift */; };
+		54FC2F6A3476132FE681E5E6 /* RadarPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6BB37965D5198DB8A9DCE65 /* RadarPalette.swift */; };
 		55E5298970D9B65C1E5B4F44 /* ComplicationDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42AF37A1FEB24BB66E9E0A34 /* ComplicationDial.swift */; };
 		5674736757CC86B2ECD79A39 /* BarryPhoneWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 078B13121EBACB3059A82BC9 /* BarryPhoneWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		568F6FDF35365FFD67F5D81D /* WindUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E3203C0CBC7B1D5F0A57759 /* WindUnit.swift */; };
@@ -252,6 +253,7 @@
 		BB955C8C1263A03BA2C97A2F /* LightningBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightningBanner.swift; sourceTree = "<group>"; };
 		C0EBA6519DD65A01DF98B527 /* RadarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarView.swift; sourceTree = "<group>"; };
 		C1326419A7770149C91B0438 /* PhoneWidgetViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWidgetViews.swift; sourceTree = "<group>"; };
+		C6BB37965D5198DB8A9DCE65 /* RadarPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarPalette.swift; sourceTree = "<group>"; };
 		CBA1D35A89B06FE9E7708D10 /* TafTimelineCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TafTimelineCard.swift; sourceTree = "<group>"; };
 		CD077DE63D0DE437229C43CC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CF51EF6C7C37D4CEE92CE308 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -415,6 +417,7 @@
 				6978CE026B8EEE1A560877C0 /* PressureGuideView.swift */,
 				6662DFD4A743261C8134B535 /* RadarMapView.swift */,
 				8C448DCCFE61D866C777918A /* RadarModel.swift */,
+				C6BB37965D5198DB8A9DCE65 /* RadarPalette.swift */,
 				1666B232D9C24406F937CCE8 /* RadarSheets.swift */,
 				C0EBA6519DD65A01DF98B527 /* RadarView.swift */,
 				63055B6BCAEBB22C1F0B5177 /* RunwayWindDial.swift */,
@@ -700,6 +703,7 @@
 				0F22D62C5D40785243A56CD0 /* PressureUnit.swift in Sources */,
 				1440BAB18BF4B5F3EE776457 /* RadarMapView.swift in Sources */,
 				5204621388C2B94B99BE1CCF /* RadarModel.swift in Sources */,
+				54FC2F6A3476132FE681E5E6 /* RadarPalette.swift in Sources */,
 				4DC0A2667AD32E4946FA8106 /* RadarSheets.swift in Sources */,
 				06E7445D9EF69D7CD6C141EE /* RadarView.swift in Sources */,
 				2FC7F63C72023A1812F99D63 /* RangeAnalysis.swift in Sources */,

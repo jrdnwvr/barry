@@ -48,6 +48,14 @@ struct RadarMapView: UIViewRepresentable {
 
     final class RadarTileOverlay: MKTileOverlay {
         var frameTime = 0
+        /// RainViewer tiles are read back to dBZ and repainted in Barry's
+        /// palette (RadarPalette); model tiles from IEM are shown as served.
+        var recolor = false
+        private static let recoloredCache: NSCache<NSString, NSData> = {
+            let c = NSCache<NSString, NSData>()
+            c.countLimit = 160
+            return c
+        }()
 
         /// Deepest native zoom of the tile source: RainViewer serves to z7,
         /// IEM's HRRR tiles hold up to ~z10. Beyond it we fetch the ancestor
@@ -64,7 +72,14 @@ struct RadarMapView: UIViewRepresentable {
         override func loadTile(at path: MKTileOverlayPath,
                                result: @escaping (Data?, Error?) -> Void) {
             guard path.z > maxNativeZ else {
-                super.loadTile(at: path, result: result)
+                if recolor {
+                    fetchCached(url(forTilePath: path)) { data in
+                        guard let data else { result(nil, nil); return }
+                        result(self.painted(data, key: self.url(forTilePath: path).absoluteString), nil)
+                    }
+                } else {
+                    super.loadTile(at: path, result: result)
+                }
                 return
             }
             let factor = path.z - maxNativeZ
@@ -74,7 +89,9 @@ struct RadarMapView: UIViewRepresentable {
                                                contentScaleFactor: path.contentScaleFactor)
             let subX = path.x % scale
             let subY = path.y % scale
-            fetchCached(url(forTilePath: parentPath)) { data in
+            let parentURL = url(forTilePath: parentPath)
+            fetchCached(parentURL) { raw in
+                let data = raw.map { self.recolor ? self.painted($0, key: parentURL.absoluteString) : $0 }
                 guard let data, let cg = UIImage(data: data)?.cgImage else {
                     result(nil, nil)
                     return
@@ -96,6 +113,16 @@ struct RadarMapView: UIViewRepresentable {
                 }
                 result(up.pngData(), nil)
             }
+        }
+
+        /// Repainted bytes for a source tile, cached so the crop-and-upscale
+        /// path and neighbouring zooms never repaint the same tile twice.
+        private func painted(_ data: Data, key: String) -> Data {
+            let k = ("painted:" + key) as NSString
+            if let hit = Self.recoloredCache.object(forKey: k) { return hit as Data }
+            let out = RadarPalette.recolor(data)
+            Self.recoloredCache.setObject(out as NSData, forKey: k)
+            return out
         }
 
         /// Parent-tile fetch with a small in-memory cache — 4^n child tiles share
@@ -601,10 +628,12 @@ struct RadarMapView: UIViewRepresentable {
                 center: center,
                 span: MKCoordinateSpan(latitudeDelta: 3.2, longitudeDelta: 3.2)), animated: true)
         }
-        // Lazily add an overlay per frame (RainViewer "Dark Sky" scheme = color 8;
-        // options 1_1 = smoothed + snow shown distinctly). Past RainViewer's native
-        // z7 the overlay itself crops + upscales ancestor tiles (see loadTile) —
-        // do NOT set maximumZ, which would stop rendering entirely past z7.
+        // Lazily add an overlay per frame. RainViewer serves only its Universal
+        // Blue palette now (color 2), fetched UNSMOOTHED (options 0_1: sharp,
+        // snow in its own colors) so each pixel reads back to an exact dBZ and
+        // RadarPalette repaints it. Past RainViewer's native z7 the overlay
+        // crops + upscales ancestor tiles (see loadTile) — do NOT set maximumZ,
+        // which would stop rendering entirely past z7.
         for f in frames where context.coordinator.overlays[f.time] == nil {
             let tile: RadarTileOverlay
             if let layer = f.iemLayer {
@@ -615,8 +644,9 @@ struct RadarMapView: UIViewRepresentable {
                 tile.tileSize = CGSize(width: 256, height: 256)
             } else {
                 tile = RadarTileOverlay(urlTemplate:
-                    host + f.path + "/512/{z}/{x}/{y}/8/1_1.png")
+                    host + f.path + "/512/{z}/{x}/{y}/2/0_1.png")
                 tile.tileSize = CGSize(width: 512, height: 512)
+                tile.recolor = true
             }
             tile.frameTime = f.time
             tile.canReplaceMapContent = false

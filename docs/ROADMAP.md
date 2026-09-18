@@ -272,6 +272,50 @@ Cost is fixed at the server: about 2 to 3 GB a day regardless of users.
 on the Storms chip; the West satellite's Pacific coverage is kept only west
 of 106° W so the overlap is not double counted.
 
+## H. Altimeter setting off-field (framed 2026-09-17, not started)
+
+The headline is a field's own altimeter setting only at an airport (selected
+or within 3 NM). Everywhere else the pilot has no local setting. This is the
+plan for an estimated one, kept honest.
+
+**H1. Backtest first.** (S) For every reporting station in the bulk history,
+hide its report, estimate its setting from its neighbors, compare with what it
+reported. Gives a real error distribution by region and distance to the nearest
+station. The +/- figure and the wording come from this, not from a guess.
+
+**H2. Server estimate.** (M) `/combined.altimeterHere` when the headline is not
+a field's own setting: distance-weighted blend of altimeter settings from fresh
+stations within 100 NM (bulk table, reports under 90 min, neighbor-outlier
+guard), cross-checked against the model's surface pressure reduced through the
+standard atmosphere with the model's ground elevation. Returns value, +/- from
+the spread, the stations used (id, distance, age, setting), and a "rough" flag
+when the sources disagree or the nearest station is far.
+
+**H3. Phone barometer as a third source.** (S) Only when the local sensor is
+on, the phone is still, and GPS vertical accuracy is under about 100 ft. The
+calibration offset Barry already learns at a field carries to the new spot;
+the sensor then measures the pressure *here* rather than interpolating it.
+
+**H4. Watch barometer.** (S) `CMAltimeter` has delivered the watch's raw
+pressure since watchOS 2 (Series 3 and later have the sensor); nothing new in
+watchOS 27. Same treatment as the phone: calibrate against the field's METAR
+when at an airport, then read it off-field. It is a second sensor a meter from
+the first, so it buys redundancy (phone in a car or a pocket) more than
+accuracy; the error budget is dominated by device elevation and the distance to
+the calibrating station, not sensor noise. Foreground only on watchOS.
+
+**H5. App.** (M) A second line under the headline, never replacing it:
+"~29.94 inHg altimeter here, estimated" with an info button showing the
+stations, the model figure, the spread, and the disclaimer. Settings: off by
+default, one-time "I understand" sheet; sources picker (stations / stations
+and model / include phone barometer); range 50 or 100 NM.
+
+**H6. Disclaimer copy.** Always visible: "Estimated, advisory only." Sheet, one
+paragraph: worked out from nearby stations' settings and checked against the
+model; not a reported setting and does not satisfy 14 CFR 91.121; use a
+reported setting within 100 NM when one exists, otherwise set field elevation
+before takeoff; never for an instrument approach.
+
 ## F. Efficiency check (current state, for the record)
 
 - `/combined` and the scheduler share the pressure cache; no double fetch.

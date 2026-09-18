@@ -272,6 +272,11 @@ Cost is fixed at the server: about 2 to 3 GB a day regardless of users.
 on the Storms chip; the West satellite's Pacific coverage is kept only west
 of 106° W so the overlap is not double counted.
 
+## I. Multiple fields and routes (draft 2026-09-18, not scheduled)
+
+A Fields card for the saved fields at a glance and a Route card for
+departure to destination. Detail and open questions: docs/ROUTES.md.
+
 ## H. Altimeter setting off-field (framed 2026-09-17, not started)
 
 Detail, the watch plan, and the model review: docs/OFF_FIELD.md.

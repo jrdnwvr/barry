@@ -30,6 +30,11 @@ enum FlightCategory {
         }
     }
 
+    /// Worse to better, for "improving" versus "deteriorating" wording.
+    static func rank(_ cat: String) -> Int {
+        ["LIFR": 0, "IFR": 1, "MVFR": 2, "VFR": 3][cat] ?? -1
+    }
+
     static func color(_ cat: String?) -> Color {
         cat.map(order.contains) == true ? Color(uiColor: uiColor(cat)) : .secondary
     }

@@ -103,6 +103,7 @@
 		B0DD843032BBA29B2C4097D0 /* PressureHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */; };
 		B0ED75F3A2F54154E9DC25F8 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0094727B647701DDDCF17BD2 /* LocationManager.swift */; };
 		B5956053A3566C6DBCDAAF14 /* StationLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3DE49EE7CDCB4E59BB8E97F /* StationLayer.swift */; };
+		C10944BA3D2626C8FF342DCD /* TafTimelineCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBA1D35A89B06FE9E7708D10 /* TafTimelineCard.swift */; };
 		C1FA94A165B7428939C8372D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CD077DE63D0DE437229C43CC /* Assets.xcassets */; };
 		C2BB4B03167622269DA26352 /* PressureFieldOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 763CE62FEE3C1CA173ABA1C3 /* PressureFieldOverlay.swift */; };
 		D21F7D7C1B619DD998B3C235 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0094727B647701DDDCF17BD2 /* LocationManager.swift */; };
@@ -251,6 +252,7 @@
 		BB955C8C1263A03BA2C97A2F /* LightningBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightningBanner.swift; sourceTree = "<group>"; };
 		C0EBA6519DD65A01DF98B527 /* RadarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarView.swift; sourceTree = "<group>"; };
 		C1326419A7770149C91B0438 /* PhoneWidgetViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWidgetViews.swift; sourceTree = "<group>"; };
+		CBA1D35A89B06FE9E7708D10 /* TafTimelineCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TafTimelineCard.swift; sourceTree = "<group>"; };
 		CD077DE63D0DE437229C43CC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CF51EF6C7C37D4CEE92CE308 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		CFA4A69E8BBEEF268407FC68 /* WatchSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSync.swift; sourceTree = "<group>"; };
@@ -421,6 +423,7 @@
 				72812DF1800A9DF0CF5EF2C3 /* SettingsView.swift */,
 				F3DE49EE7CDCB4E59BB8E97F /* StationLayer.swift */,
 				E569F3B3B9FAB65C07970B1A /* StormAlerter.swift */,
+				CBA1D35A89B06FE9E7708D10 /* TafTimelineCard.swift */,
 				CFA4A69E8BBEEF268407FC68 /* WatchSync.swift */,
 				39AF53020220091BA0FC5C07 /* WindFlowView.swift */,
 			);
@@ -708,6 +711,7 @@
 				4841725627A1F0AC607A52BE /* SharedSnapshot.swift in Sources */,
 				B5956053A3566C6DBCDAAF14 /* StationLayer.swift in Sources */,
 				20AD2A1B5CC1C7738EAEF8F5 /* StormAlerter.swift in Sources */,
+				C10944BA3D2626C8FF342DCD /* TafTimelineCard.swift in Sources */,
 				7917511FB9F6E4E7614296AA /* Tendency.swift in Sources */,
 				50F708BB96C5BBFE917DE01A /* TendencyProvider.swift in Sources */,
 				0F0411FE134D2DF658D00A67 /* WatchSync.swift in Sources */,

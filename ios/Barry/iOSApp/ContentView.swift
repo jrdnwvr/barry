@@ -225,6 +225,11 @@ struct ContentView: View {
         case .chart:
             // The focused trend: window toggle + chart + the honest caveat.
             if layout == .phone { trendSection(combined) }
+        case .taf:
+            // The forecaster's product as a strip; only when the station has a TAF.
+            if let taf = combined.taf, !taf.periods.isEmpty {
+                TafTimelineCard(combined: combined, now: store.now)
+            }
         case .rainWind:
             if layout == .phone { ConfirmationOverlayView(combined: combined, now: store.now) }
         case .conditions:

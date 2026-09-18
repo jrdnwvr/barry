@@ -12,6 +12,7 @@ import SwiftUI
 enum HomeCard: String, CaseIterable, Codable, Identifiable {
     case lightning
     case chart
+    case taf
     case rainWind
     case conditions
     case strip
@@ -26,6 +27,7 @@ enum HomeCard: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .lightning:  return "Lightning nearby"
         case .chart:      return "Trend chart"
+        case .taf:        return "TAF timeline"
         case .rainWind:   return "Rain and wind"
         case .conditions: return "Conditions"
         case .strip:      return "Here (off-field)"
@@ -40,6 +42,7 @@ enum HomeCard: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .lightning:  return "Strikes within 100 miles, when there are any."
         case .chart:      return "The pressure curve. Always shown."
+        case .taf:        return "Flight category by the hour for the next 24 h, with sunset and sunrise."
         case .rainWind:   return "The next hours from the forecast model."
         case .conditions: return "Density altitude, clouds, boundary layer, storms, fog."
         case .strip:      return "Nearest station and estimates away from a reporting field."
@@ -62,13 +65,13 @@ struct HomeLayout: Codable, Equatable {
 
     /// A pilot's day: the field first, the phone sensor out of the way.
     static let pilot = HomeLayout(
-        order: [.lightning, .chart, .conditions, .wind, .strip, .rainWind, .radar, .sensor, .sources],
+        order: [.lightning, .chart, .taf, .conditions, .wind, .strip, .rainWind, .radar, .sensor, .sources],
         hidden: [.sensor])
 
     /// Weather first: the map and the sky, no runway talk.
     static let weather = HomeLayout(
-        order: [.lightning, .chart, .radar, .rainWind, .conditions, .sensor, .wind, .strip, .sources],
-        hidden: [.wind, .strip])
+        order: [.lightning, .chart, .radar, .rainWind, .conditions, .sensor, .taf, .wind, .strip, .sources],
+        hidden: [.wind, .strip, .taf])
 
     func isVisible(_ card: HomeCard) -> Bool { !hidden.contains(card) || !card.canHide }
 

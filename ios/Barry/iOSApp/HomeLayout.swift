@@ -138,7 +138,7 @@ struct HomeLayoutView: View {
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
             } header: {
-                Text("Start from")
+                Text("Presets")
             }
 
             Section {

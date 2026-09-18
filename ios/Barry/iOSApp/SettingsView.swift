@@ -87,19 +87,6 @@ struct SettingsView: View {
                 } header: {
                     Text("Backcountry")
                 }
-                .onChange(of: backcountryEnabled) { _, on in
-                    // First time on: the disclaimer, once, before anything shows.
-                    if on, !backcountryAcknowledged {
-                        backcountryEnabled = false
-                        showBackcountryAck = true
-                    }
-                }
-                .sheet(isPresented: $showBackcountryAck) {
-                    BackcountryAckSheet {
-                        backcountryAcknowledged = true
-                        backcountryEnabled = true
-                    }
-                }
 
                 Section {
                     Toggle("Storm alerts", isOn: $stormAlertsEnabled)
@@ -306,6 +293,18 @@ struct SettingsView: View {
                     }
                 }
                 #endif
+            }
+            // On the Form, not a Section: a section's modifiers apply to every
+            // row, and four sheets presenting at once tears the stack down.
+            .onChange(of: backcountryEnabled) { _, on in
+                // First time on: the disclaimer, once. The switch stays on
+                // while the sheet is up; cancelling turns it back off.
+                if on, !backcountryAcknowledged { showBackcountryAck = true }
+            }
+            .sheet(isPresented: $showBackcountryAck, onDismiss: {
+                if !backcountryAcknowledged { backcountryEnabled = false }
+            }) {
+                BackcountryAckSheet { backcountryAcknowledged = true }
             }
             .navigationTitle("Settings")
             .toolbar {

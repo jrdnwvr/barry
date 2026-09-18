@@ -75,10 +75,7 @@ final class LiveActivityManager {
     /// Bring the activity in line with the data: start one for a new event
     /// (foreground only), update a running one, end one whose event is over.
     func sync(_ c: CombinedResponse, atAirport: Bool, foreground: Bool) async {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
-            NSLog("Barry live activity: activities disabled for this app")
-            return
-        }
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         let running = current
         guard isEnabled else {
             if let running { await end(running, with: running.content.state) }

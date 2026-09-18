@@ -1,5 +1,5 @@
 //  BarometerEngine.swift
-//  Barry — iOS
+//  Barry — Shared
 //
 //  The phone-barometer feature's pure value types: samples, micro-trend,
 //  calibration points and the multi-point model with drift, altitude helpers,
@@ -14,7 +14,7 @@ import Foundation
 struct BarometerSample: Equatable {
     let date: Date
     let stationPressureHPa: Double  // raw phone reading (kPa × 10), NOT SLP
-    var slpEquivalent: Double?      // set after calibration against a METAR
+    var calibrated: Double?         // altimeter-setting equivalent, set after calibration
     /// Usable for display / micro-trend / history. True when the classifier says
     /// stationary, OR when the pressure stream itself is weather-plausible while
     /// hand-carried (physics check) — the barometer only cares about vertical motion.
@@ -33,8 +33,11 @@ struct MicroTrend: Equatable {
 
 // MARK: - CalibrationState
 
-/// The SLP offset derived from aligning one phone reading with a fresh METAR SLP.
-/// offset = metar_slp − phone_station_pressure_hPa. This is one calibration *point*;
+/// The offset from aligning one phone reading with the station's altimeter
+/// setting: offset = station_altim − phone_raw_hPa. Every METAR carries an
+/// altimeter setting (rural AWOS often has no sea-level pressure), and it is
+/// the number a pilot dials, so it is the one quantity the sensor is tied to.
+/// This is one calibration *point*;
 /// CalibrationModel keeps a short history of them for a robust offset + drift.
 struct CalibrationState: Equatable, Codable {
     let offset: Double
@@ -48,13 +51,13 @@ struct CalibrationState: Equatable, Codable {
     /// A sudden jump of this magnitude means the user changed altitude, not the weather.
     static let maxOffsetJump: Double = 5.0
 
-    func slpEquivalent(for stationPressureHPa: Double) -> Double {
+    func calibrated(for stationPressureHPa: Double) -> Double {
         stationPressureHPa + offset
     }
 
-    static func make(metarSLP: Double, phonePressureHPa: Double, at date: Date = Date(),
+    static func make(stationAltim: Double, phonePressureHPa: Double, at date: Date = Date(),
                      obsTime: Date? = nil) -> CalibrationState {
-        CalibrationState(offset: metarSLP - phonePressureHPa, calibratedAt: date,
+        CalibrationState(offset: stationAltim - phonePressureHPa, calibratedAt: date,
                          metarObsTime: obsTime)
     }
 }
@@ -121,7 +124,7 @@ struct CalibrationModel: Equatable, Codable {
 
     /// Flat (mean) SLP-equivalent — ignores drift. Kept for callers without a
     /// timestamp; the live path uses the time-aware variant below.
-    func slpEquivalent(for stationPressureHPa: Double) -> Double? {
+    func calibrated(for stationPressureHPa: Double) -> Double? {
         offset.map { stationPressureHPa + $0 }
     }
 
@@ -140,7 +143,7 @@ struct CalibrationModel: Equatable, Codable {
     }
 
     /// Drift-aware SLP-equivalent for a reading taken at `date`.
-    func slpEquivalent(for stationPressureHPa: Double, at date: Date) -> Double? {
+    func calibrated(for stationPressureHPa: Double, at date: Date) -> Double? {
         offset(at: date).map { stationPressureHPa + $0 }
     }
 
@@ -185,11 +188,20 @@ enum PressureAltitude {
     /// small moves (hills, garages, buildings) the altitude bridge handles.
     static let hPaPerMeter = 0.118
 
-    /// ISA (standard atmosphere) sea-level reduction: what SLP would be if the
-    /// sensor reading `rawHPa` was taken `altitudeM` above sea level. Used only for
-    /// the GPS *bootstrap* (±1–2 hPa) — METAR calibration replaces it when it lands.
-    static func standardSLP(rawHPa: Double, altitudeM h: Double) -> Double {
+    /// ISA reduction of a raw reading taken `altitudeM` above sea level: the
+    /// altimeter setting (QNH) by definition. Used for the GPS *bootstrap*
+    /// (±1–2 hPa) until a station calibration lands.
+    static func altimeterSetting(rawHPa: Double, altitudeM h: Double) -> Double {
         rawHPa * pow(1.0 - 0.0065 * h / 288.15, -5.257)
+    }
+
+    /// Pressure change per metre of height for the air actually present:
+    /// p·g/(R·T). 0.120 at 15 °C and 1013 hPa, 0.114 at 30 °C, 0.131 at −10 °C.
+    /// The constant above is ten percent off at the extremes, which a 100 m
+    /// move turns into a hundredth of an inch.
+    static func lapseHPaPerMeter(pressureHPa p: Double, tempC: Double?) -> Double {
+        let t = (tempC ?? 15.0) + 273.15
+        return p * 9.80665 / (287.05 * t)
     }
 }
 
@@ -266,7 +278,7 @@ struct SampleBuffer: Equatable {
     }
 
     func trustedSamples() -> [BarometerSample] {
-        samples.filter { $0.trusted && $0.slpEquivalent != nil }
+        samples.filter { $0.trusted && $0.calibrated != nil }
     }
 
     /// True when a new raw reading taken while the classifier reports motion is
@@ -330,7 +342,7 @@ struct SampleBuffer: Equatable {
 
     /// Calibrated (SLP-equivalent) points for the chart trace, oldest → newest.
     func phoneTrace() -> [(Date, Double)] {
-        trustedSamples().compactMap { s in s.slpEquivalent.map { (s.date, $0) } }
+        trustedSamples().compactMap { s in s.calibrated.map { (s.date, $0) } }
     }
 
     /// Δp over the trusted window. Returns nil when fewer than 3 points or
@@ -341,7 +353,7 @@ struct SampleBuffer: Equatable {
         let first = trusted[0], last = trusted[trusted.count - 1]
         let windowMinutes = Int(last.date.timeIntervalSince(first.date) / 60)
         guard windowMinutes >= 5 else { return nil }
-        let delta = (last.slpEquivalent ?? 0) - (first.slpEquivalent ?? 0)
+        let delta = (last.calibrated ?? 0) - (first.calibrated ?? 0)
         return MicroTrend(deltaHPa: delta, windowMinutes: windowMinutes)
     }
 }

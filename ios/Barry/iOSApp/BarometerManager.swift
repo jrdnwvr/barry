@@ -2,7 +2,9 @@
 //  Barry — iOS
 //
 //  Phone barometer enrichment (brief §4.5). Wires CMAltimeter + CMMotionActivityManager
-//  into a calibrated, motion-gated live pressure supplement.
+//  into a calibrated, motion-gated live pressure supplement. The sensor is tied to
+//  the station's altimeter setting; the views convert to sea-level pressure where
+//  the station reports one (CombinedResponse.displayValue).
 //
 //  Architecture: the pure value types (MotionGate, CalibrationState, SampleBuffer) carry
 //  all the logic and are fully testable without Core Motion hardware. BarometerManager
@@ -22,7 +24,7 @@ import SwiftUI
 final class BarometerManager: ObservableObject {
     @Published private(set) var motionState: MotionGate.State = .moving
     @Published private(set) var microTrend: MicroTrend?
-    @Published private(set) var latestLocalSLP: Double?
+    @Published private(set) var latestLocalAltim: Double?
     /// True only on physical iPhones with a real barometer; false on simulator.
     @Published private(set) var isAvailable: Bool = false
 
@@ -39,9 +41,11 @@ final class BarometerManager: ObservableObject {
     @Published private(set) var provisionalOffset: Double?
 
     private var model = CalibrationModel()
-    private var lastMetarSLP: Double?
+    private var lastStationAltim: Double?
+    /// Air temperature at the station, for the lapse rate the altitude bridge uses.
+    private var lastStationTempC: Double?
     private var lastMetarObsTime: Date?
-    private static let storeKey = "barometer.calibration.v1"
+    private static let storeKey = "barometer.calibration.v2"
 
     /// Altitude (m, MSL) captured at the last calibration — the datum the altitude
     /// bridge compares against after the device moves. Persisted with the model.
@@ -61,7 +65,7 @@ final class BarometerManager: ObservableObject {
 
     /// Persisted, downsampled long-horizon log of calibrated SLP readings (Task 2).
     private var history = PressureHistory()
-    private static let historyStoreKey = "barometer.history.v1"
+    private static let historyStoreKey = "barometer.history.v2"
 
     private var gate = MotionGate()
     private var buffer = SampleBuffer()
@@ -80,8 +84,8 @@ final class BarometerManager: ObservableObject {
     var isProvisional: Bool { offsetHPa == nil && provisionalOffset != nil }
 
     /// Model offset when calibrated, else the GPS bootstrap offset.
-    private func effectiveSLP(for rawHPa: Double, at date: Date) -> Double? {
-        model.slpEquivalent(for: rawHPa, at: date) ?? provisionalOffset.map { rawHPa + $0 }
+    private func effectiveCalibrated(for rawHPa: Double, at date: Date) -> Double? {
+        model.calibrated(for: rawHPa, at: date) ?? provisionalOffset.map { rawHPa + $0 }
     }
 
     /// Barry's current motion verdict — true only when the device is classified still.
@@ -103,14 +107,14 @@ final class BarometerManager: ObservableObject {
     var phoneHistoryTrace: [(Date, Double)] { history.trace() }
 
 
-    /// Most recent trusted local SLP and when it was taken. Unlike `latestLocalSLP`
+    /// Most recent trusted local SLP and when it was taken. Unlike `latestLocalAltim`
     /// (which is nil while moving), this persists across motion — so the UI can keep
     /// showing the last good local reading; a to-the-second live value isn't required.
-    var lastLocalReading: (slp: Double, at: Date)? {
-        if let live = latestLocalSLP {
+    var lastLocalReading: (altim: Double, at: Date)? {
+        if let live = latestLocalAltim {
             return (live, buffer.samples.last(where: { $0.trusted })?.date ?? Date())
         }
-        return history.entries.last.map { ($0.slp, $0.date) }
+        return history.entries.last.map { ($0.value, $0.date) }
     }
 
     init() {
@@ -160,8 +164,9 @@ final class BarometerManager: ObservableObject {
     /// One point per station observation: refreshes that carry the same (frozen)
     /// METAR are skipped, so between-report weather change can't bias the offset
     /// and the retained points genuinely span hours (what drift fitting needs).
-    func attemptCalibration(metarSLP: Double, observedAt: Date? = nil) {
-        lastMetarSLP = metarSLP
+    func attemptCalibration(stationAltim: Double, tempC: Double? = nil, observedAt: Date? = nil) {
+        lastStationAltim = stationAltim
+        lastStationTempC = tempC ?? lastStationTempC
         lastMetarObsTime = observedAt
         if let observedAt, model.containsObservation(observedAt) { return }
         guard gate.isStationary else { return }
@@ -169,7 +174,7 @@ final class BarometerManager: ObservableObject {
         let phonePressureMaybe = observedAt.map { buffer.averageStationPressure(around: $0) }
             ?? buffer.averageStationPressure()
         guard let phonePressure = phonePressureMaybe else { return }
-        let point = CalibrationState.make(metarSLP: metarSLP, phonePressureHPa: phonePressure,
+        let point = CalibrationState.make(stationAltim: stationAltim, phonePressureHPa: phonePressure,
                                           obsTime: observedAt)
         let didReset = model.add(point)
         lastResetWasAltitude = didReset
@@ -199,14 +204,14 @@ final class BarometerManager: ObservableObject {
         saveModel()
         saveHistory()
         refreshDerivedState()
-        if let slp = lastMetarSLP { attemptCalibration(metarSLP: slp, observedAt: lastMetarObsTime) }
+        if let slp = lastStationAltim { attemptCalibration(stationAltim: slp, observedAt: lastMetarObsTime) }
     }
 
     // MARK: - On-demand measurement
 
     /// The result of a user-triggered "Measure now" reading.
     struct ManualMeasurement: Equatable {
-        let slp: Double?     // calibrated SLP-equivalent, nil if not calibrated yet
+        let altim: Double?   // calibrated altimeter-setting equivalent, nil if not calibrated yet
         let rawHPa: Double?  // raw station pressure sampled, nil if no sensor data
         let hadMotion: Bool  // device was moving during the reading
         let recorded: Bool   // stored to the persisted trace (shows on the chart)
@@ -218,11 +223,11 @@ final class BarometerManager: ObservableObject {
     /// but is NEVER folded into calibration (it doesn't touch the offset or the
     /// calibration buffer), so a bumpy reading can't corrupt the live value.
     @discardableResult
-    func measureNow(stationSLP: Double? = nil, observedAt: Date? = nil) async -> ManualMeasurement {
+    func measureNow(stationAltim: Double? = nil, observedAt: Date? = nil) async -> ManualMeasurement {
         // Keep the latest station SLP fresh so calibration bootstrap works even before
         // the passive calibration path has run (e.g. right after first launch).
-        if let stationSLP {
-            lastMetarSLP = stationSLP
+        if let stationAltim {
+            lastStationAltim = stationAltim
             lastMetarObsTime = observedAt
         }
 
@@ -233,7 +238,7 @@ final class BarometerManager: ObservableObject {
         // genuinely noisy sample — real vertical movement (stairs, elevator, a car) —
         // counts as "moving". Falls back to the gate only if too few samples arrived.
         guard let stats = await sampleAltimeterOnce(seconds: 3) else {
-            return ManualMeasurement(slp: nil, rawHPa: nil,
+            return ManualMeasurement(altim: nil, rawHPa: nil,
                                      hadMotion: !gate.isStationary, recorded: false)
         }
         let steady = stats.count >= 2 ? stats.spread < Self.steadySpreadHPa
@@ -248,39 +253,39 @@ final class BarometerManager: ObservableObject {
         // GPS altitude + ISA reduction (approximate) so a deliberate tap always
         // produces a value rather than silently doing nothing.
         if model.offset == nil, !moving {
-            if let metar = lastMetarSLP {
-                model.add(CalibrationState.make(metarSLP: metar, phonePressureHPa: raw,
+            if let metar = lastStationAltim {
+                model.add(CalibrationState.make(stationAltim: metar, phonePressureHPa: raw,
                                                 at: now, obsTime: lastMetarObsTime))
                 provisionalOffset = nil
                 syncOutputs()
                 saveModel()
                 Task { await updateReferenceAltitude() }
             } else if provisionalOffset == nil, let fix = await sampleAltitude() {
-                provisionalOffset = PressureAltitude.standardSLP(rawHPa: raw,
+                provisionalOffset = PressureAltitude.altimeterSetting(rawHPa: raw,
                                                                  altitudeM: fix.meters) - raw
             }
         }
 
-        let calibratedSLP = model.slpEquivalent(for: raw, at: now)
-        let slp = calibratedSLP ?? provisionalOffset.map { raw + $0 }
+        let calibratedValue = model.calibrated(for: raw, at: now)
+        let slp = calibratedValue ?? provisionalOffset.map { raw + $0 }
 
         var recorded = false
         if let slp {
             // Log deliberate taps (force past the downsample throttle) — but only
             // METAR-calibrated values enter the persisted history; the GPS bootstrap
             // drives the live display without contaminating the log.
-            if calibratedSLP != nil, history.record(slp: slp, at: now, force: true) {
+            if calibratedValue != nil, history.record(value: slp, at: now, force: true) {
                 saveHistory()
                 recorded = true
             }
             // Feed calibration ONLY when still — a moving reading is excluded.
             if !moving {
                 buffer.add(BarometerSample(date: now, stationPressureHPa: raw,
-                                           slpEquivalent: slp, trusted: true))
+                                           calibrated: slp, trusted: true))
             }
         }
         refreshDerivedState()
-        return ManualMeasurement(slp: slp, rawHPa: raw, hadMotion: moving, recorded: recorded)
+        return ManualMeasurement(altim: slp, rawHPa: raw, hadMotion: moving, recorded: recorded)
     }
 
     /// Background one-shot recalibration for BGAppRefreshTask. Unlike the live path
@@ -288,8 +293,8 @@ final class BarometerManager: ObservableObject {
     /// *historical* activity, takes a brief altimeter sample, and folds it into the
     /// calibration model. No-op if the sensor is unavailable or the device wasn't
     /// recently still. Does its own start/stop — independent of the live session.
-    func recalibrateInBackground(metarSLP: Double, observedAt: Date? = nil) async {
-        lastMetarSLP = metarSLP
+    func recalibrateInBackground(stationAltim: Double, observedAt: Date? = nil) async {
+        lastStationAltim = stationAltim
         lastMetarObsTime = observedAt
         if let observedAt, model.containsObservation(observedAt) { return }
         guard CMAltimeter.isRelativeAltitudeAvailable() else { return }
@@ -297,11 +302,11 @@ final class BarometerManager: ObservableObject {
         guard let stats = await sampleAltimeterOnce() else { return }
         let pressure = stats.mean
         let now = Date()
-        model.add(CalibrationState.make(metarSLP: metarSLP, phonePressureHPa: pressure,
+        model.add(CalibrationState.make(stationAltim: stationAltim, phonePressureHPa: pressure,
                                         at: now, obsTime: observedAt))
         syncOutputs()
         saveModel()
-        if let slp = model.slpEquivalent(for: pressure, at: now), history.record(slp: slp, at: now) {
+        if let slp = model.calibrated(for: pressure, at: now), history.record(value: slp, at: now) {
             saveHistory()
         }
     }
@@ -327,13 +332,13 @@ final class BarometerManager: ObservableObject {
         while t < anchorDate {
             let hrs = t.timeIntervalSince(start) / 3600.0
             let wave = 2.0 * sin(2 * .pi * hrs / 26.0 - 0.5) + 0.4 * sin(2 * .pi * hrs / 12.0)
-            seeded.record(slp: anchorVal + wave + offset, at: t, force: true)
+            seeded.record(value: anchorVal + wave + offset, at: t, force: true)
             t = t.addingTimeInterval(20 * 60)
         }
         // Real observed points as the recent phone trace (offset + a touch of jitter).
         for (d, v) in real {
             let jitter = 0.04 * sin(d.timeIntervalSince(start) / 600.0)
-            seeded.record(slp: v + offset + jitter, at: d, force: true)
+            seeded.record(value: v + offset + jitter, at: d, force: true)
         }
 
         objectWillChange.send()
@@ -449,7 +454,8 @@ final class BarometerManager: ObservableObject {
         let dh = fix.meters - ref
         guard abs(dh) >= Self.minBridgeMeters else { return }
 
-        model.shiftOffsets(by: dh * PressureAltitude.hPaPerMeter)
+        let p = buffer.samples.last?.stationPressureHPa ?? 1000.0
+        model.shiftOffsets(by: dh * PressureAltitude.lapseHPaPerMeter(pressureHPa: p, tempC: lastStationTempC))
         referenceAltitudeM = fix.meters
         saveReferenceAltitude()
         lastResetWasAltitude = false
@@ -465,7 +471,7 @@ final class BarometerManager: ObservableObject {
         guard model.offset == nil, provisionalOffset == nil, gate.isStationary else { return }
         guard let stats = await sampleAltimeterOnce(seconds: 2) else { return }
         guard let fix = await sampleAltitude() else { return }
-        provisionalOffset = PressureAltitude.standardSLP(rawHPa: stats.mean,
+        provisionalOffset = PressureAltitude.altimeterSetting(rawHPa: stats.mean,
                                                          altitudeM: fix.meters) - stats.mean
         refreshDerivedState()
     }
@@ -596,21 +602,21 @@ final class BarometerManager: ObservableObject {
         // itself; only "moving AND pressure changing fast" is truly unknowable
         // (can't split altitude from weather) and gets discarded.
         let trusted = stationary || buffer.isCleanWhileMoving(candidateHPa: pressureHPa, at: now)
-        let calibratedSLP = trusted ? model.slpEquivalent(for: pressureHPa, at: now) : nil
+        let calibratedValue = trusted ? model.calibrated(for: pressureHPa, at: now) : nil
         // The GPS bootstrap drives the live value too, but is kept out of the
         // persisted history — only METAR-calibrated points are logged.
-        let slpEquiv = calibratedSLP
+        let calValue = calibratedValue
             ?? (trusted ? provisionalOffset.map { pressureHPa + $0 } : nil)
         buffer.add(BarometerSample(
             date: now,
             stationPressureHPa: pressureHPa,
-            slpEquivalent: slpEquiv,
+            calibrated: calValue,
             trusted: trusted,
             stationary: stationary
         ))
         // Feed the persisted long-horizon log only with trusted, calibrated readings.
         // record() downsamples internally; persist only when a point was actually stored.
-        if let slp = calibratedSLP, history.record(slp: slp, at: now) {
+        if let slp = calibratedValue, history.record(value: slp, at: now) {
             saveHistory()
         }
         refreshDerivedState()
@@ -618,7 +624,7 @@ final class BarometerManager: ObservableObject {
 
     private func backfillCalibration() {
         for i in buffer.samples.indices where buffer.samples[i].trusted {
-            buffer.samples[i].slpEquivalent = model.slpEquivalent(
+            buffer.samples[i].calibrated = model.calibrated(
                 for: buffer.samples[i].stationPressureHPa, at: buffer.samples[i].date)
         }
     }
@@ -630,9 +636,9 @@ final class BarometerManager: ObservableObject {
         // through an elevator ride.
         if model.offset != nil || provisionalOffset != nil,
            let latest = buffer.samples.last, latest.trusted {
-            latestLocalSLP = effectiveSLP(for: latest.stationPressureHPa, at: latest.date)
+            latestLocalAltim = effectiveCalibrated(for: latest.stationPressureHPa, at: latest.date)
         } else {
-            latestLocalSLP = nil
+            latestLocalAltim = nil
         }
         microTrend = buffer.microTrend()
     }

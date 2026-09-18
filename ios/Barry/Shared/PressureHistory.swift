@@ -1,7 +1,7 @@
 //  PressureHistory.swift
 //  Barry — Shared
 //
-//  A persisted, downsampled rolling log of calibrated phone SLP readings (brief Task 2).
+//  A persisted, downsampled rolling log of calibrated phone readings (brief Task 2).
 //
 //  BarometerManager's in-memory SampleBuffer only spans ~60 min and resets on relaunch.
 //  PressureHistory is the long-horizon companion: one point every few minutes, retained
@@ -15,10 +15,10 @@ import Foundation
 
 // MARK: - PressureLogEntry
 
-/// One stored calibrated reading: the SLP-equivalent the app believed at `date`.
+/// One stored calibrated reading: the altimeter-setting equivalent at `date`.
 struct PressureLogEntry: Equatable, Codable {
     let date: Date
-    let slp: Double  // calibrated SLP-equivalent (hPa)
+    let value: Double  // calibrated altimeter-setting equivalent (hPa)
 }
 
 // MARK: - PressureHistory
@@ -45,13 +45,13 @@ struct PressureHistory: Equatable, Codable {
     /// (non-positive Δt) are always ignored. `force` bypasses the downsample throttle
     /// (but not the ordering guard) for deliberate, user-triggered "measure now" taps.
     @discardableResult
-    mutating func record(slp: Double, at date: Date, force: Bool = false) -> Bool {
+    mutating func record(value: Double, at date: Date, force: Bool = false) -> Bool {
         if let last = entries.last {
             let dt = date.timeIntervalSince(last.date)
             if dt <= 0 { return false }                              // out-of-order / duplicate
             if !force && dt < Self.minSampleInterval { return false } // downsample
         }
-        entries.append(PressureLogEntry(date: date, slp: slp))
+        entries.append(PressureLogEntry(date: date, value: value))
         prune(now: date)
         return true
     }
@@ -67,6 +67,6 @@ struct PressureHistory: Equatable, Codable {
 
     /// Charting trace, oldest → newest, as (Date, SLP) pairs.
     func trace() -> [(Date, Double)] {
-        entries.map { ($0.date, $0.slp) }
+        entries.map { ($0.date, $0.value) }
     }
 }

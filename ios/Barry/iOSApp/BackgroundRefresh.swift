@@ -41,9 +41,9 @@ enum BackgroundRefresh {
     static func run(store: PressureStore, barometer: BarometerManager,
                     sensorEnabled: Bool, stormAlertsEnabled: Bool) async {
         await store.load()
-        if sensorEnabled, let slp = store.combined?.currentPressure {
+        if sensorEnabled, let ref = store.combined?.calibrationReference {
             await barometer.recalibrateInBackground(
-                metarSLP: slp,
+                stationAltim: ref,
                 observedAt: store.combined?.observedSeries.last?.t)
         }
         // Fresh reading in hand — check whether it just turned stormy.

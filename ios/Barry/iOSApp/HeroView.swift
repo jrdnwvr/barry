@@ -42,12 +42,13 @@ struct HeroView: View {
     /// from the same period as the last station report (or within the last hour),
     /// capped so a stale reading can't masquerade. Deliberately does NOT require the
     /// device to be stationary right now, so moving the phone doesn't hide it.
-    private var localReading: (slp: Double, at: Date)? {
+    private var localReading: (value: Double, at: Date)? {
         guard barometerEnabled, barometer.isCalibrated || barometer.isProvisional,
               let r = barometer.lastLocalReading else { return nil }
         let sameMetarPeriod = r.at >= lastMetarTime || now.timeIntervalSince(r.at) <= 3600
         let notAncient = now.timeIntervalSince(r.at) <= 2 * 3600
-        return (sameMetarPeriod && notAncient) ? r : nil
+        guard sameMetarPeriod && notAncient else { return nil }
+        return (combined.displayValue(fromLocalAltim: r.altim), r.at)
     }
 
     /// The reported altimeter setting wins at the airport; it is the number
@@ -57,7 +58,7 @@ struct HeroView: View {
     private var isLocal: Bool { localReading != nil && !showsAltimeter }
     private var displayValue: Double? {
         if showsAltimeter { return combined.pressure.current.altim }
-        return localReading?.slp ?? combined.currentPressure
+        return localReading?.value ?? combined.currentPressure
     }
 
     /// The words under the number can roll up (a tap on the chevron or the
@@ -248,7 +249,7 @@ struct HeroView: View {
 
     /// "station 29.92 · phone −0.04" — how far the phone has moved off the station.
     private var comparisonText: String? {
-        guard let local = localReading?.slp, let station = combined.currentPressure else { return nil }
+        guard let local = localReading?.value, let station = combined.currentPressure else { return nil }
         let diff = unit.convertDelta(local - station)
         let dp = unit == .inHg ? 3 : 1
         let mag = String(format: "%.\(dp)f", abs(diff))

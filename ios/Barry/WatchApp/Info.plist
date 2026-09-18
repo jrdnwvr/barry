@@ -26,6 +26,8 @@
     <true/>
     <key>WKCompanionAppBundleIdentifier</key>
     <string>me.wvr.barry</string>
+    <key>NSMotionUsageDescription</key>
+    <string>Barry reads the watch barometer for a local pressure reading between station reports.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Barry uses your location to find the nearest weather-reporting station.</string>
     <!-- Backend endpoint. Production: self-hosted backend behind the Cloudflare

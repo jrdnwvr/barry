@@ -25,9 +25,11 @@
 		17B2F3F6A33ED2C6DB766640 /* ForecastCaveatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031482E889A2274CBD689E88 /* ForecastCaveatView.swift */; };
 		20AD2A1B5CC1C7738EAEF8F5 /* StormAlerter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E569F3B3B9FAB65C07970B1A /* StormAlerter.swift */; };
 		25F2CA5D0A085C6A963656C0 /* TendencyProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A24A6845ECB66698D61771D /* TendencyProvider.swift */; };
+		270E209661CB57713C9B71F5 /* BarometerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA32F779F49D1C628F2BC52E /* BarometerEngine.swift */; };
 		2C56C28A6BD13F7F21CA306B /* BarryWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = F776D233FE3E44CDDD61C05B /* BarryWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2D039F6DE65B45CABECF405F /* SavedLocations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */; };
 		2D0CD865C6748C6CBA5D63AB /* PressureUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D967187F3CE6292310A2937 /* PressureUnit.swift */; };
+		2D7A5E61DF49C1DD1C90956C /* BarometerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA32F779F49D1C628F2BC52E /* BarometerEngine.swift */; };
 		2D8B5E2682CB6128237923B4 /* RangeAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EBD287C6CB46A536198173F /* RangeAnalysis.swift */; };
 		2FC7F63C72023A1812F99D63 /* RangeAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EBD287C6CB46A536198173F /* RangeAnalysis.swift */; };
 		2FF2F39288A0E15C1D7C4E43 /* BarryComplication.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5B1CE5EDD6706AFE35F1B6D9 /* BarryComplication.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -96,7 +98,6 @@
 		B5956053A3566C6DBCDAAF14 /* StationLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3DE49EE7CDCB4E59BB8E97F /* StationLayer.swift */; };
 		C1FA94A165B7428939C8372D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CD077DE63D0DE437229C43CC /* Assets.xcassets */; };
 		C2BB4B03167622269DA26352 /* PressureFieldOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 763CE62FEE3C1CA173ABA1C3 /* PressureFieldOverlay.swift */; };
-		C64D83BB7F2009F4F3BE2D7F /* BarometerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AF1347518FFA7C2430E8A95 /* BarometerEngine.swift */; };
 		D21F7D7C1B619DD998B3C235 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0094727B647701DDDCF17BD2 /* LocationManager.swift */; };
 		D3CCE6CB0DB066A238922179 /* BarryAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */; };
 		DACD1A75954EE1A27EDEC976 /* BarryApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B8FF4A39677C2C8F46B98F7 /* BarryApp.swift */; };
@@ -105,7 +106,9 @@
 		E1DA0A2BA6D5DAE408366B62 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EB1F388C1A5FE3D18F1D62E /* ContentView.swift */; };
 		E1F631B6FE1E863E001704F2 /* SharedSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */; };
 		EF29D661015A900FB9D47F02 /* RunwayWindsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F83C3064588614F2B8DEAA34 /* RunwayWindsView.swift */; };
+		F0637246A729C97719EA086D /* BarometerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA32F779F49D1C628F2BC52E /* BarometerEngine.swift */; };
 		F1A6FC2E3347FCA151FA44A1 /* CoreMotion.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 292532F4A2C2D5C39CC797B1 /* CoreMotion.framework */; };
+		F90B1CA7A19C349CE3049023 /* BarometerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA32F779F49D1C628F2BC52E /* BarometerEngine.swift */; };
 		F9FAEAFFE5323B1757725A34 /* WatchContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A4A8464736F548F6F72A42 /* WatchContentView.swift */; };
 /* End PBXBuildFile section */
 
@@ -191,7 +194,6 @@
 		252EE81999FF16293FA0CF7A /* LightningOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightningOverlay.swift; sourceTree = "<group>"; };
 		2542DA2C850B2399B31A9069 /* Tendency.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tendency.swift; sourceTree = "<group>"; };
 		292532F4A2C2D5C39CC797B1 /* CoreMotion.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMotion.framework; path = System/Library/Frameworks/CoreMotion.framework; sourceTree = SDKROOT; };
-		2AF1347518FFA7C2430E8A95 /* BarometerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarometerEngine.swift; sourceTree = "<group>"; };
 		2BB3C628CF8662B6BEF5A73F /* BarryWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryWatchApp.swift; sourceTree = "<group>"; };
 		34019275BE3EADB1E1E1739B /* BarryPhoneWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BarryPhoneWidget.entitlements; sourceTree = "<group>"; };
 		35839C2045A30D70938041B6 /* FrontsOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontsOverlay.swift; sourceTree = "<group>"; };
@@ -248,6 +250,7 @@
 		F4F0EF3938BA8F192FB71228 /* WatchSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSettingsView.swift; sourceTree = "<group>"; };
 		F776D233FE3E44CDDD61C05B /* BarryWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BarryWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F83C3064588614F2B8DEAA34 /* RunwayWindsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayWindsView.swift; sourceTree = "<group>"; };
+		FA32F779F49D1C628F2BC52E /* BarometerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarometerEngine.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -287,6 +290,7 @@
 			isa = PBXGroup;
 			children = (
 				5C59EF4878E06062DC20D1D7 /* AppConfig.swift */,
+				FA32F779F49D1C628F2BC52E /* BarometerEngine.swift */,
 				77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */,
 				0094727B647701DDDCF17BD2 /* LocationManager.swift */,
 				918B4D14CC966B0E820FC1AC /* Models.swift */,
@@ -367,7 +371,6 @@
 			children = (
 				CD077DE63D0DE437229C43CC /* Assets.xcassets */,
 				7CB1EFCBAEC1FFFB0EF24917 /* BackgroundRefresh.swift */,
-				2AF1347518FFA7C2430E8A95 /* BarometerEngine.swift */,
 				02CC4610E9A811E4A3554DCB /* BarometerManager.swift */,
 				9639018DA53DA80272AC71E9 /* Barry.entitlements */,
 				4B8FF4A39677C2C8F46B98F7 /* BarryApp.swift */,
@@ -591,6 +594,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				56B07C1F7EC0EC1BF3B731E8 /* AppConfig.swift in Sources */,
+				2D7A5E61DF49C1DD1C90956C /* BarometerEngine.swift in Sources */,
 				571426E9EFB2689033DDB2CD /* BarryAPI.swift in Sources */,
 				31549614253BF1B636E51ED3 /* BarryComplication.swift in Sources */,
 				55E5298970D9B65C1E5B4F44 /* ComplicationDial.swift in Sources */,
@@ -615,6 +619,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4BBFD392779CDC66E4252928 /* AppConfig.swift in Sources */,
+				F0637246A729C97719EA086D /* BarometerEngine.swift in Sources */,
 				A11B605E76613C43AC5FE11E /* BarryAPI.swift in Sources */,
 				811727C7296B6B80F9E3F81C /* BarryPhoneWidget.swift in Sources */,
 				772708512B575F16B6A02B14 /* LocationManager.swift in Sources */,
@@ -638,7 +643,7 @@
 			files = (
 				A63CCB08373B1B5AE4CC5897 /* AppConfig.swift in Sources */,
 				A977EEB6ABB925E5A2B2B549 /* BackgroundRefresh.swift in Sources */,
-				C64D83BB7F2009F4F3BE2D7F /* BarometerEngine.swift in Sources */,
+				F90B1CA7A19C349CE3049023 /* BarometerEngine.swift in Sources */,
 				8F156D0C3F3371A2376F2394 /* BarometerManager.swift in Sources */,
 				D3CCE6CB0DB066A238922179 /* BarryAPI.swift in Sources */,
 				DACD1A75954EE1A27EDEC976 /* BarryApp.swift in Sources */,
@@ -688,6 +693,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5976B0374D4F59B1A90268F5 /* AppConfig.swift in Sources */,
+				270E209661CB57713C9B71F5 /* BarometerEngine.swift in Sources */,
 				42482AB94F1FE3D8035354D9 /* BarryAPI.swift in Sources */,
 				4B47718B22FC9723FF410F76 /* BarryWatchApp.swift in Sources */,
 				B0ED75F3A2F54154E9DC25F8 /* LocationManager.swift in Sources */,

@@ -20,7 +20,9 @@ struct SensorComparisonView: View {
     @ObservedObject var barometer: BarometerManager
 
     /// Calibrated phone SLP history, oldest → newest.
-    private var history: [(Date, Double)] { barometer.phoneHistoryTrace }
+    private var history: [(Date, Double)] {
+        barometer.phoneHistoryTrace.map { ($0.0, combined.displayValue(fromLocalAltim: $0.1)) }
+    }
 
     @State private var window: ComparisonWindow = .hours6
     @State private var measuring = false
@@ -124,7 +126,7 @@ struct SensorComparisonView: View {
             if let r = lastResult {
                 Text(resultMessage(r))
                     .font(.caption2)
-                    .foregroundStyle(r.hadMotion || r.slp == nil ? .orange : .secondary)
+                    .foregroundStyle(r.hadMotion || r.altim == nil ? .orange : .secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -136,7 +138,7 @@ struct SensorComparisonView: View {
 
     private func runMeasure() async {
         measuring = true
-        lastResult = await barometer.measureNow(stationSLP: combined.currentPressure,
+        lastResult = await barometer.measureNow(stationAltim: combined.calibrationReference,
                                                 observedAt: combined.observedSeries.last?.t)
         measuring = false
     }
@@ -145,10 +147,10 @@ struct SensorComparisonView: View {
         if r.rawHPa == nil {
             return "Couldn't get a sensor reading. This needs a real device, held still for a moment."
         }
-        guard let slp = r.slp else {
+        guard let altim = r.altim else {
             return "Measured, but Barry couldn't calibrate to the station yet. Hold the phone still and try again."
         }
-        let shown = String(format: unit == .hPa ? "%.0f" : "%.2f", unit.convert(slp))
+        let shown = String(format: unit == .hPa ? "%.0f" : "%.2f", unit.convert(combined.displayValue(fromLocalAltim: altim)))
         if r.hadMotion {
             return "Logged \(shown) \(unit.label) while moving. It's on the chart but left out of calibration."
         }
@@ -346,7 +348,7 @@ struct SensorStationRow: View {
     @ObservedObject var barometer: BarometerManager
 
     private var divergence: Double? {
-        sensorStationDivergence(history: barometer.phoneHistoryTrace, combined: combined)
+        sensorStationDivergence(history: barometer.phoneHistoryTrace.map { ($0.0, combined.displayValue(fromLocalAltim: $0.1)) }, combined: combined)
     }
 
     var body: some View {

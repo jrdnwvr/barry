@@ -14,7 +14,13 @@ final class PhoneSync: NSObject, WCSessionDelegate {
     static let shared = PhoneSync()
 
     /// Called on the main actor whenever the phone's choice changes.
-    var onUpdate: ((_ station: String, _ airportSelected: Bool) -> Void)?
+    var onUpdate: ((_ station: String, _ airportSelected: Bool, _ physical: Bool) -> Void)?
+
+    /// Whether the phone is within Bluetooth or Wi-Fi reach right now. False on
+    /// a cellular watch left behind; the watch then finds its own station.
+    var isPhoneReachable: Bool {
+        WCSession.isSupported() && WCSession.default.activationState == .activated && WCSession.default.isReachable
+    }
 
     func activate() {
         guard WCSession.isSupported() else { return }
@@ -25,21 +31,24 @@ final class PhoneSync: NSObject, WCSessionDelegate {
     }
 
     /// The last choice the phone sent, from this device's store.
-    static var stored: (station: String, airportSelected: Bool)? {
+    static var stored: (station: String, airportSelected: Bool, physical: Bool)? {
         let d = AppConfig.sharedDefaults
         guard let st = d.string(forKey: AppConfig.syncStationKey) else { return nil }
-        return (st, d.bool(forKey: AppConfig.syncAirportSelectedKey))
+        return (st, d.bool(forKey: AppConfig.syncAirportSelectedKey), d.bool(forKey: AppConfig.syncPhysicalKey))
     }
 
     private func apply(_ ctx: [String: Any]) {
         guard let station = ctx[AppConfig.syncStationKey] as? String, !station.isEmpty else { return }
         let selected = ctx[AppConfig.syncAirportSelectedKey] as? Bool ?? false
+        let physical = ctx[AppConfig.syncPhysicalKey] as? Bool ?? false
         let d = AppConfig.sharedDefaults
         let changed = d.string(forKey: AppConfig.syncStationKey) != station
             || d.bool(forKey: AppConfig.syncAirportSelectedKey) != selected
+            || d.bool(forKey: AppConfig.syncPhysicalKey) != physical
         d.set(station, forKey: AppConfig.syncStationKey)
         d.set(selected, forKey: AppConfig.syncAirportSelectedKey)
-        if changed { onUpdate?(station, selected) }
+        d.set(physical, forKey: AppConfig.syncPhysicalKey)
+        if changed { onUpdate?(station, selected, physical) }
     }
 
     // MARK: WCSessionDelegate

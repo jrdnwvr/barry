@@ -37,6 +37,9 @@ enum AppConfig {
     /// complication agree on the station and on whether an airport is chosen.
     static let syncStationKey = "homeStation"
     static let syncAirportSelectedKey = "airportSelected"
+    /// True when the phone's selection is "My location": the station is where
+    /// the wearer physically is, so the watch barometer may calibrate against it.
+    static let syncPhysicalKey = "selectionPhysical"
 }
 
 /// How Barry chooses the "where am I" coordinates for forecast + station lookup.

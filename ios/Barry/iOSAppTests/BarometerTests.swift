@@ -17,9 +17,9 @@ struct BarometerTests {
     // Subsequent phone reading 989 → phone_slp_equiv = 1013.
 
     @Test func datumCorrection() {
-        let cal = CalibrationState.make(metarSLP: 1014, phonePressureHPa: 990)
+        let cal = CalibrationState.make(stationAltim: 1014, phonePressureHPa: 990)
         #expect(cal.offset == 24.0)
-        #expect(cal.slpEquivalent(for: 989) == 1013.0)
+        #expect(cal.calibrated(for: 989) == 1013.0)
     }
 
     // MARK: §4.5.7 Test 2 — Elevator spike rejected
@@ -32,7 +32,7 @@ struct BarometerTests {
         var gate = MotionGate(state: .stationary)
         var buffer = SampleBuffer()
         let t0 = Date(timeIntervalSince1970: 1_000_000)
-        let cal = CalibrationState.make(metarSLP: 1014, phonePressureHPa: 990, at: t0)
+        let cal = CalibrationState.make(stationAltim: 1014, phonePressureHPa: 990, at: t0)
 
         // Five stationary baseline samples.
         for i in 0..<5 {
@@ -40,7 +40,7 @@ struct BarometerTests {
             buffer.add(BarometerSample(
                 date: t0.addingTimeInterval(Double(i) * 60),
                 stationPressureHPa: p,
-                slpEquivalent: cal.slpEquivalent(for: p),
+                calibrated: cal.calibrated(for: p),
                 trusted: gate.isStationary
             ))
         }
@@ -58,7 +58,7 @@ struct BarometerTests {
             buffer.add(BarometerSample(
                 date: t0.addingTimeInterval(Double(i) * 30),
                 stationPressureHPa: spikedPressure,
-                slpEquivalent: nil,   // no calibration while moving
+                calibrated: nil,   // no calibration while moving
                 trusted: gate.isStationary
             ))
         }
@@ -101,25 +101,25 @@ struct BarometerTests {
 
     // MARK: §4.5.7 Test 4 — Uncalibrated mode
     //
-    // Without a calibration applied, slpEquivalent is nil on all samples.
+    // Without a calibration applied, calibrated is nil on all samples.
     // microTrend() must return nil — no absolute-axis value exposed.
 
     @Test func uncalibratedModeNoMicroTrend() {
         var buffer = SampleBuffer()
         let t0 = Date(timeIntervalSince1970: 1_000_000)
 
-        // Add 10 stationary samples but with no slpEquivalent (uncalibrated).
+        // Add 10 stationary samples but with no calibrated (uncalibrated).
         for i in 0..<10 {
             buffer.add(BarometerSample(
                 date: t0.addingTimeInterval(Double(i) * 60),
                 stationPressureHPa: 990.0,
-                slpEquivalent: nil,  // ← uncalibrated
+                calibrated: nil,  // ← uncalibrated
                 trusted: true
             ))
         }
 
         #expect(buffer.trustedSamples().isEmpty,
-                "trustedSamples() filters out samples without slpEquivalent")
+                "trustedSamples() filters out samples without calibrated")
         #expect(buffer.microTrend() == nil,
                 "No micro-trend without calibration")
         #expect(buffer.phoneTrace().isEmpty,
@@ -134,7 +134,7 @@ struct BarometerTests {
     @Test func realLocalFallSurfaces() {
         var buffer = SampleBuffer()
         let t0 = Date(timeIntervalSince1970: 1_000_000)
-        let cal = CalibrationState.make(metarSLP: 1014, phonePressureHPa: 990, at: t0)
+        let cal = CalibrationState.make(stationAltim: 1014, phonePressureHPa: 990, at: t0)
 
         // 9 samples over 40 min, pressure falling 0.1 hPa per step (−0.8 total).
         for i in 0...8 {
@@ -142,7 +142,7 @@ struct BarometerTests {
             buffer.add(BarometerSample(
                 date: t0.addingTimeInterval(Double(i) * 5 * 60),  // every 5 min
                 stationPressureHPa: phonePressure,
-                slpEquivalent: cal.slpEquivalent(for: phonePressure),
+                calibrated: cal.calibrated(for: phonePressure),
                 trusted: true
             ))
         }
@@ -163,7 +163,7 @@ struct BarometerTests {
         // Stationary samples jittering ±1 hPa around 1000 over 4 min → mean 1000.
         for (i, v) in [999.0, 1001.0, 1000.0, 1001.0, 999.0].enumerated() {
             buffer.add(BarometerSample(date: t0.addingTimeInterval(Double(i) * 60),
-                                       stationPressureHPa: v, slpEquivalent: nil, trusted: true))
+                                       stationPressureHPa: v, calibrated: nil, trusted: true))
         }
         #expect(abs((buffer.averageStationPressure() ?? 0) - 1000.0) < 1e-9)
     }
@@ -173,15 +173,15 @@ struct BarometerTests {
         let t0 = Date(timeIntervalSince1970: 1_000_000)
         // Stationary but 10 min before the latest → outside the 5-min window.
         buffer.add(BarometerSample(date: t0, stationPressureHPa: 950.0,
-                                   slpEquivalent: nil, trusted: true))
+                                   calibrated: nil, trusted: true))
         // Untrusted (moving) spike inside the window → excluded.
         buffer.add(BarometerSample(date: t0.addingTimeInterval(540), stationPressureHPa: 800.0,
-                                   slpEquivalent: nil, trusted: false))
+                                   calibrated: nil, trusted: false))
         // Two trusted samples inside the window → averaged (1000, 1002 → 1001).
         buffer.add(BarometerSample(date: t0.addingTimeInterval(560), stationPressureHPa: 1000.0,
-                                   slpEquivalent: nil, trusted: true))
+                                   calibrated: nil, trusted: true))
         buffer.add(BarometerSample(date: t0.addingTimeInterval(600), stationPressureHPa: 1002.0,
-                                   slpEquivalent: nil, trusted: true))
+                                   calibrated: nil, trusted: true))
         #expect(buffer.averageStationPressure() == 1001.0)
     }
 
@@ -192,12 +192,12 @@ struct BarometerTests {
     // MARK: - Bonus: altitude-jump detection resets buffer
 
     @Test func altitudeJumpDetected() {
-        let existing = CalibrationState.make(metarSLP: 1014, phonePressureHPa: 990)
-        let afterElevator = CalibrationState.make(metarSLP: 1014, phonePressureHPa: 975)
+        let existing = CalibrationState.make(stationAltim: 1014, phonePressureHPa: 990)
+        let afterElevator = CalibrationState.make(stationAltim: 1014, phonePressureHPa: 975)
         #expect(isAltitudeJump(from: existing, to: afterElevator),
                 "A 15-hPa station-pressure shift should register as an altitude jump")
 
-        let normalRecal = CalibrationState.make(metarSLP: 1014, phonePressureHPa: 989)
+        let normalRecal = CalibrationState.make(stationAltim: 1014, phonePressureHPa: 989)
         #expect(!isAltitudeJump(from: existing, to: normalRecal),
                 "A 1-hPa recalibration drift should not trigger an altitude jump")
     }
@@ -207,18 +207,18 @@ struct BarometerTests {
     @Test func modelAveragesOffsets() {
         var m = CalibrationModel()
         let t = Date(timeIntervalSince1970: 1_000_000)
-        m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 990, at: t))                    // +24
-        m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 989,
+        m.add(CalibrationState.make(stationAltim: 1014, phonePressureHPa: 990, at: t))                    // +24
+        m.add(CalibrationState.make(stationAltim: 1014, phonePressureHPa: 989,
                                     at: t.addingTimeInterval(3600)))                                  // +25
         #expect(m.offset == 24.5, "Robust offset (median; = mean for 2 points)")
-        #expect(m.slpEquivalent(for: 990) == 1014.5)
+        #expect(m.calibrated(for: 990) == 1014.5)
     }
 
     @Test func modelAltitudeJumpResetsHistory() {
         var m = CalibrationModel()
         let t = Date(timeIntervalSince1970: 1_000_000)
-        m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 990, at: t))                    // +24
-        let didReset = m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 975,
+        m.add(CalibrationState.make(stationAltim: 1014, phonePressureHPa: 990, at: t))                    // +24
+        let didReset = m.add(CalibrationState.make(stationAltim: 1014, phonePressureHPa: 975,
                                                    at: t.addingTimeInterval(1800)))                   // +39
         #expect(didReset, "A 15-hPa offset jump should reset the model")
         #expect(m.points.count == 1)
@@ -229,10 +229,10 @@ struct BarometerTests {
         var m = CalibrationModel()
         let t = Date(timeIntervalSince1970: 1_000_000)
         // Offset climbing ~1 hPa/hr — slow sensor drift, not an altitude jump.
-        m.add(CalibrationState.make(metarSLP: 1010, phonePressureHPa: 990, at: t))                    // +20
-        m.add(CalibrationState.make(metarSLP: 1011, phonePressureHPa: 990,
+        m.add(CalibrationState.make(stationAltim: 1010, phonePressureHPa: 990, at: t))                    // +20
+        m.add(CalibrationState.make(stationAltim: 1011, phonePressureHPa: 990,
                                     at: t.addingTimeInterval(3600)))                                  // +21
-        m.add(CalibrationState.make(metarSLP: 1012, phonePressureHPa: 990,
+        m.add(CalibrationState.make(stationAltim: 1012, phonePressureHPa: 990,
                                     at: t.addingTimeInterval(7200)))                                  // +22
         #expect((m.driftPerHour ?? 0) > 0.9 && (m.driftPerHour ?? 0) < 1.1,
                 "Drift slope should be ~1 hPa/hr")
@@ -243,8 +243,8 @@ struct BarometerTests {
     @Test func offsetFallsBackToMeanWithoutDrift() {
         var m = CalibrationModel()
         let t = Date(timeIntervalSince1970: 1_000_000)
-        m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 990, at: t))                    // +24
-        m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 989,
+        m.add(CalibrationState.make(stationAltim: 1014, phonePressureHPa: 990, at: t))                    // +24
+        m.add(CalibrationState.make(stationAltim: 1014, phonePressureHPa: 989,
                                     at: t.addingTimeInterval(3600)))                                  // +25
         // Only 2 points → no drift estimate → flat mean.
         #expect(m.offset(at: t.addingTimeInterval(7200)) == 24.5)
@@ -253,10 +253,10 @@ struct BarometerTests {
     @Test func offsetProjectsDriftForward() {
         var m = CalibrationModel()
         let t = Date(timeIntervalSince1970: 1_000_000)
-        m.add(CalibrationState.make(metarSLP: 1010, phonePressureHPa: 990, at: t))                    // +20
-        m.add(CalibrationState.make(metarSLP: 1011, phonePressureHPa: 990,
+        m.add(CalibrationState.make(stationAltim: 1010, phonePressureHPa: 990, at: t))                    // +20
+        m.add(CalibrationState.make(stationAltim: 1011, phonePressureHPa: 990,
                                     at: t.addingTimeInterval(3600)))                                  // +21
-        m.add(CalibrationState.make(metarSLP: 1012, phonePressureHPa: 990,
+        m.add(CalibrationState.make(stationAltim: 1012, phonePressureHPa: 990,
                                     at: t.addingTimeInterval(7200)))                                  // +22  (slope ~1/h)
         // At the last point the trend value ≈ +22 (vs flat mean +21).
         #expect(abs((m.offset(at: t.addingTimeInterval(7200)) ?? 0) - 22.0) < 0.05)
@@ -267,10 +267,10 @@ struct BarometerTests {
     @Test func offsetExtrapolationIsClamped() {
         var m = CalibrationModel()
         let t = Date(timeIntervalSince1970: 1_000_000)
-        m.add(CalibrationState.make(metarSLP: 1010, phonePressureHPa: 990, at: t))                    // +20
-        m.add(CalibrationState.make(metarSLP: 1013, phonePressureHPa: 990,
+        m.add(CalibrationState.make(stationAltim: 1010, phonePressureHPa: 990, at: t))                    // +20
+        m.add(CalibrationState.make(stationAltim: 1013, phonePressureHPa: 990,
                                     at: t.addingTimeInterval(3600)))                                  // +23
-        m.add(CalibrationState.make(metarSLP: 1016, phonePressureHPa: 990,
+        m.add(CalibrationState.make(stationAltim: 1016, phonePressureHPa: 990,
                                     at: t.addingTimeInterval(7200)))                                  // +26  (slope ~3/h)
         let mean = m.offset ?? 0  // 23
         // Far-future projection is clamped to mean ± maxDriftDeviation.
@@ -281,9 +281,9 @@ struct BarometerTests {
     @Test func modelPrunesOldPoints() {
         var m = CalibrationModel()
         let t = Date(timeIntervalSince1970: 1_000_000)
-        m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 990, at: t))
+        m.add(CalibrationState.make(stationAltim: 1014, phonePressureHPa: 990, at: t))
         // 13h later — the first point is older than the 12h window and is pruned.
-        m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 990,
+        m.add(CalibrationState.make(stationAltim: 1014, phonePressureHPa: 990,
                                     at: t.addingTimeInterval(13 * 3600)))
         #expect(m.points.count == 1, "Points older than the retention window are dropped")
     }
@@ -293,10 +293,10 @@ struct BarometerTests {
         let t = Date(timeIntervalSince1970: 1_000_000)
         // Two agreeing points + one 4-hPa outlier (inside the 5-hPa jump gate, so
         // it's retained). Median ignores it; a mean would be dragged ~1.3 hPa.
-        m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 990, at: t))          // +24.0
-        m.add(CalibrationState.make(metarSLP: 1014.2, phonePressureHPa: 990,
+        m.add(CalibrationState.make(stationAltim: 1014, phonePressureHPa: 990, at: t))          // +24.0
+        m.add(CalibrationState.make(stationAltim: 1014.2, phonePressureHPa: 990,
                                     at: t.addingTimeInterval(3600)))                        // +24.2
-        m.add(CalibrationState.make(metarSLP: 1018, phonePressureHPa: 990,
+        m.add(CalibrationState.make(stationAltim: 1018, phonePressureHPa: 990,
                                     at: t.addingTimeInterval(7200)))                        // +28.0 outlier
         #expect(abs((m.offset ?? 0) - 24.2) < 1e-9, "Median resists a single outlier point")
     }
@@ -305,7 +305,7 @@ struct BarometerTests {
         var m = CalibrationModel()
         let t = Date(timeIntervalSince1970: 1_000_000)
         let obs = t.addingTimeInterval(-600)
-        m.add(CalibrationState.make(metarSLP: 1014, phonePressureHPa: 990, at: t, obsTime: obs))
+        m.add(CalibrationState.make(stationAltim: 1014, phonePressureHPa: 990, at: t, obsTime: obs))
         #expect(m.containsObservation(obs), "The paired obs is remembered")
         #expect(!m.containsObservation(obs.addingTimeInterval(3600)),
                 "A new obs is not falsely deduped")
@@ -316,9 +316,9 @@ struct BarometerTests {
         let t = Date(timeIntervalSince1970: 1_000_000)
         // Pressure fell 0.6 hPa between the obs (at t) and "now" (t+30 min).
         b.add(BarometerSample(date: t, stationPressureHPa: 1000.0,
-                              slpEquivalent: nil, trusted: true, stationary: true))
+                              calibrated: nil, trusted: true, stationary: true))
         b.add(BarometerSample(date: t.addingTimeInterval(1800), stationPressureHPa: 999.4,
-                              slpEquivalent: nil, trusted: true, stationary: true))
+                              calibrated: nil, trusted: true, stationary: true))
         // Around the obs time → the reading taken THEN, not the newer one.
         #expect(b.averageStationPressure(around: t) == 1000.0)
         // No samples near a much older obs → falls back to the trailing average.
@@ -401,7 +401,7 @@ struct BarometerTests {
         for i in 0..<6 {
             b.add(BarometerSample(date: t.addingTimeInterval(Double(i) * 20),
                                   stationPressureHPa: 1000.0 + 0.02 * Double(i % 2),
-                                  slpEquivalent: nil, trusted: false, stationary: false))
+                                  calibrated: nil, trusted: false, stationary: false))
         }
         #expect(b.isCleanWhileMoving(candidateHPa: 1000.03, at: t.addingTimeInterval(120)),
                 "Weather-plausible pressure while moving is trusted")
@@ -414,7 +414,7 @@ struct BarometerTests {
         for i in 0..<6 {
             b.add(BarometerSample(date: t.addingTimeInterval(Double(i) * 20),
                                   stationPressureHPa: 1000.0 - 2.4 * Double(i),
-                                  slpEquivalent: nil, trusted: false, stationary: false))
+                                  calibrated: nil, trusted: false, stationary: false))
         }
         #expect(!b.isCleanWhileMoving(candidateHPa: 1000.0 - 2.4 * 6,
                                       at: t.addingTimeInterval(120)),
@@ -429,7 +429,7 @@ struct BarometerTests {
         for i in 0..<20 {
             b.add(BarometerSample(date: t.addingTimeInterval(Double(i) * 30),
                                   stationPressureHPa: 1000.0 + 0.04 * Double(i),
-                                  slpEquivalent: nil, trusted: false, stationary: false))
+                                  calibrated: nil, trusted: false, stationary: false))
         }
         #expect(!b.isCleanWhileMoving(candidateHPa: 1000.8, at: t.addingTimeInterval(600)),
                 "A slow ramp must be caught by the long accumulation window")
@@ -445,9 +445,9 @@ struct BarometerTests {
         var b = SampleBuffer()
         let t = Date(timeIntervalSince1970: 1_000_000)
         b.add(BarometerSample(date: t, stationPressureHPa: 1000.0,
-                              slpEquivalent: 1013.0, trusted: true))
+                              calibrated: 1013.0, trusted: true))
         b.add(BarometerSample(date: t.addingTimeInterval(540), stationPressureHPa: 1000.1,
-                              slpEquivalent: 1013.1, trusted: true))
+                              calibrated: 1013.1, trusted: true))
         // Motion detected at t+600 → only the classifier-lag window is suspect.
         b.untrustRecent(since: t.addingTimeInterval(600 - 90))
         #expect(b.samples[0].trusted, "Old, provably-still data survives")
@@ -459,10 +459,10 @@ struct BarometerTests {
         var b = SampleBuffer()
         let t = Date(timeIntervalSince1970: 1_000_000)
         b.add(BarometerSample(date: t, stationPressureHPa: 1000.0,
-                              slpEquivalent: nil, trusted: true, stationary: true))
+                              calibrated: nil, trusted: true, stationary: true))
         // Carried-clean sample: display-trusted, but NOT calibration-grade.
         b.add(BarometerSample(date: t.addingTimeInterval(60), stationPressureHPa: 1010.0,
-                              slpEquivalent: nil, trusted: true, stationary: false))
+                              calibrated: nil, trusted: true, stationary: false))
         #expect(b.averageStationPressure() == 1000.0,
                 "Carried samples must never feed the calibration offset")
     }
@@ -497,9 +497,9 @@ struct BarometerTests {
 
     @Test func standardAtmosphereReduction() {
         // At sea level the reduction is the identity.
-        #expect(abs(PressureAltitude.standardSLP(rawHPa: 1013.25, altitudeM: 0) - 1013.25) < 1e-9)
+        #expect(abs(PressureAltitude.altimeterSetting(rawHPa: 1013.25, altitudeM: 0) - 1013.25) < 1e-9)
         // At 200 m, SLP ≈ raw + ~23.6 hPa (0.118 hPa/m regime).
-        let slp = PressureAltitude.standardSLP(rawHPa: 990.0, altitudeM: 200)
+        let slp = PressureAltitude.altimeterSetting(rawHPa: 990.0, altitudeM: 200)
         #expect(abs(slp - (990.0 + 200 * PressureAltitude.hPaPerMeter)) < 0.5,
                 "ISA reduction should agree with the linear rate for small heights, got \(slp)")
     }
@@ -512,7 +512,7 @@ struct BarometerTests {
         // Trusted samples arrive every 30s; only points ≥ minSampleInterval apart store.
         var stored = 0
         for i in 0..<20 {
-            if h.record(slp: 1013.0, at: t.addingTimeInterval(Double(i) * 30)) { stored += 1 }
+            if h.record(value: 1013.0, at: t.addingTimeInterval(Double(i) * 30)) { stored += 1 }
         }
         // 20 samples × 30s = 9.5 min span; at a 1-min floor that's the first point
         // plus one roughly every other sample.
@@ -524,21 +524,21 @@ struct BarometerTests {
     @Test func historyThrottlesTooSoonAndOutOfOrder() {
         var h = PressureHistory()
         let t = Date(timeIntervalSince1970: 1_000_000)
-        let first = h.record(slp: 1013.0, at: t)
-        let tooSoon = h.record(slp: 1013.1, at: t.addingTimeInterval(30))
-        let outOfOrder = h.record(slp: 1012.0, at: t.addingTimeInterval(-300))
+        let first = h.record(value: 1013.0, at: t)
+        let tooSoon = h.record(value: 1013.1, at: t.addingTimeInterval(30))
+        let outOfOrder = h.record(value: 1012.0, at: t.addingTimeInterval(-300))
         #expect(first, "First point always stores")
         #expect(!tooSoon, "A point 30s later is throttled (< 1 min)")
         #expect(!outOfOrder, "An out-of-order (earlier) timestamp is ignored")
         #expect(h.entries.count == 1)
 
-        let later = h.record(slp: 1014.0, at: t.addingTimeInterval(90))
+        let later = h.record(value: 1014.0, at: t.addingTimeInterval(90))
         #expect(later, "A point past the 1-min floor stores")
         #expect(h.entries.count == 2)
 
         // `force` bypasses the downsample throttle but not the ordering guard.
-        let forced = h.record(slp: 1014.5, at: t.addingTimeInterval(100), force: true)
-        let forcedOutOfOrder = h.record(slp: 1011.0, at: t.addingTimeInterval(50), force: true)
+        let forced = h.record(value: 1014.5, at: t.addingTimeInterval(100), force: true)
+        let forcedOutOfOrder = h.record(value: 1011.0, at: t.addingTimeInterval(50), force: true)
         #expect(forced, "A forced (manual) point stores even within the 1-min floor")
         #expect(!forcedOutOfOrder, "force does not override the out-of-order guard")
         #expect(h.entries.count == 3)
@@ -549,7 +549,7 @@ struct BarometerTests {
         let t = Date(timeIntervalSince1970: 1_000_000)
         // One point every 30 min across 50 h — older-than-48h points get pruned.
         for i in 0..<100 {
-            h.record(slp: 1013.0, at: t.addingTimeInterval(Double(i) * 30 * 60))
+            h.record(value: 1013.0, at: t.addingTimeInterval(Double(i) * 30 * 60))
         }
         let newest = h.entries.last!.date
         let span = newest.timeIntervalSince(h.entries.first!.date)
@@ -563,9 +563,9 @@ struct BarometerTests {
     @Test func historyTraceIsChronological() {
         var h = PressureHistory()
         let t = Date(timeIntervalSince1970: 1_000_000)
-        h.record(slp: 1013.0, at: t)
-        h.record(slp: 1012.5, at: t.addingTimeInterval(200))
-        h.record(slp: 1012.0, at: t.addingTimeInterval(400))
+        h.record(value: 1013.0, at: t)
+        h.record(value: 1012.5, at: t.addingTimeInterval(200))
+        h.record(value: 1012.0, at: t.addingTimeInterval(400))
         let trace = h.trace()
         #expect(trace.count == 3)
         #expect(trace.map(\.0) == h.entries.map(\.date), "Trace preserves order")
@@ -575,8 +575,8 @@ struct BarometerTests {
     @Test func historyCodableRoundTrips() throws {
         var h = PressureHistory()
         let t = Date(timeIntervalSince1970: 1_000_000)
-        h.record(slp: 1013.0, at: t)
-        h.record(slp: 1012.0, at: t.addingTimeInterval(200))
+        h.record(value: 1013.0, at: t)
+        h.record(value: 1012.0, at: t.addingTimeInterval(200))
         let data = try JSONEncoder().encode(h)
         let decoded = try JSONDecoder().decode(PressureHistory.self, from: data)
         #expect(decoded == h, "PressureHistory survives a Codable round-trip")

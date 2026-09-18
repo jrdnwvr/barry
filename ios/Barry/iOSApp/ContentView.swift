@@ -267,7 +267,8 @@ struct ContentView: View {
                 // Full persisted history — the chart clips to its window and
                 // splits the line where recording gaps would fake a bridge.
                 // Local trace only at the physical location.
-                phoneTrace: localSensorActive ? barometer.phoneHistoryTrace : [],
+                phoneTrace: localSensorActive
+                    ? barometer.phoneHistoryTrace.map { ($0.0, combined.displayValue(fromLocalAltim: $0.1)) } : [],
                 window: chartWindow,
                 height: chartHeight
             )
@@ -277,9 +278,10 @@ struct ContentView: View {
             // jump reset). The obs time keeps it one point per METAR.
             .onChange(of: combined) { _, newCombined in
                 guard isPhysicalSelection else { return }
-                if let slp = newCombined.currentPressure {
+                if let ref = newCombined.calibrationReference {
                     barometer.attemptCalibration(
-                        metarSLP: slp,
+                        stationAltim: ref,
+                        tempC: newCombined.pressure.current.temp,
                         observedAt: newCombined.observedSeries.last?.t)
                 }
             }
@@ -401,7 +403,8 @@ struct ContentView: View {
 
     /// The watch follows the phone's station and airport choice.
     private func syncWatch() {
-        WatchSync.shared.send(station: store.station, airportSelected: store.airportSelected)
+        WatchSync.shared.send(station: store.station, airportSelected: store.airportSelected,
+                              physical: savedLocations.selected.isPhysical)
     }
 
     private func initialLoad() async {

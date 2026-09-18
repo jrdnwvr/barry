@@ -681,6 +681,22 @@ extension CombinedResponse {
         pressure.current.slp ?? pressure.series.last?.pressure
     }
 
+    /// What the device barometer is calibrated against: the station's altimeter
+    /// setting. Every METAR has one; sea-level pressure is the fallback for the
+    /// rare station that reports only that.
+    var calibrationReference: Double? {
+        pressure.current.altim ?? currentPressure
+    }
+
+    /// A local altimeter-setting equivalent expressed in the kind of number the
+    /// station series uses: sea-level pressure where the station reports it,
+    /// the altimeter setting otherwise. The difference is the station's own
+    /// temperature reduction, refreshed with every report.
+    func displayValue(fromLocalAltim a: Double) -> Double {
+        if let slp = pressure.current.slp, let alt = pressure.current.altim { return a + (slp - alt) }
+        return a
+    }
+
     /// The number to headline. At an airport (selected, or within 3 NM) it
     /// is the field's reported altimeter setting, the value a pilot dials
     /// in; elsewhere the sea-level pressure the trend is measured on.

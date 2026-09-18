@@ -31,6 +31,8 @@
          and re-add an NSAppTransportSecurity → NSAllowsLocalNetworking exception. -->
     <key>BarryBackendURL</key>
     <string>https://barry.wide-stack.com</string>
+    <key>NSSupportsLiveActivities</key>
+    <true/>
     <key>UIBackgroundModes</key>
     <array>
         <string>fetch</string>

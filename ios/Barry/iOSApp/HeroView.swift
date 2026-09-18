@@ -26,6 +26,9 @@ struct HeroView: View {
     var locations: [SavedLocation] = []
     var selectedLocationID: UUID? = nil
     var onSelectLocation: ((UUID) -> Void)? = nil
+    /// Lock-screen follow (Live Activity) for the next hours.
+    var isFollowing: Bool = false
+    var onFollow: (() -> Void)? = nil
 
     @State private var showComparison = false
     @State private var showGuide = false
@@ -106,7 +109,8 @@ struct HeroView: View {
         StatusRow(combined: combined, barometer: barometer, now: now,
                   barometerEnabled: barometerEnabled, localAt: localReading?.at,
                   locations: locations, selectedLocationID: selectedLocationID,
-                  onSelectLocation: onSelectLocation)
+                  onSelectLocation: onSelectLocation,
+                  isFollowing: isFollowing, onFollow: onFollow)
     }
 
     private var numberBlock: some View {
@@ -329,20 +333,33 @@ private struct StatusRow: View {
     var locations: [SavedLocation] = []
     var selectedLocationID: UUID? = nil
     var onSelectLocation: ((UUID) -> Void)? = nil
+    var isFollowing: Bool = false
+    var onFollow: (() -> Void)? = nil
+
+    private var hasLocationMenu: Bool { onSelectLocation != nil && locations.count > 1 }
 
     var body: some View {
         HStack(spacing: 6) {
-            if let onSelectLocation, locations.count > 1 {
+            if hasLocationMenu || onFollow != nil {
                 Menu {
-                    ForEach(locations) { loc in
-                        Button {
-                            onSelectLocation(loc.id)
-                        } label: {
-                            if loc.id == selectedLocationID {
-                                Label(loc.title, systemImage: "checkmark")
-                            } else {
-                                Text(loc.title)
+                    if let onSelectLocation, hasLocationMenu {
+                        ForEach(locations) { loc in
+                            Button {
+                                onSelectLocation(loc.id)
+                            } label: {
+                                if loc.id == selectedLocationID {
+                                    Label(loc.title, systemImage: "checkmark")
+                                } else {
+                                    Text(loc.title)
+                                }
                             }
+                        }
+                    }
+                    if let onFollow {
+                        if hasLocationMenu { Divider() }
+                        Button(action: onFollow) {
+                            Label(isFollowing ? "Stop following" : "Follow on lock screen",
+                                  systemImage: isFollowing ? "pin.slash" : "pin")
                         }
                     }
                 } label: {

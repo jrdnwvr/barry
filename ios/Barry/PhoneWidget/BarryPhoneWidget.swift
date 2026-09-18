@@ -13,6 +13,7 @@ import SwiftUI
 struct BarryPhoneWidgetBundle: WidgetBundle {
     var body: some Widget {
         BarryPhoneWidget()
+        PressureActivityWidget()
     }
 }
 

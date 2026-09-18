@@ -11,6 +11,7 @@ struct ContentView: View {
     @EnvironmentObject var store: PressureStore
     @EnvironmentObject var barometer: BarometerManager
     @StateObject private var savedLocations = SavedLocationsStore()
+    @StateObject private var homeLayout = HomeLayoutStore()
     @AppStorage("pressureUnit", store: AppConfig.sharedDefaults)
     private var unitRaw: String = PressureUnit.inHg.rawValue
     @AppStorage("phoneBarometerEnabled", store: AppConfig.sharedDefaults)
@@ -55,6 +56,7 @@ struct ContentView: View {
             .sheet(isPresented: $showSettings) {
                 SettingsView()
                     .environmentObject(savedLocations)
+                    .environmentObject(homeLayout)
             }
             // Switching locations (from the hero menu or Settings) reloads for
             // the new selection.
@@ -68,6 +70,12 @@ struct ContentView: View {
                 await initialLoad()
             }
             .onChange(of: backcountryEnabled) { _, _ in syncWatch() }
+            // The lock screen follows the data: start for a new event while
+            // the app is in front, update or end a running one.
+            .onChange(of: store.combined) { _, c in
+                guard let c else { return }
+                Task { await LiveActivityManager.shared.sync(c, atAirport: isAtAirport(c), foreground: true) }
+            }
             .onChange(of: backcountryUseWatch) { _, _ in syncWatch() }
             // Keep the reading live while the app is open. Keyed on scenePhase so the
             // loop only runs while frontmost — it stops the moment the app is dimmed
@@ -179,62 +187,17 @@ struct ContentView: View {
                  atAirport: isAtAirport(combined),
                  locations: savedLocations.locations,
                  selectedLocationID: savedLocations.selectedID,
-                 onSelectLocation: { savedLocations.selectedID = $0 })
+                 onSelectLocation: { savedLocations.selectedID = $0 },
+                 isFollowing: LiveActivityManager.shared.isFollowing,
+                 onFollow: { Task { await LiveActivityManager.shared.toggleFollow(combined, atAirport: isAtAirport(combined)) } })
 
-        // Lightning nearby: the breakout card the front banner used to be.
-        // The front watch itself still runs (the watch complication uses
-        // it); its map and compass are on the radar now.
-        lightningBanner(combined)
-
-        // The focused trend: window toggle + chart + the honest caveat.
-        if layout == .phone {
-            trendSection(combined)
+        // The cards, in the user's order (Settings > Home screen). Each one
+        // still decides whether it has anything to say.
+        ForEach(homeLayout.layout.order) { card in
+            if homeLayout.isVisible(card) {
+                homeCard(card, combined, layout: layout)
+            }
         }
-
-        // Secondary: wind + rain confirmation, always expanded. The iPad
-        // dashboard puts it under the chart instead.
-        if layout == .phone {
-            ConfirmationOverlayView(combined: combined, now: store.now)
-        }
-
-        // Field conditions: DA now + trend, clouds, boundary layer, storm
-        // and fog outlooks when they exist. Never an empty card.
-        if let cond = combined.conditions, cond.hasContent {
-            FieldConditionsCard(conditions: cond, combined: combined, now: store.now)
-        }
-
-        // Off-field only: the nearest station as a fact for everyone, the
-        // estimates when Backcountry is on. Never at an airport.
-        if !isAtAirport(combined) {
-            StripCard(combined: combined, now: store.now, unit: unit,
-                      here: hereCoordinate, physical: isPhysicalSelection,
-                      barometer: barometer, sensorEnabled: localSensorActive)
-        }
-
-        // The wind on the compass: crosswind per runway at an airport, the
-        // plain wind everywhere else.
-        RunwayWindsCard(combined: combined, atAirport: isAtAirport(combined))
-
-        // Radar: the same embedded map the kneeboard has, phone-sized; the
-        // expand button pushes the full screen. Needs station coords.
-        if layout == .phone, let rlat = combined.pressure.lat, let rlon = combined.pressure.lon {
-            RadarPanel(lat: rlat, lon: rlon,
-                       stationName: combined.pressure.name ?? combined.pressure.station,
-                       home: homeMarker(combined),
-                       onExpand: { showRadarFullScreen = true },
-                       embedded: true)
-                .frame(height: 440)
-        }
-
-        // Sensor vs Station: a compact entry row — the full comparison panel
-        // lives on its own screen. Physical location only: comparing the
-        // pocket barometer to a remote station is meaningless.
-        if localSensorActive {
-            SensorStationRow(combined: combined, now: store.now,
-                             unit: unit, barometer: barometer)
-        }
-
-        DataSourceFootnote(combined: combined)
 
         // The app's name lives at the foot of the page, where the title
         // bar used to say it.
@@ -247,6 +210,58 @@ struct ContentView: View {
             Text("Barry")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    /// One card of the home list. The iPad dashboard draws the chart and
+    /// the rain + wind card in their own columns, so the rail skips them.
+    @ViewBuilder
+    private func homeCard(_ card: HomeCard, _ combined: CombinedResponse, layout: GlanceLayout) -> some View {
+        switch card {
+        case .lightning:
+            // The breakout card the front banner used to be. The front watch
+            // itself still runs; its map and compass are on the radar.
+            lightningBanner(combined)
+        case .chart:
+            // The focused trend: window toggle + chart + the honest caveat.
+            if layout == .phone { trendSection(combined) }
+        case .rainWind:
+            if layout == .phone { ConfirmationOverlayView(combined: combined, now: store.now) }
+        case .conditions:
+            // DA now + trend, clouds, boundary layer, storm and fog outlooks
+            // when they exist. Never an empty card.
+            if let cond = combined.conditions, cond.hasContent {
+                FieldConditionsCard(conditions: cond, combined: combined, now: store.now)
+            }
+        case .strip:
+            // Off-field only: the nearest station as a fact for everyone,
+            // the estimates when Backcountry is on. Never at an airport.
+            if !isAtAirport(combined) {
+                StripCard(combined: combined, now: store.now, unit: unit,
+                          here: hereCoordinate, physical: isPhysicalSelection,
+                          barometer: barometer, sensorEnabled: localSensorActive)
+            }
+        case .wind:
+            // Crosswind per runway at an airport, the plain wind elsewhere.
+            RunwayWindsCard(combined: combined, atAirport: isAtAirport(combined))
+        case .radar:
+            // The same embedded map the kneeboard has, phone-sized.
+            if layout == .phone, let rlat = combined.pressure.lat, let rlon = combined.pressure.lon {
+                RadarPanel(lat: rlat, lon: rlon,
+                           stationName: combined.pressure.name ?? combined.pressure.station,
+                           home: homeMarker(combined),
+                           onExpand: { showRadarFullScreen = true },
+                           embedded: true)
+                    .frame(height: 440)
+            }
+        case .sensor:
+            // Physical location only: comparing the pocket barometer to a
+            // remote station is meaningless.
+            if localSensorActive {
+                SensorStationRow(combined: combined, now: store.now, unit: unit, barometer: barometer)
+            }
+        case .sources:
+            DataSourceFootnote(combined: combined)
         }
     }
 
@@ -331,7 +346,9 @@ struct ContentView: View {
                         ScrollView(showsIndicators: false) {
                             VStack(spacing: 12) {
                                 trendSection(combined, chartHeight: 200)
-                                ConfirmationOverlayView(combined: combined, now: store.now)
+                                if homeLayout.isVisible(.rainWind) {
+                                    ConfirmationOverlayView(combined: combined, now: store.now)
+                                }
                             }
                         }
                         .frame(maxWidth: .infinity)
@@ -341,7 +358,9 @@ struct ContentView: View {
                     } else {
                         VStack(spacing: 12) {
                             trendSection(combined, chartHeight: 200)
-                            ConfirmationOverlayView(combined: combined, now: store.now)
+                            if homeLayout.isVisible(.rainWind) {
+                                ConfirmationOverlayView(combined: combined, now: store.now)
+                            }
                             radarColumn(combined)
                         }
                         .frame(maxWidth: .infinity)

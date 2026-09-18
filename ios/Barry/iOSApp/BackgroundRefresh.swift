@@ -48,5 +48,8 @@ enum BackgroundRefresh {
         }
         // Fresh reading in hand — check whether it just turned stormy.
         await StormAlerter.evaluate(store.combined, enabled: stormAlertsEnabled)
+        if let c = store.combined {
+            await LiveActivityManager.shared.sync(c, atAirport: store.atAirport, foreground: false)
+        }
     }
 }

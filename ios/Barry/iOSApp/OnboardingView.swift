@@ -26,6 +26,8 @@ struct OnboardingView: View {
     private var phoneBarometerEnabled: Bool = false
     @AppStorage(StormAlerter.enabledKey, store: AppConfig.sharedDefaults)
     private var stormAlertsEnabled: Bool = false
+    @AppStorage(LiveActivityManager.enabledKey, store: AppConfig.sharedDefaults)
+    private var liveActivityEnabled: Bool = false
 
     @State private var page = 0
     private let pageCount = 5
@@ -205,6 +207,18 @@ struct OnboardingView: View {
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(Color(.secondarySystemBackground),
+                        in: RoundedRectangle(cornerRadius: 10))
+            Toggle(isOn: $liveActivityEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Also on the lock screen")
+                        .font(.footnote.weight(.semibold))
+                    Text("While a change is under way, the trend as a Live Activity.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
             .padding(12)
             .background(Color(.secondarySystemBackground),
                         in: RoundedRectangle(cornerRadius: 10))

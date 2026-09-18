@@ -39,6 +39,8 @@ struct SettingsView: View {
     @AppStorage(Backcountry.useWatchSensorKey, store: AppConfig.sharedDefaults)
     private var backcountryUseWatch: Bool = true
     @State private var showBackcountryAck = false
+    @AppStorage(LiveActivityManager.enabledKey, store: AppConfig.sharedDefaults)
+    private var liveActivityEnabled: Bool = false
     @AppStorage(RadarPanel.autoplayKey, store: AppConfig.sharedDefaults)
     private var radarAutoplay: Bool = true
 
@@ -62,6 +64,15 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 } header: {
                     Text("Phone barometer")
+                }
+
+                Section {
+                    NavigationLink("Cards and lock screen") { HomeLayoutView() }
+                    Text("Choose which cards show, in what order, and whether a change shows on the lock screen.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("Home screen")
                 }
 
                 Section {
@@ -103,6 +114,7 @@ struct SettingsView: View {
                     if stormAlertsEnabled && !notifDenied {
                         Button("Send a test alert") { StormAlerter.sendTestAlert() }
                     }
+                    Toggle("Live Activity on the lock screen", isOn: $liveActivityEnabled)
                 } header: {
                     Text("Storm alerts")
                 }

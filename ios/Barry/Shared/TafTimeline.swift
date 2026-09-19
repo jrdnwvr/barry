@@ -145,10 +145,4 @@ struct TafTimeline {
         }
         return "\(first) all day"
     }
-
-    var hatchCaption: String? {
-        guard !overlays.isEmpty else { return nil }
-        return overlays.contains { $0.isProb } ? "Hatched: TEMPO or PROB, a chance over the base forecast."
-                                               : "Hatched: TEMPO, a chance over the base forecast."
-    }
 }

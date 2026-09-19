@@ -775,8 +775,6 @@ struct PressureChartView: View {
             if !visiblePhone.isEmpty {
                 legendSwatch(colors: [.orange, .orange], label: "local")
             }
-            if !visibleTafPeriods.isEmpty {
-            }
             Spacer()
             Text("tap or drag to read")
                 .font(.caption2).foregroundStyle(.tertiary)

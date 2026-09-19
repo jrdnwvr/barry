@@ -17,16 +17,13 @@ import SwiftUI
 import MapKit
 
 /// The one fill layer under everything else.
-enum RadarBase: String, CaseIterable, Identifiable {
-    case radar, pressure, change
+/// The gridded field drawn over the map: none, sea-level pressure (isobars
+/// and shading), or the 3 h change (isallobars and shading). One at a time,
+/// since two shadings on one map say nothing; the radar can stay on under
+/// either.
+enum RadarField: String, CaseIterable, Identifiable {
+    case off, pressure, change
     var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .radar: return "Radar"
-        case .pressure: return "Pressure"
-        case .change: return "Change"
-        }
-    }
 }
 
 // MARK: - Screen
@@ -64,9 +61,17 @@ struct RadarPanel: View {
     @StateObject private var model = RadarModel()
     @State private var dwellTicks = 0
 
-    // Base layer (exclusive).
-    @AppStorage("radarBase", store: AppConfig.sharedDefaults)
-    private var baseRaw: String = RadarBase.radar.rawValue
+    // Layers. Radar is one of them now, not a base the others sit on, so
+    // the pressure field can shade over the rain. The field is exclusive
+    // within itself (pressure or change), everything else stacks.
+    @AppStorage("radarShowRadar", store: AppConfig.sharedDefaults)
+    private var showRadar: Bool = true
+    @AppStorage("radarField", store: AppConfig.sharedDefaults)
+    private var fieldRaw: String = RadarField.off.rawValue
+    /// WPC trough lines on their own chip: a trough is worth seeing on the
+    /// plain radar without the rest of the surface chart.
+    @AppStorage("radarTroughs", store: AppConfig.sharedDefaults)
+    private var showTroughs: Bool = true
     // Overlays (any combination).
     @AppStorage("radarWindArrows", store: AppConfig.sharedDefaults)
     private var showWind: Bool = true
@@ -90,17 +95,20 @@ struct RadarPanel: View {
     private var frontLines: Bool = true
     @AppStorage("radarFrontPips", store: AppConfig.sharedDefaults)
     private var frontPips: Bool = true
-    @AppStorage("radarFrontTroughs", store: AppConfig.sharedDefaults)
-    private var frontTroughs: Bool = true
     @AppStorage("radarFrontWeak", store: AppConfig.sharedDefaults)
     private var frontWeak: Bool = true
     @AppStorage("radarFrontCenters", store: AppConfig.sharedDefaults)
     private var frontCenters: Bool = true
 
+    /// What the fronts overlay draws: the chart's parts when Fronts is on,
+    /// only the trough lines when just the Troughs chip is.
     private var frontStyle: FrontStyle {
-        FrontStyle(lines: frontLines, pips: frontPips, troughs: frontTroughs,
-                   weak: frontWeak, centers: frontCenters)
+        showFronts
+            ? FrontStyle(lines: frontLines, pips: frontPips, troughs: showTroughs,
+                         weak: frontWeak, centers: frontCenters)
+            : FrontStyle(lines: false, pips: false, troughs: showTroughs, weak: false, centers: false)
     }
+    private var wantsFronts: Bool { showFronts || showTroughs }
 
     /// Loop on open (the default) or hold the newest frame (Settings).
     static let autoplayKey = "radarAutoplay"
@@ -121,7 +129,7 @@ struct RadarPanel: View {
     /// The flash slice ages a minute at a time; the server polls NOAA per minute.
     private let lightningTicker = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
-    private var base: RadarBase { RadarBase(rawValue: baseRaw) ?? .radar }
+    private var field: RadarField { RadarField(rawValue: fieldRaw) ?? .off }
     private var stationStyle: StationLayerStyle { StationLayerStyle(rawValue: stationStyleRaw) ?? .off }
     private var stationsOn: Bool { stationStyle != .off }
     /// The station slice feeds the station layer, the storm bolts, and the
@@ -129,14 +137,18 @@ struct RadarPanel: View {
     private var wantsStations: Bool { stationsOn || showStorms || home?.asBarb == true }
 
     private var pressureState: PressureFieldState? {
-        switch base {
-        case .radar: return nil
+        // Lighter shading over the radar so the rain still reads through it.
+        let opacity = showRadar ? 0.30 : 0.42
+        switch field {
+        case .off: return nil
         case .pressure:
             return PressureFieldState(field: model.pressureField, showIsobars: true,
-                                      showIsallobars: false, shade: .pressure, version: model.pressureVersion)
+                                      showIsallobars: false, shade: .pressure, shadeOpacity: opacity,
+                                      version: model.pressureVersion)
         case .change:
             return PressureFieldState(field: model.pressureField, showIsobars: false,
-                                      showIsallobars: true, shade: .change, version: model.pressureVersion)
+                                      showIsallobars: true, shade: .change, shadeOpacity: opacity,
+                                      version: model.pressureVersion)
         }
     }
 
@@ -163,13 +175,18 @@ struct RadarPanel: View {
             }
         }
         .task {
+            // The old exclusive base setting becomes a field choice once.
+            if let old = AppConfig.sharedDefaults.string(forKey: "radarBase") {
+                if old == "pressure" || old == "change" { fieldRaw = old }
+                AppConfig.sharedDefaults.removeObject(forKey: "radarBase")
+            }
             model.frontStyle = frontStyle
             await model.load()
             model.playing = autoplay
             if showWind {
                 await model.fetchField(region: model.lastRegion ?? initialRegion)
             }
-            if showFronts {
+            if wantsFronts {
                 await model.fetchFronts()
             }
             if wantsStations {
@@ -178,7 +195,7 @@ struct RadarPanel: View {
             if showStorms {
                 await model.fetchLightning(center: initialRegion.center)
             }
-            if base != .radar {
+            if field != .off {
                 await model.fetchPressureField(region: model.lastRegion ?? initialRegion)
             }
         }
@@ -187,7 +204,7 @@ struct RadarPanel: View {
             Task { await model.fetchLightning(center: model.lastRegion?.center ?? initialRegion.center, force: true) }
         }
         .onReceive(ticker) { _ in
-            guard base == .radar, model.playing, !model.frames.isEmpty else { return }
+            guard showRadar, model.playing, !model.frames.isEmpty else { return }
             // Dwell at the end of the loop (the freshest picture) before
             // restarting — the Dark Sky rhythm, and it reads far calmer.
             if dwellTicks > 0 {
@@ -215,7 +232,8 @@ struct RadarPanel: View {
                 .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showKey) {
-            RadarKeySheet(base: base, wind: showWind, windStyle: windStyle, fronts: showFronts,
+            RadarKeySheet(radar: showRadar, field: field, wind: showWind, windStyle: windStyle,
+                          fronts: showFronts, troughs: showTroughs,
                           frontValidText: frontValidText, stations: stationsOn,
                           stationStyle: stationStyle, storms: showStorms,
                           pressureStations: model.pressureField?.stations ?? 0,
@@ -229,8 +247,7 @@ struct RadarPanel: View {
                                if stationsOn { stationStyleRaw = style }
                            },
                            frontLines: $frontLines, frontPips: $frontPips,
-                           frontTroughs: $frontTroughs, frontWeak: $frontWeak,
-                           frontCenters: $frontCenters)
+                           frontWeak: $frontWeak, frontCenters: $frontCenters)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
@@ -253,8 +270,13 @@ struct RadarPanel: View {
             }
             if !on { showFrontRow = false }
         }
-        .onChange(of: baseRaw) { _, _ in
-            if base != .radar, model.pressureField == nil {
+        .onChange(of: showTroughs) { _, on in
+            if on, model.frontFrames.isEmpty {
+                Task { await model.fetchFronts() }
+            }
+        }
+        .onChange(of: fieldRaw) { _, _ in
+            if field != .off, model.pressureField == nil {
                 Task { await model.fetchPressureField(region: model.lastRegion ?? initialRegion) }
             }
         }
@@ -273,12 +295,12 @@ struct RadarPanel: View {
         RadarMapView(host: model.host,
                      frames: model.frames,
                      index: model.index,
-                     radarVisible: base == .radar,
+                     radarVisible: showRadar,
                      center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
                      windArrows: model.windArrows,
                      showWind: showWind && windStyle == "arrows",
                      windFlow: (showWind && windStyle == "flow") ? model.windField : nil,
-                     frontState: showFronts ? model.frontState : nil,
+                     frontState: wantsFronts ? model.frontState : nil,
                      stations: model.stationObs,
                      stationStyle: stationStyle,
                      showStorms: showStorms,
@@ -291,7 +313,7 @@ struct RadarPanel: View {
                          model.scheduleFieldReload(for: region,
                                                    wind: showWind,
                                                    stations: wantsStations,
-                                                   pressure: base != .radar,
+                                                   pressure: field != .off,
                                                    storms: showStorms)
                      })
     }
@@ -420,25 +442,21 @@ struct RadarPanel: View {
 
     // MARK: - Chip bar
 
-    /// One scrollable row: the base picker on the left, then overlay chips
-    /// with checkmarks, then More. No paragraphs; the key explains.
+    /// One scrollable row of layer chips, then More. Radar first, then the
+    /// field pair (one at a time), then the rest. No paragraphs; the key
+    /// explains.
     private var chipBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                Picker("Base layer", selection: $baseRaw) {
-                    ForEach(RadarBase.allCases) { b in
-                        Text(b.title).tag(b.rawValue)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .controlSize(.small)
-                .frame(width: 210)
-
+                chip("Radar", icon: "antenna.radiowaves.left.and.right", isOn: $showRadar)
+                chip("Pressure", icon: "circle.circle", isOn: fieldBinding(.pressure))
+                chip("Change", icon: "arrow.up.arrow.down", isOn: fieldBinding(.change))
                 chip("Wind", icon: "wind", isOn: $showWind)
                 chip("Fronts", icon: "line.diagonal", isOn: $showFronts)
                 if showFronts, model.frontFrames.count > 1 {
                     frontTimeChip
                 }
+                chip("Troughs", icon: "point.topleft.down.to.point.bottomright.curvepath", isOn: $showTroughs)
                 chip("Stations", icon: "flag", isOn: Binding(
                     get: { stationsOn },
                     set: { stationStyleRaw = $0 ? stationStyleLast : "off" }))
@@ -453,6 +471,11 @@ struct RadarPanel: View {
                 .accessibilityLabel("More options")
             }
         }
+    }
+
+    /// Pressure and Change share one slot: turning one on turns the other off.
+    private func fieldBinding(_ f: RadarField) -> Binding<Bool> {
+        Binding(get: { field == f }, set: { fieldRaw = $0 ? f.rawValue : RadarField.off.rawValue })
     }
 
     /// An overlay chip: solid accent when on, the segmented control's gray
@@ -496,9 +519,12 @@ struct RadarPanel: View {
     // MARK: - Timeline (belongs to the base)
 
     @ViewBuilder private var timeline: some View {
-        switch base {
-        case .radar:
+        if showRadar {
             radarControls
+        }
+        switch field {
+        case .off:
+            EmptyView()
         case .pressure:
             baseCaption("Isobars every 4 hPa, 2 on a flat day.")
         case .change:

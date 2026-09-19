@@ -155,10 +155,13 @@ rebuild with `tools/build_runways.py`) on `/combined.runways`, and
 `RunwayWindsView.swift` projects the METAR wind onto each runway end.
 `/privacy` and `/support` are the App Store URLs (app/static/).
 
-Radar layers (2026-09-16) are two-tier: one BASE (`RadarBase`: Radar,
-Pressure = isobars + shading, Change = isallobars + shading) plus overlays
-Wind / Fronts / Stations / Storms on a chip bar; `RadarKeySheet` lists only
-what is on. Boundary-layer top lives on the main page (density altitude
+Radar layers (2026-09-19) all stack: Radar is a chip like the rest, the
+field pair (`RadarField`: Pressure = isobars + shading, Change = isallobars
++ shading, one at a time, lighter shading when the radar is under it), then
+Wind / Fronts / Troughs (WPC trough lines on their own chip) / Stations /
+Lightning; `RadarKeySheet` lists only what is on. Radar tiles are read back
+to dBZ and repainted (`RadarPalette`); clusters of GLM flashes get a violet
+outline. Boundary-layer top lives on the main page (density altitude
 card) now, not the map. **Lightning** (`backend/app/lightning.py`) is decoded
 from the METARs themselves (TS/VCTS + LTG remarks): `StationObs.lightning`,
 `CurrentObs.lightning`, `/combined.lightningNearby` (nearest fresh report

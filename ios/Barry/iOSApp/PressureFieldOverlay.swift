@@ -17,6 +17,8 @@ struct PressureFieldState: Equatable {
     var showIsobars = true
     var showIsallobars = false
     var shade: PressureShade = .off
+    /// Lighter when the radar is under it.
+    var shadeOpacity: Double = 0.38
     var version = 0
 }
 
@@ -39,7 +41,7 @@ final class PressureFieldRenderer: MKOverlayRenderer {
         let visible = mapRect.insetBy(dx: -60 * scale, dy: -60 * scale)
 
         if st.shade != .off, let grid = (st.shade == .pressure ? field.pressureGrid : field.tendencyGrid) {
-            drawShade(grid, kind: st.shade, version: st.version, in: ctx)
+            drawShade(grid, kind: st.shade, version: st.version, opacity: st.shadeOpacity, in: ctx)
         }
         if st.showIsobars {
             for line in field.isobars {
@@ -150,7 +152,7 @@ final class PressureFieldRenderer: MKOverlayRenderer {
 
     /// The gridded field as a smooth translucent gradient. The image is one
     /// pixel per grid cell; Core Graphics interpolates it across the tile.
-    private func drawShade(_ grid: GridOut, kind: PressureShade, version: Int, in ctx: CGContext) {
+    private func drawShade(_ grid: GridOut, kind: PressureShade, version: Int, opacity: Double, in ctx: CGContext) {
         let key = "\(kind.rawValue)-\(version)"
         if shadeKey != key || shadeImage == nil {
             shadeImage = makeImage(grid, kind: kind)
@@ -166,7 +168,7 @@ final class PressureFieldRenderer: MKOverlayRenderer {
         let r = rect(for: shadeRect)
         ctx.saveGState()
         ctx.interpolationQuality = .high
-        ctx.setAlpha(0.38)
+        ctx.setAlpha(CGFloat(opacity))
         // Row 0 of the grid is south; CGImage row 0 is top, so flip.
         ctx.translateBy(x: 0, y: r.maxY + r.minY)
         ctx.scaleBy(x: 1, y: -1)

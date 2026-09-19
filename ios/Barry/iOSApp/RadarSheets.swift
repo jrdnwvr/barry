@@ -9,10 +9,12 @@
 import SwiftUI
 
 struct RadarKeySheet: View {
-    let base: RadarBase
+    let radar: Bool
+    let field: RadarField
     let wind: Bool
     let windStyle: String
     let fronts: Bool
+    let troughs: Bool
     let frontValidText: String
     let stations: Bool
     let stationStyle: StationLayerStyle
@@ -57,6 +59,12 @@ struct RadarKeySheet: View {
                         Text(stationStyle == .speeds
                              ? "Latest METAR wind in knots, tinted by flight category. Tap a station for its report."
                              : "METAR wind barbs: the staff points into the wind, a full barb is 10 kt, a half barb 5, a pennant 50. Tinted by flight category. Tap a station for its report.")
+                    }
+                }
+
+                if troughs, !fronts {
+                    section("Troughs", icon: "point.topleft.down.to.point.bottomright.curvepath") {
+                        Text("Dashed lines where the NWS marks a trough: a line of low pressure without a front's temperature change. Showers and a wind shift often ride along it.")
                     }
                 }
 
@@ -106,8 +114,7 @@ struct RadarKeySheet: View {
     }
 
     @ViewBuilder private var baseSection: some View {
-        switch base {
-        case .radar:
+        if radar {
             section("Radar", icon: "antenna.radiowaves.left.and.right") {
                 HStack(spacing: 10) {
                     swatch(Color(red: 0.50, green: 0.72, blue: 0.99), "Light")
@@ -121,6 +128,10 @@ struct RadarKeySheet: View {
                 }
                 Text("Blues are rain. Orange is where an echo stops being just rain, in dBZ. Frames every 10 minutes; the last two (orange time) are a short nowcast.")
             }
+        }
+        switch field {
+        case .off:
+            EmptyView()
         case .pressure:
             section("Pressure", icon: "circle.circle") {
                 ramp([Color(red: 0.45, green: 0.2, blue: 0.7), Color(red: 0.2, green: 0.45, blue: 0.9),
@@ -193,7 +204,6 @@ struct RadarMoreSheet: View {
     var onStationStyleChange: (String) -> Void
     @Binding var frontLines: Bool
     @Binding var frontPips: Bool
-    @Binding var frontTroughs: Bool
     @Binding var frontWeak: Bool
     @Binding var frontCenters: Bool
 
@@ -208,7 +218,6 @@ struct RadarMoreSheet: View {
                     .font(.subheadline.weight(.semibold))
                 Toggle("Front lines", isOn: $frontLines)
                 Toggle("Cold and warm symbols", isOn: $frontPips)
-                Toggle("Troughs (dashed)", isOn: $frontTroughs)
                 Toggle("Fronts marked weak", isOn: $frontWeak)
                 Toggle("H and L pressure centers", isOn: $frontCenters)
                 Text("Symbols sit on the side the front is moving toward.")

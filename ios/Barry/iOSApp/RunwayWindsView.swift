@@ -16,63 +16,6 @@ import SwiftUI
 /// When the wind card shows runway components instead of the plain rose.
 /// Auto = an airport is selected, or you are within 3 NM of the station
 /// (the same rule that draws the home station as its own barb).
-enum RunwayWindsMode: String, CaseIterable, Identifiable {
-    case always, auto, compass
-    static let key = "runwayWindsMode"
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .always: return "Runway"
-        case .auto: return "Auto"
-        case .compass: return "Compass only"
-        }
-    }
-
-    var footer: String {
-        switch self {
-        case .always: return "Runway components whenever the station has runway data."
-        case .auto: return "Runway components at a selected airport or within 3 NM of one. Wind rose elsewhere."
-        case .compass: return "Wind on the compass rose only."
-        }
-    }
-}
-
-struct RunwayWind: Identifiable {
-    let ident: String
-    let heading: Double
-    let headwind: Double        // kt, negative = tailwind
-    let crosswind: Double       // kt, signed, positive = from the right
-    let gustCrosswind: Double?  // kt, signed, when a gust was reported
-
-    var id: String { ident }
-    var isTailwind: Bool { headwind < -0.5 }
-}
-
-enum RunwayWinds {
-    /// One entry per runway END, best first: headwind ends before tailwind
-    /// ends, then least crosswind. Nil wind or unknown runways gives [].
-    static func compute(runways: [Runway], windDirDeg: Double?, windKt: Double,
-                        gustKt: Double?) -> [RunwayWind] {
-        guard let dir = windDirDeg, windKt >= 1 else { return [] }
-        var out: [RunwayWind] = []
-        for r in runways {
-            for (ident, hdg) in [(r.le, r.leHeading), (r.he, r.heHeading)] where !ident.isEmpty {
-                let delta = (dir - hdg) * .pi / 180
-                let head = windKt * cos(delta)
-                let cross = windKt * sin(delta)
-                let gustCross = gustKt.map { $0 * sin(delta) }
-                out.append(RunwayWind(ident: ident, heading: hdg, headwind: head,
-                                      crosswind: cross, gustCrosswind: gustCross))
-            }
-        }
-        return out.sorted {
-            if $0.isTailwind != $1.isTailwind { return !$0.isTailwind }
-            return abs($0.crosswind) < abs($1.crosswind)
-        }
-    }
-}
-
 /// Main-page card: the wind on the rose, with the runway components when the
 /// field has runway data and the wind is blowing. Renders nothing only when
 /// the station reports no wind at all.
@@ -86,13 +29,7 @@ struct RunwayWindsCard: View {
 
     private var mode: RunwayWindsMode { RunwayWindsMode(rawValue: modeRaw) ?? .auto }
 
-    private var useRunways: Bool {
-        switch mode {
-        case .always: return true
-        case .auto: return atAirport
-        case .compass: return false
-        }
-    }
+    private var useRunways: Bool { mode.usesRunways(atAirport: atAirport) }
 
     private var runways: [Runway] { useRunways ? Runway.merged(combined.runways ?? []) : [] }
 

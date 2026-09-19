@@ -1,5 +1,5 @@
 //  RunwayWindDial.swift
-//  Barry — iOS
+//  Barry — Shared
 //
 //  The wind-component picture pilots already read: a compass rose (degrees
 //  true, matching both the METAR and the runway headings), the chosen runway
@@ -34,6 +34,16 @@ struct RunwayWindDial: View {
         }
         .aspectRatio(1, contentMode: .fit)
         .accessibilityLabel(accessibilityText)
+    }
+
+    /// The centreline dash: the background color, so it reads as a gap in
+    /// the pavement. UIKit's system background is not on watchOS.
+    private static var pavementDash: Color {
+        #if os(watchOS)
+        return .black
+        #else
+        return Color(.systemBackground)
+        #endif
     }
 
     private var accessibilityText: String {
@@ -78,10 +88,10 @@ struct RunwayWindDial: View {
         let b = point(c, half, deg: rw.leHeading)
         var body = Path()
         body.move(to: a); body.addLine(to: b)
-        ctx.stroke(body, with: .color(Color(.label)), style: StrokeStyle(lineWidth: 13, lineCap: .butt))
+        ctx.stroke(body, with: .color(.primary), style: StrokeStyle(lineWidth: 13, lineCap: .butt))
         var center = Path()
         center.move(to: a); center.addLine(to: b)
-        ctx.stroke(center, with: .color(Color(.systemBackground)), style: StrokeStyle(lineWidth: 1.2, dash: [5, 4]))
+        ctx.stroke(center, with: .color(Self.pavementDash), style: StrokeStyle(lineWidth: 1.2, dash: [5, 4]))
         for (ident, deg) in [(rw.le, rw.leHeading + 180), (rw.he, rw.leHeading)] {
             let p = point(c, half + 11, deg: deg)
             let chosen = ident == bestIdent

@@ -14,29 +14,10 @@ enum StationLayerStyle: String {
     case off, barbs, speeds
 }
 
-/// Standard aviation flight-category colors, shared by the METAR readout on
-/// the main page and the station layer on the radar. Nil or unknown category
-/// falls back to the plain label color.
-enum FlightCategory {
-    static let order = ["VFR", "MVFR", "IFR", "LIFR"]
-
+extension FlightCategory {
+    /// The map's barbs draw with UIKit.
     static func uiColor(_ cat: String?) -> UIColor {
-        switch cat {
-        case "VFR":  return UIColor(red: 0.13, green: 0.62, blue: 0.28, alpha: 1)
-        case "MVFR": return UIColor(red: 0.20, green: 0.48, blue: 0.85, alpha: 1)
-        case "IFR":  return UIColor(red: 0.85, green: 0.22, blue: 0.18, alpha: 1)
-        case "LIFR": return UIColor(red: 0.72, green: 0.20, blue: 0.70, alpha: 1)
-        default:     return .label
-        }
-    }
-
-    /// Worse to better, for "improving" versus "deteriorating" wording.
-    static func rank(_ cat: String) -> Int {
-        ["LIFR": 0, "IFR": 1, "MVFR": 2, "VFR": 3][cat] ?? -1
-    }
-
-    static func color(_ cat: String?) -> Color {
-        cat.map(order.contains) == true ? Color(uiColor: uiColor(cat)) : .secondary
+        cat.map(order.contains) == true ? UIColor(color(cat)) : .label
     }
 }
 

@@ -132,6 +132,10 @@ final class PressureStore: ObservableObject {
             let combined = try await api.combined(station: station, lat: lat, lon: lon)
             state = .loaded(combined)
             atAirport = isAtAirport(combined)
+            #if os(iOS)
+            // The home screen widgets draw from this same payload.
+            CombinedStore.save(combined, at: now)
+            #endif
             // Hand the complication a fresh snapshot and nudge it to redraw.
             SnapshotStore.save(TendencySnapshot(from: combined, updatedAt: now,
                                                 atAirport: atAirport))

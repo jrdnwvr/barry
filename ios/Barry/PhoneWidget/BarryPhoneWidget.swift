@@ -13,6 +13,10 @@ import SwiftUI
 struct BarryPhoneWidgetBundle: WidgetBundle {
     var body: some Widget {
         BarryPhoneWidget()
+        TrendWidget()
+        TafWidget()
+        FieldGlanceWidget()
+        RunwayWindsWidget()
         PressureActivityWidget()
     }
 }

@@ -24,16 +24,19 @@ final class WindFlowView: UIView {
 
     // Tunables: "less busy" lives here.
     private let particleCount = 220
-    private let trailLength = 10
+    private let trailLength = 18               // points kept in the streak
+    private let trailStride = 3                // frames between kept points
     private let pxPerKmh: CGFloat = 1.25       // 20 km/h -> 25 px/s
-    private let minLife = 60, maxLife = 150    // frames at 30 fps
+    private let minLife = 90, maxLife = 180    // frames at 30 fps
     private let fps = 30
 
     private struct Particle {
-        var trail: [CGPoint]   // head last
+        var trail: [CGPoint]   // sampled every trailStride frames, oldest first
+        var head: CGPoint      // current position, moved every frame
         var age: Int
         var life: Int
         var speed: CGFloat     // km/h at the head, for opacity
+        var sinceSample: Int
     }
 
     private struct Sample { let x: CGFloat; let y: CGFloat; let u: CGFloat; let v: CGFloat }
@@ -135,7 +138,8 @@ final class WindFlowView: UIView {
     private func spawn() -> Particle {
         let p = CGPoint(x: CGFloat.random(in: -10...(bounds.width + 10)),
                         y: CGFloat.random(in: -10...(bounds.height + 10)))
-        return Particle(trail: [p], age: 0, life: Int.random(in: minLife...maxLife), speed: 0)
+        return Particle(trail: [p], head: p, age: 0,
+                        life: Int.random(in: minLife...maxLife), speed: 0, sinceSample: 0)
     }
 
     @objc private func tick() {
@@ -144,11 +148,17 @@ final class WindFlowView: UIView {
         let margin: CGFloat = 20
         for i in particles.indices {
             var pt = particles[i]
-            let head = pt.trail.last!
-            let (u, v) = wind(at: head)
-            let next = CGPoint(x: head.x + u * pxPerKmh * dt, y: head.y - v * pxPerKmh * dt)
-            pt.trail.append(next)
-            if pt.trail.count > trailLength { pt.trail.removeFirst() }
+            let (u, v) = wind(at: pt.head)
+            let next = CGPoint(x: pt.head.x + u * pxPerKmh * dt, y: pt.head.y - v * pxPerKmh * dt)
+            pt.head = next
+            // The head moves every frame; the trail only records every few, so
+            // the streak reaches further back without costing more strokes.
+            pt.sinceSample += 1
+            if pt.sinceSample >= trailStride {
+                pt.sinceSample = 0
+                pt.trail.append(next)
+                if pt.trail.count > trailLength { pt.trail.removeFirst() }
+            }
             pt.speed = hypot(u, v)
             pt.age += 1
             let gone = next.x < -margin || next.x > bounds.width + margin
@@ -165,7 +175,7 @@ final class WindFlowView: UIView {
         let base = UIColor.label
         ctx.setLineCap(.round)
         ctx.setLineWidth(1.6)
-        for pt in particles where pt.trail.count >= 2 {
+        for pt in particles where !pt.trail.isEmpty {
             // Speed sets presence; the trail fades toward its tail so the streak
             // reads as motion rather than a scratch.
             let presence = 0.12 + 0.55 * min(1, pt.speed / 45)
@@ -173,13 +183,21 @@ final class WindFlowView: UIView {
             let lifeFade = min(1, CGFloat(pt.age) / 15, CGFloat(pt.life - pt.age) / 15)
             let n = pt.trail.count
             for k in 1..<n {
-                let f = CGFloat(k) / CGFloat(n - 1)
+                // Taper hard toward the tail: a long streak stays light on the
+                // map, and the bright end shows which way the wind is going.
+                let f = pow(CGFloat(k) / CGFloat(n), 1.8)
                 ctx.setStrokeColor(base.withAlphaComponent(presence * lifeFade * f).cgColor)
                 ctx.beginPath()
                 ctx.move(to: pt.trail[k - 1])
                 ctx.addLine(to: pt.trail[k])
                 ctx.strokePath()
             }
+            // The live segment from the last sample to the head, at full presence.
+            ctx.setStrokeColor(base.withAlphaComponent(presence * lifeFade).cgColor)
+            ctx.beginPath()
+            ctx.move(to: pt.trail[n - 1])
+            ctx.addLine(to: pt.head)
+            ctx.strokePath()
         }
     }
 }

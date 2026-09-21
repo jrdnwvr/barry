@@ -190,7 +190,7 @@ struct RadarPanel: View {
                 await model.fetchFronts()
             }
             if wantsStations {
-                await model.fetchStations(center: initialRegion.center)
+                await model.fetchStations(region: model.lastRegion ?? initialRegion)
             }
             if showStorms {
                 await model.fetchLightning(center: initialRegion.center)
@@ -253,13 +253,13 @@ struct RadarPanel: View {
         }
         .onChange(of: stationStyleRaw) { _, raw in
             if raw != "off" {
-                Task { await model.fetchStations(center: model.lastRegion?.center ?? initialRegion.center) }
+                Task { await model.fetchStations(region: model.lastRegion ?? initialRegion) }
             }
         }
         .onChange(of: showStorms) { _, on in
             if on {
                 Task {
-                    await model.fetchStations(center: model.lastRegion?.center ?? initialRegion.center)
+                    await model.fetchStations(region: model.lastRegion ?? initialRegion)
                     await model.fetchLightning(center: model.lastRegion?.center ?? initialRegion.center)
                 }
             }

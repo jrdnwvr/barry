@@ -65,13 +65,17 @@ struct BarryAPI {
     }
 
     /// Latest wind at every station around a point — the radar's barb/speed layer.
-    func metars(lat: Double, lon: Double) async throws -> StationsResponse {
+    /// `half` is the box half-width in degrees of latitude. The server thins
+    /// to a fixed ceiling whatever the box, so a wide one spreads the same
+    /// number of stations further rather than returning more of them.
+    func metars(lat: Double, lon: Double, half: Double? = nil) async throws -> StationsResponse {
         var comps = URLComponents(url: baseURL.appendingPathComponent("metars"),
                                   resolvingAgainstBaseURL: false)
         comps?.queryItems = [
             URLQueryItem(name: "lat", value: String(lat)),
             URLQueryItem(name: "lon", value: String(lon)),
         ]
+        if let half { comps?.queryItems?.append(URLQueryItem(name: "half", value: String(half))) }
         return try await get(comps?.url)
     }
 

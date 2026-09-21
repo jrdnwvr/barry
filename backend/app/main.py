@@ -142,7 +142,7 @@ async def radar_hrrr():
 async def get_metars(
     lat: float = Query(..., ge=-90, le=90),
     lon: float = Query(..., ge=-180, le=180),
-    half: float = Query(3.0, ge=0.5, le=5.0),
+    half: float = Query(3.0, ge=0.5, le=30.0),
 ):
     """Latest report at every station within ±half degrees of a point, from
     the server's bulk METAR table (no upstream call per request): the radar's
@@ -156,8 +156,8 @@ async def get_metars(
 async def radar_pressure(
     lat: float = Query(..., ge=-90, le=90),
     lon: float = Query(..., ge=-180, le=180),
-    latSpan: float = Query(..., gt=0, le=30),
-    lonSpan: float = Query(..., gt=0, le=60),
+    latSpan: float = Query(..., gt=0),
+    lonSpan: float = Query(..., gt=0),
 ):
     """Isobars (every 4 hPa) and isallobars (±1/2/3 hPa per 3 h) for a map
     region, contoured from Barry's own station table. No upstream call."""
@@ -192,8 +192,8 @@ async def radar_frames():
 async def radar_field(
     lat: float = Query(..., ge=-90, le=90),
     lon: float = Query(..., ge=-180, le=180),
-    latSpan: float = Query(..., gt=0, le=30),
-    lonSpan: float = Query(..., gt=0, le=60),
+    latSpan: float = Query(..., gt=0),
+    lonSpan: float = Query(..., gt=0),
 ):
     """Model wind + boundary-layer top on the radar's sample grid for a map
     region. One upstream call per region cell per ten minutes, shared by

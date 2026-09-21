@@ -43,19 +43,33 @@ final class RadarModel: ObservableObject {
     /// Reporting stations with their latest wind (barb / speed layer).
     @Published var stationObs: [StationObs] = []
     private var stationTask: Task<Void, Never>?
-    private var stationsFetchedAround: CLLocationCoordinate2D?
+    private var stationsFetchedFor: MKCoordinateRegion?
 
     /// Fetch stations for a region center. The backend slices ±3° out of its
     /// in-memory METAR table (no upstream call), so this is cheap; still, only
     /// bother it after a real move (~1.5°, half the box).
-    func fetchStations(center: CLLocationCoordinate2D) async {
-        if let prev = stationsFetchedAround,
-           abs(prev.latitude - center.latitude) < 1.5, abs(prev.longitude - center.longitude) < 1.5,
-           !stationObs.isEmpty {
-            return
+    /// Box half-width for a region: wide enough to cover what is on screen,
+    /// with the old ±3° as the floor so a close-in view behaves as before.
+    private static func stationHalf(_ r: MKCoordinateRegion) -> Double {
+        max(3.0, min(30.0, r.span.latitudeDelta * 0.7))
+    }
+
+    func fetchStations(region: MKCoordinateRegion) async {
+        // Reuse what we have while the fetched box still comfortably covers
+        // the map and the zoom has not changed much.
+        if let prev = stationsFetchedFor, !stationObs.isEmpty {
+            let ratio = region.span.latitudeDelta / prev.span.latitudeDelta
+            let slack = Self.stationHalf(prev) * 0.5
+            if ratio > 0.6, ratio < 1.6,
+               abs(prev.center.latitude - region.center.latitude) < slack,
+               abs(prev.center.longitude - region.center.longitude) < slack {
+                return
+            }
         }
-        guard let resp = try? await BarryAPI().metars(lat: center.latitude, lon: center.longitude) else { return }
-        stationsFetchedAround = center
+        guard let resp = try? await BarryAPI().metars(lat: region.center.latitude,
+                                                      lon: region.center.longitude,
+                                                      half: Self.stationHalf(region)) else { return }
+        stationsFetchedFor = region
         stationObs = resp.stations
     }
 
@@ -309,7 +323,7 @@ final class RadarModel: ObservableObject {
             stationTask = Task {
                 try? await Task.sleep(nanoseconds: 700_000_000)
                 guard !Task.isCancelled else { return }
-                await fetchStations(center: region.center)
+                await fetchStations(region: region)
             }
         }
         if wind {

@@ -47,7 +47,8 @@ final class PressureFieldRenderer: MKOverlayRenderer {
             for line in field.isobars {
                 // Indigo, not gray: gray reads as a road on Apple's map.
                 drawLine(line, color: UIColor.systemIndigo.withAlphaComponent(0.85), width: 1.6 * scale,
-                         dash: nil, label: String(Int(line.level)), scale: scale, visible: visible, in: ctx)
+                         dash: nil, label: String(Int(line.level)), unit: "hPa",
+                         scale: scale, visible: visible, in: ctx)
             }
         }
         if st.showIsallobars {
@@ -99,8 +100,13 @@ final class PressureFieldRenderer: MKOverlayRenderer {
         ctx.restoreGState()
     }
 
+    /// `unit` is spelled out on every label. A paper chart leaves the numbers
+    /// bare and puts the unit in its legend, but a bare "1020" in an app set
+    /// to inHg has been read as some other unit entirely, and a label that
+    /// only appears where a line starts is usually off screen.
     private func drawLine(_ line: ContourLine, color: UIColor, width: CGFloat, dash: [CGFloat]?,
-                          label: String, scale: CGFloat, visible: MKMapRect, in ctx: CGContext) {
+                          label: String, unit: String? = nil, scale: CGFloat,
+                          visible: MKMapRect, in ctx: CGContext) {
         let pts = line.points.compactMap { p -> CGPoint? in
             guard p.count == 2 else { return nil }
             return point(for: MKMapPoint(CLLocationCoordinate2D(latitude: p[0], longitude: p[1])))
@@ -124,7 +130,6 @@ final class PressureFieldRenderer: MKOverlayRenderer {
         // knockouts so they stay legible over the radar (the chart style).
         let font = UIFont.systemFont(ofSize: 9 * scale, weight: .bold)
         let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
-        let size = (label as NSString).size(withAttributes: attrs)
         let every: CGFloat = 170 * scale
         var run: CGFloat = every * 0.5
         var spots: [CGPoint] = []
@@ -140,11 +145,13 @@ final class PressureFieldRenderer: MKOverlayRenderer {
         ctx.saveGState()
         UIGraphicsPushContext(ctx)
         for sp in spots {
+            let text = (unit.map { "\(label) \($0)" } ?? label) as NSString
+            let size = text.size(withAttributes: attrs)
             let box = CGRect(x: sp.x - size.width / 2 - 2 * scale, y: sp.y - size.height / 2,
                              width: size.width + 4 * scale, height: size.height)
             ctx.setFillColor(UIColor.systemBackground.withAlphaComponent(0.75).cgColor)
             ctx.fill(box)
-            (label as NSString).draw(at: CGPoint(x: box.minX + 2 * scale, y: box.minY), withAttributes: attrs)
+            text.draw(at: CGPoint(x: box.minX + 2 * scale, y: box.minY), withAttributes: attrs)
         }
         UIGraphicsPopContext()
         ctx.restoreGState()
@@ -183,6 +190,10 @@ final class PressureFieldRenderer: MKOverlayRenderer {
         for row in grid.values { for v in row { if let v { vals.append(v) } } }
         guard let lo = vals.min(), let hi = vals.max() else { return nil }
         var px = [UInt8](repeating: 0, count: w * h * 4)
+        // The grid covers a bounded region and the map does not, so the shading
+        // used to end on a hard rectangle wherever the two disagreed. Fade the
+        // outer cells out instead.
+        let feather = max(1.0, Double(min(w, h)) * 0.08)
         for j in 0..<h {
             for i in 0..<w {
                 // Image row 0 = north = grid's last row.
@@ -190,7 +201,8 @@ final class PressureFieldRenderer: MKOverlayRenderer {
                 let o = (j * w + i) * 4
                 guard let v else { continue }
                 let (r, g, b, a) = PressureShadeColor.rgba(v, lo: lo, hi: hi, kind: kind)
-                px[o] = r; px[o + 1] = g; px[o + 2] = b; px[o + 3] = a
+                let edge = min(1.0, min(Double(min(i, w - 1 - i)), Double(min(j, h - 1 - j))) / feather)
+                px[o] = r; px[o + 1] = g; px[o + 2] = b; px[o + 3] = UInt8(Double(a) * edge)
             }
         }
         let cs = CGColorSpaceCreateDeviceRGB()

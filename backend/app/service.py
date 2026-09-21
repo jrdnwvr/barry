@@ -549,7 +549,7 @@ class PressureService:
         """Stations within ±half degrees of a point, sliced from the in-memory
         bulk table (no upstream call per user). Dense areas are thinned on a
         grid to STATIONS_MAX, keeping the fullest report per cell."""
-        half = max(0.5, min(5.0, half))
+        half = max(0.5, min(30.0, half))
         cache_key = f"stations:{round(lat * 5) / 5}:{round(lon * 5) / 5}:{half}"
         cached = await self.cache.get(cache_key)
         if cached is not None:

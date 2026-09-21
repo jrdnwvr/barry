@@ -97,6 +97,10 @@ def get_service() -> PressureService:
 
 
 log = logging.getLogger(__name__)
+# httpx logs every upstream URL at INFO, query string included, which put
+# client coordinates back into the container log after the access log went.
+for _noisy in ("httpx", "httpcore"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 
 STATIC = Path(__file__).resolve().parent / "static"
 

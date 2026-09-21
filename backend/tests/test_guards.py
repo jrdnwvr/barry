@@ -148,3 +148,12 @@ async def test_upstream_failure_body_carries_no_upstream_detail(client):
         r = await c.get("/radar/frames")
         assert r.status_code == 503
         assert "example" not in r.text and "key=" not in r.text and "boom" not in r.text
+
+
+@pytest.mark.asyncio
+async def test_forecast_upstream_url_carries_the_cell_not_the_point(client, upstream):
+    s = PressureService(client)
+    await s.get_forecast(39.1234, -84.4321)
+    url = str(upstream.om_calls[0].url)
+    assert "latitude=39.1&" in url and "longitude=-84.4&" in url
+    assert "39.1234" not in url and "84.4321" not in url

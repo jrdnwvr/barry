@@ -319,7 +319,10 @@ class PressureService:
     ) -> ForecastResponse:
         # 0.1 deg cells: finer than that is noise for a point forecast, and
         # at 0.01 a sweep of coordinates was an unbounded Open-Meteo bill.
-        cache_key = f"forecast:{round(lat, 1)}:{round(lon, 1)}"
+        # The same cell goes upstream: one forecast per cell is what the cache
+        # promises, and the precise point never leaves the server.
+        lat, lon = round(lat, 1), round(lon, 1)
+        cache_key = f"forecast:{lat}:{lon}"
         last_good_key = f"{cache_key}:lastgood"
         if use_cache:
             cached = await self.cache.get(cache_key)

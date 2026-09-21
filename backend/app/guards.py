@@ -59,3 +59,46 @@ class RateGate:
     def require(self, n: float = 1.0) -> None:
         if not self.take(n):
             raise RateLimited()
+
+
+class IPLimiter:
+    """One token bucket per client address, bounded in number so a scan of
+    addresses cannot grow memory. `per_minute` of 0 disables the limiter."""
+
+    def __init__(self, per_minute: float = 60, *, max_keys: int = 10_000, clock=time.monotonic) -> None:
+        self.per_minute = float(per_minute)
+        self.max_keys = max_keys
+        self._clock = clock
+        self._buckets: dict[str, RateGate] = {}
+
+    def allow(self, key: str) -> bool:
+        if self.per_minute <= 0:
+            return True
+        gate = self._buckets.get(key)
+        if gate is None:
+            if len(self._buckets) >= self.max_keys:
+                # Drop the bucket that has gone longest without a request.
+                oldest = min(self._buckets, key=lambda k: self._buckets[k]._last)
+                del self._buckets[oldest]
+            gate = RateGate(self.per_minute, clock=self._clock)
+            self._buckets[key] = gate
+        return gate.take()
+
+
+def client_key(peer: str | None, cf_connecting_ip: str | None) -> str:
+    """Which address a request counts against. Through the tunnel the peer is
+    the cloudflared container and the real address is in CF-Connecting-IP;
+    that header is trusted only when the peer is a private address, which is
+    the only place the tunnel can be."""
+    if cf_connecting_ip and peer and _is_private(peer):
+        return cf_connecting_ip.strip()
+    return peer or "unknown"
+
+
+def _is_private(ip: str) -> bool:
+    try:
+        import ipaddress
+        a = ipaddress.ip_address(ip)
+        return a.is_private or a.is_loopback
+    except ValueError:
+        return False

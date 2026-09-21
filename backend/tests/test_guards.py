@@ -86,3 +86,41 @@ async def test_routes_reject_junk_before_the_service(client):
             assert r.status_code == 422, url
         r = await c.get("/pressure/KLUK?hours=24")
         assert r.status_code == 200
+
+
+def test_client_key_trusts_the_tunnel_header_only_from_a_private_peer():
+    from app.guards import client_key
+    assert client_key("172.18.0.5", "203.0.113.9") == "203.0.113.9"   # cloudflared container
+    assert client_key("8.8.8.8", "203.0.113.9") == "8.8.8.8"         # public peer: header ignored
+    assert client_key("127.0.0.1", None) == "127.0.0.1"
+
+
+def test_ip_limiter_is_bounded_in_keys():
+    from app.guards import IPLimiter
+    lim = IPLimiter(per_minute=1000, max_keys=3)
+    for i in range(10):
+        assert lim.allow(f"10.0.0.{i}")
+    assert len(lim._buckets) == 3
+
+
+@pytest.mark.asyncio
+async def test_per_ip_budget_returns_429_but_never_for_healthz(client):
+    from app.main import app
+    from app.guards import IPLimiter
+    app.state.service = PressureService(client)
+    app.state.ip_limiter = IPLimiter(per_minute=2)
+    try:
+        # raise_app_exceptions=False: /healthz has no scheduler state outside
+        # the lifespan and would otherwise raise here instead of answering.
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+                                     base_url="http://t") as c:
+            codes = [(await c.get("/pressure/KLUK")).status_code for _ in range(3)]
+            assert codes == [200, 200, 429]
+            # Exempt from the budget. (Without the lifespan there is no
+            # scheduler state, so only the non-429 part is meaningful here.)
+            assert (await c.get("/healthz")).status_code != 429
+            # A different address behind the tunnel has its own budget.
+            r = await c.get("/pressure/KLUK", headers={"cf-connecting-ip": "203.0.113.7"})
+            assert r.status_code == 200
+    finally:
+        app.state.ip_limiter = IPLimiter(per_minute=0)

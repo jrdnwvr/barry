@@ -28,7 +28,7 @@ services:
     # The tunnel does NOT need this — it reaches the container over the compose
     # network as http://barry-backend:8080.
     ports:
-      - "8077:8080"
+      - "127.0.0.1:8077:8080"   # Tower-local only; the LAN went round Cloudflare
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/healthz').status==200 else 1)"]
       interval: 30s

@@ -15,15 +15,16 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 import httpx
+import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi import Path as PathParam   # pathlib.Path is the file one below
 from fastapi.responses import FileResponse, JSONResponse
 
 from . import stations
 from .scheduler import Scheduler
-from .guards import InvalidStation, RateLimited
+from .guards import InvalidStation, IPLimiter, RateLimited, client_key
 from .service import PressureService
 
 logging.basicConfig(level=logging.INFO)
@@ -52,6 +53,25 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Barry backend", version="1.0", lifespan=lifespan)
 
 STATION_PATTERN = r"^[A-Za-z0-9]{3,4}$"
+
+# Per-address request budget. Cloudflare's own rule is the outer guard; this
+# is the backstop for anything that reaches the container another way, and
+# it is what actually keys on the real client address behind the tunnel.
+# BARRY_RATE_PER_MIN=0 disables it (tests, local dev).
+app.state.ip_limiter = IPLimiter(per_minute=float(os.environ.get("BARRY_RATE_PER_MIN", "60")))
+
+
+@app.middleware("http")
+async def _per_ip_budget(request: Request, call_next):
+    if request.url.path == "/healthz":
+        return await call_next(request)
+    limiter: IPLimiter = request.app.state.ip_limiter
+    key = client_key(request.client.host if request.client else None,
+                     request.headers.get("cf-connecting-ip"))
+    if not limiter.allow(key):
+        return JSONResponse(status_code=429, content={"detail": "too many requests"},
+                            headers={"Retry-After": "30"})
+    return await call_next(request)
 
 
 @app.exception_handler(InvalidStation)

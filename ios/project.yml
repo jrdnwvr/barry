@@ -13,8 +13,8 @@ name: Barry
 options:
   bundleIdPrefix: me.wvr
   deploymentTarget:
-    iOS: "18.0"
-    watchOS: "11.0"
+    iOS: "17.0"
+    watchOS: "10.0"
   createIntermediateGroups: true
 
 settings:

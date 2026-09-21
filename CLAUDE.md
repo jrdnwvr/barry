@@ -6,9 +6,11 @@ pressure, not the absolute value. Barry shows the −24h observed / +24h forecas
 pressure curve and turns the 3-hour tendency into a plain-language verdict and an
 at-a-glance watch complication.
 
-- **Platforms:** iOS 18+ (SwiftUI + Swift Charts), watchOS 11+ (SwiftUI +
-  WidgetKit complication), backend in Python (FastAPI). The floor was raised
-  from 17/10 on 2026-09-21; scroll-visibility APIs need 18.
+- **Platforms:** iOS 17+ (SwiftUI + Swift Charts), watchOS 10+ (SwiftUI +
+  WidgetKit complication), backend in Python (FastAPI). Briefly raised to
+  18/11 on 2026-09-21 and reverted: a Pilots tester's iPhone is on 17.0.3 and
+  is the most active one. On-screen detection uses GeometryReader instead of
+  iOS 18's `onScrollVisibilityChange`.
 - **Bundle IDs:** `me.wvr.barry`, `.watchkitapp`, `.watchkitapp.complication`.
   App Group: `group.me.wvr.barry`.
 - **Backend prod host (when deployed):** `https://barry.wide-stack.com`. Local dev

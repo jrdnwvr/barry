@@ -7,6 +7,12 @@
 import SwiftUI
 import CoreLocation
 
+/// Where the dashboard's radar card sits inside the scroll view.
+private struct RadarCardFrame: PreferenceKey {
+    static let defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
+}
+
 struct ContentView: View {
     @EnvironmentObject var store: PressureStore
     @EnvironmentObject var barometer: BarometerManager
@@ -28,6 +34,8 @@ struct ContentView: View {
     @State private var showRadarFullScreen = false
     /// The dashboard's radar card only animates while it is on screen.
     @State private var radarCardOnScreen = true
+    private static let dashSpace = "dashboard"
+
 
     private var unit: PressureUnit { PressureUnit(rawValue: unitRaw) ?? .inHg }
     private var chartWindow: ChartWindow { ChartWindow(rawValue: chartWindowRaw) ?? .hours6 }
@@ -121,9 +129,19 @@ struct ContentView: View {
         if isDashboard, case .loaded(let combined) = store.state {
             dashboard(combined)
         } else {
-            ScrollView {
-                content
-                    .padding(.horizontal)
+            // The outer reader knows the viewport height before the content
+            // lays out, and the card publishes where it sits, so the two are
+            // always known together. iOS 18 would do this with one modifier.
+            GeometryReader { outer in
+                ScrollView {
+                    content
+                        .padding(.horizontal)
+                }
+                .coordinateSpace(name: Self.dashSpace)
+                .onPreferenceChange(RadarCardFrame.self) { f in
+                    let onScreen = f != .zero && f.maxY > 0 && f.minY < outer.size.height
+                    if onScreen != radarCardOnScreen { radarCardOnScreen = onScreen }
+                }
             }
             .refreshable { await reload() }
             .navigationDestination(isPresented: $showRadarFullScreen) {
@@ -261,8 +279,14 @@ struct ContentView: View {
                            embedded: true,
                            active: radarCardOnScreen)
                     .frame(height: 440)
-                    .onScrollVisibilityChange(threshold: 0.05) { visible in
-                        radarCardOnScreen = visible
+                    // iOS 18 has onScrollVisibilityChange for exactly this. On
+                    // 17 the card measures itself against the scroll view and
+                    // only writes state when the answer actually flips.
+                    .background {
+                        GeometryReader { g in
+                            Color.clear.preference(key: RadarCardFrame.self,
+                                                   value: g.frame(in: .named(Self.dashSpace)))
+                        }
                     }
             }
         case .sensor:

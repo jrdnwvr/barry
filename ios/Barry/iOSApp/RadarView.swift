@@ -68,6 +68,11 @@ struct RadarPanel: View {
     private var showRadar: Bool = true
     @AppStorage("radarField", store: AppConfig.sharedDefaults)
     private var fieldRaw: String = RadarField.off.rawValue
+    /// Isobars are their own layer now, not part of the Pressure shading:
+    /// lines of equal sea-level pressure are worth having over plain radar,
+    /// or beside a trough, without a wash of colour under them.
+    @AppStorage("radarIsobars", store: AppConfig.sharedDefaults)
+    private var showIsobars: Bool = false
     /// WPC trough lines on their own chip: a trough is worth seeing on the
     /// plain radar without the rest of the surface chart.
     @AppStorage("radarTroughs", store: AppConfig.sharedDefaults)
@@ -135,20 +140,25 @@ struct RadarPanel: View {
     /// home barb's sheet; any of them wants it.
     private var wantsStations: Bool { stationsOn || showStorms || home?.asBarb == true }
 
+    /// Anything that needs the gridded pressure field behind it.
+    private var wantsPressure: Bool { field != .off || showIsobars }
+
     private var pressureState: PressureFieldState? {
+        guard wantsPressure else { return nil }
         // Lighter shading over the radar so the rain still reads through it.
         let opacity = showRadar ? 0.30 : 0.42
+        let shade: PressureShade
         switch field {
-        case .off: return nil
-        case .pressure:
-            return PressureFieldState(field: model.pressureField, showIsobars: true,
-                                      showIsallobars: false, shade: .pressure, shadeOpacity: opacity,
-                                      version: model.pressureVersion)
-        case .change:
-            return PressureFieldState(field: model.pressureField, showIsobars: false,
-                                      showIsallobars: true, shade: .change, shadeOpacity: opacity,
-                                      version: model.pressureVersion)
+        case .off: shade = .off
+        case .pressure: shade = .pressure
+        case .change: shade = .change
         }
+        // Isallobars belong to the change field; they mean nothing without it.
+        return PressureFieldState(field: model.pressureField,
+                                  showIsobars: showIsobars,
+                                  showIsallobars: field == .change,
+                                  shade: shade, shadeOpacity: opacity,
+                                  version: model.pressureVersion)
     }
 
     private var initialRegion: MKCoordinateRegion {
@@ -179,6 +189,12 @@ struct RadarPanel: View {
                 if old == "pressure" || old == "change" { fieldRaw = old }
                 AppConfig.sharedDefaults.removeObject(forKey: "radarBase")
             }
+            // Isobars used to be drawn by the Pressure shading. Now that they
+            // are their own chip, anyone who had Pressure on keeps their lines.
+            if !AppConfig.sharedDefaults.bool(forKey: "radarIsobarsSplit") {
+                if field == .pressure { showIsobars = true }
+                AppConfig.sharedDefaults.set(true, forKey: "radarIsobarsSplit")
+            }
             model.frontStyle = frontStyle
             await model.load()
             model.playing = autoplay
@@ -194,7 +210,7 @@ struct RadarPanel: View {
             if showStorms {
                 await model.fetchLightning(center: initialRegion.center)
             }
-            if field != .off {
+            if wantsPressure {
                 await model.fetchPressureField(region: model.lastRegion ?? initialRegion)
             }
         }
@@ -231,7 +247,8 @@ struct RadarPanel: View {
                 .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showKey) {
-            RadarKeySheet(radar: showRadar, field: field, wind: showWind, windStyle: windStyle,
+            RadarKeySheet(radar: showRadar, field: field, isobars: showIsobars,
+                          wind: showWind, windStyle: windStyle,
                           fronts: showFronts, troughs: showTroughs,
                           frontValidText: frontValidText, stations: stationsOn,
                           stationStyle: stationStyle, storms: showStorms,
@@ -274,7 +291,12 @@ struct RadarPanel: View {
             }
         }
         .onChange(of: fieldRaw) { _, _ in
-            if field != .off, model.pressureField == nil {
+            if wantsPressure, model.pressureField == nil {
+                Task { await model.fetchPressureField(region: model.lastRegion ?? initialRegion) }
+            }
+        }
+        .onChange(of: showIsobars) { _, on in
+            if on, model.pressureField == nil {
                 Task { await model.fetchPressureField(region: model.lastRegion ?? initialRegion) }
             }
         }
@@ -311,7 +333,7 @@ struct RadarPanel: View {
                          model.scheduleFieldReload(for: region,
                                                    wind: showWind,
                                                    stations: wantsStations,
-                                                   pressure: field != .off,
+                                                   pressure: wantsPressure,
                                                    storms: showStorms)
                      })
     }
@@ -449,6 +471,7 @@ struct RadarPanel: View {
                 chip("Radar", icon: "antenna.radiowaves.left.and.right", isOn: $showRadar)
                 chip("Pressure", icon: "circle.circle", isOn: fieldBinding(.pressure))
                 chip("Change", icon: "arrow.up.arrow.down", isOn: fieldBinding(.change))
+                chip("Isobars", icon: "circle.dashed", isOn: $showIsobars)
                 chip("Wind", icon: "wind", isOn: $showWind)
                 chip("Fronts", icon: "line.diagonal", isOn: $showFronts)
                 chip("Troughs", icon: "point.topleft.down.to.point.bottomright.curvepath", isOn: $showTroughs)
@@ -494,12 +517,16 @@ struct RadarPanel: View {
         if showRadar {
             radarControls
         }
-        switch field {
-        case .off:
+        switch (field, showIsobars) {
+        case (.off, false):
             EmptyView()
-        case .pressure:
+        case (.off, true):
             baseCaption("Isobars every 4 hPa, 2 on a flat day.")
-        case .change:
+        case (.pressure, true):
+            baseCaption("Sea-level pressure. Isobars every 4 hPa, 2 on a flat day.")
+        case (.pressure, false):
+            baseCaption("Sea-level pressure, gridded from station reports.")
+        case (.change, _):
             baseCaption("Pressure change over the last 3 h. Solid rising, dashed falling, H and L at the strongest.")
         }
         windCalmNote

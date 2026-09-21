@@ -11,6 +11,7 @@ import SwiftUI
 struct RadarKeySheet: View {
     let radar: Bool
     let field: RadarField
+    let isobars: Bool
     let wind: Bool
     let windStyle: String
     let fronts: Bool
@@ -137,7 +138,7 @@ struct RadarKeySheet: View {
                 ramp([Color(red: 0.45, green: 0.2, blue: 0.7), Color(red: 0.2, green: 0.45, blue: 0.9),
                       Color(red: 0.2, green: 0.7, blue: 0.5), Color(red: 0.85, green: 0.8, blue: 0.2),
                       Color(red: 0.95, green: 0.5, blue: 0.15)], low: "lower", high: "higher")
-                Text("Sea-level pressure from \(pressureStations) stations, gridded. Isobars every 4 hPa, or 2 on a flat day.")
+                Text("Sea-level pressure from \(pressureStations) stations, gridded.")
             }
         case .change:
             section("Pressure change", icon: "arrow.down.right.circle") {
@@ -145,6 +146,11 @@ struct RadarKeySheet: View {
                       Color(red: 0.15, green: 0.43, blue: 0.9).opacity(0.15), Color(red: 0.15, green: 0.43, blue: 0.9)],
                      low: "falling", high: "rising")
                 Text("3 h pressure change at each station, gridded. Solid rising, dashed falling, one line per hPa. H and L mark the strongest.")
+            }
+        }
+        if isobars {
+            section("Isobars", icon: "circle.dashed") {
+                Text("Equal sea-level pressure, every 4 hPa or 2 on a flat day. Tighter spacing means more wind, and it runs along them rather than across.")
             }
         }
     }

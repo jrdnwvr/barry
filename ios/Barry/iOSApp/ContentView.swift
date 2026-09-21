@@ -7,12 +7,6 @@
 import SwiftUI
 import CoreLocation
 
-/// Where the dashboard's radar card sits inside the scroll view.
-private struct RadarCardFrame: PreferenceKey {
-    static let defaultValue: CGRect = .zero
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
-}
-
 struct ContentView: View {
     @EnvironmentObject var store: PressureStore
     @EnvironmentObject var barometer: BarometerManager
@@ -34,7 +28,15 @@ struct ContentView: View {
     @State private var showRadarFullScreen = false
     /// The dashboard's radar card only animates while it is on screen.
     @State private var radarCardOnScreen = true
-    private static let dashSpace = "dashboard"
+
+    /// Height of the screen the app is on, in points. Available from the
+    /// first frame, which is the whole point of using it.
+    private static var screenHeight: CGFloat {
+        (UIApplication.shared.connectedScenes.first { $0.activationState == .foregroundActive }
+            as? UIWindowScene)?.screen.bounds.height
+        ?? (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.height
+        ?? 0
+    }
 
 
     private var unit: PressureUnit { PressureUnit(rawValue: unitRaw) ?? .inHg }
@@ -129,19 +131,9 @@ struct ContentView: View {
         if isDashboard, case .loaded(let combined) = store.state {
             dashboard(combined)
         } else {
-            // The outer reader knows the viewport height before the content
-            // lays out, and the card publishes where it sits, so the two are
-            // always known together. iOS 18 would do this with one modifier.
-            GeometryReader { outer in
-                ScrollView {
-                    content
-                        .padding(.horizontal)
-                }
-                .coordinateSpace(name: Self.dashSpace)
-                .onPreferenceChange(RadarCardFrame.self) { f in
-                    let onScreen = f != .zero && f.maxY > 0 && f.minY < outer.size.height
-                    if onScreen != radarCardOnScreen { radarCardOnScreen = onScreen }
-                }
+            ScrollView {
+                content
+                    .padding(.horizontal)
             }
             .refreshable { await reload() }
             .navigationDestination(isPresented: $showRadarFullScreen) {
@@ -280,12 +272,19 @@ struct ContentView: View {
                            active: radarCardOnScreen)
                     .frame(height: 440)
                     // iOS 18 has onScrollVisibilityChange for exactly this. On
-                    // 17 the card measures itself against the scroll view and
-                    // only writes state when the answer actually flips.
+                    // 17 the card measures its own window-space frame against
+                    // the screen. The screen height needs no layout pass, so
+                    // there is no window where one side is known and the other
+                    // is not, which is what sank the two attempts before this.
                     .background {
                         GeometryReader { g in
-                            Color.clear.preference(key: RadarCardFrame.self,
-                                                   value: g.frame(in: .named(Self.dashSpace)))
+                            let fr = g.frame(in: .global)
+                            let h = Self.screenHeight
+                            let onScreen = h <= 0 || (fr.maxY > 0 && fr.minY < h)
+                            Color.clear
+                                .onChange(of: onScreen, initial: true) { _, visible in
+                                    if visible != radarCardOnScreen { radarCardOnScreen = visible }
+                                }
                         }
                     }
             }

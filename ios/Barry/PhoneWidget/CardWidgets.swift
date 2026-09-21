@@ -192,7 +192,14 @@ struct FieldGlanceView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             if let v = cur.visibilitySM { row("Visibility", "\(v.formatted()) SM") }
                             if let ceiling = ceilingText(cur) { row(isCeiling(cur) ? "Ceiling" : "Clouds", ceiling) }
-                            if let t = cur.temp { row("Temp", "\(Int(t.rounded()))°\(cur.dewpoint.map { " / \(Int($0.rounded()))°" } ?? "")") }
+                            // Both from the field's METAR: air temperature, then dew point.
+                            if let t = cur.temp {
+                                if let d = cur.dewpoint {
+                                    row("Temp / dew", "\(Int(t.rounded()))° / \(Int(d.rounded()))°")
+                                } else {
+                                    row("Temp", "\(Int(t.rounded()))°")
+                                }
+                            }
                         }
                         VStack(alignment: .leading, spacing: 3) {
                             if let da = c.conditions?.densityAltitudeFt { row("Density alt", "\(da.formatted()) ft") }

@@ -26,7 +26,12 @@ final class WindFlowView: UIView {
 
     /// The wind grid — every sample, calm ones included.
     var samples: [WindArrow] = [] {
-        didSet { rebuildField(); reseed() }
+        didSet {
+            rebuildField()
+            // A fresh grid should bend the streaks that are already flying,
+            // not restart them. Only seed when there is nothing on screen.
+            if particles.isEmpty { reseed() }
+        }
     }
 
     // Tunables: "less busy" lives here.

@@ -11,6 +11,12 @@
 //  therefore carry the streaks along with the terrain instead of blanking the
 //  layer and starting over, which is what a pan used to cost.
 //
+//  Drawing is Metal. The simulation stays on the CPU, because a couple of
+//  hundred particles is nothing, but each frame's segments are expanded into
+//  quads and handed over as ONE buffer for ONE draw call. The Core Graphics
+//  path this replaced re-rasterized the whole view on the main thread thirty
+//  times a second, which is what the dashboard was paying for.
+//
 //  Speed drives tone as well as presence. The fastest streaks are drawn in the
 //  foreground colour and slower ones wash out toward the map's own background
 //  tone before fading away, so on a light map the quick air is near black and
@@ -19,6 +25,7 @@
 //  those palettes for hue.
 
 import MapKit
+import Metal
 import UIKit
 
 final class WindFlowView: UIView {
@@ -53,13 +60,15 @@ final class WindFlowView: UIView {
     /// Particles per unit of view area, so the dashboard's card does
     /// proportionally less work than the full screen.
     private var targetParticles: Int {
-        max(70, min(240, Int(bounds.width * bounds.height / 1150)))
+        max(70, min(Self.maxParticles, Int(bounds.width * bounds.height / 1150)))
     }
+    private static let maxParticles = 240
     private let trailLength = 18               // points kept in the streak
     private let trailStride = 3                // frames between kept points
     private let pxPerKmh: CGFloat = 1.25       // 20 km/h -> 25 px/s on screen
     private let minLife = 90, maxLife = 180    // frames at 30 fps
     private let fps = 30
+    private let lineWidth: CGFloat = 1.6
     /// The speed that reads as full strength on the ramp.
     private let fastKmh: CGFloat = 45
 
@@ -79,28 +88,92 @@ final class WindFlowView: UIView {
     private var link: CADisplayLink?
     private var lastScale: Double = 0
 
-    /// Greyscale ramp from the map's background tone to its foreground, built
-    /// once per appearance rather than per particle per frame.
-    private var ramp: [UIColor] = []
+    /// Greyscale ramp from the map's background tone to its foreground, as raw
+    /// bytes because that is what goes into the vertex buffer.
+    private var toneRGB: [(UInt8, UInt8, UInt8)] = []
     private var rampStyle: UIUserInterfaceStyle = .unspecified
     private static let rampSteps = 16
-    /// Every colour the layer can stroke, [tone][alpha], resolved once. Making
-    /// these per segment meant allocating a CGColor tens of thousands of times
-    /// a second, which the dashboard paid for in dropped scroll frames.
-    private var inks: [[CGColor]] = []
-    private static let alphaSteps = 10
     /// taper[n][k] = (k/n)^1.8, the fade along a trail of n points.
     private var taper: [[CGFloat]] = []
+
+    // MARK: Metal
+
+    /// One quad per segment, six vertices each, every trail full.
+    private static let maxVertices = maxParticles * 18 * 6
+
+    private struct FlowVertex {
+        var x: Float
+        var y: Float
+        var r: UInt8
+        var g: UInt8
+        var b: UInt8
+        var a: UInt8
+    }
+
+    override class var layerClass: AnyClass { CAMetalLayer.self }
+    private var metalLayer: CAMetalLayer { layer as! CAMetalLayer }
+    private var queue: MTLCommandQueue?
+    private var pipeline: MTLRenderPipelineState?
+    private var vertexBuffer: MTLBuffer?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         isOpaque = false
         backgroundColor = .clear
         isUserInteractionEnabled = false
-        contentMode = .redraw
+        setUpMetal()
     }
 
     required init?(coder: NSCoder) { fatalError("unused") }
+
+    private func setUpMetal() {
+        guard let device = MTLCreateSystemDefaultDevice() else { return }
+        metalLayer.device = device
+        metalLayer.pixelFormat = .bgra8Unorm
+        metalLayer.isOpaque = false
+        metalLayer.framebufferOnly = true
+        queue = device.makeCommandQueue()
+
+        guard let library = device.makeDefaultLibrary(),
+              let vertexFn = library.makeFunction(name: "wind_vertex"),
+              let fragmentFn = library.makeFunction(name: "wind_fragment") else { return }
+
+        let layout = MTLVertexDescriptor()
+        layout.attributes[0].format = .float2
+        layout.attributes[0].offset = 0
+        layout.attributes[0].bufferIndex = 0
+        layout.attributes[1].format = .uchar4Normalized
+        layout.attributes[1].offset = MemoryLayout<Float>.size * 2
+        layout.attributes[1].bufferIndex = 0
+        layout.layouts[0].stride = MemoryLayout<FlowVertex>.stride
+
+        let desc = MTLRenderPipelineDescriptor()
+        desc.vertexFunction = vertexFn
+        desc.fragmentFunction = fragmentFn
+        desc.vertexDescriptor = layout
+        if let colour = desc.colorAttachments[0] {
+            colour.pixelFormat = .bgra8Unorm
+            colour.isBlendingEnabled = true
+            colour.rgbBlendOperation = .add
+            colour.alphaBlendOperation = .add
+            // The fragment shader premultiplies, so the source factors are one.
+            colour.sourceRGBBlendFactor = .one
+            colour.sourceAlphaBlendFactor = .one
+            colour.destinationRGBBlendFactor = .oneMinusSourceAlpha
+            colour.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        }
+        pipeline = try? device.makeRenderPipelineState(descriptor: desc)
+        vertexBuffer = device.makeBuffer(length: Self.maxVertices * MemoryLayout<FlowVertex>.stride,
+                                         options: .storageModeShared)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let scale = max(1, traitCollection.displayScale)
+        metalLayer.contentsScale = scale
+        metalLayer.drawableSize = CGSize(width: bounds.width * scale, height: bounds.height * scale)
+        if particles.isEmpty { reseed() }
+    }
 
     // MARK: Lifecycle
 
@@ -143,7 +216,6 @@ final class WindFlowView: UIView {
                 particles[i] = spawn(rect: rect, scale: scale)
             }
         }
-        setNeedsDisplay()
     }
 
     // MARK: Field
@@ -208,7 +280,6 @@ final class WindFlowView: UIView {
         particles = (0..<targetParticles).map { _ in spawn(rect: rect, scale: scale) }
         // Stagger ages so the whole field doesn't blink out in sync.
         for i in particles.indices { particles[i].age = Int.random(in: 0..<particles[i].life) }
-        setNeedsDisplay()
     }
 
     private func spawn(rect: MKMapRect, scale: Double) -> Particle {
@@ -220,7 +291,7 @@ final class WindFlowView: UIView {
     }
 
     @objc private func tick() {
-        guard !field.isEmpty, alpha > 0, bounds.width > 0, let map = mapView else { return }
+        guard !field.isEmpty, bounds.width > 0, let map = mapView else { return }
         if particles.isEmpty { reseed(); return }
         let rect = map.visibleMapRect
         let scale = rect.size.width / Double(bounds.width)
@@ -236,7 +307,7 @@ final class WindFlowView: UIView {
                                   y: pt.head.y - Double(v * pxPerKmh * dt) * scale)
             pt.head = next
             // The head moves every frame; the trail only records every few, so
-            // the streak reaches further back without costing more strokes.
+            // the streak reaches further back without costing more vertices.
             pt.sinceSample += 1
             if pt.sinceSample >= trailStride {
                 pt.sinceSample = 0
@@ -250,10 +321,10 @@ final class WindFlowView: UIView {
                 || s.y < -margin || s.y > bounds.height + margin
             particles[i] = (pt.age >= pt.life || gone) ? spawn(rect: rect, scale: scale) : pt
         }
-        setNeedsDisplay()
+        render(mapRect: rect, scale: scale)
     }
 
-    // MARK: Drawing
+    // MARK: Colour
 
     /// Background tone to foreground tone in even steps. Neutral by
     /// construction, so it sits on the coloured field overlays without
@@ -262,23 +333,19 @@ final class WindFlowView: UIView {
         let traits = traitCollection
         let slow = UIColor.systemBackground.resolvedColor(with: traits)
         let fast = UIColor.label.resolvedColor(with: traits)
-        ramp = (0...Self.rampSteps).map { i in
+        toneRGB = (0...Self.rampSteps).map { i in
             // Reach most of the tone before top speed, so an ordinary breeze
             // still reads rather than sitting washed out at the pale end.
-            Self.blend(slow, fast, pow(CGFloat(i) / CGFloat(Self.rampSteps), 0.7))
-        }
-        inks = ramp.map { c in
-            (0...Self.alphaSteps).map {
-                c.withAlphaComponent(CGFloat($0) / CGFloat(Self.alphaSteps)).cgColor
-            }
+            let c = Self.blend(slow, fast, pow(CGFloat(i) / CGFloat(Self.rampSteps), 0.7))
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            c.getRed(&r, green: &g, blue: &b, alpha: &a)
+            return (Self.byte(r), Self.byte(g), Self.byte(b))
         }
         rampStyle = traits.userInterfaceStyle
     }
 
-    private func buildTaper() {
-        taper = (0...trailLength).map { n in
-            (0...max(1, n)).map { k in n <= 1 ? 1 : pow(CGFloat(k) / CGFloat(n), 1.8) }
-        }
+    private static func byte(_ v: CGFloat) -> UInt8 {
+        UInt8(max(0, min(255, (v * 255).rounded())))
     }
 
     private static func blend(_ a: UIColor, _ b: UIColor, _ t: CGFloat) -> UIColor {
@@ -290,65 +357,101 @@ final class WindFlowView: UIView {
                        blue: ab + (bb - ab) * t, alpha: 1)
     }
 
-    override func draw(_ rect: CGRect) {
-        guard let ctx = UIGraphicsGetCurrentContext(), let map = mapView, bounds.width > 0 else { return }
-        if inks.isEmpty || rampStyle != traitCollection.userInterfaceStyle { rebuildRamp() }
-        if taper.isEmpty { buildTaper() }
-        let mrect = map.visibleMapRect
-        let scale = mrect.size.width / Double(bounds.width)
-
-        // Collect every segment into one path per (tone, alpha) pair, then
-        // stroke each pair once. Same picture as stroking segment by segment,
-        // for a tiny fraction of the Core Graphics calls.
-        let alphas = Self.alphaSteps + 1
-        var paths = [CGMutablePath?](repeating: nil, count: (Self.rampSteps + 1) * alphas)
-
-        @inline(__always) func add(_ idx: Int, _ from: CGPoint, _ to: CGPoint) {
-            let path: CGMutablePath
-            if let existing = paths[idx] { path = existing } else {
-                path = CGMutablePath()
-                paths[idx] = path
-            }
-            path.move(to: from)
-            path.addLine(to: to)
+    private func buildTaper() {
+        taper = (0...trailLength).map { n in
+            (0...max(1, n)).map { k in n <= 1 ? 1 : pow(CGFloat(k) / CGFloat(n), 1.8) }
         }
+    }
 
+    // MARK: Rendering
+
+    private func render(mapRect: MKMapRect, scale: Double) {
+        guard let queue, let pipeline, let vertexBuffer,
+              bounds.width > 0, bounds.height > 0 else { return }
+        if toneRGB.isEmpty || rampStyle != traitCollection.userInterfaceStyle { rebuildRamp() }
+        if taper.isEmpty { buildTaper() }
+
+        let count = fillVertices(into: vertexBuffer, mapRect: mapRect, scale: scale)
+
+        guard let drawable = metalLayer.nextDrawable() else { return }
+        let pass = MTLRenderPassDescriptor()
+        pass.colorAttachments[0].texture = drawable.texture
+        pass.colorAttachments[0].loadAction = .clear
+        pass.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
+        pass.colorAttachments[0].storeAction = .store
+        guard let buffer = queue.makeCommandBuffer(),
+              let encoder = buffer.makeRenderCommandEncoder(descriptor: pass) else { return }
+        if count > 0 {
+            encoder.setRenderPipelineState(pipeline)
+            encoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
+            var viewport = SIMD2<Float>(Float(bounds.width), Float(bounds.height))
+            encoder.setVertexBytes(&viewport, length: MemoryLayout<SIMD2<Float>>.size, index: 1)
+            encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: count)
+        }
+        encoder.endEncoding()
+        buffer.present(drawable)
+        buffer.commit()
+    }
+
+    /// Expand every visible trail segment into a quad. Returns the vertex count.
+    private func fillVertices(into buffer: MTLBuffer, mapRect: MKMapRect, scale: Double) -> Int {
+        let out = buffer.contents().bindMemory(to: FlowVertex.self, capacity: Self.maxVertices)
+        let half = Float(lineWidth / 2)
+        var n = 0
         for pt in particles where !pt.trail.isEmpty {
             // Speed sets tone and presence together: quick air is dark and
             // solid, calm air washes to the map's own tone and disappears.
             let t = min(1, pt.speed / fastKmh)
-            let tone = min(Self.rampSteps, Int(t * CGFloat(Self.rampSteps)))
+            let rgb = toneRGB[min(Self.rampSteps, Int(t * CGFloat(Self.rampSteps)))]
             let presence = 0.10 + 0.55 * t
             // Fade in/out over the particle's life so births and deaths are quiet.
             let lifeFade = min(1, CGFloat(pt.age) / 15, CGFloat(pt.life - pt.age) / 15)
             let strength = presence * lifeFade
             guard strength > 0.015 else { continue }
-            let n = pt.trail.count
-            let row = taper[min(n, trailLength)]
-            let base = tone * alphas
-            var prev = Self.screen(pt.trail[0], rect: mrect, scale: scale)
-            for k in 1..<n {
-                let cur = Self.screen(pt.trail[k], rect: mrect, scale: scale)
+            let cnt = pt.trail.count
+            let row = taper[min(cnt, trailLength)]
+            var prev = Self.screen(pt.trail[0], rect: mapRect, scale: scale)
+            for k in 1..<cnt {
+                let cur = Self.screen(pt.trail[k], rect: mapRect, scale: scale)
                 // Taper hard toward the tail: a long streak stays light on the
                 // map, and the bright end shows which way the wind is going.
-                let step = Int(strength * row[min(k, row.count - 1)] * CGFloat(Self.alphaSteps) + 0.5)
-                if step > 0 { add(base + step, prev, cur) }
+                let alpha = Self.byte(strength * row[min(k, row.count - 1)])
+                if alpha > 3, n + 6 <= Self.maxVertices {
+                    n += Self.emit(out + n, prev, cur, rgb, alpha, half)
+                }
                 prev = cur
             }
             // The live segment from the last sample to the head, at full presence.
-            let step = Int(strength * CGFloat(Self.alphaSteps) + 0.5)
-            if step > 0 {
-                add(base + step, prev, Self.screen(pt.head, rect: mrect, scale: scale))
+            let alpha = Self.byte(strength)
+            if alpha > 3, n + 6 <= Self.maxVertices {
+                let head = Self.screen(pt.head, rect: mapRect, scale: scale)
+                n += Self.emit(out + n, prev, head, rgb, alpha, half)
             }
         }
+        return n
+    }
 
-        ctx.setLineCap(.round)
-        ctx.setLineWidth(1.6)
-        for idx in paths.indices {
-            guard let path = paths[idx] else { continue }
-            ctx.setStrokeColor(inks[idx / alphas][idx % alphas])
-            ctx.addPath(path)
-            ctx.strokePath()
+    @inline(__always)
+    private static func emit(_ out: UnsafeMutablePointer<FlowVertex>,
+                             _ a: CGPoint, _ b: CGPoint,
+                             _ rgb: (UInt8, UInt8, UInt8), _ alpha: UInt8,
+                             _ half: Float) -> Int {
+        let ax = Float(a.x), ay = Float(a.y)
+        let bx = Float(b.x), by = Float(b.y)
+        let dx = bx - ax, dy = by - ay
+        let len = (dx * dx + dy * dy).squareRoot()
+        guard len > 0.001 else { return 0 }
+        // Perpendicular, half a line width out on each side.
+        let nx = -dy / len * half, ny = dx / len * half
+        func v(_ x: Float, _ y: Float) -> FlowVertex {
+            FlowVertex(x: x, y: y, r: rgb.0, g: rgb.1, b: rgb.2, a: alpha)
         }
+        out[0] = v(ax + nx, ay + ny)
+        out[1] = v(ax - nx, ay - ny)
+        out[2] = v(bx + nx, by + ny)
+        out[3] = v(bx + nx, by + ny)
+        out[4] = v(ax - nx, ay - ny)
+        out[5] = v(bx - nx, by - ny)
+        return 6
     }
 }

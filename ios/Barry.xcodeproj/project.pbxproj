@@ -28,6 +28,7 @@
 		17B2F3F6A33ED2C6DB766640 /* ForecastCaveatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031482E889A2274CBD689E88 /* ForecastCaveatView.swift */; };
 		20AD2A1B5CC1C7738EAEF8F5 /* StormAlerter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E569F3B3B9FAB65C07970B1A /* StormAlerter.swift */; };
 		25F2CA5D0A085C6A963656C0 /* TendencyProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A24A6845ECB66698D61771D /* TendencyProvider.swift */; };
+		26D196BA1D0C9CD075B59F31 /* WindFlow.metal in Sources */ = {isa = PBXBuildFile; fileRef = 9C9E7A347455A6781BAB196E /* WindFlow.metal */; };
 		270E209661CB57713C9B71F5 /* BarometerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA32F779F49D1C628F2BC52E /* BarometerEngine.swift */; };
 		2BF26B141D9A63C4291EF0DF /* TafStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D63A9351C0871620CA4A195 /* TafStrip.swift */; };
 		2C56C28A6BD13F7F21CA306B /* BarryWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = F776D233FE3E44CDDD61C05B /* BarryWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -276,6 +277,7 @@
 		918B4D14CC966B0E820FC1AC /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		95423D24AF145867D59E1434 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		9639018DA53DA80272AC71E9 /* Barry.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Barry.entitlements; sourceTree = "<group>"; };
+		9C9E7A347455A6781BAB196E /* WindFlow.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = WindFlow.metal; sourceTree = "<group>"; };
 		A59F4AD2D2CF0AC8FB31B534 /* ConfirmationOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmationOverlayView.swift; sourceTree = "<group>"; };
 		AD313083D4B2A9BAD12BAB92 /* RunwayWindDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayWindDial.swift; sourceTree = "<group>"; };
 		B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureHistory.swift; sourceTree = "<group>"; };
@@ -467,6 +469,7 @@
 				E569F3B3B9FAB65C07970B1A /* StormAlerter.swift */,
 				CBA1D35A89B06FE9E7708D10 /* TafTimelineCard.swift */,
 				CFA4A69E8BBEEF268407FC68 /* WatchSync.swift */,
+				9C9E7A347455A6781BAB196E /* WindFlow.metal */,
 				39AF53020220091BA0FC5C07 /* WindFlowView.swift */,
 			);
 			path = iOSApp;
@@ -777,6 +780,7 @@
 				7917511FB9F6E4E7614296AA /* Tendency.swift in Sources */,
 				50F708BB96C5BBFE917DE01A /* TendencyProvider.swift in Sources */,
 				0F0411FE134D2DF658D00A67 /* WatchSync.swift in Sources */,
+				26D196BA1D0C9CD075B59F31 /* WindFlow.metal in Sources */,
 				56C21F3EA69EB17912672252 /* WindFlowView.swift in Sources */,
 				0C6CE77FC97065E5CF6D21D1 /* WindUnit.swift in Sources */,
 			);

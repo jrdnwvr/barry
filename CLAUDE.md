@@ -116,6 +116,9 @@ cd ~/barry/backend && .venv/bin/pytest -q     # run backend tests (36, no networ
 - **Backend runs ONE worker/instance** — the cache, registry, and scheduler are
   in-process. Scaling out needs Redis first (see `cache.py`).
 - **Tendency thresholds live in two files** (Python + Swift) by design — change both.
+- **Metal toolchain is a separate download** under Xcode 27:
+  `xcodebuild -downloadComponent MetalToolchain` (~840 MB). Without it
+  `WindFlow.metal` fails to compile and the whole app build fails.
 - **Xcode project is generated** by XcodeGen from `ios/project.yml`; it's gitignored.
   After editing `project.yml` or adding/renaming source files, re-run `xcodegen generate`.
 - **Set your signing Team** per target in Signing & Capabilities (free Apple ID is
@@ -168,7 +171,10 @@ radar or beside a trough), Wind / Fronts / Troughs (WPC trough lines on their
 own chip) / Stations / Lightning; `RadarKeySheet` lists only what is on. The
 `radarIsobarsSplit` flag migrates anyone who had Pressure on to keep lines. Radar tiles are read back
 to dBZ and repainted (`RadarPalette`); clusters of GLM flashes get a violet
-outline. Boundary-layer top lives on the main page (density altitude
+outline. The wind streaks (`WindFlowView` + `WindFlow.metal`) simulate on the
+CPU but render in Metal: every trail segment becomes a quad in one buffer,
+one draw call. Measured on the full-screen radar in the simulator, that took
+the app from 46% CPU to 21%. Boundary-layer top lives on the main page (density altitude
 card) now, not the map. **Lightning** (`backend/app/lightning.py`) is decoded
 from the METARs themselves (TS/VCTS + LTG remarks): `StationObs.lightning`,
 `CurrentObs.lightning`, `/combined.lightningNearby` (nearest fresh report

@@ -18,10 +18,12 @@ import httpx
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi import Path as PathParam   # pathlib.Path is the file one below
+from fastapi.responses import FileResponse, JSONResponse
 
 from . import stations
 from .scheduler import Scheduler
+from .guards import InvalidStation, RateLimited
 from .service import PressureService
 
 logging.basicConfig(level=logging.INFO)
@@ -48,6 +50,20 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Barry backend", version="1.0", lifespan=lifespan)
+
+STATION_PATTERN = r"^[A-Za-z0-9]{3,4}$"
+
+
+@app.exception_handler(InvalidStation)
+async def _invalid_station(_request, _exc):
+    return JSONResponse(status_code=422, content={"detail": "station must be 3 or 4 letters or digits"})
+
+
+@app.exception_handler(RateLimited)
+async def _rate_limited(_request, _exc):
+    # Constant body on purpose: which upstream and why is not the client's business.
+    return JSONResponse(status_code=503, content={"detail": "upstream budget exhausted, try again shortly"},
+                        headers={"Retry-After": "30"})
 
 
 def get_service() -> PressureService:
@@ -83,7 +99,8 @@ async def healthz():
 
 
 @app.get("/pressure/{station}")
-async def get_pressure(station: str, hours: int = Query(24, ge=1, le=24 * 15)):
+async def get_pressure(station: str = PathParam(..., pattern=STATION_PATTERN),
+                       hours: int = Query(24, ge=1, le=24)):
     service = get_service()
     resp = await service.get_pressure(station, hours=hours)
     return resp.model_dump(mode="json", by_alias=True)
@@ -101,7 +118,7 @@ async def get_forecast(
 
 @app.get("/combined")
 async def get_combined(
-    station: str = Query(...),
+    station: str = Query(..., pattern=STATION_PATTERN),
     lat: Optional[float] = Query(None, ge=-90, le=90),
     lon: Optional[float] = Query(None, ge=-180, le=180),
     tz: Optional[int] = Query(None, ge=-14 * 60, le=14 * 60,
@@ -114,7 +131,7 @@ async def get_combined(
 
 @app.get("/front")
 async def get_front(
-    station: str = Query(...),
+    station: str = Query(..., pattern=STATION_PATTERN),
     lat: Optional[float] = Query(None, ge=-90, le=90),
     lon: Optional[float] = Query(None, ge=-180, le=180),
 ):

@@ -59,15 +59,21 @@ class StationRegistry:
     registry after `ttl` seconds of no requests (default 24h per the brief).
     """
 
-    def __init__(self, *, ttl: float = 24 * 3600.0, clock=time.monotonic) -> None:
+    def __init__(self, *, ttl: float = 24 * 3600.0, cap: int = 2000, clock=time.monotonic) -> None:
         self._seen: Dict[str, float] = {}
         self._ttl = ttl
+        # Hard ceiling on what the scheduler will refresh. Without it one
+        # client could hand the scheduler a day of work on junk ids.
+        self._cap = cap
         self._clock = clock
         self._lock = asyncio.Lock()
 
     async def touch(self, station: str) -> None:
         async with self._lock:
             self._seen[station.upper()] = self._clock()
+            if len(self._seen) > self._cap:
+                oldest = min(self._seen, key=self._seen.get)
+                del self._seen[oldest]
 
     def restore(self, stations: List[str]) -> None:
         """Seed the registry (after a restart) as if each station had just

@@ -16,6 +16,7 @@ from typing import Dict, List, Optional
 import httpx
 
 from . import conditions as conditions_mod
+from .guards import RateGate, check_station
 from . import explain
 from . import flashes as flashes_mod
 from . import lightning as lightning_mod
@@ -165,6 +166,10 @@ class PressureService:
         self._client = client
         self.cache = cache or TTLCache()
         self.registry = registry or StationRegistry()
+        # Client-driven upstream budgets. AWC allows 100/min per IP and the
+        # scheduler shares that IP, so clients get well under half of it.
+        self.awc_gate = RateGate(per_minute=30)
+        self.om_gate = RateGate(per_minute=100)
         # (fetch time, {station: (obsTime, slp, altim, lat, lon)}), oldest first.
         # Restored from disk when a data dir is configured, so a restart
         # doesn't cost the front watch its 7.5 h warm-up.
@@ -182,18 +187,22 @@ class PressureService:
     async def get_pressure(
         self, station: str, *, hours: int = 24, use_cache: bool = True
     ) -> PressureResponse:
-        station = station.upper()
-        await self.registry.touch(station)
-        cache_key = f"pressure:{station}:{hours}"
+        station = check_station(station)
+        hours = max(1, min(24, hours))
+        # One key per station, always the full day: `hours` used to be part of
+        # the key, which let one client turn one station into hundreds of
+        # distinct upstream fetches. A shorter window is sliced off the cached day.
+        cache_key = f"pressure:{station}"
 
         if use_cache:
             cached = await self.cache.get(cache_key)
             if cached is not None:
-                return cached
+                await self.registry.touch(cached.station)
+                return self._slice_hours(cached, hours)
 
         degraded = False
         try:
-            parsed_all = await self._fetch_metars_retry([station], hours=hours)
+            parsed_all = await self._fetch_metars_retry([station], hours=24)
             parsed = parsed_all.get(station)
             used_station = station
             if parsed is None and len(station) == 3:
@@ -201,13 +210,14 @@ class PressureService:
                 # (CVG -> KCVG) — and that includes alphanumeric fields
                 # (I67 -> KI67). Retry the K form and adopt it as canonical.
                 k_station = "K" + station
-                parsed_all = await self._fetch_metars_retry([k_station], hours=hours)
+                parsed_all = await self._fetch_metars_retry([k_station], hours=24)
                 parsed = parsed_all.get(k_station)
                 if parsed is not None:
                     used_station = k_station
-                    await self.registry.touch(used_station)
             if parsed is None:
                 raise LookupError(f"no METAR data for {station}")
+            # Only a station that actually answered joins the scheduler's list.
+            await self.registry.touch(used_station)
             tendency = awc.build_tendency(parsed)
             elev = parsed.get("elev")
             if elev is None:
@@ -234,15 +244,25 @@ class PressureService:
             log.warning("pressure %s: upstream failed (%s: %s); falling back",
                         station, type(exc).__name__, exc)
             degraded = True
-            resp = await self._pressure_fallback(station, hours=hours)
+            resp = await self._pressure_fallback(station, hours=24)
 
         await self.cache.set(cache_key, resp, ttl=DEGRADED_TTL if degraded else PRESSURE_TTL)
-        return resp
+        return self._slice_hours(resp, hours)
+
+    @staticmethod
+    def _slice_hours(resp: PressureResponse, hours: int) -> PressureResponse:
+        """The cached day, trimmed to the window asked for."""
+        if hours >= 24 or not resp.series:
+            return resp
+        cutoff = _now() - timedelta(hours=hours)
+        return resp.model_copy(update={"series": [p for p in resp.series if p.t >= cutoff]})
 
     async def _fetch_metars_retry(self, ids: List[str], *, hours: int) -> Dict[str, dict]:
         """One METAR fetch, retried once on a transport error. AWC closes idle
         keep-alive connections; the first reuse after a quiet minute can fail
-        instantly with a dropped socket, and that must not become the answer."""
+        instantly with a dropped socket, and that must not become the answer.
+        Gated: this is the client-driven path to AWC."""
+        self.awc_gate.require()
         try:
             return await awc.fetch_metars(ids, self._client, hours=hours)
         except httpx.TransportError as exc:
@@ -266,6 +286,7 @@ class PressureService:
                 source="unavailable",
                 cachedAt=_now(),
             )
+        self.om_gate.require()
         raw = await om.fetch_forecast(
             info["lat"], info["lon"], self._client, forecast_days=1, past_days=1
         )
@@ -296,8 +317,9 @@ class PressureService:
     async def get_forecast(
         self, lat: float, lon: float, *, use_cache: bool = True
     ) -> ForecastResponse:
-        # round coords for a stable cache key — sub-0.1deg precision is noise here
-        cache_key = f"forecast:{round(lat, 2)}:{round(lon, 2)}"
+        # 0.1 deg cells: finer than that is noise for a point forecast, and
+        # at 0.01 a sweep of coordinates was an unbounded Open-Meteo bill.
+        cache_key = f"forecast:{round(lat, 1)}:{round(lon, 1)}"
         last_good_key = f"{cache_key}:lastgood"
         if use_cache:
             cached = await self.cache.get(cache_key)
@@ -305,6 +327,7 @@ class PressureService:
                 return cached
 
         try:
+            self.om_gate.require()
             raw = await om.fetch_forecast(lat, lon, self._client, forecast_days=2)
         except Exception:
             # Stale-if-error: the upstream is down — re-serve the last good
@@ -664,6 +687,7 @@ class PressureService:
         if cached is not None:
             return cached or None
         try:
+            self.awc_gate.require()
             taf = await awc.fetch_taf(station, self._client)
         except Exception as exc:
             log.warning("taf fetch failed for %s: %s", station, exc)
@@ -761,6 +785,7 @@ class PressureService:
         lats = [lat0 + h * r / (rows - 1) for r in range(rows) for _ in range(cols)]
         lons = [lon0 + w * c / (cols - 1) for _ in range(rows) for c in range(cols)]
         now = _now()
+        self.om_gate.require()
         points = await om.fetch_field_grid(lats, lons, self._client, now=now)
         resp = FieldGridResponse(points=points, cachedAt=now)
         await self.cache.set(cache_key, resp, ttl=FIELD_TTL)

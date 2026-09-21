@@ -98,14 +98,14 @@ async def test_degraded_answer_is_cached_only_briefly(service, upstream):
     from app.service import DEGRADED_TTL, PRESSURE_TTL
     upstream.awc_fail = True
     await service.get_pressure("KLUK")
-    entry = service.cache._store["pressure:KLUK:24"]
+    entry = service.cache._store["pressure:KLUK"]
     assert entry.expires_at - time.monotonic() <= DEGRADED_TTL + 1
     # Upstream is back: a real answer replaces it and keeps for the full TTL.
     upstream.awc_fail = False
     resp = await service.get_pressure("KLUK", use_cache=False)
     assert resp.source == "aviationweather.gov"
-    assert service.cache._store["pressure:KLUK:24"].expires_at - time.monotonic() > DEGRADED_TTL + 60
-    assert service.cache._store["pressure:KLUK:24"].expires_at - time.monotonic() <= PRESSURE_TTL + 1
+    assert service.cache._store["pressure:KLUK"].expires_at - time.monotonic() > DEGRADED_TTL + 60
+    assert service.cache._store["pressure:KLUK"].expires_at - time.monotonic() <= PRESSURE_TTL + 1
 
 
 async def test_fallback_uses_the_directory_for_fields_off_the_small_table(service, upstream):
@@ -218,6 +218,6 @@ async def test_scheduler_refresh_keeps_the_field_elevation(client, upstream):
     first = await service.get_pressure("KLUK")
     assert first.elevM == 147.0
     await Scheduler(service).refresh_once()
-    cached = await service.cache.get("pressure:KLUK:24")
+    cached = await service.cache.get("pressure:KLUK")
     assert cached is not None and cached.elevM == 147.0
     assert cached.name == first.name

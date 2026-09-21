@@ -197,6 +197,11 @@ Parked, fully built: **forecast radar** (HRRR via Iowa Mesonet, +6 h model
 frames) behind `RadarModel.modelFramesEnabled = false` — flip one Bool to ship;
 while false the app makes zero IEM / `/radar/hrrr` requests.
 
+**docs/PRODUCTION.md (2026-09-21)** is the hardening plan: an independent
+review of everything since build 86 plus the backend, what was fixed the same
+day, and the ranked open items (backend fan-out and registry validation are the
+first two). Read it before any security or robustness work.
+
 Not yet: courtesy emails to RainViewer + IEM before public App Store, App
 Store listing copy, verdict track record (built, hidden until rescored),
 real strike positions (GOES GLM would be the source), APNs push.

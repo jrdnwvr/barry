@@ -134,15 +134,33 @@ struct RadarMapView: UIViewRepresentable {
 
         /// Parent-tile fetch with a small in-memory cache — 4^n child tiles share
         /// one ancestor, so this collapses the request count while zoomed in.
+        /// Requests in flight, keyed by URL, with everyone waiting on each.
+        /// MapKit asks for four children of one ancestor at once past the
+        /// native zoom, and a prefetch ring resolves to a handful of ancestors,
+        /// so without this the same bytes were fetched many times over.
+        private static let inflightLock = NSLock()
+        private static var inflight: [NSString: [(Data?) -> Void]] = [:]
+
         private func fetchCached(_ url: URL, completion: @escaping (Data?) -> Void) {
             let key = url.absoluteString as NSString
             if let hit = Self.parentCache.object(forKey: key) {
                 completion(hit as Data)
                 return
             }
+            Self.inflightLock.lock()
+            if Self.inflight[key] != nil {
+                Self.inflight[key]!.append(completion)
+                Self.inflightLock.unlock()
+                return
+            }
+            Self.inflight[key] = [completion]
+            Self.inflightLock.unlock()
             URLSession.shared.dataTask(with: url) { data, _, _ in
                 if let data { Self.parentCache.setObject(data as NSData, forKey: key, cost: data.count) }
-                completion(data)
+                Self.inflightLock.lock()
+                let waiters = Self.inflight.removeValue(forKey: key) ?? []
+                Self.inflightLock.unlock()
+                for w in waiters { w(data) }
             }.resume()
         }
 
@@ -158,9 +176,17 @@ struct RadarMapView: UIViewRepresentable {
             let src = MKTileOverlayPath(x: path.x / scale, y: path.y / scale, z: z,
                                         contentScaleFactor: path.contentScaleFactor)
             let u = url(forTilePath: src)
+            let key = u.absoluteString
+            // Already repainted: nothing to warm.
+            if recolor, Self.recoloredCache.object(forKey: ("painted:" + key) as NSString) != nil { return }
             fetchCached(u) { [weak self] data in
                 guard let self, let data, self.recolor else { return }
-                _ = self.painted(data, key: u.absoluteString)
+                // A cache hit calls back synchronously on the caller's thread,
+                // which for a prefetch is main. Repainting is a quarter of a
+                // million pixels; keep it off the main thread regardless.
+                DispatchQueue.global(qos: .utility).async {
+                    _ = self.painted(data, key: key)
+                }
             }
         }
     }
@@ -473,23 +499,31 @@ struct RadarMapView: UIViewRepresentable {
         /// once the map has settled. MapKit only asks for a tile the moment it
         /// is on screen; this asks a little earlier.
         private func prefetchRing(on map: MKMapView) {
-            guard !radarHidden, let overlay = overlays[currentTime], map.bounds.width > 0 else { return }
+            guard !radarHidden, let overlay = overlays[currentTime],
+                  map.bounds.width > 0, map.visibleMapRect.size.width > 0 else { return }
             let rect = map.visibleMapRect
             let world = MKMapSize.world.width
-            // The zoom MapKit will pick for a 512 px tile at this scale.
-            let pixelsPerMapPoint = Double(map.bounds.width) * Double(map.traitCollection.displayScale) / rect.size.width
-            let z = max(1, min(20, Int((log2(pixelsPerMapPoint * world / Double(overlay.tileSize.width))).rounded())))
+            let displayScale = Double(max(1, map.traitCollection.displayScale))
+            // The zoom MapKit will pick for a 512 px tile at this scale, then
+            // clamped to the source's native zoom: past it every child maps to
+            // the same few ancestors, so the ring is computed there directly.
+            let pixelsPerMapPoint = Double(map.bounds.width) * displayScale / rect.size.width
+            let raw = log2(pixelsPerMapPoint * world / Double(overlay.tileSize.width))
+            guard raw.isFinite else { return }
+            let z = max(1, min(overlay.maxNativeZ, Int(raw.rounded())))
             let span = world / Double(1 << z)
             let n = 1 << z
-            let x0 = Int(floor(rect.minX / span)), x1 = Int(floor(rect.maxX / span))
-            let y0 = Int(floor(rect.minY / span)), y1 = Int(floor(rect.maxY / span))
+            let fx0 = floor(rect.minX / span), fx1 = floor(rect.maxX / span)
+            let fy0 = floor(rect.minY / span), fy1 = floor(rect.maxY / span)
+            guard fx0.isFinite, fx1.isFinite, fy0.isFinite, fy1.isFinite else { return }
+            let x0 = Int(fx0), x1 = Int(fx1), y0 = Int(fy0), y1 = Int(fy1)
             var count = 0
             for x in (x0 - 1)...(x1 + 1) {
                 for y in (y0 - 1)...(y1 + 1) {
                     let inside = x >= x0 && x <= x1 && y >= y0 && y <= y1
                     guard !inside, x >= 0, y >= 0, x < n, y < n, count < 48 else { continue }
                     overlay.prefetch(MKTileOverlayPath(x: x, y: y, z: z,
-                                                       contentScaleFactor: map.traitCollection.displayScale))
+                                                       contentScaleFactor: CGFloat(displayScale)))
                     count += 1
                 }
             }
@@ -635,11 +669,15 @@ struct RadarMapView: UIViewRepresentable {
             displayLink?.invalidate()
             displayLink = nil
             // Park everything that isn't part of this transition.
+            // Mid-pan the parked frames stay at zero; the loop stepping must
+            // not quietly un-park them (review finding: it did, within one
+            // tick, which made the parking cosmetic while playing).
+            let parked: CGFloat = panning ? 0 : Self.idleAlpha
             for (t, r) in renderers where t != time && r !== old {
-                r.alpha = Self.idleAlpha
+                r.alpha = parked
             }
             guard let new = renderers[time] else {
-                old?.alpha = Self.idleAlpha
+                old?.alpha = parked
                 return
             }
             fadeFrom = old
@@ -655,6 +693,7 @@ struct RadarMapView: UIViewRepresentable {
             fadeTo?.alpha = Self.idleAlpha + (visibleAlpha - Self.idleAlpha) * p
             fadeFrom?.alpha = visibleAlpha - (visibleAlpha - Self.idleAlpha) * p
             if p >= 1 {
+                if panning { fadeFrom?.alpha = 0 }
                 displayLink?.invalidate()
                 displayLink = nil
                 fadeFrom = nil

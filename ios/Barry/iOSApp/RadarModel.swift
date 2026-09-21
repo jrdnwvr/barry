@@ -51,7 +51,7 @@ final class RadarModel: ObservableObject {
     /// Box half-width for a region: wide enough to cover what is on screen,
     /// with the old ±3° as the floor so a close-in view behaves as before.
     private static func stationHalf(_ r: MKCoordinateRegion) -> Double {
-        max(3.0, min(30.0, r.span.latitudeDelta * 0.7))
+        (max(3.0, min(30.0, r.span.latitudeDelta * 0.7)) * 2).rounded() / 2
     }
 
     func fetchStations(region: MKCoordinateRegion) async {

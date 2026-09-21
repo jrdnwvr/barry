@@ -50,6 +50,7 @@ final class WindFlowView: UIView {
     var samples: [WindArrow] = [] {
         didSet {
             rebuildField()
+            if field.isEmpty { clear(); return }
             // A fresh grid should bend the streaks that are already flying,
             // not restart them. Only seed when there is nothing on screen.
             if particles.isEmpty { reseed() }
@@ -63,7 +64,7 @@ final class WindFlowView: UIView {
         max(70, min(Self.maxParticles, Int(bounds.width * bounds.height / 1150)))
     }
     private static let maxParticles = 240
-    private let trailLength = 18               // points kept in the streak
+    private let trailLength = WindFlowView.maxTrailLength   // points kept in the streak
     private let trailStride = 3                // frames between kept points
     /// 20 km/h -> 38 px/s on screen. Trail length is speed times the trail's
     /// duration, so this is also what stops a 3 kt breeze from drawing a
@@ -105,7 +106,8 @@ final class WindFlowView: UIView {
     // MARK: Metal
 
     /// One quad per segment, six vertices each, every trail full.
-    private static let maxVertices = maxParticles * 18 * 6
+    private static let maxVertices = maxParticles * maxTrailLength * 6
+    private static let maxTrailLength = 18
 
     private struct FlowVertex {
         var x: Float
@@ -120,7 +122,12 @@ final class WindFlowView: UIView {
     private var metalLayer: CAMetalLayer { layer as! CAMetalLayer }
     private var queue: MTLCommandQueue?
     private var pipeline: MTLRenderPipelineState?
-    private var vertexBuffer: MTLBuffer?
+    /// Three vertex buffers in rotation, fenced by a semaphore, so the CPU
+    /// never rewrites a buffer the GPU is still reading. One shared buffer
+    /// tore a frame whenever the GPU fell behind a tick.
+    private var vertexBuffers: [MTLBuffer] = []
+    private var bufferIndex = 0
+    private let inflight = DispatchSemaphore(value: 3)
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -169,8 +176,10 @@ final class WindFlowView: UIView {
             colour.destinationAlphaBlendFactor = .oneMinusSourceAlpha
         }
         pipeline = try? device.makeRenderPipelineState(descriptor: desc)
-        vertexBuffer = device.makeBuffer(length: Self.maxVertices * MemoryLayout<FlowVertex>.stride,
-                                         options: .storageModeShared)
+        vertexBuffers = (0..<3).compactMap { _ in
+            device.makeBuffer(length: Self.maxVertices * MemoryLayout<FlowVertex>.stride,
+                              options: .storageModeShared)
+        }
     }
 
     override func layoutSubviews() {
@@ -372,21 +381,26 @@ final class WindFlowView: UIView {
     // MARK: Rendering
 
     private func render(mapRect: MKMapRect, scale: Double) {
-        guard let queue, let pipeline, let vertexBuffer,
+        guard let queue, let pipeline, vertexBuffers.count == 3,
               bounds.width > 0, bounds.height > 0 else { return }
         if toneRGB.isEmpty || rampStyle != traitCollection.userInterfaceStyle { rebuildRamp() }
         if taper.isEmpty { buildTaper() }
 
+        // Wait for a buffer the GPU has finished with. Every early return
+        // after this point must give the slot back.
+        inflight.wait()
+        let vertexBuffer = vertexBuffers[bufferIndex]
+        bufferIndex = (bufferIndex + 1) % 3
         let count = fillVertices(into: vertexBuffer, mapRect: mapRect, scale: scale)
 
-        guard let drawable = metalLayer.nextDrawable() else { return }
+        guard let drawable = metalLayer.nextDrawable() else { inflight.signal(); return }
         let pass = MTLRenderPassDescriptor()
         pass.colorAttachments[0].texture = drawable.texture
         pass.colorAttachments[0].loadAction = .clear
         pass.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
         pass.colorAttachments[0].storeAction = .store
         guard let buffer = queue.makeCommandBuffer(),
-              let encoder = buffer.makeRenderCommandEncoder(descriptor: pass) else { return }
+              let encoder = buffer.makeRenderCommandEncoder(descriptor: pass) else { inflight.signal(); return }
         if count > 0 {
             encoder.setRenderPipelineState(pipeline)
             encoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
@@ -394,6 +408,24 @@ final class WindFlowView: UIView {
             encoder.setVertexBytes(&viewport, length: MemoryLayout<SIMD2<Float>>.size, index: 1)
             encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: count)
         }
+        encoder.endEncoding()
+        let fence = inflight
+        buffer.addCompletedHandler { _ in fence.signal() }
+        buffer.present(drawable)
+        buffer.commit()
+    }
+
+    /// Present one empty frame. Used when the wind grid goes away, so the
+    /// last streaks do not sit frozen on the map.
+    private func clear() {
+        guard let queue, let drawable = metalLayer.nextDrawable() else { return }
+        let pass = MTLRenderPassDescriptor()
+        pass.colorAttachments[0].texture = drawable.texture
+        pass.colorAttachments[0].loadAction = .clear
+        pass.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
+        pass.colorAttachments[0].storeAction = .store
+        guard let buffer = queue.makeCommandBuffer(),
+              let encoder = buffer.makeRenderCommandEncoder(descriptor: pass) else { return }
         encoder.endEncoding()
         buffer.present(drawable)
         buffer.commit()

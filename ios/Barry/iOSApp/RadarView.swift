@@ -200,7 +200,7 @@ struct RadarPanel: View {
             }
             model.frontStyle = frontStyle
             await model.load()
-            model.playing = autoplay && active
+            model.playing = autoplay
             if showWind {
                 await model.fetchField(region: model.lastRegion ?? initialRegion)
             }
@@ -222,7 +222,7 @@ struct RadarPanel: View {
             Task { await model.fetchLightning(center: model.lastRegion?.center ?? initialRegion.center, force: true) }
         }
         .onReceive(ticker) { _ in
-            guard showRadar, model.playing, !model.frames.isEmpty else { return }
+            guard showRadar, active, model.playing, !model.frames.isEmpty else { return }
             // Dwell at the end of the loop (the freshest picture) before
             // restarting — the Dark Sky rhythm, and it reads far calmer.
             if dwellTicks > 0 {
@@ -294,17 +294,14 @@ struct RadarPanel: View {
             }
         }
         .onChange(of: fieldRaw) { _, _ in
-            if wantsPressure, model.pressureField == nil {
+            if wantsPressure {
                 Task { await model.fetchPressureField(region: model.lastRegion ?? initialRegion) }
             }
         }
         .onChange(of: showIsobars) { _, on in
-            if on, model.pressureField == nil {
+            if on {
                 Task { await model.fetchPressureField(region: model.lastRegion ?? initialRegion) }
             }
-        }
-        .onChange(of: active) { _, on in
-            model.playing = on && autoplay
         }
         .onChange(of: showWind) { _, on in
             if on {

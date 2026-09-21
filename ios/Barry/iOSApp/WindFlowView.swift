@@ -65,12 +65,18 @@ final class WindFlowView: UIView {
     private static let maxParticles = 240
     private let trailLength = 18               // points kept in the streak
     private let trailStride = 3                // frames between kept points
-    private let pxPerKmh: CGFloat = 1.25       // 20 km/h -> 25 px/s on screen
+    /// 20 km/h -> 38 px/s on screen. Trail length is speed times the trail's
+    /// duration, so this is also what stops a 3 kt breeze from drawing a
+    /// twelve pixel smudge nobody can see.
+    private let pxPerKmh: CGFloat = 1.9
     private let minLife = 90, maxLife = 180    // frames at 30 fps
     private let fps = 30
     private let lineWidth: CGFloat = 1.6
-    /// The speed that reads as full strength on the ramp.
-    private let fastKmh: CGFloat = 45
+    /// The speed that reads as full strength on the ramp. 35 km/h is about
+    /// 19 kt: a brisk day, not a gale. The old 45 put an ordinary 5 to 10 kt
+    /// breeze so far down the ramp that it drew in the map's own background
+    /// tone at barely any opacity, which read as the layer being broken.
+    private let fastKmh: CGFloat = 35
 
     private struct Particle {
         var trail: [MKMapPoint]   // on the ground, oldest first
@@ -336,7 +342,7 @@ final class WindFlowView: UIView {
         toneRGB = (0...Self.rampSteps).map { i in
             // Reach most of the tone before top speed, so an ordinary breeze
             // still reads rather than sitting washed out at the pale end.
-            let c = Self.blend(slow, fast, pow(CGFloat(i) / CGFloat(Self.rampSteps), 0.7))
+            let c = Self.blend(slow, fast, pow(CGFloat(i) / CGFloat(Self.rampSteps), 0.4))
             var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
             c.getRed(&r, green: &g, blue: &b, alpha: &a)
             return (Self.byte(r), Self.byte(g), Self.byte(b))
@@ -403,7 +409,8 @@ final class WindFlowView: UIView {
             // solid, calm air washes to the map's own tone and disappears.
             let t = min(1, pt.speed / fastKmh)
             let rgb = toneRGB[min(Self.rampSteps, Int(t * CGFloat(Self.rampSteps)))]
-            let presence = 0.10 + 0.55 * t
+            // Floor it: calm air should be a whisper, not nothing at all.
+            let presence = 0.26 + 0.45 * t
             // Fade in/out over the particle's life so births and deaths are quiet.
             let lifeFade = min(1, CGFloat(pt.age) / 15, CGFloat(pt.life - pt.age) / 15)
             let strength = presence * lifeFade

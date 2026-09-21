@@ -6,6 +6,7 @@ so both the HTTP routes and the scheduled worker share one code path.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 
@@ -549,7 +550,9 @@ class PressureService:
         """Stations within ±half degrees of a point, sliced from the in-memory
         bulk table (no upstream call per user). Dense areas are thinned on a
         grid to STATIONS_MAX, keeping the fullest report per cell."""
-        half = max(0.5, min(30.0, half))
+        # Snap to half a degree: the client derives this from the map span,
+        # so left raw every pan minted a fresh ~1 MB cache entry.
+        half = round(max(0.5, min(30.0, half)) * 2) / 2
         cache_key = f"stations:{round(lat * 5) / 5}:{round(lon * 5) / 5}:{half}"
         cached = await self.cache.get(cache_key)
         if cached is not None:
@@ -697,16 +700,35 @@ class PressureService:
         cached = await self.cache.get(cache_key)
         if cached is not None:
             return cached
-        table = await self.metar_bulk() or []
-        tend_pts = self._tendency_points(_now()) if self.history_span_h(_now()) >= 3.5 else None
-        isobars, isallobars, pgrid, tgrid, textrema = pressure_field.build(
-            table, q_lat, q_lon, q_lat_span, q_lon_span, tend_pts=tend_pts)
-        resp = PressureFieldResponse(isobars=isobars, isallobars=isallobars,
-                                     pressureGrid=pgrid, tendencyGrid=tgrid,
-                                     tendencyExtrema=textrema,
-                                     stations=len(table), cachedAt=_now())
-        await self.cache.set(cache_key, resp, ttl=BULK_TTL)
-        return resp
+        # The build is CPU-bound and at a continental span takes seconds. It
+        # used to run inline, freezing the single worker for every other
+        # request; now it runs in a thread, and concurrent misses on the same
+        # key wait for the one build already under way instead of each
+        # starting their own.
+        inflight: Dict[str, "asyncio.Task"] = self.__dict__.setdefault("_pf_inflight", {})
+        if (task := inflight.get(cache_key)) is not None:
+            return await task
+
+        async def _build() -> PressureFieldResponse:
+            try:
+                table = await self.metar_bulk() or []
+                now = _now()
+                tend_pts = self._tendency_points(now) if self.history_span_h(now) >= 3.5 else None
+                isobars, isallobars, pgrid, tgrid, textrema = await asyncio.to_thread(
+                    pressure_field.build, table, q_lat, q_lon, q_lat_span, q_lon_span,
+                    tend_pts=tend_pts)
+                resp = PressureFieldResponse(isobars=isobars, isallobars=isallobars,
+                                             pressureGrid=pgrid, tendencyGrid=tgrid,
+                                             tendencyExtrema=textrema,
+                                             stations=len(table), cachedAt=_now())
+                await self.cache.set(cache_key, resp, ttl=BULK_TTL)
+                return resp
+            finally:
+                inflight.pop(cache_key, None)
+
+        task = asyncio.create_task(_build())
+        inflight[cache_key] = task
+        return await task
 
     # ---- Radar model field (wind + boundary layer) ------------------------
 
@@ -792,7 +814,7 @@ class PressureService:
     async def get_lightning(self, lat: float, lon: float, half: float = 3.0) -> LightningResponse:
         """Binned GLM flashes around a point for the map's Storms overlay.
         Served from memory; quantized so nearby users share the slice."""
-        half = max(0.5, min(6.0, half))
+        half = round(max(0.5, min(6.0, half)) * 2) / 2
         key = f"lightning:{round(lat * 5) / 5}:{round(lon * 5) / 5}:{half}"
         cached = await self.cache.get(key)
         if cached is not None:

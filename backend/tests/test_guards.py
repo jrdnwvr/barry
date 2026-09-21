@@ -124,3 +124,27 @@ async def test_per_ip_budget_returns_429_but_never_for_healthz(client):
             assert r.status_code == 200
     finally:
         app.state.ip_limiter = IPLimiter(per_minute=0)
+
+
+@pytest.mark.asyncio
+async def test_docs_and_schema_are_not_served_by_default(client):
+    from app.main import app
+    app.state.service = PressureService(client)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+                                 base_url="http://t") as c:
+        for path in ("/docs", "/redoc", "/openapi.json"):
+            assert (await c.get(path)).status_code == 404, path
+
+
+@pytest.mark.asyncio
+async def test_upstream_failure_body_carries_no_upstream_detail(client):
+    from unittest.mock import AsyncMock
+    from app.main import app
+    svc = PressureService(client)
+    svc.get_radar_frames = AsyncMock(side_effect=RuntimeError("boom https://internal.example/tiles?key=abc"))
+    app.state.service = svc
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+                                 base_url="http://t") as c:
+        r = await c.get("/radar/frames")
+        assert r.status_code == 503
+        assert "example" not in r.text and "key=" not in r.text and "boom" not in r.text

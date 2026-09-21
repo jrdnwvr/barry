@@ -18,4 +18,6 @@ EXPOSE 8080
 # one worker / one instance so there is exactly one scheduler hitting
 # aviationweather.gov per cycle. To scale horizontally, move the cache + registry
 # to Redis first, otherwise each worker runs its own scheduler and its own cache.
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
+# No access log: it recorded every client's coordinates in the query string.
+# No server header: nothing to announce.
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --no-access-log --no-server-header"]

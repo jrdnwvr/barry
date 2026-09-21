@@ -50,7 +50,13 @@ async def lifespan(app: FastAPI):
         await client.aclose()
 
 
-app = FastAPI(title="Barry backend", version="1.0", lifespan=lifespan)
+# The interactive docs and the schema are for development. In production they
+# are a map of every parameter for anyone who finds the hostname.
+_PUBLIC_DOCS = os.environ.get("BARRY_PUBLIC_DOCS") == "1"
+app = FastAPI(title="Barry backend", version="1.0", lifespan=lifespan,
+              docs_url="/docs" if _PUBLIC_DOCS else None,
+              redoc_url="/redoc" if _PUBLIC_DOCS else None,
+              openapi_url="/openapi.json" if _PUBLIC_DOCS else None)
 
 STATION_PATTERN = r"^[A-Za-z0-9]{3,4}$"
 
@@ -89,6 +95,8 @@ async def _rate_limited(_request, _exc):
 def get_service() -> PressureService:
     return app.state.service
 
+
+log = logging.getLogger(__name__)
 
 STATIC = Path(__file__).resolve().parent / "static"
 
@@ -221,7 +229,8 @@ async def radar_frames():
     try:
         resp = await get_service().get_radar_frames()
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"radar frames unavailable: {exc}")
+        log.warning("radar frames unavailable: %s: %s", type(exc).__name__, exc)
+        raise HTTPException(status_code=503, detail="radar frames unavailable")
     return resp.model_dump(mode="json", by_alias=True)
 
 
@@ -238,7 +247,8 @@ async def radar_field(
     try:
         resp = await get_service().get_field_grid(lat, lon, latSpan, lonSpan)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"field grid unavailable: {exc}")
+        log.warning("field grid unavailable: %s: %s", type(exc).__name__, exc)
+        raise HTTPException(status_code=503, detail="field grid unavailable")
     return resp.model_dump(mode="json", by_alias=True)
 
 

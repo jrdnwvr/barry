@@ -57,6 +57,9 @@ struct RadarPanel: View {
     /// Dashboard embeds run chrome-light: the map is a rounded card and the
     /// chip bar sits under it, so the MAP gets the panel's height.
     var embedded: Bool = false
+    /// False while the card is scrolled out of sight. Both the radar loop and
+    /// the wind streaks stand down; neither is worth a frame nobody sees.
+    var active: Bool = true
 
     @StateObject private var model = RadarModel()
     @State private var dwellTicks = 0
@@ -197,7 +200,7 @@ struct RadarPanel: View {
             }
             model.frontStyle = frontStyle
             await model.load()
-            model.playing = autoplay
+            model.playing = autoplay && active
             if showWind {
                 await model.fetchField(region: model.lastRegion ?? initialRegion)
             }
@@ -300,6 +303,9 @@ struct RadarPanel: View {
                 Task { await model.fetchPressureField(region: model.lastRegion ?? initialRegion) }
             }
         }
+        .onChange(of: active) { _, on in
+            model.playing = on && autoplay
+        }
         .onChange(of: showWind) { _, on in
             if on {
                 Task { await model.fetchField(region: model.lastRegion ?? initialRegion) }
@@ -321,6 +327,7 @@ struct RadarPanel: View {
                      showWind: showWind && windStyle == "arrows",
                      windFlow: (showWind && windStyle == "flow") ? model.windField : nil,
                      embedded: embedded,
+                     animating: active,
                      frontState: wantsFronts ? model.frontState : nil,
                      stations: model.stationObs,
                      stationStyle: stationStyle,

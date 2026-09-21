@@ -26,6 +26,8 @@ struct ContentView: View {
     @Environment(\.horizontalSizeClass) private var hSizeClass
     @State private var showSettings = false
     @State private var showRadarFullScreen = false
+    /// The dashboard's radar card only animates while it is on screen.
+    @State private var radarCardOnScreen = true
 
     private var unit: PressureUnit { PressureUnit(rawValue: unitRaw) ?? .inHg }
     private var chartWindow: ChartWindow { ChartWindow(rawValue: chartWindowRaw) ?? .hours6 }
@@ -256,8 +258,12 @@ struct ContentView: View {
                            stationName: combined.pressure.name ?? combined.pressure.station,
                            home: homeMarker(combined),
                            onExpand: { showRadarFullScreen = true },
-                           embedded: true)
+                           embedded: true,
+                           active: radarCardOnScreen)
                     .frame(height: 440)
+                    .onScrollVisibilityChange(threshold: 0.05) { visible in
+                        radarCardOnScreen = visible
+                    }
             }
         case .sensor:
             // Physical location only: comparing the pocket barometer to a

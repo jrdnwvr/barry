@@ -33,6 +33,12 @@ final class WindFlowView: UIView {
         didSet { if yieldsToScrolling != oldValue, link != nil { stop(); start() } }
     }
 
+    /// False once the card has scrolled out of sight. Nothing is watching, so
+    /// there is nothing to animate for.
+    var isActive = true {
+        didSet { if isActive != oldValue { syncLink() } }
+    }
+
     /// The wind grid — every sample, calm ones included.
     var samples: [WindArrow] = [] {
         didSet {
@@ -100,11 +106,15 @@ final class WindFlowView: UIView {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        window == nil ? stop() : start()
+        syncLink()
+    }
+
+    private func syncLink() {
+        (window != nil && isActive) ? start() : stop()
     }
 
     func start() {
-        guard link == nil else { return }
+        guard link == nil, isActive else { return }
         let l = CADisplayLink(target: self, selector: #selector(tick))
         l.preferredFrameRateRange = CAFrameRateRange(minimum: 20, maximum: Float(fps), preferred: Float(fps))
         l.add(to: .main, forMode: yieldsToScrolling ? .default : .common)

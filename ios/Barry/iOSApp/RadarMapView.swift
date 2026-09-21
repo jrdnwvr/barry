@@ -27,6 +27,8 @@ struct RadarMapView: UIViewRepresentable {
     var windFlow: [WindArrow]? = nil
     /// The dashboard card scrolls with the page; the full screen map does not.
     var embedded: Bool = false
+    /// False when the card is scrolled off screen: stop animating for nobody.
+    var animating: Bool = true
     /// nil = fronts layer off; otherwise the field to draw (morphs included).
     var frontState: FrontRenderState? = nil
     var stations: [StationObs] = []
@@ -375,7 +377,7 @@ struct RadarMapView: UIViewRepresentable {
         /// The particle layer rides on top of the map as a subview; its
         /// streaks are anchored to the ground, so the map only has to tell it
         /// when it moved, and only so fresh territory gets topped up.
-        func syncFlow(_ field: [WindArrow]?, on map: MKMapView, embedded: Bool) {
+        func syncFlow(_ field: [WindArrow]?, on map: MKMapView, embedded: Bool, animating: Bool) {
             guard let field else {
                 flowView?.removeFromSuperview()
                 flowView = nil
@@ -389,6 +391,7 @@ struct RadarMapView: UIViewRepresentable {
                 flowView = v
             }
             flowView?.yieldsToScrolling = embedded
+            flowView?.isActive = animating
             if flowView?.samples != field {
                 flowView?.samples = field
             }
@@ -666,7 +669,7 @@ struct RadarMapView: UIViewRepresentable {
         context.coordinator.syncArrows(showWind ? windArrows : [], on: map)
         context.coordinator.syncFronts(frontState, on: map)
         context.coordinator.syncPressure(pressureState, on: map)
-        context.coordinator.syncFlow(windFlow, on: map, embedded: embedded)
+        context.coordinator.syncFlow(windFlow, on: map, embedded: embedded, animating: animating)
         context.coordinator.syncStations(stations, style: stationStyle, on: map)
         context.coordinator.syncStorms(stations, show: showStorms, stationsOn: stationStyle != .off, on: map)
         context.coordinator.syncLightning(showStorms ? lightning : nil, on: map)

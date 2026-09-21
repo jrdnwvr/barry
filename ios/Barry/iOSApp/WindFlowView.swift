@@ -24,6 +24,15 @@ import UIKit
 final class WindFlowView: UIView {
     weak var mapView: MKMapView?
 
+    /// True inside the dashboard card, where the thing being dragged is the
+    /// page and not the map. The display link then runs in the default run
+    /// loop mode, so it stands down while a scroll is tracking and the list
+    /// gets the main thread to itself. The full screen map keeps common mode,
+    /// because there a drag IS the map and the streaks have to keep up.
+    var yieldsToScrolling = false {
+        didSet { if yieldsToScrolling != oldValue, link != nil { stop(); start() } }
+    }
+
     /// The wind grid — every sample, calm ones included.
     var samples: [WindArrow] = [] {
         didSet {
@@ -35,7 +44,11 @@ final class WindFlowView: UIView {
     }
 
     // Tunables: "less busy" lives here.
-    private let particleCount = 220
+    /// Particles per unit of view area, so the dashboard's card does
+    /// proportionally less work than the full screen.
+    private var targetParticles: Int {
+        max(70, min(240, Int(bounds.width * bounds.height / 1150)))
+    }
     private let trailLength = 18               // points kept in the streak
     private let trailStride = 3                // frames between kept points
     private let pxPerKmh: CGFloat = 1.25       // 20 km/h -> 25 px/s on screen
@@ -65,6 +78,13 @@ final class WindFlowView: UIView {
     private var ramp: [UIColor] = []
     private var rampStyle: UIUserInterfaceStyle = .unspecified
     private static let rampSteps = 16
+    /// Every colour the layer can stroke, [tone][alpha], resolved once. Making
+    /// these per segment meant allocating a CGColor tens of thousands of times
+    /// a second, which the dashboard paid for in dropped scroll frames.
+    private var inks: [[CGColor]] = []
+    private static let alphaSteps = 10
+    /// taper[n][k] = (k/n)^1.8, the fade along a trail of n points.
+    private var taper: [[CGFloat]] = []
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -87,7 +107,7 @@ final class WindFlowView: UIView {
         guard link == nil else { return }
         let l = CADisplayLink(target: self, selector: #selector(tick))
         l.preferredFrameRateRange = CAFrameRateRange(minimum: 20, maximum: Float(fps), preferred: Float(fps))
-        l.add(to: .main, forMode: .common)
+        l.add(to: .main, forMode: yieldsToScrolling ? .default : .common)
         link = l
     }
 
@@ -175,7 +195,7 @@ final class WindFlowView: UIView {
         let rect = map.visibleMapRect
         let scale = rect.size.width / Double(bounds.width)
         lastScale = scale
-        particles = (0..<particleCount).map { _ in spawn(rect: rect, scale: scale) }
+        particles = (0..<targetParticles).map { _ in spawn(rect: rect, scale: scale) }
         // Stagger ages so the whole field doesn't blink out in sync.
         for i in particles.indices { particles[i].age = Int.random(in: 0..<particles[i].life) }
         setNeedsDisplay()
@@ -237,7 +257,18 @@ final class WindFlowView: UIView {
             // still reads rather than sitting washed out at the pale end.
             Self.blend(slow, fast, pow(CGFloat(i) / CGFloat(Self.rampSteps), 0.7))
         }
+        inks = ramp.map { c in
+            (0...Self.alphaSteps).map {
+                c.withAlphaComponent(CGFloat($0) / CGFloat(Self.alphaSteps)).cgColor
+            }
+        }
         rampStyle = traits.userInterfaceStyle
+    }
+
+    private func buildTaper() {
+        taper = (0...trailLength).map { n in
+            (0...max(1, n)).map { k in n <= 1 ? 1 : pow(CGFloat(k) / CGFloat(n), 1.8) }
+        }
     }
 
     private static func blend(_ a: UIColor, _ b: UIColor, _ t: CGFloat) -> UIColor {
@@ -251,40 +282,62 @@ final class WindFlowView: UIView {
 
     override func draw(_ rect: CGRect) {
         guard let ctx = UIGraphicsGetCurrentContext(), let map = mapView, bounds.width > 0 else { return }
-        if ramp.isEmpty || rampStyle != traitCollection.userInterfaceStyle { rebuildRamp() }
+        if inks.isEmpty || rampStyle != traitCollection.userInterfaceStyle { rebuildRamp() }
+        if taper.isEmpty { buildTaper() }
         let mrect = map.visibleMapRect
         let scale = mrect.size.width / Double(bounds.width)
-        ctx.setLineCap(.round)
-        ctx.setLineWidth(1.6)
-        for pt in particles where pt.trail.count >= 1 {
+
+        // Collect every segment into one path per (tone, alpha) pair, then
+        // stroke each pair once. Same picture as stroking segment by segment,
+        // for a tiny fraction of the Core Graphics calls.
+        let alphas = Self.alphaSteps + 1
+        var paths = [CGMutablePath?](repeating: nil, count: (Self.rampSteps + 1) * alphas)
+
+        @inline(__always) func add(_ idx: Int, _ from: CGPoint, _ to: CGPoint) {
+            let path: CGMutablePath
+            if let existing = paths[idx] { path = existing } else {
+                path = CGMutablePath()
+                paths[idx] = path
+            }
+            path.move(to: from)
+            path.addLine(to: to)
+        }
+
+        for pt in particles where !pt.trail.isEmpty {
             // Speed sets tone and presence together: quick air is dark and
             // solid, calm air washes to the map's own tone and disappears.
             let t = min(1, pt.speed / fastKmh)
-            let base = ramp[Int(t * CGFloat(Self.rampSteps))]
+            let tone = min(Self.rampSteps, Int(t * CGFloat(Self.rampSteps)))
             let presence = 0.10 + 0.55 * t
             // Fade in/out over the particle's life so births and deaths are quiet.
             let lifeFade = min(1, CGFloat(pt.age) / 15, CGFloat(pt.life - pt.age) / 15)
             let strength = presence * lifeFade
             guard strength > 0.015 else { continue }
             let n = pt.trail.count
+            let row = taper[min(n, trailLength)]
+            let base = tone * alphas
             var prev = Self.screen(pt.trail[0], rect: mrect, scale: scale)
             for k in 1..<n {
                 let cur = Self.screen(pt.trail[k], rect: mrect, scale: scale)
                 // Taper hard toward the tail: a long streak stays light on the
                 // map, and the bright end shows which way the wind is going.
-                let f = pow(CGFloat(k) / CGFloat(n), 1.8)
-                ctx.setStrokeColor(base.withAlphaComponent(strength * f).cgColor)
-                ctx.beginPath()
-                ctx.move(to: prev)
-                ctx.addLine(to: cur)
-                ctx.strokePath()
+                let step = Int(strength * row[min(k, row.count - 1)] * CGFloat(Self.alphaSteps) + 0.5)
+                if step > 0 { add(base + step, prev, cur) }
                 prev = cur
             }
             // The live segment from the last sample to the head, at full presence.
-            ctx.setStrokeColor(base.withAlphaComponent(strength).cgColor)
-            ctx.beginPath()
-            ctx.move(to: prev)
-            ctx.addLine(to: Self.screen(pt.head, rect: mrect, scale: scale))
+            let step = Int(strength * CGFloat(Self.alphaSteps) + 0.5)
+            if step > 0 {
+                add(base + step, prev, Self.screen(pt.head, rect: mrect, scale: scale))
+            }
+        }
+
+        ctx.setLineCap(.round)
+        ctx.setLineWidth(1.6)
+        for idx in paths.indices {
+            guard let path = paths[idx] else { continue }
+            ctx.setStrokeColor(inks[idx / alphas][idx % alphas])
+            ctx.addPath(path)
             ctx.strokePath()
         }
     }

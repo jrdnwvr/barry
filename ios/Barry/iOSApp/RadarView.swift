@@ -320,6 +320,7 @@ struct RadarPanel: View {
                      windArrows: model.windArrows,
                      showWind: showWind && windStyle == "arrows",
                      windFlow: (showWind && windStyle == "flow") ? model.windField : nil,
+                     embedded: embedded,
                      frontState: wantsFronts ? model.frontState : nil,
                      stations: model.stationObs,
                      stationStyle: stationStyle,

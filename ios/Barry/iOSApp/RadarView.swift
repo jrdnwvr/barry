@@ -116,7 +116,6 @@ struct RadarPanel: View {
     private var autoplay: Bool = true
 
     @State private var recenterToken = 0
-    @State private var showFrontRow = false
     /// The dashboard embed keeps the chip bar behind a button: the layers
     /// are shared with the full screen (same stored settings), so the small
     /// map follows whatever was chosen there and rarely needs its own bar.
@@ -268,7 +267,6 @@ struct RadarPanel: View {
             if on, model.frontFrames.isEmpty {
                 Task { await model.fetchFronts() }
             }
-            if !on { showFrontRow = false }
         }
         .onChange(of: showTroughs) { _, on in
             if on, model.frontFrames.isEmpty {
@@ -453,9 +451,6 @@ struct RadarPanel: View {
                 chip("Change", icon: "arrow.up.arrow.down", isOn: fieldBinding(.change))
                 chip("Wind", icon: "wind", isOn: $showWind)
                 chip("Fronts", icon: "line.diagonal", isOn: $showFronts)
-                if showFronts, model.frontFrames.count > 1 {
-                    frontTimeChip
-                }
                 chip("Troughs", icon: "point.topleft.down.to.point.bottomright.curvepath", isOn: $showTroughs)
                 chip("Stations", icon: "flag", isOn: Binding(
                     get: { stationsOn },
@@ -493,29 +488,6 @@ struct RadarPanel: View {
         .accessibilityAddTraits(isOn.wrappedValue ? .isSelected : [])
     }
 
-    /// Sits next to the Fronts chip when the chart has forecast positions:
-    /// shows the front time on screen and opens the Now / +12h / +24h row.
-    private var frontTimeChip: some View {
-        Button {
-            withAnimation(.snappy(duration: 0.2)) { showFrontRow.toggle() }
-        } label: {
-            HStack(spacing: 3) {
-                Text(frontHoursLabel)
-                Image(systemName: showFrontRow ? "chevron.up" : "chevron.down")
-                    .font(.system(size: 8, weight: .bold))
-            }
-            .font(.caption.weight(.medium))
-            .fixedSize()
-        }
-        .buttonStyle(ChipStyle(on: showFrontRow))
-        .accessibilityLabel("Front forecast time")
-    }
-
-    private var frontHoursLabel: String {
-        let h = Int(model.frontHours.rounded())
-        return h == 0 ? "Now" : "+\(h)h"
-    }
-
     // MARK: - Timeline (belongs to the base)
 
     @ViewBuilder private var timeline: some View {
@@ -529,10 +501,6 @@ struct RadarPanel: View {
             baseCaption("Isobars every 4 hPa, 2 on a flat day.")
         case .change:
             baseCaption("Pressure change over the last 3 h. Solid rising, dashed falling, H and L at the strongest.")
-        }
-        if showFronts, showFrontRow, model.frontFrames.count > 1 {
-            frontTimeline
-                .transition(.move(edge: .top).combined(with: .opacity))
         }
         windCalmNote
         stormsNote
@@ -556,45 +524,9 @@ struct RadarPanel: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Now / +12h / +24h ... chips plus a play button. Tapping a chip glides the
-    /// field there; play sweeps the whole timeline.
-    private var frontTimeline: some View {
-        HStack(spacing: 8) {
-            // Say what the row moves: these chips slide the WPC front lines
-            // and H/L centers to their forecast positions, not the radar.
-            Text("Fronts")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Button { model.playFronts() } label: {
-                Image(systemName: model.frontPlaying ? "stop.fill" : "play.fill")
-                    .font(.system(size: 12, weight: .semibold))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(model.frontPlaying ? "Stop front movement" : "Play front movement")
-
-            ForEach(model.frontFrames) { frame in
-                let selected = abs(model.frontHours - Double(frame.hours)) < 0.5
-                Button(frame.hours == 0 ? "Now" : "+\(frame.hours)h") {
-                    model.animateFronts(to: Double(frame.hours))
-                }
-                .font(.caption.weight(selected ? .semibold : .regular))
-                .buttonStyle(.bordered)
-                .tint(selected ? .accentColor : .secondary)
-                .controlSize(.small)
-            }
-            Spacer()
-            Text(frontChipTime)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-        }
-    }
-
-    /// Local valid time of the frame nearest the current front position.
+    /// Local valid time of the analysis on screen.
     private var frontChipTime: String {
-        guard let f = model.frontFrames.min(by: {
-            abs(Double($0.hours) - model.frontHours) < abs(Double($1.hours) - model.frontHours)
-        }) else { return "" }
+        guard let f = model.analysisFrame else { return "" }
         return "at " + f.valid.formatted(.dateTime.weekday(.abbreviated).hour())
     }
 

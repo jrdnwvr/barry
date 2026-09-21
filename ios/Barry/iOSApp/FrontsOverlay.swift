@@ -260,6 +260,9 @@ enum FrontMorph {
     }
 
     /// The field at fraction `t` of the way from `a` to `b`.
+    /// Unused since the front timeline came out: the map shows the analysis
+    /// and nothing else. Kept because putting the progs back on the radar's
+    /// own clock, rather than a second one, is the plan.
     static func blend(_ a: FrontFrame, _ b: FrontFrame, t: Double) -> FrontRenderState {
         let t = min(1, max(0, t))
         var out = FrontRenderState()

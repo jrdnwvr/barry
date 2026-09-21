@@ -137,14 +137,19 @@ final class RadarModel: ObservableObject {
     /// True once a wind fetch has answered, so "no arrows" is a real answer.
     @Published var windSampled = false
 
-    // MARK: Fronts (WPC surface chart, analysis + forecast positions)
+    // MARK: Fronts (WPC surface chart, analysis)
 
     @Published var frontFrames: [FrontFrame] = []
-    /// Where on the 0...48 h front timeline we're drawing; fractional mid-glide.
-    @Published var frontHours: Double = 0
     @Published var frontState: FrontRenderState = .empty
-    private var frontAnimTask: Task<Void, Never>?
     private var frontVersion = 0
+
+    /// The current analysis, which is the only front frame Barry draws. The
+    /// 12 and 24 hour progs still arrive with it, unused for now: a map that
+    /// carried its own clock separate from the radar's was a good way to read
+    /// tomorrow's front as today's.
+    var analysisFrame: FrontFrame? {
+        frontFrames.first(where: { $0.hours == 0 }) ?? frontFrames.first
+    }
 
     /// Which parts of the chart to draw (map options). Changing it
     /// re-renders the field in place.
@@ -155,80 +160,17 @@ final class RadarModel: ObservableObject {
     func fetchFronts() async {
         guard let resp = try? await BarryAPI().fronts() else { return }
         frontFrames = resp.frames.sorted { $0.hours < $1.hours }
-        frontHours = 0
         updateFrontState()
     }
 
-    /// The drawn field for `frontHours`: an exact frame, or a morph between the
-    /// two frames it sits between.
+    /// The drawn field: the analysis, and only the analysis.
     func updateFrontState() {
-        var next: FrontRenderState
-        if let exact = frontFrames.first(where: { Double($0.hours) == frontHours }) {
-            next = FrontMorph.state(for: exact)
-        } else if let a = frontFrames.last(where: { Double($0.hours) < frontHours }),
-                  let b = frontFrames.first(where: { Double($0.hours) > frontHours }) {
-            let t = (frontHours - Double(a.hours)) / Double(b.hours - a.hours)
-            next = FrontMorph.blend(a, b, t: t)
-        } else if let edge = frontFrames.last {
-            next = FrontMorph.state(for: edge)
-        } else {
-            next = .empty
-        }
+        var next = analysisFrame.map { FrontMorph.state(for: $0) } ?? .empty
         next.style = frontStyle
         if !frontStyle.centers { next.centers = [] }
         frontVersion += 1
         next.version = frontVersion
         frontState = next
-    }
-
-    /// Glide to a valid time — the old Weather Channel move, eased, ~1.3 s.
-    func animateFronts(to hours: Double, duration: Double = 1.3) {
-        frontAnimTask?.cancel()
-        let from = frontHours
-        guard from != hours else { return }
-        frontAnimTask = Task { @MainActor in
-            let steps = max(1, Int(duration * 30))
-            for i in 1...steps {
-                guard !Task.isCancelled else { return }
-                let p = Double(i) / Double(steps)
-                let eased = p < 0.5 ? 2 * p * p : 1 - pow(-2 * p + 2, 2) / 2
-                frontHours = from + (hours - from) * eased
-                updateFrontState()
-                try? await Task.sleep(nanoseconds: UInt64(duration / Double(steps) * 1e9))
-            }
-            frontHours = hours
-            updateFrontState()
-        }
-    }
-
-    @Published var frontPlaying = false
-
-    /// Sweep the whole timeline from the analysis to the last prog; tapping
-    /// again while it runs stops it where it is.
-    func playFronts() {
-        if frontPlaying {
-            frontAnimTask?.cancel()
-            frontPlaying = false
-            return
-        }
-        guard let last = frontFrames.last, last.hours > 0 else { return }
-        frontAnimTask?.cancel()
-        frontPlaying = true
-        frontAnimTask = Task { @MainActor in
-            defer { frontPlaying = false }
-            frontHours = 0
-            updateFrontState()
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            let total = Double(last.hours)
-            let duration = 1.8 * Double(max(1, frontFrames.count - 1))
-            let steps = Int(duration * 30)
-            for i in 1...steps {
-                guard !Task.isCancelled else { return }
-                frontHours = total * Double(i) / Double(steps)
-                updateFrontState()
-                try? await Task.sleep(nanoseconds: UInt64(duration / Double(steps) * 1e9))
-            }
-        }
     }
 
     /// Index of the most recent observed (non-forecast) frame.

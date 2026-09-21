@@ -137,8 +137,10 @@ coherent-gradient fallback; NEVER wire front statuses to notifications).
 Also live (2026-09): **fronts on the radar** — `/fronts` parses WPC's coded
 bulletins (CODSUS analysis + CODSRP 12/24/36/48 h progs, via IEM AFOS) into
 typed polylines; `FrontsOverlay.swift` draws the classic chart (pips on the
-left-of-travel side = direction of motion, verified) and morphs between valid
-times. Wind is a particle-flow layer by default (`WindFlowView.swift`, Flow/Arrows
+left-of-travel side = direction of motion, verified) at the ANALYSIS time only.
+The 12/24 h progs still come down and the morph code is still there, but the
+map no longer carries a clock of its own: two independent times on one map read
+as tomorrow's front being today's. Wind is a particle-flow layer by default (`WindFlowView.swift`, Flow/Arrows
 picker); arrows scale with speed from ~3 kt. `/front` also names the nearest
 WPC-analyzed front (`nearestFront`: type, distance, bearing, and motion/ETA
 from WPC's 12 h prog) — enrichment only, the backtested status logic is untouched.

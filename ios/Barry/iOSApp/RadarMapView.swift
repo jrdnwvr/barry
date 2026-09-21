@@ -370,12 +370,9 @@ struct RadarMapView: UIViewRepresentable {
             }
         }
 
-        func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
-            flowView?.mapWillMove()
-        }
-
-        /// The particle layer rides on top of the map as a subview; the map
-        /// tells it when it moved so it can reseed.
+        /// The particle layer rides on top of the map as a subview; its
+        /// streaks are anchored to the ground, so the map only has to tell it
+        /// when it moved, and only so fresh territory gets topped up.
         func syncFlow(_ field: [WindArrow]?, on map: MKMapView) {
             guard let field else {
                 flowView?.removeFromSuperview()

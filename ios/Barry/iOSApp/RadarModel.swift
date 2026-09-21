@@ -88,12 +88,28 @@ final class RadarModel: ObservableObject {
     @Published var pressureVersion = 0
 
     func fetchPressureField(region: MKCoordinateRegion) async {
+        if Self.nearEnough(region, to: pressureFetchedFor), pressureField != nil { return }
         guard let resp = try? await BarryAPI().pressureField(
             lat: region.center.latitude, lon: region.center.longitude,
             latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta)
         else { return }
+        pressureFetchedFor = region
         pressureField = resp
         pressureVersion += 1
+    }
+
+    private var fieldFetchedFor: MKCoordinateRegion?
+    private var pressureFetchedFor: MKCoordinateRegion?
+
+    /// Close enough to the region a grid was fetched for that refetching it
+    /// would return the same thing. The backend quantizes these anyway, so a
+    /// small move is a round trip for an identical payload.
+    private static func nearEnough(_ r: MKCoordinateRegion, to prev: MKCoordinateRegion?) -> Bool {
+        guard let prev else { return false }
+        let ratio = r.span.latitudeDelta / prev.span.latitudeDelta
+        guard ratio > 0.8, ratio < 1.25 else { return false }
+        return abs(prev.center.latitude - r.center.latitude) < prev.span.latitudeDelta * 0.2
+            && abs(prev.center.longitude - r.center.longitude) < prev.span.longitudeDelta * 0.2
     }
 
     /// Arrows render from a light breeze up (~3 kt) and fade/shrink with speed,
@@ -310,10 +326,15 @@ final class RadarModel: ObservableObject {
     /// its 7×5 grid and shares one Open-Meteo request per region cell across
     /// users).
     func fetchField(region: MKCoordinateRegion) async {
+        // The station layer already skips a refetch for a small move; the wind
+        // grid used to hit the network on every nudge. A fifth of the span in
+        // either direction, or a quarter of a zoom step, reuses what we have.
+        if Self.nearEnough(region, to: fieldFetchedFor), !windField.isEmpty { return }
         guard let resp = try? await BarryAPI().fieldGrid(
             lat: region.center.latitude, lon: region.center.longitude,
             latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta)
         else { return }   // enrichment: fail quietly and keep whatever we had
+        fieldFetchedFor = region
         let all = resp.points.map {
             WindArrow(lat: $0.lat, lon: $0.lon, speedKmh: $0.windKmh, fromDeg: $0.windDeg)
         }

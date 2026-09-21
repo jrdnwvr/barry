@@ -22,6 +22,10 @@ struct BarryApp: App {
     init() {
         // Let storm alerts surface as banners even while the app is open.
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
+        // RainViewer serves every radar tile with a two day max-age and an
+        // ETag. The default shared cache is too small to keep more than a
+        // screenful, so a tile evicted from memory went back to the network.
+        URLCache.shared = URLCache(memoryCapacity: 16 << 20, diskCapacity: 200 << 20)
     }
 
     var body: some Scene {

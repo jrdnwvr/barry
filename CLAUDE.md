@@ -171,8 +171,15 @@ radar or beside a trough), Wind / Fronts / Troughs (WPC trough lines on their
 own chip) / Stations / Lightning; `RadarKeySheet` lists only what is on. The
 `radarIsobarsSplit` flag migrates anyone who had Pressure on to keep lines. Radar tiles are read back
 to dBZ and repainted (`RadarPalette`); clusters of GLM flashes get a violet
-outline. The wind streaks (`WindFlowView` + `WindFlow.metal`) simulate on the
-CPU but render in Metal: every trail segment becomes a quad in one buffer,
+outline. Radar tile pop-in on a pan is held down four ways (2026-09-21): parked
+frames drop to alpha 0 while the map moves (MapKit stops fetching for them)
+and return to 0.02 once it settles; both tile caches are sized in bytes
+(48 MB repainted, 24 MB source) rather than a count that one screen of seven
+frames overflowed; `URLCache.shared` is 200 MB on disk because RainViewer
+sends a two-day max-age; and `prefetchRing` warms one ring of tiles around
+the viewport for the current frame after each region change. The wind
+streaks (`WindFlowView` + `WindFlow.metal`) simulate on the CPU but render
+in Metal: every trail segment becomes a quad in one buffer,
 one draw call. Measured on the full-screen radar in the simulator, that took
 the app from 46% CPU to 21%. Boundary-layer top lives on the main page (density altitude
 card) now, not the map. **Lightning** (`backend/app/lightning.py`) is decoded

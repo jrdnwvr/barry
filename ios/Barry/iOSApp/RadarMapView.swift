@@ -55,9 +55,12 @@ struct RadarMapView: UIViewRepresentable {
         /// RainViewer tiles are read back to dBZ and repainted in Barry's
         /// palette (RadarPalette); model tiles from IEM are shown as served.
         var recolor = false
+        /// Sized in bytes, not tiles: seven frames of one screen is well over a
+        /// hundred tiles, and a count limit that small meant a pan evicted and
+        /// repainted what a pan back was about to need.
         private static let recoloredCache: NSCache<NSString, NSData> = {
             let c = NSCache<NSString, NSData>()
-            c.countLimit = 160
+            c.totalCostLimit = 48 << 20
             return c
         }()
 
@@ -69,7 +72,7 @@ struct RadarMapView: UIViewRepresentable {
         var maxNativeZ = 7
         private static let parentCache: NSCache<NSString, NSData> = {
             let c = NSCache<NSString, NSData>()
-            c.countLimit = 80
+            c.totalCostLimit = 24 << 20
             return c
         }()
 
@@ -125,7 +128,7 @@ struct RadarMapView: UIViewRepresentable {
             let k = ("painted:" + key) as NSString
             if let hit = Self.recoloredCache.object(forKey: k) { return hit as Data }
             let out = RadarPalette.recolor(data)
-            Self.recoloredCache.setObject(out as NSData, forKey: k)
+            Self.recoloredCache.setObject(out as NSData, forKey: k, cost: out.count)
             return out
         }
 
@@ -138,9 +141,27 @@ struct RadarMapView: UIViewRepresentable {
                 return
             }
             URLSession.shared.dataTask(with: url) { data, _, _ in
-                if let data { Self.parentCache.setObject(data as NSData, forKey: key) }
+                if let data { Self.parentCache.setObject(data as NSData, forKey: key, cost: data.count) }
                 completion(data)
             }.resume()
+        }
+
+        // ---- 4. prefetch ---------------------------------------------------
+
+        /// Warm both caches for a tile without handing anything to MapKit, so
+        /// the next small pan finds its edge already there. Past the native
+        /// zoom this resolves to the ancestor tile, which is what loadTile
+        /// would crop from anyway.
+        func prefetch(_ path: MKTileOverlayPath) {
+            let z = min(path.z, maxNativeZ)
+            let scale = 1 << max(0, path.z - z)
+            let src = MKTileOverlayPath(x: path.x / scale, y: path.y / scale, z: z,
+                                        contentScaleFactor: path.contentScaleFactor)
+            let u = url(forTilePath: src)
+            fetchCached(u) { [weak self] data in
+                guard let self, let data, self.recolor else { return }
+                _ = self.painted(data, key: u.absoluteString)
+            }
         }
     }
 
@@ -411,17 +432,67 @@ struct RadarMapView: UIViewRepresentable {
             }
             if let tile = overlay as? RadarTileOverlay {
                 let r = MKTileOverlayRenderer(tileOverlay: tile)
-                r.alpha = radarHidden ? 0 : (tile.frameTime == currentTime ? visibleAlpha : Self.idleAlpha)
+                r.alpha = radarHidden ? 0
+                    : (tile.frameTime == currentTime ? visibleAlpha : (panning ? 0 : Self.idleAlpha))
                 renderers[tile.frameTime] = r
                 return r
             }
             return MKOverlayRenderer(overlay: overlay)
         }
 
+        /// True between a gesture starting and the map settling.
+        private var panning = false
+
+        /// While the map moves, only the frame on screen asks MapKit for
+        /// tiles. The others drop to true zero, where MapKit stops fetching
+        /// for them, so the visible frame's tiles are not queued behind six
+        /// nobody is looking at. A frame mid-crossfade is left alone.
+        func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
+            panning = true
+            guard !radarHidden else { return }
+            for (t, r) in renderers where t != currentTime && r !== fadeFrom && r !== fadeTo {
+                r.alpha = 0
+            }
+        }
+
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+            panning = false
+            if !radarHidden {
+                // Back to a hair above zero, so the other frames warm up again.
+                for (t, r) in renderers where t != currentTime && r !== fadeFrom && r !== fadeTo {
+                    r.alpha = Self.idleAlpha
+                }
+            }
             onRegionChange?(mapView.region)
             applyDeclutter(on: mapView)
             flowView?.mapDidMove()
+            prefetchRing(on: mapView)
+        }
+
+        /// One ring of tiles around the visible ones, for the current frame,
+        /// once the map has settled. MapKit only asks for a tile the moment it
+        /// is on screen; this asks a little earlier.
+        private func prefetchRing(on map: MKMapView) {
+            guard !radarHidden, let overlay = overlays[currentTime], map.bounds.width > 0 else { return }
+            let rect = map.visibleMapRect
+            let world = MKMapSize.world.width
+            // The zoom MapKit will pick for a 512 px tile at this scale.
+            let pixelsPerMapPoint = Double(map.bounds.width) * Double(map.traitCollection.displayScale) / rect.size.width
+            let z = max(1, min(20, Int((log2(pixelsPerMapPoint * world / Double(overlay.tileSize.width))).rounded())))
+            let span = world / Double(1 << z)
+            let n = 1 << z
+            let x0 = Int(floor(rect.minX / span)), x1 = Int(floor(rect.maxX / span))
+            let y0 = Int(floor(rect.minY / span)), y1 = Int(floor(rect.maxY / span))
+            var count = 0
+            for x in (x0 - 1)...(x1 + 1) {
+                for y in (y0 - 1)...(y1 + 1) {
+                    let inside = x >= x0 && x <= x1 && y >= y0 && y <= y1
+                    guard !inside, x >= 0, y >= 0, x < n, y < n, count < 48 else { continue }
+                    overlay.prefetch(MKTileOverlayPath(x: x, y: y, z: z,
+                                                       contentScaleFactor: map.traitCollection.displayScale))
+                    count += 1
+                }
+            }
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {

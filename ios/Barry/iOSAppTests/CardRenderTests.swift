@@ -18,6 +18,22 @@ struct CardRenderTests {
         return r.cgImage
     }
 
+    /// The rain, wind and temperature card, saved as a picture so the
+    /// three time axes can be checked against each other by eye.
+    @Test func rainWindTemperatureCardRendersAndSavesAPicture() throws {
+        let combined = try Fixtures.combinedKLUK()
+        let view = ConfirmationOverlayView(combined: combined, now: Fixtures.fixtureNow)
+            .padding(12)
+            .background(Color(.systemBackground))
+        let r = ImageRenderer(content: view.frame(width: 358).fixedSize(horizontal: false, vertical: true))
+        r.scale = 3
+        let img = try #require(r.uiImage)
+        #expect(img.size.height > 150)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("rainwind.png")
+        try img.pngData()?.write(to: url)
+        NSLog("rainwind card saved to %@", url.path)
+    }
+
     @Test func tafRunwayAndHeroCardsRenderAtEveryPhoneWidth() throws {
         let combined = try Fixtures.combinedKLUK()
         let now = Fixtures.fixtureNow

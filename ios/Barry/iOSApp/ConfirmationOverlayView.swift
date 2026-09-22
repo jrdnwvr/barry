@@ -25,6 +25,17 @@ struct ConfirmationOverlayView: View {
 
     private var precipHours: [ForecastHour] { hours.filter { $0.precip_prob != nil } }
     private var windHours: [ForecastHour] { hours.filter { $0.windspeed != nil } }
+    private var tempHours: [ForecastHour] { hours.filter { $0.temperature != nil } }
+
+    /// Every chart on the card shares this, so 3 PM is the same pixel in
+    /// each of them whatever hours a channel happens to have.
+    private var xDomain: ClosedRange<Date> {
+        let first = hours.first?.t ?? now
+        let last = hours.last?.t ?? now.addingTimeInterval(23 * 3600)
+        return first...max(last, first.addingTimeInterval(3600))
+    }
+    /// The y-axis labels are all this wide, on the leading side, for the same reason.
+    private static let axisWidth: CGFloat = 30
 
     // Only surface the panel when at least one channel has something to show.
     private var hasMeaningfulPrecip: Bool { precipHours.contains { ($0.precip_prob ?? 0) > 5 } }
@@ -102,20 +113,34 @@ struct ConfirmationOverlayView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                if tempHours.count >= 2 { tempChart }
             }
             // Fresh forecast → any tapped point may no longer exist; clear it.
             .onChange(of: combined) { _, _ in windSelection = nil }
         }
     }
 
+    /// "16–21°": the coming six hours' low and high, one number when flat.
+    private var tempRangeText: String? {
+        let temps = next6h.compactMap { $0.temperature }
+        guard let lo = temps.min(), let hi = temps.max() else { return nil }
+        let a = Int(lo.rounded()), b = Int(hi.rounded())
+        return a == b ? "\(a)°" : "\(a)–\(b)°"
+    }
+
     private var summaryRow: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 14) {
             Label("\(precipMaxPct)%", systemImage: "cloud.rain")
             Label(windText, systemImage: "wind")
+            if let t = tempRangeText {
+                Label(t, systemImage: "thermometer.medium")
+            }
             Text("next 6h").foregroundStyle(.secondary)
             Spacer()
         }
         .font(.subheadline)
+        .lineLimit(1)
+        .minimumScaleFactor(0.85)
     }
 
     // MARK: - Precip chart (0–100 %)
@@ -142,13 +167,15 @@ struct ConfirmationOverlayView: View {
                 }
             }
             .frame(height: 56)
+            .chartXScale(domain: xDomain)
             .chartYScale(domain: 0...100)
             .chartYAxis {
-                AxisMarks(values: [0, 50, 100]) { v in
+                AxisMarks(position: .leading, values: [0, 50, 100]) { v in
                     AxisGridLine().foregroundStyle(.secondary.opacity(0.2))
                     AxisValueLabel {
                         if let pct = v.as(Int.self) {
                             Text("\(pct)%").font(.system(size: 9))
+                                .frame(width: Self.axisWidth, alignment: .trailing)
                         }
                     }
                 }
@@ -251,10 +278,17 @@ struct ConfirmationOverlayView: View {
                 }
             }
             .frame(height: 56)
+            .chartXScale(domain: xDomain)
             .chartYAxis {
                 AxisMarks(position: .leading) { v in
                     AxisGridLine().foregroundStyle(.secondary.opacity(0.2))
-                    AxisValueLabel().font(.system(size: 9))
+                    AxisValueLabel {
+                        if let d = v.as(Double.self) {
+                            Text(d.formatted(.number.precision(.fractionLength(0))))
+                                .font(.system(size: 9))
+                                .frame(width: Self.axisWidth, alignment: .trailing)
+                        }
+                    }
                 }
             }
             .chartXAxis {
@@ -277,6 +311,84 @@ struct ConfirmationOverlayView: View {
             if let sel = windSelection {
                 windReadout(sel)
             }
+        }
+    }
+
+    // MARK: - Temperature chart (°C, with the dew point)
+
+    private var tempDomain: ClosedRange<Double> {
+        let vals = tempHours.compactMap { $0.temperature } + tempHours.compactMap { $0.dewpoint }
+        let lo = (vals.min() ?? 0).rounded(.down) - 2
+        let hi = (vals.max() ?? 10).rounded(.up) + 2
+        return lo...max(hi, lo + 6)
+    }
+
+    private var tempChart: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label("Temperature (°C)", systemImage: "thermometer.medium")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            Chart {
+                // Freezing, when the day crosses it: the one line that changes plans.
+                if tempDomain.contains(0) {
+                    RuleMark(y: .value("Freezing", 0))
+                        .foregroundStyle(.blue.opacity(0.5))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 3]))
+                }
+                ForEach(tempHours) { h in
+                    if let d = h.dewpoint {
+                        LineMark(
+                            x: .value("Time", h.t),
+                            y: .value("Dew point", d),
+                            series: .value("Series", "dew")
+                        )
+                        .foregroundStyle(.green.opacity(0.6))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                        .interpolationMethod(.catmullRom)
+                    }
+                }
+                ForEach(tempHours) { h in
+                    if let t = h.temperature {
+                        LineMark(
+                            x: .value("Time", h.t),
+                            y: .value("Temperature", t),
+                            series: .value("Series", "temp")
+                        )
+                        .foregroundStyle(.orange)
+                        .lineStyle(StrokeStyle(lineWidth: 1.5))
+                        .interpolationMethod(.catmullRom)
+                    }
+                }
+            }
+            .frame(height: 56)
+            .chartXScale(domain: xDomain)
+            .chartYScale(domain: tempDomain)
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { v in
+                    AxisGridLine().foregroundStyle(.secondary.opacity(0.2))
+                    AxisValueLabel {
+                        if let d = v.as(Double.self) {
+                            Text("\(Int(d.rounded()))°")
+                                .font(.system(size: 9))
+                                .frame(width: Self.axisWidth, alignment: .trailing)
+                        }
+                    }
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: .stride(by: .hour, count: 6)) {
+                    AxisGridLine().foregroundStyle(.secondary.opacity(0.2))
+                    AxisValueLabel(format: .dateTime.hour()).font(.system(size: 9))
+                }
+            }
+
+            HStack(spacing: 10) {
+                Label { Text("temperature") } icon: { Rectangle().fill(.orange).frame(width: 10, height: 2) }
+                Label { Text("dew point") } icon: { Rectangle().fill(.green.opacity(0.6)).frame(width: 10, height: 2) }
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
         }
     }
 

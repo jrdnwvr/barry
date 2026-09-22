@@ -86,6 +86,20 @@ final class RadarUITests: XCTestCase {
         }
         XCTAssertTrue(chip(app, "Wind").isSelected, "the wind layer should still be on")
 
+        // The timeline: Now parks on the latest frame, a scrub pauses where
+        // it lands, the loop button starts the last hour again.
+        let now = app.buttons["radar.now"], loop = app.buttons["radar.loop"]
+        let frameTime = app.staticTexts["radar.frameTime"]
+        XCTAssertTrue(now.waitForExistence(timeout: 5) && loop.exists)
+        now.tap()
+        XCTAssertTrue(now.isSelected && !loop.isSelected)
+        XCTAssertTrue(frameTime.label.contains("latest"), frameTime.label)
+        app.sliders.firstMatch.adjust(toNormalizedSliderPosition: 0.2)
+        XCTAssertTrue(!now.isSelected && !loop.isSelected, "a scrub should pause where it lands")
+        XCTAssertFalse(frameTime.label.contains("latest"), frameTime.label)
+        loop.tap()
+        XCTAssertTrue(loop.isSelected && !now.isSelected)
+
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(expand.waitForExistence(timeout: 10), "did not come back to the dashboard")
         XCTAssertEqual(app.state, .runningForeground)

@@ -72,7 +72,7 @@ Radar screen, each layer alone and stacked.
 
 | Behaviour | Automated | Sim | Phone | Notes |
 |---|---|---|---|---|
-| Radar tiles repainted to Barry's palette, timeline scrubs, plays | palette table and unreadable input tested | eyeball | | |
+| Radar tiles repainted to Barry's palette; Now parks on the latest frame, the loop plays the last hour, a scrub pauses where it lands | palette tested; UI test taps Now, scrubs, loops | eyeball | | frame time under the slider |
 | Pressure shading, Change shading, one at a time | | eyeball | | |
 | Isobars alone over plain radar, labels in hPa | | eyeball | | |
 | Wind streaks: direction, tone by speed, visible at 3 kt | | eyeball | | |

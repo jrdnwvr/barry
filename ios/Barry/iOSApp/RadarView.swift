@@ -201,6 +201,7 @@ struct RadarPanel: View {
             model.frontStyle = frontStyle
             await model.load()
             model.playing = autoplay
+            model.lockedToNow = !autoplay
             if showWind {
                 await model.fetchField(region: model.lastRegion ?? initialRegion)
             }
@@ -229,8 +230,11 @@ struct RadarPanel: View {
                 dwellTicks -= 1
                 return
             }
-            model.index = (model.index + 1) % model.frames.count
-            if model.index == model.frames.count - 1 {
+            // The loop is the last hour: the observed frames through now.
+            // Nowcast and model frames are there for the scrubber.
+            let last = model.nowIndex
+            model.index = model.index >= last ? 0 : model.index + 1
+            if model.index == last {
                 dwellTicks = 3
             }
         }
@@ -525,18 +529,6 @@ struct RadarPanel: View {
         if showRadar {
             radarControls
         }
-        switch (field, showIsobars) {
-        case (.off, false):
-            EmptyView()
-        case (.off, true):
-            baseCaption("Isobars every 4 hPa, 2 on a flat day.")
-        case (.pressure, true):
-            baseCaption("Sea-level pressure. Isobars every 4 hPa, 2 on a flat day.")
-        case (.pressure, false):
-            baseCaption("Sea-level pressure, gridded from station reports.")
-        case (.change, _):
-            baseCaption("Pressure change over the last 3 h. Solid rising, dashed falling, H and L at the strongest.")
-        }
         windCalmNote
         stormsNote
     }
@@ -550,13 +542,6 @@ struct RadarPanel: View {
                 .foregroundStyle(.tertiary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-
-    private func baseCaption(_ text: String) -> some View {
-        Text(text)
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Local valid time of the analysis on screen.
@@ -579,30 +564,61 @@ struct RadarPanel: View {
         }
     }
 
+    /// Now parks the map on the freshest observation and keeps it there.
+    /// The loop plays the last hour through now and dwells on the freshest
+    /// frame. A scrub pauses where the finger left it until the loop is
+    /// tapped again. The frame's time sits under the slider.
     private var radarControls: some View {
-        HStack(spacing: 12) {
-            Button {
-                model.playing.toggle()
-            } label: {
-                Image(systemName: model.playing ? "pause.fill" : "play.fill")
-                    .font(.system(size: 16, weight: .semibold))
+        VStack(spacing: 5) {
+            HStack(spacing: 8) {
+                Button {
+                    model.playing = false
+                    model.lockedToNow = true
+                    model.index = model.nowIndex
+                } label: {
+                    Text("Now")
+                        .font(.caption.weight(.semibold))
+                        .fixedSize()
+                }
+                .buttonStyle(ChipStyle(on: model.lockedToNow && !model.playing))
+                .accessibilityAddTraits(model.lockedToNow && !model.playing ? .isSelected : [])
+                .accessibilityIdentifier("radar.now")
+
+                Button {
+                    if model.playing {
+                        model.playing = false
+                    } else {
+                        model.lockedToNow = false
+                        model.playing = true
+                    }
+                } label: {
+                    Image(systemName: "goforward.60")
+                        .font(.system(size: 15, weight: .semibold))
+                }
+                .buttonStyle(ChipStyle(on: model.playing))
+                .accessibilityAddTraits(model.playing ? .isSelected : [])
+                .accessibilityLabel(model.playing ? "Pause the loop" : "Loop the last hour")
+                .accessibilityIdentifier("radar.loop")
+
+                Slider(
+                    value: Binding(
+                        get: { Double(model.index) },
+                        set: {
+                            model.index = Int($0.rounded())
+                            model.playing = false
+                            model.lockedToNow = false
+                        }
+                    ),
+                    in: 0...Double(max(1, model.frames.count - 1)),
+                    step: 1
+                )
             }
-            .buttonStyle(.plain)
-
-            Slider(
-                value: Binding(
-                    get: { Double(model.index) },
-                    set: { model.index = Int($0.rounded()); model.playing = false }
-                ),
-                in: 0...Double(max(1, model.frames.count - 1)),
-                step: 1
-            )
-
-            Text(timeLabel)
-                .font(.caption.weight(.medium))
+            Text(frameTimeText)
+                .font(.caption2.weight(.medium))
                 .monospacedDigit()
                 .foregroundStyle(timeLabelColor)
-                .frame(width: 84, alignment: .trailing)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("radar.frameTime")
         }
     }
 
@@ -618,15 +634,18 @@ struct RadarPanel: View {
         return f.nowcast ? .orange : .secondary
     }
 
-    private var timeLabel: String {
-        guard let f = currentFrame else { return "" }
+    /// "8:20 PM · 20m ago", "8:50 PM · nowcast", "10 PM · model +2h".
+    private var frameTimeText: String {
+        guard let f = currentFrame else { return " " }
+        let clock = Date(timeIntervalSince1970: Double(f.time)).formatted(date: .omitted, time: .shortened)
         if f.iemLayer != nil {
             let hrs = max(1, Int(((Double(f.time) - Date().timeIntervalSince1970) / 3600).rounded()))
-            return "+\(hrs)h model"
+            return "\(clock) · model +\(hrs)h"
         }
         let mins = Int((Date().timeIntervalSince1970 - Double(f.time)) / 60)
-        if f.nowcast { return "+\(max(0, -mins))m forecast" }
-        return mins <= 1 ? "now" : "\(mins)m ago"
+        if f.nowcast { return "\(clock) · nowcast" }
+        let age = mins <= 1 ? "now" : "\(mins)m ago"
+        return model.lockedToNow && !model.playing ? "\(clock) · latest, \(age)" : "\(clock) · \(age)"
     }
 }
 

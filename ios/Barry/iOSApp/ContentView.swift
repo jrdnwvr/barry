@@ -77,6 +77,10 @@ struct ContentView: View {
                 Task { await loadForCurrentMode(silent: false) }
             }
             .task {
+                // A UI test or a screenshot run can land on the radar directly.
+                if UITestSupport.active, ProcessInfo.processInfo.arguments.contains("-uitest-radar") {
+                    showRadarFullScreen = true
+                }
                 WatchSync.shared.activate()
                 syncAirportSelection()
                 await initialLoad()

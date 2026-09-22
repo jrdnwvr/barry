@@ -36,6 +36,9 @@ final class RadarModel: ObservableObject {
     @Published var host = "https://tilecache.rainviewer.com"
     @Published var index = 0
     @Published var playing = true
+    /// The Now pill: the map stays on the freshest observed frame, through
+    /// reloads, until the loop or a scrub moves it.
+    @Published var lockedToNow = false
     @Published var failed = false
     @Published var windArrows: [WindArrow] = []
     /// The whole wind grid, calm points included — the flow layer's field.
@@ -187,8 +190,15 @@ final class RadarModel: ObservableObject {
         do {
             let resp = try await BarryAPI().radarFrames()
             host = resp.host
+            let hadFrames = !frames.isEmpty
             frames = resp.frames.map { RadarFrame(time: $0.time, path: $0.path, nowcast: $0.nowcast) }
-            index = nowIndex
+            // A reload snaps to now unless the user parked the timeline
+            // somewhere or the loop is running; then the index stays.
+            if lockedToNow || !hadFrames {
+                index = nowIndex
+            } else {
+                index = min(index, max(0, frames.count - 1))
+            }
         } catch {
             failed = true
             return

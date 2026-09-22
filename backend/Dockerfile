@@ -13,7 +13,14 @@ COPY requirements.lock pyproject.toml ./
 COPY app ./app
 RUN pip install --upgrade pip \
     && pip install --require-hashes -r requirements.lock \
-    && pip install --no-deps .
+    && pip install --no-deps . \
+    # The runtime installs nothing, so the installer goes: pip with its
+    # vendored msgpack, the bundled setuptools wheel, and the egg-info the
+    # build left in the source tree. Each has been a CVE in the scan.
+    && pip uninstall -y pip setuptools wheel 2>/dev/null || true \
+    && rm -rf /usr/local/lib/python3.12/ensurepip /usr/local/lib/python3.12/site-packages/pip* \
+              /usr/local/lib/python3.12/site-packages/setuptools* /usr/local/lib/python3.12/site-packages/_distutils_hack \
+              /usr/local/lib/python3.12/site-packages/distutils-precedence.pth /srv/barry_backend.egg-info /root/.cache
 
 EXPOSE 8080
 

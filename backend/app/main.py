@@ -18,30 +18,43 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
+from uuid import uuid4
 import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi import Path as PathParam   # pathlib.Path is the file one below
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 
-from . import diagnostics, stations
-from .guards import RateGate
+from . import diagnostics, logs, metrics, stations
+from .guards import RateGate, is_private
 from .scheduler import Scheduler
 from .cache import CachedFailure
 from .guards import InvalidStation, IPLimiter, RateLimited, client_key
 from .service import PressureService
 
-logging.basicConfig(level=logging.INFO)
+logs.configure()
 
 # A descriptive User-Agent is required by AWC (brief §2.1). Set on every request
 # at the source layer; this is the connection-pooled client shared app-wide.
 HTTP_TIMEOUT = 15.0
 
 
+def _upstream_hooks():
+    """Count every upstream call by host, and every answer by status
+    class; sent minus answered is what timed out or failed to connect."""
+    async def on_request(request: httpx.Request):
+        metrics.inc("barry_upstream_requests_total", request.url.host)
+
+    async def on_response(response: httpx.Response):
+        metrics.inc("barry_upstream_responses_total", response.request.url.host,
+                    metrics.status_class(response.status_code))
+    return {"request": [on_request], "response": [on_response]}
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    client = httpx.AsyncClient(timeout=HTTP_TIMEOUT)
+    client = httpx.AsyncClient(timeout=HTTP_TIMEOUT, event_hooks=_upstream_hooks())
     service = PressureService(client)
     scheduler = Scheduler(service, interval_seconds=600.0)
     app.state.client = client
@@ -77,16 +90,56 @@ app.state.ip_limiter = IPLimiter(per_minute=float(os.environ.get("BARRY_RATE_PER
 
 
 @app.middleware("http")
-async def _per_ip_budget(request: Request, call_next):
-    if request.url.path == "/healthz":
-        return await call_next(request)
-    limiter: IPLimiter = request.app.state.ip_limiter
-    key = client_key(request.client.host if request.client else None,
-                     request.headers.get("cf-connecting-ip"))
-    if not limiter.allow(key):
-        return JSONResponse(status_code=429, content={"detail": "too many requests"},
-                            headers={"Retry-After": "30"})
-    return await call_next(request)
+async def _request_context(request: Request, call_next):
+    """A request id on every log line and response, the per-address budget,
+    and one count per answer by route template and status. The template,
+    not the path: nothing a client typed reaches a label."""
+    rid = uuid4().hex[:12]
+    token = logs.request_id.set(rid)
+    try:
+        response = None
+        if request.url.path != "/healthz":
+            limiter: IPLimiter = request.app.state.ip_limiter
+            key = client_key(request.client.host if request.client else None,
+                             request.headers.get("cf-connecting-ip"))
+            if not limiter.allow(key):
+                response = JSONResponse(status_code=429, content={"detail": "too many requests"},
+                                        headers={"Retry-After": "30"})
+        if response is None:
+            try:
+                response = await call_next(request)
+            except Exception:
+                metrics.inc("barry_requests_total", _route_template(request), "500")
+                raise
+        response.headers["X-Request-Id"] = rid
+        metrics.inc("barry_requests_total", _route_template(request), str(response.status_code))
+        return response
+    finally:
+        logs.request_id.reset(token)
+
+
+def _route_template(request: Request) -> str:
+    route = request.scope.get("route")
+    return getattr(route, "path", None) or "unmatched"
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics_endpoint(request: Request):
+    """Counters in the Prometheus text format, for the box's own network
+    only: a request that came through the tunnel carries CF-Connecting-IP,
+    and one from outside has a public peer; both get the same 404 as a
+    path that does not exist."""
+    peer = request.client.host if request.client else None
+    if request.headers.get("cf-connecting-ip") or not (peer and is_private(peer)):
+        raise HTTPException(status_code=404, detail="Not Found")
+    sched: Optional[Scheduler] = getattr(app.state, "scheduler", None)
+    service: Optional[PressureService] = getattr(app.state, "service", None)
+    if service is not None:
+        metrics.gauge("barry_cache_entries", len(service.cache._store))
+        metrics.gauge("barry_glm_flashes", len(service.flashes))
+    if sched is not None:
+        metrics.gauge("barry_scheduler_cycles_total", sched.cycles)
+    return PlainTextResponse(metrics.render(), media_type="text/plain; version=0.0.4; charset=utf-8")
 
 
 @app.exception_handler(InvalidStation)

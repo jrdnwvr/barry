@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass
+from . import metrics
 from typing import Any, Dict, Generic, List, Optional, TypeVar
 
 T = TypeVar("T")
@@ -48,13 +49,17 @@ class TTLCache:
         async with self._lock:
             entry = self._store.get(key)
             if entry is None:
+                metrics.inc("barry_cache_total", "miss")
                 return None
             if entry.expires_at <= self._clock():
                 self._store.pop(key, None)
+                metrics.inc("barry_cache_total", "miss")
                 return None
             # A remembered failure is not a value to anyone reading plainly.
             if isinstance(entry.value, _Failure):
+                metrics.inc("barry_cache_total", "miss")
                 return None
+            metrics.inc("barry_cache_total", "hit")
             return entry.value
 
     async def set(self, key: str, value: Any, *, ttl: Optional[float] = None) -> None:
@@ -92,11 +97,15 @@ class TTLCache:
                 entry = self._store.get(key)
                 if entry is not None and entry.expires_at > self._clock():
                     if isinstance(entry.value, _Failure):
+                        metrics.inc("barry_cache_total", "negative")
                         raise CachedFailure(entry.value.reason)
+                    metrics.inc("barry_cache_total", "hit")
                     return entry.value
         fut = self._inflight.get(key)
         if fut is not None:
+            metrics.inc("barry_cache_total", "joined")
             return await asyncio.shield(fut)
+        metrics.inc("barry_cache_total", "miss")
         loop = asyncio.get_running_loop()
         fut = loop.create_future()
         self._inflight[key] = fut

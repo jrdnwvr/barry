@@ -102,3 +102,6 @@ def _is_private(ip: str) -> bool:
         return a.is_private or a.is_loopback
     except ValueError:
         return False
+
+
+is_private = _is_private

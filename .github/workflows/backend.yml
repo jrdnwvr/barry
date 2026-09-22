@@ -1,0 +1,47 @@
+# The backend on every push: the suite, the lockfile against known
+# vulnerabilities, the image built as production builds it, and the image
+# scanned. A red job blocks the merge.
+name: backend
+
+on:
+  push:
+    paths: ["backend/**", ".github/workflows/backend.yml"]
+  pull_request:
+    paths: ["backend/**", ".github/workflows/backend.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install from the lock, then the test tools
+        run: |
+          pip install --require-hashes -r requirements.lock
+          pip install --no-deps -e .
+          pip install "pytest>=8" "pytest-asyncio>=0.23" "hypothesis>=6.100"
+      - name: Tests
+        run: pytest -q
+      - name: Known vulnerabilities in the lock
+        run: |
+          pip install pip-audit
+          pip-audit --no-deps -r requirements.lock
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the production image
+        run: docker build -t barry-backend:ci backend
+      - name: Scan it
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: barry-backend:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"

@@ -11,10 +11,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from . import persist
+from . import metrics, persist
 from .models import PressureResponse
 from .service import BULK_TTL, PRESSURE_TTL, PressureService, _now, _tendency_out
 from .sources import aviationweather as awc
@@ -80,6 +81,14 @@ class Scheduler:
 
     async def refresh_once(self) -> int:
         """Refresh all active stations in batched calls. Returns #upstream calls."""
+        t0 = time.monotonic()
+        try:
+            return await self._refresh_once()
+        finally:
+            metrics.gauge("barry_scheduler_cycle_seconds", time.monotonic() - t0)
+            metrics.gauge("barry_glm_flashes", len(self._service.flashes))
+
+    async def _refresh_once(self) -> int:
         # Warm the whole-world METAR table and the station directory so no
         # request waits on AWC for either.
         try:
@@ -94,6 +103,7 @@ class Scheduler:
 
         active = await self._service.registry.active()
         persist.save("registry", active)
+        metrics.gauge("barry_registry_size", len(active))
         if not active:
             log.info("scheduler: no active stations; skipping cycle")
             return 0
@@ -143,6 +153,7 @@ class Scheduler:
                 await self._service.cache.set(f"pressure:{sid}", resp, ttl=PRESSURE_TTL)
 
         self.cycles += 1
+        metrics.inc("barry_scheduler_cycles_total")
         self.last_request_count = request_count
         log.info(
             "scheduler: cycle %d refreshed %d stations in %d batched request(s) "

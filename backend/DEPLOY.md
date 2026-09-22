@@ -1,5 +1,12 @@
 # Deploying the Barry backend
 
+**Production today** is one container on the home server (Unraid "Tower")
+behind a Cloudflare tunnel; see `UNRAID.md` for the setup and
+`../docs/RUNBOOK.md` for what to do when it breaks. Deploy with
+`sh deploy.sh` on the box (image tagged by commit, health check waited
+on, last three tags kept), roll back with `sh rollback.sh <tag>`. The
+options below are the hosted alternatives and still work.
+
 The app is a single FastAPI process. The **only** operational rule that matters:
 run **one instance / one worker**. The TTL cache, the active-station registry, and
 the batched aviationweather.gov scheduler are all in-process — a second instance

@@ -13,6 +13,7 @@
 		080D7B1C19F00CD2B2FAA9B8 /* PressureActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECFAFB3674B651E14D4FEC8B /* PressureActivity.swift */; };
 		08AE6842CBAF80BC672E193D /* PressureUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D967187F3CE6292310A2937 /* PressureUnit.swift */; };
 		094EEF5E8D649C8E37BEB643 /* PressureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A60F6C6B6915B13C8CAD3A3 /* PressureStore.swift */; };
+		09BD3BFC632BF28FB8587A1B /* tendency_cases.json in Resources */ = {isa = PBXBuildFile; fileRef = 562F0C5A2584915B01FB409F /* tendency_cases.json */; };
 		09EEB08561CA15D52D6E6036 /* WatchSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F0EF3938BA8F192FB71228 /* WatchSettingsView.swift */; };
 		0A97A6AB092391F5F45D58FC /* SharedSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */; };
 		0C6CE77FC97065E5CF6D21D1 /* WindUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E3203C0CBC7B1D5F0A57759 /* WindUnit.swift */; };
@@ -43,6 +44,7 @@
 		31549614253BF1B636E51ED3 /* BarryComplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 726AB15B448612548C2CCCCD /* BarryComplication.swift */; };
 		316A4B6AE3D7881F77DC672C /* RunwayWindDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD313083D4B2A9BAD12BAB92 /* RunwayWindDial.swift */; };
 		31C975A1344ECEECC2458169 /* PhoneWidgetViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1326419A7770149C91B0438 /* PhoneWidgetViews.swift */; };
+		390537B91AECE9E9F057FE3B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F07D88A5BEA3FC7C9BD42D68 /* PrivacyInfo.xcprivacy */; };
 		395DCB7F587238A3F9D7C739 /* RunwayMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85C6CB170A65E1A614F64BB1 /* RunwayMath.swift */; };
 		3FD01657A6175EE55DF94D91 /* ConfirmationOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A59F4AD2D2CF0AC8FB31B534 /* ConfirmationOverlayView.swift */; };
 		42482AB94F1FE3D8035354D9 /* BarryAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */; };
@@ -53,9 +55,11 @@
 		4841725627A1F0AC607A52BE /* SharedSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */; };
 		496D420D268C7B1C34C7AD34 /* WatchBarometer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 886DA735AE684A5A59D95000 /* WatchBarometer.swift */; };
 		4B47718B22FC9723FF410F76 /* BarryWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BB3C628CF8662B6BEF5A73F /* BarryWatchApp.swift */; };
+		4B7660EBAD37CF36FA22AAA6 /* SnapshotStalenessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E50753B814745AF734760F1 /* SnapshotStalenessTests.swift */; };
 		4BBFD392779CDC66E4252928 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C59EF4878E06062DC20D1D7 /* AppConfig.swift */; };
 		4DC0A2667AD32E4946FA8106 /* RadarSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1666B232D9C24406F937CCE8 /* RadarSheets.swift */; };
 		4ED2D56EC1DA59D7FBBD779D /* HeroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01599505777741EA095092C0 /* HeroView.swift */; };
+		4FFC946A75A20E59DE996A0C /* combined_kluk.json in Resources */ = {isa = PBXBuildFile; fileRef = 47A973B22E958B730E977380 /* combined_kluk.json */; };
 		501E15BBC91B22998A389E76 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918B4D14CC966B0E820FC1AC /* Models.swift */; };
 		5093AC139AE85DC8A14E0859 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 05E57A0FA0B17718D5FB1D5D /* Assets.xcassets */; };
 		50F708BB96C5BBFE917DE01A /* TendencyProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A24A6845ECB66698D61771D /* TendencyProvider.swift */; };
@@ -73,6 +77,7 @@
 		57789B75BDC58D0AACC5CA36 /* Tendency.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2542DA2C850B2399B31A9069 /* Tendency.swift */; };
 		5976B0374D4F59B1A90268F5 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C59EF4878E06062DC20D1D7 /* AppConfig.swift */; };
 		59DA22C45F3ECB63E17189B1 /* PressureUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D967187F3CE6292310A2937 /* PressureUnit.swift */; };
+		5B4110D0966F6475A5E665D5 /* CardRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75CA082BD890DE5E1469223E /* CardRenderTests.swift */; };
 		5DBD0FC19C6288F1D8E8B24C /* TafTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72EC9A1E421849C76710D333 /* TafTimeline.swift */; };
 		62FB812E1EB219CC6E616BBC /* Tendency.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2542DA2C850B2399B31A9069 /* Tendency.swift */; };
 		62FE249CDA4A80409C304F3D /* Tendency.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2542DA2C850B2399B31A9069 /* Tendency.swift */; };
@@ -80,6 +85,7 @@
 		6341C06F45343F3FAAAE7353 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918B4D14CC966B0E820FC1AC /* Models.swift */; };
 		69FA11493C9F04A3A79384A3 /* HorizontalDragGesture.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB906A0DF0FCEFBE609EBF06 /* HorizontalDragGesture.swift */; };
 		70D7BA6937527AE4D263FF9A /* FrontsOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35839C2045A30D70938041B6 /* FrontsOverlay.swift */; };
+		71A3F386AC931B1BD311F583 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A376D4EE445D8849427A861E /* PrivacyInfo.xcprivacy */; };
 		73C115787B3F6EB1F3D44776 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918B4D14CC966B0E820FC1AC /* Models.swift */; };
 		7492FC46266CE19D8B710E51 /* RectangularComplications.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAFA9596978A2666CDFADAB4 /* RectangularComplications.swift */; };
 		772708512B575F16B6A02B14 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0094727B647701DDDCF17BD2 /* LocationManager.swift */; };
@@ -87,6 +93,7 @@
 		77F617DE1799A58749B82524 /* PressureHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */; };
 		7917511FB9F6E4E7614296AA /* Tendency.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2542DA2C850B2399B31A9069 /* Tendency.swift */; };
 		7A6DDBC8AE57AB1B76FBBD68 /* CombinedProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22E85CED436F95A55C69D8B0 /* CombinedProvider.swift */; };
+		7CF4014037C06AD763D6389F /* TendencyParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E7A086EE5185D61C26B5533 /* TendencyParityTests.swift */; };
 		7D0122F48329169FE2A913E7 /* RangeAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EBD287C6CB46A536198173F /* RangeAnalysis.swift */; };
 		7D4E858B190A8B961B283BE6 /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E7AD448DB8DDD1CE1C73553 /* LiveActivityManager.swift */; };
 		7DDE0AE0EEA91898EC721A08 /* HomeLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14751C812932452AF8884F79 /* HomeLayout.swift */; };
@@ -103,9 +110,12 @@
 		8F156D0C3F3371A2376F2394 /* BarometerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02CC4610E9A811E4A3554DCB /* BarometerManager.swift */; };
 		9267F000F0820CEB0BF3D9CC /* LightningOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 252EE81999FF16293FA0CF7A /* LightningOverlay.swift */; };
 		93B3BCD445531D00C4959583 /* PressureHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */; };
+		9553E76C4220FA9D9A10E09D /* RadarUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F12F9F36D9EEE36F56997FA /* RadarUITests.swift */; };
 		967511152A1EBB2D602F2B9A /* SavedLocations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */; };
 		971C47371255C41380413D3E /* SavedLocations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */; };
 		98A632AA5A2B036CFA27697A /* PressureGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6978CE026B8EEE1A560877C0 /* PressureGuideView.swift */; };
+		99DBC62DAB0A16C1295609C3 /* RunwayMathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29ED804DF107D966F7295562 /* RunwayMathTests.swift */; };
+		9A3EF5B92F7E694E33F31FFC /* Fixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 024F41291A68B29C57129A86 /* Fixtures.swift */; };
 		9B711DD69DC404927EE59946 /* LightningBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB955C8C1263A03BA2C97A2F /* LightningBanner.swift */; };
 		9F987BE952507B2A891ADC78 /* PressureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A60F6C6B6915B13C8CAD3A3 /* PressureStore.swift */; };
 		A11B605E76613C43AC5FE11E /* BarryAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */; };
@@ -133,8 +143,11 @@
 		D3C402CAC4DD221E088344E1 /* TafTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72EC9A1E421849C76710D333 /* TafTimeline.swift */; };
 		D3CCE6CB0DB066A238922179 /* BarryAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */; };
 		D6D685CBFD1BD430889413FC /* RunwayWindDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD313083D4B2A9BAD12BAB92 /* RunwayWindDial.swift */; };
+		D6FF8AA397153E989437EDAB /* UITestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B661E997E72021B37CCFFD4 /* UITestSupport.swift */; };
 		DACD1A75954EE1A27EDEC976 /* BarryApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B8FF4A39677C2C8F46B98F7 /* BarryApp.swift */; };
 		DE3B1D2A64D44211EFC29928 /* SavedLocations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */; };
+		DE9BEC621A1206759924685E /* RadarPaletteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4258044D160E9F49F088BAF /* RadarPaletteTests.swift */; };
+		DFDEE353D4F787864B64BCCD /* TafTimelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29C7E17624E3FBD582130C1E /* TafTimelineTests.swift */; };
 		E05FC95492D2378F98823D23 /* WindUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E3203C0CBC7B1D5F0A57759 /* WindUnit.swift */; };
 		E1DA0A2BA6D5DAE408366B62 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EB1F388C1A5FE3D18F1D62E /* ContentView.swift */; };
 		E1F631B6FE1E863E001704F2 /* SharedSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */; };
@@ -147,6 +160,9 @@
 		F622C89A1421128F895C8A28 /* RunwayMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85C6CB170A65E1A614F64BB1 /* RunwayMath.swift */; };
 		F90B1CA7A19C349CE3049023 /* BarometerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA32F779F49D1C628F2BC52E /* BarometerEngine.swift */; };
 		F9FAEAFFE5323B1757725A34 /* WatchContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A4A8464736F548F6F72A42 /* WatchContentView.swift */; };
+		FB1449121DF56602057E312B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 4763C8EEB9FBC9182028B8E2 /* PrivacyInfo.xcprivacy */; };
+		FBC05BDAC2F9A55BFB1380E2 /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34C2B97E09DCD235BF42063C /* Diagnostics.swift */; };
+		FEBD3AFFDBBDF5EEA682BC93 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B6858331167EFEA8CE241D78 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -163,6 +179,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 0F5F9DCD10132AA92370D5FC;
 			remoteInfo = BarryComplication;
+		};
+		D0F059285E72560196235C86 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 62926B13FC503987447CF5E6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5876656BFCB39671113D6441;
+			remoteInfo = Barry;
 		};
 		F658F5A5CCCCC54B90D6354A /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -221,11 +244,14 @@
 		0094727B647701DDDCF17BD2 /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		01599505777741EA095092C0 /* HeroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroView.swift; sourceTree = "<group>"; };
 		02038B2170BC3114C24A63CC /* CardWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardWidgets.swift; sourceTree = "<group>"; };
+		024F41291A68B29C57129A86 /* Fixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fixtures.swift; sourceTree = "<group>"; };
 		02CC4610E9A811E4A3554DCB /* BarometerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarometerManager.swift; sourceTree = "<group>"; };
 		031482E889A2274CBD689E88 /* ForecastCaveatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForecastCaveatView.swift; sourceTree = "<group>"; };
 		05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedSnapshot.swift; sourceTree = "<group>"; };
 		05E57A0FA0B17718D5FB1D5D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		078B13121EBACB3059A82BC9 /* BarryPhoneWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = BarryPhoneWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		078B13121EBACB3059A82BC9 /* BarryPhoneWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = BarryPhoneWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		0E50753B814745AF734760F1 /* SnapshotStalenessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotStalenessTests.swift; sourceTree = "<group>"; };
+		0E7A086EE5185D61C26B5533 /* TendencyParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TendencyParityTests.swift; sourceTree = "<group>"; };
 		14751C812932452AF8884F79 /* HomeLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeLayout.swift; sourceTree = "<group>"; };
 		1666B232D9C24406F937CCE8 /* RadarSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarSheets.swift; sourceTree = "<group>"; };
 		1A24A6845ECB66698D61771D /* TendencyProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TendencyProvider.swift; sourceTree = "<group>"; };
@@ -234,17 +260,24 @@
 		252EE81999FF16293FA0CF7A /* LightningOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightningOverlay.swift; sourceTree = "<group>"; };
 		2542DA2C850B2399B31A9069 /* Tendency.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tendency.swift; sourceTree = "<group>"; };
 		292532F4A2C2D5C39CC797B1 /* CoreMotion.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMotion.framework; path = System/Library/Frameworks/CoreMotion.framework; sourceTree = SDKROOT; };
+		29C7E17624E3FBD582130C1E /* TafTimelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TafTimelineTests.swift; sourceTree = "<group>"; };
+		29ED804DF107D966F7295562 /* RunwayMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayMathTests.swift; sourceTree = "<group>"; };
 		2BB3C628CF8662B6BEF5A73F /* BarryWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryWatchApp.swift; sourceTree = "<group>"; };
 		34019275BE3EADB1E1E1739B /* BarryPhoneWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BarryPhoneWidget.entitlements; sourceTree = "<group>"; };
+		34C2B97E09DCD235BF42063C /* Diagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics.swift; sourceTree = "<group>"; };
 		35839C2045A30D70938041B6 /* FrontsOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontsOverlay.swift; sourceTree = "<group>"; };
 		39AF53020220091BA0FC5C07 /* WindFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindFlowView.swift; sourceTree = "<group>"; };
 		42AF37A1FEB24BB66E9E0A34 /* ComplicationDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComplicationDial.swift; sourceTree = "<group>"; };
+		4763C8EEB9FBC9182028B8E2 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		47A973B22E958B730E977380 /* combined_kluk.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = combined_kluk.json; sourceTree = "<group>"; };
 		4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedLocations.swift; sourceTree = "<group>"; };
 		4B8FF4A39677C2C8F46B98F7 /* BarryApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryApp.swift; sourceTree = "<group>"; };
 		4D967187F3CE6292310A2937 /* PressureUnit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureUnit.swift; sourceTree = "<group>"; };
 		4EB1F388C1A5FE3D18F1D62E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		4EBD287C6CB46A536198173F /* RangeAnalysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RangeAnalysis.swift; sourceTree = "<group>"; };
+		4F12F9F36D9EEE36F56997FA /* RadarUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarUITests.swift; sourceTree = "<group>"; };
 		52B4C35AC0CE61C4C1CCE6D5 /* FieldConditionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldConditionsView.swift; sourceTree = "<group>"; };
+		562F0C5A2584915B01FB409F /* tendency_cases.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tendency_cases.json; sourceTree = "<group>"; };
 		5B1CE5EDD6706AFE35F1B6D9 /* BarryComplication.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = BarryComplication.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		5C59EF4878E06062DC20D1D7 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		5D63A9351C0871620CA4A195 /* TafStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TafStrip.swift; sourceTree = "<group>"; };
@@ -253,11 +286,12 @@
 		68D08500DD9FA42C666DFF25 /* ComplicationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComplicationViews.swift; sourceTree = "<group>"; };
 		6978CE026B8EEE1A560877C0 /* PressureGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureGuideView.swift; sourceTree = "<group>"; };
 		6FE1451AAFD8A470C4CB228A /* FrontWatchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontWatchView.swift; sourceTree = "<group>"; };
-		711E43480463B0F36F74E35A /* Barry.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Barry.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		711E43480463B0F36F74E35A /* Barry.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Barry.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7124BFCE70A82D184062809B /* BarryComplication.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BarryComplication.entitlements; sourceTree = "<group>"; };
 		726AB15B448612548C2CCCCD /* BarryComplication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryComplication.swift; sourceTree = "<group>"; };
 		72812DF1800A9DF0CF5EF2C3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		72EC9A1E421849C76710D333 /* TafTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TafTimeline.swift; sourceTree = "<group>"; };
+		75CA082BD890DE5E1469223E /* CardRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardRenderTests.swift; sourceTree = "<group>"; };
 		763CE62FEE3C1CA173ABA1C3 /* PressureFieldOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureFieldOverlay.swift; sourceTree = "<group>"; };
 		778E430DEB72ECE6B1DB5CCA /* PressureChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureChartView.swift; sourceTree = "<group>"; };
 		77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryAPI.swift; sourceTree = "<group>"; };
@@ -273,19 +307,23 @@
 		8C448DCCFE61D866C777918A /* RadarModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarModel.swift; sourceTree = "<group>"; };
 		8D9A99374F6D320BC2CEB620 /* PressureActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureActivityWidget.swift; sourceTree = "<group>"; };
 		8E3203C0CBC7B1D5F0A57759 /* WindUnit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindUnit.swift; sourceTree = "<group>"; };
-		914915E267DDB87BAB23CD51 /* BarryTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BarryTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		914915E267DDB87BAB23CD51 /* BarryTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BarryTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		918B4D14CC966B0E820FC1AC /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		95423D24AF145867D59E1434 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		9639018DA53DA80272AC71E9 /* Barry.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Barry.entitlements; sourceTree = "<group>"; };
+		9B661E997E72021B37CCFFD4 /* UITestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestSupport.swift; sourceTree = "<group>"; };
 		9C9E7A347455A6781BAB196E /* WindFlow.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = WindFlow.metal; sourceTree = "<group>"; };
+		A376D4EE445D8849427A861E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A59F4AD2D2CF0AC8FB31B534 /* ConfirmationOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmationOverlayView.swift; sourceTree = "<group>"; };
 		AD313083D4B2A9BAD12BAB92 /* RunwayWindDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayWindDial.swift; sourceTree = "<group>"; };
+		B6858331167EFEA8CE241D78 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureHistory.swift; sourceTree = "<group>"; };
 		B98E77604746429DE78EF9C4 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		BAFA9596978A2666CDFADAB4 /* RectangularComplications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RectangularComplications.swift; sourceTree = "<group>"; };
 		BB955C8C1263A03BA2C97A2F /* LightningBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightningBanner.swift; sourceTree = "<group>"; };
 		C0EBA6519DD65A01DF98B527 /* RadarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarView.swift; sourceTree = "<group>"; };
 		C1326419A7770149C91B0438 /* PhoneWidgetViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWidgetViews.swift; sourceTree = "<group>"; };
+		C4258044D160E9F49F088BAF /* RadarPaletteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarPaletteTests.swift; sourceTree = "<group>"; };
 		C6BB37965D5198DB8A9DCE65 /* RadarPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarPalette.swift; sourceTree = "<group>"; };
 		CBA1D35A89B06FE9E7708D10 /* TafTimelineCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TafTimelineCard.swift; sourceTree = "<group>"; };
 		CD077DE63D0DE437229C43CC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -297,6 +335,8 @@
 		EB906A0DF0FCEFBE609EBF06 /* HorizontalDragGesture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorizontalDragGesture.swift; sourceTree = "<group>"; };
 		ECFAFB3674B651E14D4FEC8B /* PressureActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureActivity.swift; sourceTree = "<group>"; };
 		EDA74BE38B6BB03051B074EF /* Backcountry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Backcountry.swift; sourceTree = "<group>"; };
+		F07D88A5BEA3FC7C9BD42D68 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		F08AB4623C5D33768E74DF13 /* BarryUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BarryUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F3DE49EE7CDCB4E59BB8E97F /* StationLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StationLayer.swift; sourceTree = "<group>"; };
 		F4C5676D3E1E52D59CDFED12 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F4F0EF3938BA8F192FB71228 /* WatchSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSettingsView.swift; sourceTree = "<group>"; };
@@ -326,6 +366,7 @@
 				42AF37A1FEB24BB66E9E0A34 /* ComplicationDial.swift */,
 				68D08500DD9FA42C666DFF25 /* ComplicationViews.swift */,
 				95423D24AF145867D59E1434 /* Info.plist */,
+				B6858331167EFEA8CE241D78 /* PrivacyInfo.xcprivacy */,
 				BAFA9596978A2666CDFADAB4 /* RectangularComplications.swift */,
 			);
 			path = WatchComplication;
@@ -335,6 +376,13 @@
 			isa = PBXGroup;
 			children = (
 				7C00F07F019E06DA06E95BD0 /* BarometerTests.swift */,
+				75CA082BD890DE5E1469223E /* CardRenderTests.swift */,
+				024F41291A68B29C57129A86 /* Fixtures.swift */,
+				C4258044D160E9F49F088BAF /* RadarPaletteTests.swift */,
+				29ED804DF107D966F7295562 /* RunwayMathTests.swift */,
+				0E50753B814745AF734760F1 /* SnapshotStalenessTests.swift */,
+				29C7E17624E3FBD582130C1E /* TafTimelineTests.swift */,
+				0E7A086EE5185D61C26B5533 /* TendencyParityTests.swift */,
 			);
 			path = iOSAppTests;
 			sourceTree = "<group>";
@@ -367,6 +415,23 @@
 			path = Shared;
 			sourceTree = "<group>";
 		};
+		3B5004D942875DFE325CE768 /* backend */ = {
+			isa = PBXGroup;
+			children = (
+				7222BD11B81711A0A51A459F /* tests */,
+			);
+			path = backend;
+			sourceTree = "<group>";
+		};
+		40727EE05B56843AACC95379 /* fixtures */ = {
+			isa = PBXGroup;
+			children = (
+				47A973B22E958B730E977380 /* combined_kluk.json */,
+				562F0C5A2584915B01FB409F /* tendency_cases.json */,
+			);
+			path = fixtures;
+			sourceTree = "<group>";
+		};
 		458F69C49FA512C6804698F5 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -374,6 +439,7 @@
 				5B1CE5EDD6706AFE35F1B6D9 /* BarryComplication.appex */,
 				078B13121EBACB3059A82BC9 /* BarryPhoneWidget.appex */,
 				914915E267DDB87BAB23CD51 /* BarryTests.xctest */,
+				F08AB4623C5D33768E74DF13 /* BarryUITests.xctest */,
 				F776D233FE3E44CDDD61C05B /* BarryWatch.app */,
 			);
 			name = Products;
@@ -389,6 +455,7 @@
 				85C80120E59692CD007DB4FB /* Info.plist */,
 				C1326419A7770149C91B0438 /* PhoneWidgetViews.swift */,
 				8D9A99374F6D320BC2CEB620 /* PressureActivityWidget.swift */,
+				4763C8EEB9FBC9182028B8E2 /* PrivacyInfo.xcprivacy */,
 			);
 			path = PhoneWidget;
 			sourceTree = "<group>";
@@ -401,6 +468,7 @@
 				2BB3C628CF8662B6BEF5A73F /* BarryWatchApp.swift */,
 				CF51EF6C7C37D4CEE92CE308 /* Info.plist */,
 				82E8C122995032DFD8C5C5EC /* PhoneSync.swift */,
+				A376D4EE445D8849427A861E /* PrivacyInfo.xcprivacy */,
 				886DA735AE684A5A59D95000 /* WatchBarometer.swift */,
 				E5A4A8464736F548F6F72A42 /* WatchContentView.swift */,
 				F4F0EF3938BA8F192FB71228 /* WatchSettingsView.swift */,
@@ -408,13 +476,30 @@
 			path = WatchApp;
 			sourceTree = "<group>";
 		};
+		7222BD11B81711A0A51A459F /* tests */ = {
+			isa = PBXGroup;
+			children = (
+				40727EE05B56843AACC95379 /* fixtures */,
+			);
+			path = tests;
+			sourceTree = "<group>";
+		};
 		7EC2F4433082FD00C5B6F0BA = {
 			isa = PBXGroup;
 			children = (
 				A4A9AC0D83C4E6AE65621FD8 /* Barry */,
+				F6D320B3EDAD120CE9C93AA2 /* barry */,
 				E6A9348D0ADE6FD78978E25B /* Frameworks */,
 				458F69C49FA512C6804698F5 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		A062B35F948D333951375AAD /* iOSAppUITests */ = {
+			isa = PBXGroup;
+			children = (
+				4F12F9F36D9EEE36F56997FA /* RadarUITests.swift */,
+			);
+			path = iOSAppUITests;
 			sourceTree = "<group>";
 		};
 		A4A9AC0D83C4E6AE65621FD8 /* Barry */ = {
@@ -422,6 +507,7 @@
 			children = (
 				CEA6BF2191949B48EFAF9B73 /* iOSApp */,
 				25FA9FE4534CDB72E7FC40FA /* iOSAppTests */,
+				A062B35F948D333951375AAD /* iOSAppUITests */,
 				4BE1F4C163C9382E6BEF8D2E /* PhoneWidget */,
 				32D7C9FAD0C2F3626EA22B10 /* Shared */,
 				525616942CE288E61F6EA737 /* WatchApp */,
@@ -442,6 +528,7 @@
 				0023323B71268E669397009E /* CardIcons.swift */,
 				A59F4AD2D2CF0AC8FB31B534 /* ConfirmationOverlayView.swift */,
 				4EB1F388C1A5FE3D18F1D62E /* ContentView.swift */,
+				34C2B97E09DCD235BF42063C /* Diagnostics.swift */,
 				52B4C35AC0CE61C4C1CCE6D5 /* FieldConditionsView.swift */,
 				031482E889A2274CBD689E88 /* ForecastCaveatView.swift */,
 				35839C2045A30D70938041B6 /* FrontsOverlay.swift */,
@@ -457,6 +544,7 @@
 				778E430DEB72ECE6B1DB5CCA /* PressureChartView.swift */,
 				763CE62FEE3C1CA173ABA1C3 /* PressureFieldOverlay.swift */,
 				6978CE026B8EEE1A560877C0 /* PressureGuideView.swift */,
+				F07D88A5BEA3FC7C9BD42D68 /* PrivacyInfo.xcprivacy */,
 				6662DFD4A743261C8134B535 /* RadarMapView.swift */,
 				8C448DCCFE61D866C777918A /* RadarModel.swift */,
 				C6BB37965D5198DB8A9DCE65 /* RadarPalette.swift */,
@@ -468,6 +556,7 @@
 				F3DE49EE7CDCB4E59BB8E97F /* StationLayer.swift */,
 				E569F3B3B9FAB65C07970B1A /* StormAlerter.swift */,
 				CBA1D35A89B06FE9E7708D10 /* TafTimelineCard.swift */,
+				9B661E997E72021B37CCFFD4 /* UITestSupport.swift */,
 				CFA4A69E8BBEEF268407FC68 /* WatchSync.swift */,
 				9C9E7A347455A6781BAB196E /* WindFlow.metal */,
 				39AF53020220091BA0FC5C07 /* WindFlowView.swift */,
@@ -483,6 +572,15 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
+		F6D320B3EDAD120CE9C93AA2 /* barry */ = {
+			isa = PBXGroup;
+			children = (
+				3B5004D942875DFE325CE768 /* backend */,
+			);
+			name = barry;
+			path = ..;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -491,6 +589,7 @@
 			buildConfigurationList = 8B82FE817E8D7D8C1728D9EB /* Build configuration list for PBXNativeTarget "BarryComplication" */;
 			buildPhases = (
 				3930C32599B7E4B78B9AE976 /* Sources */,
+				96989FCB45E76FB22A0D6966 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -546,11 +645,30 @@
 			productReference = 711E43480463B0F36F74E35A /* Barry.app */;
 			productType = "com.apple.product-type.application";
 		};
+		88FF630589CD00EF0439E5AC /* BarryUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F60F63B0ECF0B3B2A36BB830 /* Build configuration list for PBXNativeTarget "BarryUITests" */;
+			buildPhases = (
+				3E5A1E3EDD1E918DB440FCA4 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				ED8A7F572EF6F2BE803D2D5B /* PBXTargetDependency */,
+			);
+			name = BarryUITests;
+			packageProductDependencies = (
+			);
+			productName = BarryUITests;
+			productReference = F08AB4623C5D33768E74DF13 /* BarryUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		9939620FF6CAC52D9B8E26E5 /* BarryPhoneWidget */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 1B73881FE7584184E541F4C1 /* Build configuration list for PBXNativeTarget "BarryPhoneWidget" */;
 			buildPhases = (
 				437E8A1E86C515B53B10B00A /* Sources */,
+				07E6EC2B784E85F1095CB13B /* Resources */,
 			);
 			buildRules = (
 			);
@@ -568,6 +686,7 @@
 			buildConfigurationList = 934042CBB656E6181E81C3C4 /* Build configuration list for PBXNativeTarget "BarryTests" */;
 			buildPhases = (
 				0E93E47B5B589E2976478411 /* Sources */,
+				87B920C4216C329906047818 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -588,7 +707,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1430;
+				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					0F5F9DCD10132AA92370D5FC = {
 						DevelopmentTeam = 46RX35CZGW;
@@ -598,6 +717,10 @@
 					};
 					5876656BFCB39671113D6441 = {
 						DevelopmentTeam = 46RX35CZGW;
+					};
+					88FF630589CD00EF0439E5AC = {
+						DevelopmentTeam = 46RX35CZGW;
+						TestTargetID = 5876656BFCB39671113D6441;
 					};
 					9939620FF6CAC52D9B8E26E5 = {
 						DevelopmentTeam = 46RX35CZGW;
@@ -625,17 +748,44 @@
 				0F5F9DCD10132AA92370D5FC /* BarryComplication */,
 				9939620FF6CAC52D9B8E26E5 /* BarryPhoneWidget */,
 				AB3A268187AB106F4438FF00 /* BarryTests */,
+				88FF630589CD00EF0439E5AC /* BarryUITests */,
 				5659B8A9F8FE7BC1B6C97E7F /* BarryWatch */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		07E6EC2B784E85F1095CB13B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FB1449121DF56602057E312B /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		5FC6329811FB2224E4A4D0F5 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				5093AC139AE85DC8A14E0859 /* Assets.xcassets in Resources */,
+				71A3F386AC931B1BD311F583 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		87B920C4216C329906047818 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4FFC946A75A20E59DE996A0C /* combined_kluk.json in Resources */,
+				09BD3BFC632BF28FB8587A1B /* tendency_cases.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96989FCB45E76FB22A0D6966 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FEBD3AFFDBBDF5EEA682BC93 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -644,6 +794,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C1FA94A165B7428939C8372D /* Assets.xcassets in Resources */,
+				390537B91AECE9E9F057FE3B /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -655,6 +806,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				77A46CEAE1569CD88532A37F /* BarometerTests.swift in Sources */,
+				5B4110D0966F6475A5E665D5 /* CardRenderTests.swift in Sources */,
+				9A3EF5B92F7E694E33F31FFC /* Fixtures.swift in Sources */,
+				DE9BEC621A1206759924685E /* RadarPaletteTests.swift in Sources */,
+				99DBC62DAB0A16C1295609C3 /* RunwayMathTests.swift in Sources */,
+				4B7660EBAD37CF36FA22AAA6 /* SnapshotStalenessTests.swift in Sources */,
+				DFDEE353D4F787864B64BCCD /* TafTimelineTests.swift in Sources */,
+				7CF4014037C06AD763D6389F /* TendencyParityTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -687,6 +845,14 @@
 				62FB812E1EB219CC6E616BBC /* Tendency.swift in Sources */,
 				483CBC3B0160B52142C82C61 /* TendencyProvider.swift in Sources */,
 				161F54967F58CB6AF2EAE650 /* WindUnit.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3E5A1E3EDD1E918DB440FCA4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9553E76C4220FA9D9A10E09D /* RadarUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -738,6 +904,7 @@
 				4517F602E94072402651DC30 /* CombinedStore.swift in Sources */,
 				3FD01657A6175EE55DF94D91 /* ConfirmationOverlayView.swift in Sources */,
 				E1DA0A2BA6D5DAE408366B62 /* ContentView.swift in Sources */,
+				FBC05BDAC2F9A55BFB1380E2 /* Diagnostics.swift in Sources */,
 				1499AE344651937BC57A3E81 /* FieldConditionsView.swift in Sources */,
 				EAD163F4794C18F66265455E /* FlightCategory.swift in Sources */,
 				17B2F3F6A33ED2C6DB766640 /* ForecastCaveatView.swift in Sources */,
@@ -779,6 +946,7 @@
 				C10944BA3D2626C8FF342DCD /* TafTimelineCard.swift in Sources */,
 				7917511FB9F6E4E7614296AA /* Tendency.swift in Sources */,
 				50F708BB96C5BBFE917DE01A /* TendencyProvider.swift in Sources */,
+				D6FF8AA397153E989437EDAB /* UITestSupport.swift in Sources */,
 				0F0411FE134D2DF658D00A67 /* WatchSync.swift in Sources */,
 				26D196BA1D0C9CD075B59F31 /* WindFlow.metal in Sources */,
 				56C21F3EA69EB17912672252 /* WindFlowView.swift in Sources */,
@@ -842,6 +1010,11 @@
 			target = 0F5F9DCD10132AA92370D5FC /* BarryComplication */;
 			targetProxy = 5183243DF92A1AF147C5A26D /* PBXContainerItemProxy */;
 		};
+		ED8A7F572EF6F2BE803D2D5B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5876656BFCB39671113D6441 /* Barry */;
+			targetProxy = D0F059285E72560196235C86 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -884,6 +1057,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -915,10 +1089,12 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 13;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 46RX35CZGW;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -939,6 +1115,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.9;
@@ -958,6 +1135,23 @@
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = 4;
 				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		49047E49520AEF61FC95AD2E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = me.wvr.barry.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Barry;
 			};
 			name = Debug;
 		};
@@ -1050,6 +1244,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -1081,10 +1276,12 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 13;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 46RX35CZGW;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -1098,6 +1295,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.9;
@@ -1119,6 +1317,23 @@
 				PRODUCT_BUNDLE_IDENTIFIER = me.wvr.barry.widget;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		FD7E0B6FEC7ACAB239FDCA07 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = me.wvr.barry.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Barry;
 			};
 			name = Release;
 		};
@@ -1175,6 +1390,15 @@
 			buildConfigurations = (
 				BE7CC6681020BA8A54222839 /* Debug */,
 				685B081F0C60FE105A3789FB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F60F63B0ECF0B3B2A36BB830 /* Build configuration list for PBXNativeTarget "BarryUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				49047E49520AEF61FC95AD2E /* Debug */,
+				FD7E0B6FEC7ACAB239FDCA07 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

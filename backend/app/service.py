@@ -26,7 +26,7 @@ from . import track
 from . import runways
 from . import front as front_mod
 from . import stations
-from .cache import StationRegistry, TTLCache
+from .cache import CachedFailure, StationRegistry, TTLCache
 from .interpreter import Sample, interpret
 from .models import (
     FieldGridResponse,
@@ -200,53 +200,58 @@ class PressureService:
                 await self.registry.touch(cached.station)
                 return self._slice_hours(cached, hours)
 
-        degraded = False
-        try:
-            parsed_all = await self._fetch_metars_retry([station], hours=24)
-            parsed = parsed_all.get(station)
-            used_station = station
-            if parsed is None and len(station) == 3:
-                # US identifiers are commonly typed without the ICAO prefix
-                # (CVG -> KCVG) — and that includes alphanumeric fields
-                # (I67 -> KI67). Retry the K form and adopt it as canonical.
-                k_station = "K" + station
-                parsed_all = await self._fetch_metars_retry([k_station], hours=24)
-                parsed = parsed_all.get(k_station)
-                if parsed is not None:
-                    used_station = k_station
-            if parsed is None:
-                raise LookupError(f"no METAR data for {station}")
-            # Only a station that actually answered joins the scheduler's list.
-            await self.registry.touch(used_station)
-            tendency = awc.build_tendency(parsed)
-            elev = parsed.get("elev")
-            if elev is None:
-                # Some reports omit it; the station directory has it.
-                try:
-                    elev = ((await self.station_info()).get(used_station) or {}).get("elev")
-                except Exception:
-                    elev = None
-            resp = PressureResponse(
-                station=used_station,
-                name=parsed.get("name") or (stations.get(used_station) or {}).get("name"),
-                lat=parsed.get("lat"),
-                lon=parsed.get("lon"),
-                elevM=elev,
-                series=parsed["series"],
-                current=parsed["current"],
-                tendency=_tendency_out(tendency),
-                source="aviationweather.gov",
-                cachedAt=_now(),
-            )
-        except Exception as exc:
-            # Graceful degradation: rebuild the recent-past line from Open-Meteo
-            # surface_pressure so the app degrades rather than dies (brief §2.3).
-            log.warning("pressure %s: upstream failed (%s: %s); falling back",
-                        station, type(exc).__name__, exc)
-            degraded = True
-            resp = await self._pressure_fallback(station, hours=24)
+        async def _miss() -> PressureResponse:
+            degraded = False
+            try:
+                parsed_all = await self._fetch_metars_retry([station], hours=24)
+                parsed = parsed_all.get(station)
+                used_station = station
+                if parsed is None and len(station) == 3:
+                    # US identifiers are commonly typed without the ICAO prefix
+                    # (CVG -> KCVG) — and that includes alphanumeric fields
+                    # (I67 -> KI67). Retry the K form and adopt it as canonical.
+                    k_station = "K" + station
+                    parsed_all = await self._fetch_metars_retry([k_station], hours=24)
+                    parsed = parsed_all.get(k_station)
+                    if parsed is not None:
+                        used_station = k_station
+                if parsed is None:
+                    raise LookupError(f"no METAR data for {station}")
+                # Only a station that actually answered joins the scheduler's list.
+                await self.registry.touch(used_station)
+                tendency = awc.build_tendency(parsed)
+                elev = parsed.get("elev")
+                if elev is None:
+                    # Some reports omit it; the station directory has it.
+                    try:
+                        elev = ((await self.station_info()).get(used_station) or {}).get("elev")
+                    except Exception:
+                        elev = None
+                resp = PressureResponse(
+                    station=used_station,
+                    name=parsed.get("name") or (stations.get(used_station) or {}).get("name"),
+                    lat=parsed.get("lat"),
+                    lon=parsed.get("lon"),
+                    elevM=elev,
+                    series=parsed["series"],
+                    current=parsed["current"],
+                    tendency=_tendency_out(tendency),
+                    source="aviationweather.gov",
+                    cachedAt=_now(),
+                )
+            except Exception as exc:
+                # Graceful degradation: rebuild the recent-past line from Open-Meteo
+                # surface_pressure so the app degrades rather than dies (brief §2.3).
+                log.warning("pressure %s: upstream failed (%s: %s); falling back",
+                            station, type(exc).__name__, exc)
+                degraded = True
+                resp = await self._pressure_fallback(station, hours=24)
 
-        await self.cache.set(cache_key, resp, ttl=DEGRADED_TTL if degraded else PRESSURE_TTL)
+            return resp
+        resp = await self.cache.fetch(
+            cache_key, _miss,
+            ttl=lambda r: PRESSURE_TTL if r.source == "aviationweather.gov" else DEGRADED_TTL,
+            bypass_read=not use_cache)
         return self._slice_hours(resp, hours)
 
     @staticmethod
@@ -430,14 +435,13 @@ class PressureService:
         LookupError when IEM is unreachable or no recent run resolves — the
         client just skips the model frames."""
         cache_key = "hrrr:run"
-        cached = await self.cache.get(cache_key)
-        if cached is not None:
-            return cached
+        return await self.cache.fetch(cache_key, self._resolve_hrrr, ttl=HRRR_TTL, negative_ttl=60.0)
+
+    async def _resolve_hrrr(self) -> HrrrMeta:
         run = await iem.latest_hrrr_run(self._client)
         if run is None:
             raise LookupError("no HRRR run available")
         resp = HrrrMeta(run=run, cachedAt=_now())
-        await self.cache.set(cache_key, resp, ttl=HRRR_TTL)
         return resp
 
     # ---- station wind layer --------------------------------------------------
@@ -445,19 +449,19 @@ class PressureService:
     async def metar_bulk(self) -> Optional[List[StationObs]]:
         """Every station's latest METAR, from AWC's cache file, held for
         BULK_TTL. None when the pull fails (callers fall back to bbox)."""
-        cached = await self.cache.get("metar_bulk")
-        if cached is not None:
-            return cached
-        try:
+        async def _pull():
             table = await awc.fetch_metar_cache(self._client)
+            if not table:
+                raise LookupError("empty METAR cache file")
+            self._record_snapshot(table, _now())
+            return table
+        try:
+            return await self.cache.fetch("metar_bulk", _pull, ttl=BULK_TTL, negative_ttl=DEGRADED_TTL)
+        except CachedFailure:
+            return None
         except Exception as exc:
             log.warning("metar bulk cache fetch failed: %s", exc)
             return None
-        if not table:
-            return None
-        await self.cache.set("metar_bulk", table, ttl=BULK_TTL)
-        self._record_snapshot(table, _now())
-        return table
 
     # ---- Bulk history (the front watch ring without a bbox call) -------------
 
@@ -547,17 +551,15 @@ class PressureService:
     async def station_info(self) -> Dict[str, dict]:
         """The station directory (names, elevation, METAR/TAF flags), held a
         day. Empty when the pull fails: callers fall back to bare ids."""
-        cached = await self.cache.get("station_info")
-        if cached is not None:
-            return cached
         try:
-            info = await awc.fetch_station_info(self._client)
+            return await self.cache.fetch("station_info",
+                                          lambda: awc.fetch_station_info(self._client),
+                                          ttl=STATION_INFO_TTL, negative_ttl=60.0)
+        except CachedFailure:
+            return {}
         except Exception as exc:
             log.warning("station directory fetch failed: %s", exc)
             return {}
-        if info:
-            await self.cache.set("station_info", info, ttl=STATION_INFO_TTL)
-        return info
 
     async def search_stations(self, q: str, limit: int = 15) -> List[dict]:
         """Station search for the saved-places picker: id prefix first, then
@@ -706,12 +708,8 @@ class PressureService:
         """The radar timeline: last 7 observed frames + up to 3 nowcast, from
         one RainViewer call every two minutes for every user (the app used to
         fetch the full list itself on every radar open)."""
-        cached = await self.cache.get("radar_frames")
-        if cached is not None:
-            return cached
-        resp = await rv.fetch_frames(self._client, now=_now())
-        await self.cache.set("radar_frames", resp, ttl=FRAMES_TTL)
-        return resp
+        return await self.cache.fetch("radar_frames", lambda: rv.fetch_frames(self._client, now=_now()),
+                                      ttl=FRAMES_TTL, negative_ttl=30.0)
 
     # ---- Pressure field: isobars + isallobars from the bulk table -----------
 
@@ -734,9 +732,18 @@ class PressureService:
         # request; now it runs in a thread, and concurrent misses on the same
         # key wait for the one build already under way instead of each
         # starting their own.
-        inflight: Dict[str, "asyncio.Task"] = self.__dict__.setdefault("_pf_inflight", {})
-        if (task := inflight.get(cache_key)) is not None:
-            return await task
+        async def _build() -> PressureFieldResponse:
+            table = await self.metar_bulk() or []
+            now = _now()
+            tend_pts = self._tendency_points(now) if self.history_span_h(now) >= 3.5 else None
+            isobars, isallobars, pgrid, tgrid, textrema = await asyncio.to_thread(
+                pressure_field.build, table, q_lat, q_lon, q_lat_span, q_lon_span,
+                tend_pts=tend_pts)
+            return PressureFieldResponse(isobars=isobars, isallobars=isallobars,
+                                         pressureGrid=pgrid, tendencyGrid=tgrid,
+                                         tendencyExtrema=textrema,
+                                         stations=len(table), cachedAt=_now())
+        return await self.cache.fetch(cache_key, _build, ttl=BULK_TTL)
 
         async def _build() -> PressureFieldResponse:
             try:
@@ -859,16 +866,14 @@ class PressureService:
         """The WPC surface chart as data: analysis + 12/24/36/48 h forecast
         front positions (sources/wpc.py). Global, so one cache entry."""
         cache_key = "fronts"
-        cached = await self.cache.get(cache_key)
-        if cached is not None:
-            return cached
+        return await self.cache.fetch(cache_key, self._build_fronts, ttl=FRONTS_TTL, negative_ttl=60.0)
+
+    async def _build_fronts(self) -> FrontsResponse:
         got = await wpc.fetch_fronts(self._client)
         frames = got["analysis"] + sorted(got["progs"], key=lambda f: f.hours)
         if not frames:
             raise LookupError("no WPC front bulletins available")
-        resp = FrontsResponse(frames=frames, cachedAt=_now())
-        await self.cache.set(cache_key, resp, ttl=FRONTS_TTL)
-        return resp
+        return FrontsResponse(frames=frames, cachedAt=_now())
 
     # ---- combined (primary client endpoint) ---------------------------------
 

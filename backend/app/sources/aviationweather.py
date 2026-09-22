@@ -15,6 +15,11 @@ thing to check.
 
 from __future__ import annotations
 
+import asyncio
+import logging
+
+_log = logging.getLogger(__name__)
+
 import math
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Sequence
@@ -189,57 +194,63 @@ def parse_records(records: Sequence[dict]) -> Dict[str, dict]:
 
     out: Dict[str, dict] = {}
     for sid, recs in by_station.items():
-        points = []
-        for r in recs:
-            t = _epoch_to_dt(r.get("obsTime"))
-            if t is None:
+        try:
+            points = []
+            for r in recs:
+                t = _epoch_to_dt(r.get("obsTime"))
+                if t is None:
+                    continue
+                points.append(
+                    {
+                        "t": t,
+                        "slp": r.get("slp"),
+                        "altim": r.get("altim"),
+                        "presTend": r.get("presTend"),
+                        "name": r.get("name"),
+                        "lat": r.get("lat"),
+                        "lon": r.get("lon"),
+                        "elev": r.get("elev"),
+                        "temp": r.get("temp"),
+                        "dewp": r.get("dewp"),
+                        "wspd": r.get("wspd"),
+                        "wdir": r.get("wdir"),
+                        "wgst": r.get("wgst"),
+                        "visib": r.get("visib"),
+                        "clouds": r.get("clouds"),
+                        "fltCat": r.get("fltCat"),
+                        "wxString": r.get("wxString"),
+                        "rawOb": r.get("rawOb"),
+                    }
+                )
+            if not points:
                 continue
-            points.append(
-                {
-                    "t": t,
-                    "slp": r.get("slp"),
-                    "altim": r.get("altim"),
-                    "presTend": r.get("presTend"),
-                    "name": r.get("name"),
-                    "lat": r.get("lat"),
-                    "lon": r.get("lon"),
-                    "elev": r.get("elev"),
-                    "temp": r.get("temp"),
-                    "dewp": r.get("dewp"),
-                    "wspd": r.get("wspd"),
-                    "wdir": r.get("wdir"),
-                    "wgst": r.get("wgst"),
-                    "visib": r.get("visib"),
-                    "clouds": r.get("clouds"),
-                    "fltCat": r.get("fltCat"),
-                    "wxString": r.get("wxString"),
-                    "rawOb": r.get("rawOb"),
-                }
-            )
-        if not points:
+            points.sort(key=lambda p: p["t"])
+            newest = points[-1]
+
+            def any_of(key):
+                # Station metadata is the same on every report, but individual
+                # records (SPECIs especially) drop fields — take it from whichever
+                # report has it, newest first.
+                return next((p[key] for p in reversed(points) if p.get(key) is not None), None)
+
+            out[sid] = {
+                "name": any_of("name"),
+                "lat": any_of("lat"),
+                "lon": any_of("lon"),
+                "elev": any_of("elev"),
+                "series": [_series_point(p) for p in points],
+                # Wind + aviation conditions from the newest METAR — real measurements,
+                # so the client can prefer them over the model for "now" (METAR-first).
+                "current": _current_obs(newest),
+                "presTend": newest.get("presTend"),
+                "raw": newest.get("rawOb"),
+                "_raw_points": points,
+            }
+        except Exception as exc:
+            # One station with a record AWC could not encode must not
+            # take the other forty-nine in the batch down with it.
+            _log.warning("metar %s: unparseable record skipped (%s: %s)", sid, type(exc).__name__, exc)
             continue
-        points.sort(key=lambda p: p["t"])
-        newest = points[-1]
-
-        def any_of(key):
-            # Station metadata is the same on every report, but individual
-            # records (SPECIs especially) drop fields — take it from whichever
-            # report has it, newest first.
-            return next((p[key] for p in reversed(points) if p.get(key) is not None), None)
-
-        out[sid] = {
-            "name": any_of("name"),
-            "lat": any_of("lat"),
-            "lon": any_of("lon"),
-            "elev": any_of("elev"),
-            "series": [_series_point(p) for p in points],
-            # Wind + aviation conditions from the newest METAR — real measurements,
-            # so the client can prefer them over the model for "now" (METAR-first).
-            "current": _current_obs(newest),
-            "presTend": newest.get("presTend"),
-            "raw": newest.get("rawOb"),
-            "_raw_points": points,
-        }
     return out
 
 
@@ -417,7 +428,8 @@ async def fetch_metar_cache(client: httpx.AsyncClient) -> List[StationObs]:
     body = r.content
     if body[:2] == b"\x1f\x8b":
         body = gzip.decompress(body)
-    return parse_metar_cache(body.decode("utf-8", errors="replace"))
+    # ~10k rows of CSV: off the event loop.
+    return await asyncio.to_thread(parse_metar_cache, body.decode("utf-8", errors="replace"))
 
 
 # ---- Station directory ------------------------------------------------------
@@ -450,7 +462,8 @@ async def fetch_station_info(client: httpx.AsyncClient) -> Dict[str, dict]:
     body = r.content
     if body[:2] == b"\x1f\x8b":
         body = gzip.decompress(body)
-    return parse_station_info(json.loads(body.decode("utf-8", errors="replace")))
+    text = body.decode("utf-8", errors="replace")
+    return await asyncio.to_thread(lambda: parse_station_info(json.loads(text)))
 
 
 # ---- TAF ------------------------------------------------------------------

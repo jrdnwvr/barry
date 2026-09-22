@@ -22,12 +22,26 @@ class _Entry(Generic[T]):
     expires_at: float
 
 
+class CachedFailure(Exception):
+    """An upstream failed recently and the failure is still being remembered.
+    Raised by `fetch` without calling the fetcher again."""
+
+
+@dataclass
+class _Failure:
+    reason: str
+
+
 class TTLCache:
-    def __init__(self, *, default_ttl: float = 600.0, clock=time.monotonic) -> None:
+    def __init__(self, *, default_ttl: float = 600.0, max_entries: int = 5000,
+                 clock=time.monotonic) -> None:
         self._store: Dict[str, _Entry[Any]] = {}
         self._default_ttl = default_ttl
+        self._max = max_entries
         self._clock = clock
         self._lock = asyncio.Lock()
+        self._inflight: Dict[str, "asyncio.Future[Any]"] = {}
+        self._sets = 0
 
     async def get(self, key: str) -> Optional[Any]:
         async with self._lock:
@@ -37,6 +51,9 @@ class TTLCache:
             if entry.expires_at <= self._clock():
                 self._store.pop(key, None)
                 return None
+            # A remembered failure is not a value to anyone reading plainly.
+            if isinstance(entry.value, _Failure):
+                return None
             return entry.value
 
     async def set(self, key: str, value: Any, *, ttl: Optional[float] = None) -> None:
@@ -45,6 +62,58 @@ class TTLCache:
                 value=value,
                 expires_at=self._clock() + (ttl if ttl is not None else self._default_ttl),
             )
+            self._sets += 1
+            if self._sets % 200 == 0 or len(self._store) > self._max:
+                self._sweep_locked()
+
+    def _sweep_locked(self) -> None:
+        """Drop expired entries; if still over the cap, drop the ones that
+        expire soonest. Bounded memory without an LRU chain."""
+        now = self._clock()
+        for k in [k for k, e in self._store.items() if e.expires_at <= now]:
+            del self._store[k]
+        excess = len(self._store) - self._max
+        if excess > 0:
+            for k, _ in sorted(self._store.items(), key=lambda kv: kv[1].expires_at)[:excess]:
+                del self._store[k]
+
+    async def fetch(self, key: str, fn, *, ttl, negative_ttl: Optional[float] = None,
+                    bypass_read: bool = False) -> Any:
+        """The value for `key`, fetching it with `fn()` on a miss.
+
+        Single-flight: concurrent misses on one key share one call. Negative
+        caching: when `negative_ttl` is set and `fn` raises, the failure is
+        remembered for that long and later callers get CachedFailure at once,
+        so a down upstream is probed once per window, not once per request.
+        `ttl` is a number or a callable of the value."""
+        if not bypass_read:
+            async with self._lock:
+                entry = self._store.get(key)
+                if entry is not None and entry.expires_at > self._clock():
+                    if isinstance(entry.value, _Failure):
+                        raise CachedFailure(entry.value.reason)
+                    return entry.value
+        fut = self._inflight.get(key)
+        if fut is not None:
+            return await asyncio.shield(fut)
+        loop = asyncio.get_running_loop()
+        fut = loop.create_future()
+        self._inflight[key] = fut
+        try:
+            value = await fn()
+        except BaseException as exc:
+            if negative_ttl and not isinstance(exc, asyncio.CancelledError):
+                await self.set(key, _Failure(type(exc).__name__), ttl=negative_ttl)
+            if not fut.done():
+                fut.set_exception(exc)
+            raise
+        else:
+            await self.set(key, value, ttl=ttl(value) if callable(ttl) else ttl)
+            if not fut.done():
+                fut.set_result(value)
+            return value
+        finally:
+            self._inflight.pop(key, None)
 
     async def keys(self) -> List[str]:
         async with self._lock:

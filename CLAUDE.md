@@ -205,3 +205,26 @@ first two). Read it before any security or robustness work.
 Not yet: courtesy emails to RainViewer + IEM before public App Store, App
 Store listing copy, verdict track record (built, hidden until rescored),
 real strike positions (GOES GLM would be the source), APNs push.
+
+## Tests and checks (added 2026-09-22)
+
+- Backend: `cd backend && .venv/bin/pytest -q` (294 tests; Hypothesis
+  property tests read the app's own OpenAPI document). CI runs the suite,
+  pip-audit, the image build and trivy on every push touching `backend/`.
+  `tools/loadtest.py` against a local uvicorn started with
+  `BARRY_RATE_PER_MIN=0` checks `/healthz` stays quick while grids build.
+- iOS: `cd ios && xcodebuild test -scheme Barry -destination 'platform=iOS
+  Simulator,name=iPhone 17 Pro' CODE_SIGNING_ALLOWED=NO` runs BarryTests
+  (unit; fixtures come from `backend/tests/fixtures/`, wired in
+  project.yml) and BarryUITests (the radar walk; launches with `-uitest`,
+  which `UITestSupport.prepare()` turns into a known state). The tendency
+  table is checked on both sides against `tendency_cases.json`;
+  regenerate it with `backend/tools/gen_tendency_fixture.py` after
+  changing `tendency.py`, then mirror the change in `Tendency.swift`.
+- Production: `sh deploy.sh` on Tower (image tagged by commit, health
+  waited on, three tags kept), `sh rollback.sh <tag>`. `/healthz` can be
+  `degraded` (upstream quiet, 200) or `unhealthy` (a loop died, 503,
+  autoheal restarts). `/metrics` answers on the box only. Logs are JSON
+  lines with a request id; there is no per-request log. Runbook in
+  `docs/RUNBOOK.md`, plan and status in `docs/PRODUCTION.md`, test
+  inventory in `docs/TESTING.md`.

@@ -285,3 +285,29 @@ The thing to hold onto: nothing here is a rewrite. The architecture is
 sound and the caching discipline is real. The gaps are the ones a private
 tool has when it meets the public internet, and they close one small change
 at a time.
+
+## 4. Where it stands (2026-09-22)
+
+Done, deployed and tested, in the order above: A1 to A5, B1, the backend
+half of B2 (diagnostics drop box, shared tendency fixture), the iOS half of
+B2 (cold start from the saved payload, 12 second interactive timeout and a
+patient session for silent refreshes, MetricKit to `/diagnostics`, the
+parity test, unit tests for the timeline, runway math, palette and
+staleness, card render tests, one radar UI test, privacy manifests in all
+four targets), C1 for the backend (GitHub Actions: tests, pip-audit, image
+build, trivy), C2 (`/metrics` on the box, JSON logs with a request id), C3
+(`deploy.sh` and `rollback.sh` with images tagged by commit, the runbook
+in `docs/RUNBOOK.md`), and the manifest half of C4.
+
+Two things the tests found along the way: a remembered upstream failure
+answered 500 on the second call in a window, and the TAF timeline began
+an hour ahead of the clock. Both fixed.
+
+Left, and all of it needs the owner's hands: the Cloudflare rate rule on
+the hostname; an outside check on `/healthz?strict=1`; Xcode Cloud's Test
+action turned on for the scheme (the tests are in the scheme already); a
+session on a real phone with the radar and a day for MetricKit to send
+its first report; the App Store privacy labels (`docs/APPSTORE.md` says
+what to enter); the courtesy emails; listing copy and screenshots. Snapshot
+images were not adopted for the cards: without a reviewed reference from
+a device they would only encode whatever the simulator drew first.

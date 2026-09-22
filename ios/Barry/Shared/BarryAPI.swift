@@ -152,6 +152,19 @@ struct BarryAPI {
         return try await get(comps?.url)
     }
 
+    /// The vertical column at a point: clouds, temperatures and wind by
+    /// model level, hourly for a day. The server keys it by tenth-degree
+    /// cell and refreshes hourly.
+    func aloft(lat: Double, lon: Double) async throws -> AloftResponse {
+        var comps = URLComponents(url: baseURL.appendingPathComponent("aloft"),
+                                  resolvingAgainstBaseURL: false)
+        comps?.queryItems = [
+            URLQueryItem(name: "lat", value: String(lat)),
+            URLQueryItem(name: "lon", value: String(lon)),
+        ]
+        return try await get(comps?.url)
+    }
+
     /// RainViewer's frame list, trimmed and cached by the backend.
     func radarFrames() async throws -> RadarFramesResponse {
         try await get(baseURL.appendingPathComponent("radar/frames"))

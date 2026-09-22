@@ -282,6 +282,48 @@ struct ConditionsOut: Codable, Hashable {
     }
 }
 
+// MARK: - Aloft: the column at a point
+
+struct AloftLevel: Codable, Hashable, Identifiable {
+    let hPa: Int
+    let ft: Int
+    let tempC: Double
+    var dewC: Double?
+    var dirDeg: Double?
+    var spdKt: Double?
+    var cloudPct: Int?
+    var id: Int { hPa }
+}
+
+struct AloftCloud: Codable, Hashable {
+    let baseFt: Int
+    let topFt: Int
+    let coverPct: Int
+    var icing: Bool = false
+}
+
+struct AloftSurface: Codable, Hashable {
+    var tempC: Double?
+    var dewC: Double?
+    var dirDeg: Double?
+    var spdKt: Double?
+}
+
+struct AloftHour: Codable, Hashable {
+    let t: Date
+    var levels: [AloftLevel] = []
+    var clouds: [AloftCloud] = []
+    var surface: AloftSurface?
+    var freezingFt: Int?
+    var blAglFt: Int?
+}
+
+struct AloftResponse: Codable, Hashable {
+    var hours: [AloftHour] = []
+    let source: String
+    let cachedAt: Date
+}
+
 // MARK: - Station wind layer
 
 struct StationObs: Codable, Hashable, Identifiable {

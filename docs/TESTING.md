@@ -37,6 +37,7 @@ real device can show. An empty cell means nothing checks it.
 | Sweeps of coordinates, box sizes and spans stay bounded in cache entries | yes | |
 | Health check p95 under 200 ms while grids build | tools/loadtest.py | run before a deploy that touches the grid |
 | Diagnostics drop box: JSON only, 1 MB, gated, pruned | yes, through the app | |
+| Aloft column: levels in feet and knots, cloud layers from runs of cover, icing below freezing, one call per cell per hour | yes | /aloft |
 | Counters at /metrics answer the box only; every response carries a request id | yes, through the app | |
 | Health check: 503 when a loop dies or stalls, degraded when upstream is silent | yes, through the app | strict form for an outside monitor |
 | Container runs as nobody, hashed install, pinned tunnel | deploy smoke | `docker exec id`, `docker inspect` |
@@ -87,6 +88,15 @@ Radar screen, each layer alone and stacked.
 | Layer migration: Pressure users keep isobars | | done once | | |
 | Recentre button, full screen push and pop | | eyeball | | |
 | Every layer toggled, a pan, a zoom out and in, back to the dashboard, wind still on | UI test (BarryUITests) | | | launches with -uitest: onboarded, KLUK, layers off |
+
+Aloft (clouds and winds aloft), from the conditions card.
+
+| Behaviour | Automated | Sim | Phone | Notes |
+|---|---|---|---|---|
+| Compressed altitude scale, barb marks, rows that never overlap, signs and padding | yes, unit | | | AloftMath |
+| Column renders: clouds, METAR ceiling, freezing level, boundary layer, temps, barbs, surface band | | light and dark screenshots | | `-uitest -uitest-aloft` opens it directly |
+| Opens from the card, chips toggle, scrubber moves the hour, ceiling menu rescales, back returns | UI test | | | |
+| Tap a level for the sheet | | | | not yet automated |
 
 Widgets and watch.
 

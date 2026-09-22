@@ -14,6 +14,9 @@ struct FieldConditionsCard: View {
     /// The METAR (cloud layers) and the forecast (cloud cover trend).
     let combined: CombinedResponse
     let now: Date
+    /// Opens the Aloft column. The Clouds row and the card's last row both
+    /// lead there; nil means neither is offered.
+    var onAloft: (() -> Void)? = nil
 
     /// "agl" (the model's own height above ground) or "msl" (field
     /// elevation added, so the number reads like an altimeter).
@@ -286,7 +289,16 @@ struct FieldConditionsCard: View {
                     Text(cloudValue)
                         .font(.subheadline.weight(.semibold))
                         .monospacedDigit()
+                    if onAloft != nil {
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
                 }
+                .contentShape(Rectangle())
+                .onTapGesture { onAloft?() }
+                .accessibilityAddTraits(onAloft != nil ? .isButton : [])
+                .accessibilityIdentifier("conditions.clouds")
                 HStack {
                     if let layers = cloudLayersText {
                         Text(layers)
@@ -390,6 +402,23 @@ struct FieldConditionsCard: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let onAloft {
+                Divider()
+                Button(action: onAloft) {
+                    HStack(spacing: 8) {
+                        Text("Clouds and winds aloft")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.blue)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("conditions.aloft")
             }
         }
         .padding(12)

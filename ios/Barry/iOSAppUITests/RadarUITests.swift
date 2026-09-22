@@ -104,4 +104,50 @@ final class RadarUITests: XCTestCase {
         XCTAssertTrue(expand.waitForExistence(timeout: 10), "did not come back to the dashboard")
         XCTAssertEqual(app.state, .runningForeground)
     }
+
+    /// The column: opens from the conditions card, its chips toggle, the
+    /// scrubber moves the hour, the ceiling menu rescales, back returns.
+    func testAloftOpensTogglesScrubsAndComesBack() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["-uitest"]
+        app.launch()
+
+        let cta = app.buttons["conditions.aloft"].firstMatch
+        var swipes = 0
+        while !(cta.exists && cta.isHittable) && swipes < 10 {
+            app.swipeUp()
+            swipes += 1
+            _ = cta.waitForExistence(timeout: 2)
+        }
+        XCTAssertTrue(cta.waitForExistence(timeout: 30), "no way into Aloft on the dashboard\n\(app.debugDescription)")
+        cta.tap()
+
+        let ceiling = app.buttons["aloft.ceiling"].firstMatch
+        XCTAssertTrue(ceiling.waitForExistence(timeout: 15), "Aloft did not open")
+        let time = app.staticTexts["aloft.time"].firstMatch
+        XCTAssertTrue(time.waitForExistence(timeout: 20))
+        XCTAssertTrue(time.label.hasPrefix("Now"), time.label)
+
+        for name in ["clouds", "wind", "temp", "icing", "layer"] {
+            let chip = app.buttons["aloft.layer.\(name)"].firstMatch
+            XCTAssertTrue(chip.waitForExistence(timeout: 5), name)
+            let was = chip.isSelected
+            chip.tap()
+            XCTAssertNotEqual(chip.isSelected, was, "\(name) did not toggle")
+            chip.tap()
+        }
+
+        app.sliders.firstMatch.adjust(toNormalizedSliderPosition: 0.5)
+        XCTAssertTrue(time.label.hasPrefix("+"), time.label)
+
+        ceiling.tap()
+        let twelve = app.buttons["12,000 ft"].firstMatch
+        XCTAssertTrue(twelve.waitForExistence(timeout: 5), app.debugDescription)
+        twelve.tap()
+        XCTAssertTrue(app.buttons["aloft.ceiling"].firstMatch.label.contains("12,000"))
+
+        app.buttons["Back"].firstMatch.tap()
+        XCTAssertTrue(cta.waitForExistence(timeout: 10), "did not come back")
+        XCTAssertEqual(app.state, .runningForeground)
+    }
 }

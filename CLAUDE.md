@@ -206,6 +206,20 @@ Not yet: courtesy emails to RainViewer + IEM before public App Store, App
 Store listing copy, verdict track record (built, hidden until rescored),
 real strike positions (GOES GLM would be the source), APNs push.
 
+## Aloft (added 2026-09-22)
+
+The clouds-and-winds-aloft column: `GET /aloft?lat&lon` serves 25 hourly
+columns of Open-Meteo pressure levels (1000 to 400 hPa) in feet and knots
+with derived cloud layers (runs of cover from 30 percent, icing between 0
+and -20 C), the freezing level and the boundary layer, cached per
+tenth-degree cell for an hour. On iOS, `AloftScreen` (iOSApp/AloftView.swift)
+draws it on a compressed scale (the bottom 6,000 ft get 52 percent of the
+height; `AloftMath.swift` holds the pure parts and their tests), with the
+METAR's ceiling drawn separately from the model's layers, a ceiling menu
+(6k/12k/18k/24k, also in Settings), layer chips and an hourly scrubber.
+It opens from the conditions card's Clouds row and its last row. The
+design handoff it follows came from the user's Design canvas.
+
 ## Tests and checks (added 2026-09-22)
 
 - Backend: `cd backend && .venv/bin/pytest -q` (294 tests; Hypothesis

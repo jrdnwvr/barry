@@ -64,6 +64,7 @@
 		5093AC139AE85DC8A14E0859 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 05E57A0FA0B17718D5FB1D5D /* Assets.xcassets */; };
 		50F708BB96C5BBFE917DE01A /* TendencyProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A24A6845ECB66698D61771D /* TendencyProvider.swift */; };
 		5204621388C2B94B99BE1CCF /* RadarModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C448DCCFE61D866C777918A /* RadarModel.swift */; };
+		528E622AA0E8C3F459B35D03 /* AloftMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BC26DD5017BF6D7F4EC0346 /* AloftMath.swift */; };
 		54E71FA035FE1F8FF06685BA /* Backcountry.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDA74BE38B6BB03051B074EF /* Backcountry.swift */; };
 		54FC2F6A3476132FE681E5E6 /* RadarPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6BB37965D5198DB8A9DCE65 /* RadarPalette.swift */; };
 		55E5298970D9B65C1E5B4F44 /* ComplicationDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42AF37A1FEB24BB66E9E0A34 /* ComplicationDial.swift */; };
@@ -120,6 +121,7 @@
 		9F987BE952507B2A891ADC78 /* PressureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A60F6C6B6915B13C8CAD3A3 /* PressureStore.swift */; };
 		A11B605E76613C43AC5FE11E /* BarryAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */; };
 		A13AA88D91661ADCE95D6B34 /* PressureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A60F6C6B6915B13C8CAD3A3 /* PressureStore.swift */; };
+		A2F7E5A35C84682589A607C9 /* AloftView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BED6E2C5FCAA112FC377D73 /* AloftView.swift */; };
 		A63CCB08373B1B5AE4CC5897 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C59EF4878E06062DC20D1D7 /* AppConfig.swift */; };
 		A6A900288E1F1C496143CB88 /* CardWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02038B2170BC3114C24A63CC /* CardWidgets.swift */; };
 		A977EEB6ABB925E5A2B2B549 /* BackgroundRefresh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CB1EFCBAEC1FFFB0EF24917 /* BackgroundRefresh.swift */; };
@@ -162,6 +164,7 @@
 		F9FAEAFFE5323B1757725A34 /* WatchContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A4A8464736F548F6F72A42 /* WatchContentView.swift */; };
 		FB1449121DF56602057E312B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 4763C8EEB9FBC9182028B8E2 /* PrivacyInfo.xcprivacy */; };
 		FBC05BDAC2F9A55BFB1380E2 /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34C2B97E09DCD235BF42063C /* Diagnostics.swift */; };
+		FE972C0AD5114B4A692A5BAD /* AloftTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FAC7EA8699F6D188EF92090 /* AloftTests.swift */; };
 		FEBD3AFFDBBDF5EEA682BC93 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B6858331167EFEA8CE241D78 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
@@ -249,7 +252,7 @@
 		031482E889A2274CBD689E88 /* ForecastCaveatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForecastCaveatView.swift; sourceTree = "<group>"; };
 		05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedSnapshot.swift; sourceTree = "<group>"; };
 		05E57A0FA0B17718D5FB1D5D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		078B13121EBACB3059A82BC9 /* BarryPhoneWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = BarryPhoneWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		078B13121EBACB3059A82BC9 /* BarryPhoneWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = BarryPhoneWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		0E50753B814745AF734760F1 /* SnapshotStalenessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotStalenessTests.swift; sourceTree = "<group>"; };
 		0E7A086EE5185D61C26B5533 /* TendencyParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TendencyParityTests.swift; sourceTree = "<group>"; };
 		14751C812932452AF8884F79 /* HomeLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeLayout.swift; sourceTree = "<group>"; };
@@ -268,10 +271,11 @@
 		35839C2045A30D70938041B6 /* FrontsOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontsOverlay.swift; sourceTree = "<group>"; };
 		39AF53020220091BA0FC5C07 /* WindFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindFlowView.swift; sourceTree = "<group>"; };
 		42AF37A1FEB24BB66E9E0A34 /* ComplicationDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComplicationDial.swift; sourceTree = "<group>"; };
-		4763C8EEB9FBC9182028B8E2 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		4763C8EEB9FBC9182028B8E2 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		47A973B22E958B730E977380 /* combined_kluk.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = combined_kluk.json; sourceTree = "<group>"; };
 		4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedLocations.swift; sourceTree = "<group>"; };
 		4B8FF4A39677C2C8F46B98F7 /* BarryApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryApp.swift; sourceTree = "<group>"; };
+		4BED6E2C5FCAA112FC377D73 /* AloftView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AloftView.swift; sourceTree = "<group>"; };
 		4D967187F3CE6292310A2937 /* PressureUnit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureUnit.swift; sourceTree = "<group>"; };
 		4EB1F388C1A5FE3D18F1D62E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		4EBD287C6CB46A536198173F /* RangeAnalysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RangeAnalysis.swift; sourceTree = "<group>"; };
@@ -279,6 +283,7 @@
 		52B4C35AC0CE61C4C1CCE6D5 /* FieldConditionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldConditionsView.swift; sourceTree = "<group>"; };
 		562F0C5A2584915B01FB409F /* tendency_cases.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tendency_cases.json; sourceTree = "<group>"; };
 		5B1CE5EDD6706AFE35F1B6D9 /* BarryComplication.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = BarryComplication.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		5BC26DD5017BF6D7F4EC0346 /* AloftMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AloftMath.swift; sourceTree = "<group>"; };
 		5C59EF4878E06062DC20D1D7 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		5D63A9351C0871620CA4A195 /* TafStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TafStrip.swift; sourceTree = "<group>"; };
 		623D8012B9E2B6A8E0CE08AE /* CombinedStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CombinedStore.swift; sourceTree = "<group>"; };
@@ -286,7 +291,7 @@
 		68D08500DD9FA42C666DFF25 /* ComplicationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComplicationViews.swift; sourceTree = "<group>"; };
 		6978CE026B8EEE1A560877C0 /* PressureGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureGuideView.swift; sourceTree = "<group>"; };
 		6FE1451AAFD8A470C4CB228A /* FrontWatchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontWatchView.swift; sourceTree = "<group>"; };
-		711E43480463B0F36F74E35A /* Barry.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Barry.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		711E43480463B0F36F74E35A /* Barry.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Barry.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7124BFCE70A82D184062809B /* BarryComplication.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BarryComplication.entitlements; sourceTree = "<group>"; };
 		726AB15B448612548C2CCCCD /* BarryComplication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryComplication.swift; sourceTree = "<group>"; };
 		72812DF1800A9DF0CF5EF2C3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -307,16 +312,17 @@
 		8C448DCCFE61D866C777918A /* RadarModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarModel.swift; sourceTree = "<group>"; };
 		8D9A99374F6D320BC2CEB620 /* PressureActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureActivityWidget.swift; sourceTree = "<group>"; };
 		8E3203C0CBC7B1D5F0A57759 /* WindUnit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindUnit.swift; sourceTree = "<group>"; };
-		914915E267DDB87BAB23CD51 /* BarryTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BarryTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		8FAC7EA8699F6D188EF92090 /* AloftTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AloftTests.swift; sourceTree = "<group>"; };
+		914915E267DDB87BAB23CD51 /* BarryTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BarryTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		918B4D14CC966B0E820FC1AC /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		95423D24AF145867D59E1434 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		9639018DA53DA80272AC71E9 /* Barry.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Barry.entitlements; sourceTree = "<group>"; };
 		9B661E997E72021B37CCFFD4 /* UITestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestSupport.swift; sourceTree = "<group>"; };
 		9C9E7A347455A6781BAB196E /* WindFlow.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = WindFlow.metal; sourceTree = "<group>"; };
-		A376D4EE445D8849427A861E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		A376D4EE445D8849427A861E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A59F4AD2D2CF0AC8FB31B534 /* ConfirmationOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmationOverlayView.swift; sourceTree = "<group>"; };
 		AD313083D4B2A9BAD12BAB92 /* RunwayWindDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayWindDial.swift; sourceTree = "<group>"; };
-		B6858331167EFEA8CE241D78 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		B6858331167EFEA8CE241D78 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureHistory.swift; sourceTree = "<group>"; };
 		B98E77604746429DE78EF9C4 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		BAFA9596978A2666CDFADAB4 /* RectangularComplications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RectangularComplications.swift; sourceTree = "<group>"; };
@@ -335,8 +341,8 @@
 		EB906A0DF0FCEFBE609EBF06 /* HorizontalDragGesture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorizontalDragGesture.swift; sourceTree = "<group>"; };
 		ECFAFB3674B651E14D4FEC8B /* PressureActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureActivity.swift; sourceTree = "<group>"; };
 		EDA74BE38B6BB03051B074EF /* Backcountry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Backcountry.swift; sourceTree = "<group>"; };
-		F07D88A5BEA3FC7C9BD42D68 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		F08AB4623C5D33768E74DF13 /* BarryUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BarryUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F07D88A5BEA3FC7C9BD42D68 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		F08AB4623C5D33768E74DF13 /* BarryUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BarryUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F3DE49EE7CDCB4E59BB8E97F /* StationLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StationLayer.swift; sourceTree = "<group>"; };
 		F4C5676D3E1E52D59CDFED12 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F4F0EF3938BA8F192FB71228 /* WatchSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSettingsView.swift; sourceTree = "<group>"; };
@@ -375,6 +381,7 @@
 		25FA9FE4534CDB72E7FC40FA /* iOSAppTests */ = {
 			isa = PBXGroup;
 			children = (
+				8FAC7EA8699F6D188EF92090 /* AloftTests.swift */,
 				7C00F07F019E06DA06E95BD0 /* BarometerTests.swift */,
 				75CA082BD890DE5E1469223E /* CardRenderTests.swift */,
 				024F41291A68B29C57129A86 /* Fixtures.swift */,
@@ -519,6 +526,8 @@
 		CEA6BF2191949B48EFAF9B73 /* iOSApp */ = {
 			isa = PBXGroup;
 			children = (
+				5BC26DD5017BF6D7F4EC0346 /* AloftMath.swift */,
+				4BED6E2C5FCAA112FC377D73 /* AloftView.swift */,
 				CD077DE63D0DE437229C43CC /* Assets.xcassets */,
 				EDA74BE38B6BB03051B074EF /* Backcountry.swift */,
 				7CB1EFCBAEC1FFFB0EF24917 /* BackgroundRefresh.swift */,
@@ -707,7 +716,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 2700;
+				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					0F5F9DCD10132AA92370D5FC = {
 						DevelopmentTeam = 46RX35CZGW;
@@ -805,6 +814,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FE972C0AD5114B4A692A5BAD /* AloftTests.swift in Sources */,
 				77A46CEAE1569CD88532A37F /* BarometerTests.swift in Sources */,
 				5B4110D0966F6475A5E665D5 /* CardRenderTests.swift in Sources */,
 				9A3EF5B92F7E694E33F31FFC /* Fixtures.swift in Sources */,
@@ -893,6 +903,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				528E622AA0E8C3F459B35D03 /* AloftMath.swift in Sources */,
+				A2F7E5A35C84682589A607C9 /* AloftView.swift in Sources */,
 				A63CCB08373B1B5AE4CC5897 /* AppConfig.swift in Sources */,
 				54E71FA035FE1F8FF06685BA /* Backcountry.swift in Sources */,
 				A977EEB6ABB925E5A2B2B549 /* BackgroundRefresh.swift in Sources */,
@@ -1057,7 +1069,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -1089,12 +1100,10 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 13;
-				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 46RX35CZGW;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -1115,7 +1124,6 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.9;
@@ -1244,7 +1252,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -1276,12 +1283,10 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 13;
-				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 46RX35CZGW;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -1295,7 +1300,6 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.9;

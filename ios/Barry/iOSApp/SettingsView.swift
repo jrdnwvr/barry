@@ -43,6 +43,8 @@ struct SettingsView: View {
     private var liveActivityEnabled: Bool = false
     @AppStorage(RadarPanel.autoplayKey, store: AppConfig.sharedDefaults)
     private var radarAutoplay: Bool = true
+    @AppStorage(AloftLayer.ceilingKey, store: AppConfig.sharedDefaults)
+    private var aloftCeilingFt: Int = 18000
 
     @State private var newICAO: String = ""
     /// Live matches from /stations/search while the airport field has text.
@@ -151,6 +153,19 @@ struct SettingsView: View {
                     Text(radarAutoplay
                          ? "Loops on open. Tap pause to hold a frame."
                          : "Opens on the newest frame. Tap play to loop.")
+                }
+
+                Section {
+                    Picker("Ceiling", selection: $aloftCeilingFt) {
+                        ForEach(AloftScale.ceilings, id: \.self) { ft in
+                            Text("\(ft / 1000)k").tag(ft)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Aloft")
+                } footer: {
+                    Text("How high the clouds and winds column goes.")
                 }
 
                 Section {

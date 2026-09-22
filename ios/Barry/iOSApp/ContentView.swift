@@ -26,6 +26,7 @@ struct ContentView: View {
     @Environment(\.horizontalSizeClass) private var hSizeClass
     @State private var showSettings = false
     @State private var showRadarFullScreen = false
+    @State private var showAloft = false
     /// The dashboard's radar card only animates while it is on screen.
     @State private var radarCardOnScreen = true
 
@@ -80,6 +81,9 @@ struct ContentView: View {
                 // A UI test or a screenshot run can land on the radar directly.
                 if UITestSupport.active, ProcessInfo.processInfo.arguments.contains("-uitest-radar") {
                     showRadarFullScreen = true
+                }
+                if UITestSupport.active, ProcessInfo.processInfo.arguments.contains("-uitest-aloft") {
+                    showAloft = true
                 }
                 WatchSync.shared.activate()
                 syncAirportSelection()
@@ -140,6 +144,7 @@ struct ContentView: View {
                     .padding(.horizontal)
             }
             .refreshable { await reload() }
+            .navigationDestination(isPresented: $showAloft) { aloftScreen }
             .navigationDestination(isPresented: $showRadarFullScreen) {
                 if let combined = store.combined,
                    let rlat = combined.pressure.lat, let rlon = combined.pressure.lon {
@@ -253,7 +258,8 @@ struct ContentView: View {
             // DA now + trend, clouds, boundary layer, storm and fog outlooks
             // when they exist. Never an empty card.
             if let cond = combined.conditions, cond.hasContent {
-                FieldConditionsCard(conditions: cond, combined: combined, now: store.now)
+                FieldConditionsCard(conditions: cond, combined: combined, now: store.now,
+                                    onAloft: { showAloft = true })
             }
         case .strip:
             // Off-field only: the nearest station as a fact for everyone,
@@ -408,6 +414,7 @@ struct ContentView: View {
             }
             .padding()
         }
+        .navigationDestination(isPresented: $showAloft) { aloftScreen }
         .navigationDestination(isPresented: $showRadarFullScreen) {
             if let rlat = combined.pressure.lat, let rlon = combined.pressure.lon {
                 RadarScreen(lat: rlat, lon: rlon,
@@ -488,6 +495,15 @@ struct ContentView: View {
         WatchSync.shared.send(station: store.station, airportSelected: store.airportSelected,
                               physical: savedLocations.selected.isPhysical,
                               backcountry: backcountryEnabled, watchSensor: backcountryEnabled && backcountryUseWatch)
+    }
+
+    /// The Aloft column for the loaded station; nothing until the station
+    /// has coordinates to ask the model about.
+    @ViewBuilder private var aloftScreen: some View {
+        if let c = store.combined, let lat = c.pressure.lat, let lon = c.pressure.lon {
+            AloftScreen(lat: lat, lon: lon, station: c.pressure.station,
+                        stationName: c.pressure.name ?? c.pressure.station, combined: c)
+        }
     }
 
     private func initialLoad() async {

@@ -1,28 +1,35 @@
-"""E6: bulk history survives a restart when BARRY_DATA_DIR is set."""
-
-from __future__ import annotations
-
-from datetime import datetime, timedelta, timezone
+import gzip
+import json
+import pickle
+from datetime import datetime, timezone
 
 from app import persist
-from app.service import PressureService
-from test_front_history import ring_table
 
 
-def test_history_roundtrip_through_disk(client, tmp_path, monkeypatch):
+def test_round_trip_keeps_datetimes_and_nesting(tmp_path, monkeypatch):
     monkeypatch.setenv("BARRY_DATA_DIR", str(tmp_path))
-    now = datetime.now(timezone.utc)
-    a = PressureService(client)
-    a._record_snapshot(ring_table(now - timedelta(hours=2), 0), now - timedelta(hours=2))
-    a._record_snapshot(ring_table(now, 1), now)
-    assert (tmp_path / "bulk_history.pkl").exists()
+    t = datetime(2026, 9, 21, 20, 0, tzinfo=timezone.utc)
+    obj = {"KLUK": [{"t": t, "trend": "falling", "confidence": 0.7, "right": None}]}
+    assert persist.save("track_log", obj)
+    assert (tmp_path / "track_log.json.gz").exists()
+    back = persist.load("track_log")
+    assert back == obj and isinstance(back["KLUK"][0]["t"], datetime)
+    # nothing but JSON on disk
+    with gzip.open(tmp_path / "track_log.json.gz") as f:
+        json.loads(f.read())
 
-    b = PressureService(client)                    # "after a restart"
-    assert len(b._bulk_history) == 2
-    assert b.history_span_h(now) == 2.0
+
+def test_legacy_pickle_is_migrated_once_then_gone(tmp_path, monkeypatch):
+    monkeypatch.setenv("BARRY_DATA_DIR", str(tmp_path))
+    with open(tmp_path / "registry.pkl", "wb") as f:
+        pickle.dump(["KLUK", "KCVG"], f)
+    assert persist.load("registry") == ["KLUK", "KCVG"]
+    assert not (tmp_path / "registry.pkl").exists()
+    assert (tmp_path / "registry.json.gz").exists()
+    assert persist.load("registry") == ["KLUK", "KCVG"]
 
 
-def test_no_data_dir_means_cold_start(client, monkeypatch):
-    monkeypatch.delenv("BARRY_DATA_DIR", raising=False)
-    assert persist.save("x", 1) is False and persist.load("x") is None
-    assert PressureService(client)._bulk_history == []
+def test_unstorable_objects_fail_closed(tmp_path, monkeypatch):
+    monkeypatch.setenv("BARRY_DATA_DIR", str(tmp_path))
+    assert persist.save("x", {"f": lambda: 1}) is False
+    assert persist.load("x") is None

@@ -17,6 +17,7 @@ services:
     image: barry-backend:latest
     container_name: barry-backend
     restart: unless-stopped
+    mem_limit: 768m
     logging:
       driver: json-file
       options:
@@ -42,9 +43,10 @@ services:
       start_period: 10s
 
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared:2026.6.1   # pinned; bump on purpose
     container_name: barry-cloudflared
     restart: unless-stopped
+    mem_limit: 256m
     logging:
       driver: json-file
       options:

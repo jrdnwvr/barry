@@ -6,12 +6,19 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PORT=8080
 
-# Install the app + its runtime deps (from pyproject; no dev/test extras).
-COPY pyproject.toml ./
+# Runtime deps from the hash-pinned lock (uv pip compile --generate-hashes,
+# resolved for this image's Python), then the app itself without resolving
+# anything further. A changed or substituted wheel fails the build.
+COPY requirements.lock pyproject.toml ./
 COPY app ./app
-RUN pip install --upgrade pip && pip install .
+RUN pip install --upgrade pip \
+    && pip install --require-hashes -r requirements.lock \
+    && pip install --no-deps .
 
 EXPOSE 8080
+
+# Not root. The state volume is handed to this user at deploy time.
+USER nobody
 
 # IMPORTANT: a single worker, on purpose. The TTL cache, the active-station
 # registry, and the batched scheduler are all in-process (see app/cache.py). Run

@@ -479,7 +479,9 @@ class PressureService:
     def _load_history() -> List[tuple]:
         hist = persist.load("bulk_history") or []
         cutoff = _now() - timedelta(hours=HISTORY_KEEP_H)
-        hist = [h for h in hist if isinstance(h, tuple) and len(h) == 2 and h[0] >= cutoff]
+        # JSON gives lists back where tuples went in; re-tuple both levels.
+        hist = [(h[0], {k: tuple(v) for k, v in h[1].items()})
+                for h in hist if isinstance(h, (tuple, list)) and len(h) == 2 and h[0] >= cutoff]
         if hist:
             log.info("bulk history restored: %d snapshots, oldest %s", len(hist), hist[0][0])
         return hist

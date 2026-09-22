@@ -13,7 +13,8 @@ from typing import List, Optional
 
 import httpx
 
-from ..models import FieldPoint, ForecastHour, SunTimes
+from ..models import (AloftCloud, AloftHour, AloftLevel, AloftSurface, FieldPoint, ForecastHour,
+                      SunTimes)
 
 BASE_URL = "https://api.open-meteo.com/v1/forecast"
 USER_AGENT = "Barry/1.0 (jrdn@wvr.me)"
@@ -193,3 +194,114 @@ async def fetch_field_grid(lats, lons, client: httpx.AsyncClient, *, now: dateti
                          headers={"User-Agent": USER_AGENT}, timeout=15.0)
     r.raise_for_status()
     return parse_field_grid(r.json(), now)
+
+
+# ---- Aloft: pressure levels at a point ----------------------------------
+
+# Surface to about 24,000 ft. Fewer levels would hide the low-level detail
+# the column exists to show; more would be model noise at this scale.
+ALOFT_LEVELS = [1000, 975, 950, 925, 900, 850, 800, 700, 600, 500, 400]
+ALOFT_VARS = ("temperature", "dew_point", "cloud_cover", "wind_speed", "wind_direction", "geopotential_height")
+ALOFT_HOURLY = ([f"{v}_{p}hPa" for p in ALOFT_LEVELS for v in ALOFT_VARS]
+                + ["freezing_level_height", "boundary_layer_height",
+                   "temperature_2m", "dew_point_2m", "wind_speed_10m", "wind_direction_10m"])
+CLOUD_LAYER_PCT = 30       # a level counts as cloud from scattered; the app shades dense from 70
+ICING_MIN_C, ICING_MAX_C = -20.0, 0.0
+FT_PER_M = 3.28084
+
+
+async def fetch_aloft(lat: float, lon: float, client: httpx.AsyncClient, *, forecast_days: int = 2) -> dict:
+    """Raw Open-Meteo JSON for the column: every level, two days, knots."""
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "hourly": ",".join(ALOFT_HOURLY),
+        "wind_speed_unit": "kn",
+        "forecast_days": str(forecast_days),
+        "timezone": "UTC",
+    }
+    resp = await client.get(BASE_URL, params=params, headers={"User-Agent": USER_AGENT}, timeout=15.0)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def cloud_layers(levels: List[AloftLevel]) -> List[AloftCloud]:
+    """Consecutive levels at or above CLOUD_LAYER_PCT become one layer, base
+    at the lowest such level and top at the highest, cover the run's
+    maximum. A single cloudy level still gets a band: half the gap to the
+    next level up, so it is visible without pretending to a depth."""
+    out: List[AloftCloud] = []
+    run: List[int] = []
+
+    def close(run_idx: List[int]) -> None:
+        if not run_idx:
+            return
+        lo, hi = run_idx[0], run_idx[-1]
+        base = levels[lo].ft
+        if hi + 1 < len(levels):
+            top = levels[hi].ft if hi > lo else levels[hi].ft + (levels[hi + 1].ft - levels[hi].ft) // 2
+        else:
+            top = levels[hi].ft + 1000
+        cover = max((levels[i].cloudPct or 0) for i in run_idx)
+        icing = any(ICING_MIN_C <= levels[i].tempC <= ICING_MAX_C for i in run_idx)
+        out.append(AloftCloud(baseFt=base, topFt=max(top, base + 200), coverPct=cover, icing=icing))
+
+    for i, lv in enumerate(levels):
+        if (lv.cloudPct or 0) >= CLOUD_LAYER_PCT:
+            run.append(i)
+        else:
+            close(run)
+            run = []
+    close(run)
+    return out
+
+
+def parse_aloft(data: dict, *, now: datetime, hours: int = 25) -> List[AloftHour]:
+    """Hourly columns from the current UTC hour forward. Levels whose height
+    is missing are dropped; the rest are sorted by height so the runs that
+    make cloud layers are contiguous in altitude."""
+    hourly = data.get("hourly") or {}
+    times = hourly.get("time") or []
+    start_key = now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H")
+
+    def col(name):
+        return hourly.get(name) or []
+
+    def at(seq, i):
+        return seq[i] if i < len(seq) else None
+
+    out: List[AloftHour] = []
+    started = False
+    for i, t in enumerate(times):
+        if not started:
+            if t.startswith(start_key):
+                started = True
+            else:
+                continue
+        if len(out) >= hours:
+            break
+        levels: List[AloftLevel] = []
+        for p in ALOFT_LEVELS:
+            h_m = at(col(f"geopotential_height_{p}hPa"), i)
+            temp = at(col(f"temperature_{p}hPa"), i)
+            if h_m is None or temp is None:
+                continue
+            cloud = at(col(f"cloud_cover_{p}hPa"), i)
+            levels.append(AloftLevel(
+                hPa=p, ft=int(round(h_m * FT_PER_M)), tempC=float(temp),
+                dewC=at(col(f"dew_point_{p}hPa"), i),
+                dirDeg=at(col(f"wind_direction_{p}hPa"), i),
+                spdKt=at(col(f"wind_speed_{p}hPa"), i),
+                cloudPct=int(round(cloud)) if cloud is not None else None,
+            ))
+        levels.sort(key=lambda lv: lv.ft)
+        frz = at(col("freezing_level_height"), i)
+        blh = at(col("boundary_layer_height"), i)
+        out.append(AloftHour(
+            t=_parse_iso(t), levels=levels, clouds=cloud_layers(levels),
+            surface=AloftSurface(tempC=at(col("temperature_2m"), i), dewC=at(col("dew_point_2m"), i),
+                                 dirDeg=at(col("wind_direction_10m"), i), spdKt=at(col("wind_speed_10m"), i)),
+            freezingFt=int(round(frz * FT_PER_M)) if frz is not None else None,
+            blAglFt=int(round(blh * FT_PER_M)) if blh is not None else None,
+        ))
+    return out

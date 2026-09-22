@@ -29,6 +29,7 @@ from . import stations
 from .cache import CachedFailure, StationRegistry, TTLCache
 from .interpreter import Sample, interpret
 from .models import (
+    AloftResponse,
     FieldGridResponse,
     LightningResponse,
     PressureFieldResponse,
@@ -58,6 +59,7 @@ from .sources import wpc
 from .tendency import resolve_tendency
 from .verdict import build_verdict
 
+ALOFT_TTL = 60 * 60.0     # the model updates hourly; the column follows it
 PRESSURE_TTL = 12 * 60.0  # METARs update ~hourly; 12 min keeps it fresh-ish & cheap
 FORECAST_TTL = 30 * 60.0  # forecasts move slowly; 30 min is plenty
 FRONT_TTL = 15 * 60.0     # regional bbox fetch is the priciest call; ring METARs
@@ -808,6 +810,25 @@ class PressureService:
         resp = FieldGridResponse(points=points, cachedAt=now)
         await self.cache.set(cache_key, resp, ttl=FIELD_TTL)
         return resp
+
+    # ---- Aloft: the column at a point -----------------------------------------
+
+    async def get_aloft(self, lat: float, lon: float) -> AloftResponse:
+        """Clouds, temperatures and wind by pressure level for the next day
+        at a point, keyed by the same tenth-degree cell as the forecast, so
+        the cost is one Open-Meteo call per watched cell per hour whatever
+        the number of phones looking."""
+        lat, lon = round(lat, 1), round(lon, 1)
+
+        async def _pull() -> AloftResponse:
+            self.om_gate.require()
+            raw = await om.fetch_aloft(lat, lon, self._client, forecast_days=2)
+            hours = om.parse_aloft(raw, now=_now())
+            if not hours:
+                raise LookupError("no aloft data")
+            return AloftResponse(hours=hours, source="open-meteo", cachedAt=_now())
+
+        return await self.cache.fetch(f"aloft:{lat}:{lon}", _pull, ttl=ALOFT_TTL, negative_ttl=60.0)
 
     # ---- GOES GLM lightning ---------------------------------------------------
 

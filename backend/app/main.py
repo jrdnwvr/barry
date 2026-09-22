@@ -354,6 +354,24 @@ async def radar_frames():
     return resp.model_dump(mode="json", by_alias=True)
 
 
+@app.get("/aloft")
+async def get_aloft(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+):
+    """The vertical column at a point: clouds, temperatures and wind by
+    model level, hourly for a day. One upstream call per tenth-degree cell
+    per hour. 503 means the model is unavailable."""
+    try:
+        resp = await get_service().get_aloft(lat, lon)
+    except LookupError:
+        raise HTTPException(status_code=503, detail="aloft unavailable")
+    except Exception as exc:
+        log.warning("aloft unavailable: %s: %s", type(exc).__name__, exc)
+        raise HTTPException(status_code=503, detail="aloft unavailable")
+    return resp.model_dump(mode="json", by_alias=True)
+
+
 @app.get("/radar/field")
 async def radar_field(
     lat: float = Query(..., ge=-90, le=90),

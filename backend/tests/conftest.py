@@ -225,6 +225,33 @@ def metar_cache_row(sid, lat, lon, *, spd=7, d="270", cat="VFR"):
             f',,,,,,CLR,,,,,,,,{cat},,,,,,,,,,,,METAR,100')
 
 
+def sample_aloft(request):
+    """Open-Meteo's pressure-level shape for two hours from the current UTC
+    hour: a cloud deck at 925-850 hPa (80 %), thin cloud at 600 hPa (40 %)
+    below freezing, winds veering and strengthening with height."""
+    start = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    times = [(start + timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M") for i in range(3)]
+    levels = {1000: 110, 975: 330, 950: 560, 925: 790, 900: 1000, 850: 1470, 800: 1960, 700: 3040, 600: 4300, 500: 5700, 400: 7300}
+    hourly = {"time": times}
+    for p, h in levels.items():
+        temp = 16 - h / 1000 * 6.5
+        cloud = 80 if p in (925, 900, 850) else (40 if p == 600 else 5)
+        hourly[f"geopotential_height_{p}hPa"] = [h] * 3
+        hourly[f"temperature_{p}hPa"] = [round(temp, 1)] * 3
+        hourly[f"dew_point_{p}hPa"] = [round(temp - (0.5 if cloud >= 50 else 6), 1)] * 3
+        hourly[f"cloud_cover_{p}hPa"] = [cloud] * 3
+        hourly[f"wind_speed_{p}hPa"] = [10 + h / 200] * 3
+        hourly[f"wind_direction_{p}hPa"] = [(30 + h / 40) % 360] * 3
+    hourly["freezing_level_height"] = [2700] * 3
+    hourly["boundary_layer_height"] = [900] * 3
+    hourly["temperature_2m"] = [16] * 3
+    hourly["dew_point_2m"] = [12] * 3
+    hourly["wind_speed_10m"] = [10] * 3
+    hourly["wind_direction_10m"] = [30] * 3
+    return {"latitude": float(request.url.params["latitude"]), "longitude": float(request.url.params["longitude"]),
+            "hourly_units": {"wind_speed_1000hPa": "kn"}, "hourly": hourly}
+
+
 def sample_field_grid(request):
     """Open-Meteo's multi-location shape: a list, one dict per point, with
     `current` wind and a day of hourly boundary-layer heights. Wind speed
@@ -469,6 +496,9 @@ class FakeUpstream:
             self.om_calls.append(request)
             if self.om_fail:
                 return httpx.Response(503, text="down")
+            if "hPa" in request.url.params.get("hourly", ""):
+                self.aloft_calls = getattr(self, "aloft_calls", 0) + 1
+                return httpx.Response(200, json=sample_aloft(request))
             if "," in request.url.params.get("latitude", ""):
                 return httpx.Response(200, json=sample_field_grid(request))
             return httpx.Response(200, json=sample_forecast(trough=self.om_trough))

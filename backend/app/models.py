@@ -289,6 +289,51 @@ class FieldGridResponse(BaseModel):
     cachedAt: datetime
 
 
+# ---- Aloft: the vertical column at a point ---------------------------------
+
+class AloftLevel(BaseModel):
+    """One model pressure level, in the units the app draws: feet MSL from
+    the geopotential height, knots, degrees, whole percent."""
+    hPa: int
+    ft: int
+    tempC: float
+    dewC: Optional[float] = None
+    dirDeg: Optional[float] = None
+    spdKt: Optional[float] = None
+    cloudPct: Optional[int] = None
+
+
+class AloftCloud(BaseModel):
+    """A run of consecutive levels at or above half cover. `icing` when any
+    level in the run sits between 0 and -20 C, where supercooled water lives."""
+    baseFt: int
+    topFt: int
+    coverPct: int
+    icing: bool = False
+
+
+class AloftSurface(BaseModel):
+    tempC: Optional[float] = None
+    dewC: Optional[float] = None
+    dirDeg: Optional[float] = None
+    spdKt: Optional[float] = None
+
+
+class AloftHour(BaseModel):
+    t: datetime
+    levels: List[AloftLevel] = Field(default_factory=list)
+    clouds: List[AloftCloud] = Field(default_factory=list)
+    surface: Optional[AloftSurface] = None
+    freezingFt: Optional[int] = None
+    blAglFt: Optional[int] = None
+
+
+class AloftResponse(BaseModel):
+    hours: List[AloftHour] = Field(default_factory=list)
+    source: str = "open-meteo"
+    cachedAt: datetime
+
+
 class TafPeriod(BaseModel):
     """One TAF forecast period, decoded by AWC. `change` is None for the base
     period, else FM | BECMG | TEMPO | PROB30 | PROB40."""

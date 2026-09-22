@@ -69,7 +69,11 @@ STATIONS_TTL = 10 * 60.0  # radar station layer: METARs are hourly, specials asi
 LIGHTNING_TTL = 60.0      # map slice of GLM flashes; the feed itself is polled per minute
 GLM_LOOKBACK = timedelta(seconds=flashes_mod.WINDOW_S + 60)
 GLM_CONCURRENCY = 4       # parallel file downloads per poll
-BULK_TTL = 5 * 60.0       # AWC's whole-world METAR cache: one 250 KB pull serves everyone
+BULK_TTL = 12 * 60.0      # AWC's whole-world METAR cache: one 250 KB pull serves everyone.
+                          # Longer than the scheduler's 10 min cycle, which is what
+                          # refreshes it; the TTL is only the net under a missed cycle.
+SLICE_TTL = 2 * 60.0      # a box of stations cut from the bulk table (cheap)
+GRID_TTL = 5 * 60.0       # a contour grid built from it (seconds of CPU)
 FIELD_TTL = 10 * 60.0     # radar wind/BL grid: model updates hourly; one call per region cell
 FRAMES_TTL = 2 * 60.0     # RainViewer adds a frame every 10 min; 2 min keeps the newest near-live
 STATION_INFO_TTL = 24 * 3600.0  # AWC station directory: names change about never
@@ -176,6 +180,9 @@ class PressureService:
         self._bulk_history: List[tuple] = self._load_history()
         # {station: [call dicts]} — Barry's own trend calls, scored later.
         self._track_log: Dict[str, List[dict]] = persist.load("track_log") or {}
+        self._track_dirty = False
+        # When the bulk table last came back from AWC; the health check reads it.
+        self.bulk_ok_at: Optional[datetime] = None
         # Stations watched before the last restart, so the scheduler's first
         # cycle warms them instead of waiting for each phone to ask again.
         self.registry.restore(persist.load("registry") or [])
@@ -446,17 +453,22 @@ class PressureService:
 
     # ---- station wind layer --------------------------------------------------
 
-    async def metar_bulk(self) -> Optional[List[StationObs]]:
+    async def metar_bulk(self, *, force: bool = False) -> Optional[List[StationObs]]:
         """Every station's latest METAR, from AWC's cache file, held for
-        BULK_TTL. None when the pull fails (callers fall back to bbox)."""
+        BULK_TTL. None when the pull fails (callers fall back to bbox).
+        The scheduler passes force=True on every cycle so it, not the
+        request path, is what refreshes the table; anyone asking during
+        that pull joins it."""
         async def _pull():
             table = await awc.fetch_metar_cache(self._client)
             if not table:
                 raise LookupError("empty METAR cache file")
             self._record_snapshot(table, _now())
+            self.bulk_ok_at = _now()
             return table
         try:
-            return await self.cache.fetch("metar_bulk", _pull, ttl=BULK_TTL, negative_ttl=DEGRADED_TTL)
+            return await self.cache.fetch("metar_bulk", _pull, ttl=BULK_TTL,
+                                          negative_ttl=DEGRADED_TTL, bypass_read=force)
         except CachedFailure:
             return None
         except Exception as exc:
@@ -478,6 +490,16 @@ class PressureService:
         cutoff = now - timedelta(hours=HISTORY_KEEP_H)
         self._bulk_history = [h for h in self._bulk_history if h[0] >= cutoff]
         persist.save("bulk_history", self._bulk_history)
+
+    async def flush_track_log(self) -> None:
+        """Prune the verdict log and write it if anything changed. The
+        scheduler calls this once a cycle and the app once at shutdown."""
+        if track.prune_all(self._track_log, _now()):
+            self._track_dirty = True
+        if not self._track_dirty:
+            return
+        self._track_dirty = False
+        await asyncio.to_thread(persist.save, "track_log", self._track_log)
 
     @staticmethod
     def _load_history() -> List[tuple]:
@@ -600,7 +622,7 @@ class PressureService:
             stations = [s.model_copy(update={"name": info.get(s.id, {}).get("name")})
                         if s.name is None else s for s in stations]
         resp = StationsResponse(stations=stations, cachedAt=_now())
-        await self.cache.set(cache_key, resp, ttl=BULK_TTL)
+        await self.cache.set(cache_key, resp, ttl=SLICE_TTL)
         return resp
 
     async def _station_obs_bbox(self, lat: float, lon: float) -> StationsResponse:
@@ -743,28 +765,7 @@ class PressureService:
                                          pressureGrid=pgrid, tendencyGrid=tgrid,
                                          tendencyExtrema=textrema,
                                          stations=len(table), cachedAt=_now())
-        return await self.cache.fetch(cache_key, _build, ttl=BULK_TTL)
-
-        async def _build() -> PressureFieldResponse:
-            try:
-                table = await self.metar_bulk() or []
-                now = _now()
-                tend_pts = self._tendency_points(now) if self.history_span_h(now) >= 3.5 else None
-                isobars, isallobars, pgrid, tgrid, textrema = await asyncio.to_thread(
-                    pressure_field.build, table, q_lat, q_lon, q_lat_span, q_lon_span,
-                    tend_pts=tend_pts)
-                resp = PressureFieldResponse(isobars=isobars, isallobars=isallobars,
-                                             pressureGrid=pgrid, tendencyGrid=tgrid,
-                                             tendencyExtrema=textrema,
-                                             stations=len(table), cachedAt=_now())
-                await self.cache.set(cache_key, resp, ttl=BULK_TTL)
-                return resp
-            finally:
-                inflight.pop(cache_key, None)
-
-        task = asyncio.create_task(_build())
-        inflight[cache_key] = task
-        return await task
+        return await self.cache.fetch(cache_key, _build, ttl=GRID_TTL)
 
     # ---- Radar model field (wind + boundary layer) ------------------------
 
@@ -963,16 +964,18 @@ class PressureService:
             observed=pressure.source,
             forecast=forecast.source if forecast else None,
         )
-        # Log this call and score the old ones (C5/D6). Enrichment.
+        # Log this call and score the old ones (C5/D6). Enrichment. Only a
+        # real station reading is a call worth scoring; the model fallback
+        # is not. The file is written by the scheduler once a cycle, not here.
         track_out: Optional[TrackRecordOut] = None
         try:
-            if reading_out is not None:
+            if reading_out is not None and pressure.source == "aviationweather.gov":
                 key = pressure.station
                 log_ = track.record(self._track_log.get(key, []), _now(),
                                     reading_out.trend, reading_out.confidence)
                 log_ = track.score(log_, pressure.series, _now())
                 self._track_log[key] = log_
-                persist.save("track_log", self._track_log)
+                self._track_dirty = True
                 track_out = track.summary(log_)
         except Exception:
             track_out = None

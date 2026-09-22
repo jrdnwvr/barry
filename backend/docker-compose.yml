@@ -18,6 +18,8 @@ services:
     container_name: barry-backend
     restart: unless-stopped
     mem_limit: 768m
+    labels:
+      - "autoheal=true"       # restarted by the autoheal service when unhealthy
     logging:
       driver: json-file
       options:
@@ -41,6 +43,23 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  autoheal:
+    # Compose restarts a container that exits, not one whose health check
+    # fails. This one watches for "unhealthy" on labelled containers and
+    # restarts them. It needs the Docker socket, which is root on the host,
+    # so the image is pinned, has no network, and does nothing else.
+    image: willfarrell/autoheal:1.2.0
+    container_name: barry-autoheal
+    restart: always
+    mem_limit: 64m
+    network_mode: none
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=30
+      - AUTOHEAL_START_PERIOD=60
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
 
   cloudflared:
     image: cloudflare/cloudflared:2026.6.1   # pinned; bump on purpose

@@ -16,7 +16,7 @@ from typing import List, Optional
 
 from . import persist
 from .models import PressureResponse
-from .service import PRESSURE_TTL, PressureService, _now, _tendency_out
+from .service import BULK_TTL, PRESSURE_TTL, PressureService, _now, _tendency_out
 from .sources import aviationweather as awc
 
 log = logging.getLogger("barry.scheduler")
@@ -40,16 +40,57 @@ class Scheduler:
         self.cycles = 0
         self.last_request_count = 0
         self.glm_cycles = 0
+        self.glm_enabled = os.environ.get("BARRY_GLM", "1") != "0"
+        # For the health check: when each loop last finished an attempt,
+        # whatever the outcome. A loop that stops finishing is stuck.
+        self.started_at: Optional[datetime] = None
+        self.last_cycle_at: Optional[datetime] = None
+        self.last_glm_at: Optional[datetime] = None
+
+    STALL_CYCLES = 3        # missed cycles before the refresh loop counts as stuck
+    GLM_STALL_S = 600.0     # ten minutes without a poll finishing, or without data
+
+    def problems(self, now: datetime) -> tuple[List[str], List[str]]:
+        """Two lists for /healthz. The first is about the process: a loop
+        that exited or stopped finishing. Restarting fixes that. The second
+        is about the data: an upstream that has not answered for a while.
+        Restarting does nothing for that, so it is reported, not acted on."""
+        if self.started_at is None:
+            return ["scheduler not started"], []
+        dead: List[str] = []
+        stale: List[str] = []
+
+        def age(t: Optional[datetime]) -> float:
+            return (now - (t or self.started_at)).total_seconds()
+
+        if self._task is None or self._task.done():
+            dead.append("refresh loop exited")
+        elif age(self.last_cycle_at) > self.STALL_CYCLES * self._interval:
+            dead.append("refresh loop stalled")
+        if self.glm_enabled:
+            if self._glm_task is None or self._glm_task.done():
+                dead.append("lightning loop exited")
+            elif age(self.last_glm_at) > self.GLM_STALL_S:
+                dead.append("lightning loop stalled")
+            if age(self._service.flashes.last_fetch) > self.GLM_STALL_S:
+                stale.append("lightning feed stale")
+        if age(self._service.bulk_ok_at) > 2 * self._interval + 60.0:
+            stale.append("bulk metar table missing")
+        return dead, stale
 
     async def refresh_once(self) -> int:
         """Refresh all active stations in batched calls. Returns #upstream calls."""
         # Warm the whole-world METAR table and the station directory so no
         # request waits on AWC for either.
         try:
-            await self._service.metar_bulk()
+            await self._service.metar_bulk(force=True)
             await self._service.station_info()
         except Exception as exc:
             log.warning("scheduler: bulk metar warm failed: %s", exc)
+        try:
+            await self._service.flush_track_log()
+        except Exception as exc:
+            log.warning("scheduler: track log write failed: %s", exc)
 
         active = await self._service.registry.active()
         persist.save("registry", active)
@@ -96,9 +137,10 @@ class Scheduler:
                     source="aviationweather.gov",
                     cachedAt=_now(),
                 )
-                await self._service.cache.set(
-                    f"pressure:{sid}:24", resp, ttl=PRESSURE_TTL
-                )
+                # The key get_pressure reads. It carried the hours suffix
+                # until A1 dropped hours from the key, and for a while the
+                # warm landed beside the key the phones read.
+                await self._service.cache.set(f"pressure:{sid}", resp, ttl=PRESSURE_TTL)
 
         self.cycles += 1
         self.last_request_count = request_count
@@ -117,6 +159,7 @@ class Scheduler:
                 await self.refresh_once()
             except Exception:  # never let the loop die
                 log.exception("scheduler: unexpected error in cycle")
+            self.last_cycle_at = _now()
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=self._interval)
             except asyncio.TimeoutError:
@@ -133,17 +176,19 @@ class Scheduler:
                 self.glm_cycles += 1
             except Exception:
                 log.exception("scheduler: glm poll error")
+            self.last_glm_at = _now()
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=self.GLM_INTERVAL)
             except asyncio.TimeoutError:
                 pass
 
     def start(self) -> None:
+        self.started_at = _now()
         if self._task is None:
             self._stop.clear()
             self._task = asyncio.create_task(self._run())
             log.info("scheduler: started, interval=%.0fs", self._interval)
-        if self._glm_task is None and os.environ.get("BARRY_GLM", "1") != "0":
+        if self._glm_task is None and self.glm_enabled:
             self._glm_task = asyncio.create_task(self._run_glm())
             log.info("scheduler: glm poll started, interval=%.0fs", self.GLM_INTERVAL)
 

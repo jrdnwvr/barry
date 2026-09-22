@@ -345,6 +345,9 @@ class FakeUpstream:
         self.awc_calls = []
         self.om_calls = []
         self.awc_fail = False
+        # GLM keys are minted from this clock; a test that freezes it (and
+        # app.service._now) gets the same listing on every poll.
+        self.clock = lambda: datetime.now(timezone.utc)
         # Drop the next METAR call at the socket, the way AWC drops an idle
         # keep-alive connection; the call after that works.
         self.awc_drop_once = False
@@ -375,7 +378,7 @@ class FakeUpstream:
             # NOAA's public GOES buckets: a listing per hour, then the files.
             if getattr(self, "s3_fail", False):
                 return httpx.Response(503, text="down")
-            now = datetime.now(timezone.utc)
+            now = self.clock()
             sat = "G18" if "goes18" in url else "G19"
             if "list-type=2" in url:
                 self.s3_lists = getattr(self, "s3_lists", 0) + 1

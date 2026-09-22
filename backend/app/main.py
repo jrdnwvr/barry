@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
@@ -47,6 +48,10 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await scheduler.stop()
+        try:
+            await service.flush_track_log()
+        except Exception:
+            log.exception("track log write at shutdown failed")
         await client.aclose()
 
 
@@ -118,16 +123,36 @@ async def support_page():
 
 
 @app.get("/healthz")
-async def healthz():
-    sched: Scheduler = app.state.scheduler
-    return {
-        "status": "ok",
+async def healthz(strict: bool = Query(False)):
+    """Liveness for the container, readiness for an outside monitor.
+
+    503 with status "unhealthy" when a scheduler loop has exited or stopped
+    finishing: that is the process, and a restart fixes it. Status
+    "degraded" when an upstream has been silent too long (bulk METAR table
+    for two cycles, lightning for ten minutes): the process is fine and a
+    restart would only throw away the caches that are carrying users through
+    the outage, so that is 200 unless ?strict=1 asks for it as a failure.
+    The compose health check reads the plain form; an uptime check should
+    read the strict one."""
+    sched: Optional[Scheduler] = getattr(app.state, "scheduler", None)
+    service: Optional[PressureService] = getattr(app.state, "service", None)
+    if sched is None or service is None:
+        return JSONResponse({"status": "unhealthy", "problems": ["not started"]}, status_code=503)
+    now = datetime.now(timezone.utc)
+    dead, stale = sched.problems(now)
+    status = "unhealthy" if dead else ("degraded" if stale else "ok")
+    body = {
+        "status": status,
+        "problems": dead + stale,
         "scheduler_cycles": sched.cycles,
         "glm_cycles": sched.glm_cycles,
-        "glm_flashes": len(get_service().flashes),
-        "glm_last_fetch": get_service().flashes.last_fetch,
+        "glm_flashes": len(service.flashes),
+        "glm_last_fetch": service.flashes.last_fetch.isoformat() if service.flashes.last_fetch else None,
+        "bulk_ok_at": service.bulk_ok_at.isoformat() if service.bulk_ok_at else None,
         "last_request_count": sched.last_request_count,
     }
+    failing = bool(dead) or (strict and bool(stale))
+    return JSONResponse(body, status_code=503 if failing else 200)
 
 
 @app.get("/pressure/{station}")
@@ -205,8 +230,8 @@ async def get_metars(
 async def radar_pressure(
     lat: float = Query(..., ge=-90, le=90),
     lon: float = Query(..., ge=-180, le=180),
-    latSpan: float = Query(..., gt=0),
-    lonSpan: float = Query(..., gt=0),
+    latSpan: float = Query(..., gt=0, le=180),   # le: inf is not a span
+    lonSpan: float = Query(..., gt=0, le=360),
 ):
     """Isobars (every 4 hPa) and isallobars (±1/2/3 hPa per 3 h) for a map
     region, contoured from Barry's own station table. No upstream call."""
@@ -242,8 +267,8 @@ async def radar_frames():
 async def radar_field(
     lat: float = Query(..., ge=-90, le=90),
     lon: float = Query(..., ge=-180, le=180),
-    latSpan: float = Query(..., gt=0),
-    lonSpan: float = Query(..., gt=0),
+    latSpan: float = Query(..., gt=0, le=180),   # le: inf is not a span
+    lonSpan: float = Query(..., gt=0, le=360),
 ):
     """Model wind + boundary-layer top on the radar's sample grid for a map
     region. One upstream call per region cell per ten minutes, shared by

@@ -62,6 +62,8 @@ async def test_combined_logs_and_persists(client, tmp_path, monkeypatch):
     combined = await service.get_combined("KLUK")
     assert combined.trackRecord is None                 # first call ever
     assert len(service._track_log["KLUK"]) == 1
+    assert not (tmp_path / "track_log.json.gz").exists()   # nothing written per request
+    await service.flush_track_log()                          # the scheduler's once-a-cycle write
     assert (tmp_path / "track_log.json.gz").exists()
     again = PressureService(client)                     # restart
     assert len(again._track_log["KLUK"]) == 1

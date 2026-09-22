@@ -142,7 +142,7 @@ async def test_scheduler_batches_active_stations(service, upstream):
     }
     # and the cache is now warm for each
     for sid in ["KLUK", "KCVG", "KILN"]:
-        cached = await service.cache.get(f"pressure:{sid}:24")
+        cached = await service.cache.get(f"pressure:{sid}")
         assert cached is not None and cached.station == sid
 
 

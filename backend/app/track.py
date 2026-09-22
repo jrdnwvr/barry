@@ -81,6 +81,31 @@ def score(log: List[dict], series: Sequence[SeriesPoint], now: datetime) -> List
     return log
 
 
+MAX_STATIONS = 2000         # the registry's cap; nobody scores more fields than that
+
+
+def prune_all(logs: Dict[str, List[dict]], now: datetime) -> bool:
+    """Drop calls older than KEEP_DAYS from every station, stations left
+    with nothing, and beyond MAX_STATIONS the ones least recently called.
+    Returns whether anything changed."""
+    cutoff = now - timedelta(days=KEEP_DAYS)
+    changed = False
+    for sid in list(logs):
+        kept = [r for r in logs[sid] if r["t"] >= cutoff]
+        if len(kept) != len(logs[sid]):
+            changed = True
+            if kept:
+                logs[sid] = kept
+            else:
+                del logs[sid]
+    if len(logs) > MAX_STATIONS:
+        by_last = sorted(logs, key=lambda sid: logs[sid][-1]["t"])
+        for sid in by_last[: len(logs) - MAX_STATIONS]:
+            del logs[sid]
+        changed = True
+    return changed
+
+
 def summary(log: List[dict], days: int = KEEP_DAYS) -> Optional[TrackRecordOut]:
     scored = [r for r in log if r["right"] in (True, False)]
     if len(scored) < MIN_CALLS:

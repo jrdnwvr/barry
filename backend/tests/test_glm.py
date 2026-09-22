@@ -67,7 +67,12 @@ def test_store_bins_prunes_and_finds_the_nearest_with_drift():
 
 
 @pytest.mark.asyncio
-async def test_poll_feeds_the_slice_and_combined(client, upstream):
+async def test_poll_feeds_the_slice_and_combined(client, upstream, monkeypatch):
+    # Frozen clocks on both sides: the fake used to mint keys from the real
+    # clock, so a second boundary between the two polls made "nothing new"
+    # false once in a few hundred runs.
+    monkeypatch.setattr("app.service._now", lambda: NOW)
+    upstream.clock = lambda: NOW
     service = PressureService(client)
     await service.poll_lightning()
     assert upstream.s3_lists >= 2 and upstream.s3_files >= 2        # both satellites

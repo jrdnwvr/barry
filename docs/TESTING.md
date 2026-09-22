@@ -8,7 +8,7 @@ Three columns of meaning: **Automated** is a test in the repo. **Sim** is a
 scripted or eyeballed check in the simulator. **Phone** is something only a
 real device can show. An empty cell means nothing checks it.
 
-## Backend (FastAPI, 214 tests, all through a mock transport unless noted)
+## Backend (FastAPI, 248 tests, all through a mock transport unless noted)
 
 | Behaviour | Automated | Notes |
 |---|---|---|
@@ -16,14 +16,15 @@ real device can show. An empty cell means nothing checks it.
 | Tendency classification matches the table in CLAUDE.md | yes, Python side | no parity test with Swift yet |
 | Degraded answer when AWC is down, short TTL, replaced when back | yes | |
 | Station registry: only answering stations, capped, persisted, restored | yes | |
-| Scheduler batches watched stations, survives a bad batch | partly | a malformed record still drops its batch (B1) |
+| Scheduler batches watched stations, survives a bad batch or record | yes | a bad record drops one station |
 | Bulk METAR table sliced by box, thinned to a ceiling | yes | |
 | Pressure and change fields: contours, grids, extrema, feathering is client side | yes | |
 | Fronts: WPC bulletin parse, analysis frame only | yes | |
-| GLM lightning: poll, slice, clusters, nearest with motion | yes, one intermittent | fixed-date files vs real clock (B1) |
+| GLM lightning: poll, slice, clusters, nearest with motion | yes | clocks frozen on both sides |
 | TAF parse and timeline | yes | |
 | Runways from OurAirports, true headings | yes | |
 | Station validation at every route, 422 on junk | yes, through the app | |
+| Every numeric parameter bounded; inf, nan, denormals; error body shapes | yes, through the app | |
 | One cached day per station regardless of hours | yes, counts upstream calls | |
 | Forecast keyed and fetched per tenth-degree cell | yes, checks the URL | |
 | Per-upstream budgets fail fast without calling | yes | |
@@ -31,8 +32,8 @@ real device can show. An empty cell means nothing checks it.
 | Docs and schema not served | yes | |
 | Error bodies carry no upstream detail | yes | |
 | Persistence round-trips datetimes, migrates pickle once | yes | |
-| Pressure grid off the event loop, one build per key | smoke only | timed against production; no unit test |
-| Health check reflects upstream state | no | always ok today (B1) |
+| Pressure grid off the event loop, one build per key | yes | single-flight and negative caching tested on the cache |
+| Health check: 503 when a loop dies or stalls, degraded when upstream is silent | yes, through the app | strict form for an outside monitor |
 | Container runs as nobody, hashed install, pinned tunnel | deploy smoke | `docker exec id`, `docker inspect` |
 
 ## iOS app (three unit tests, all barometer calibration)
@@ -104,7 +105,7 @@ Widgets and watch.
    a continent, and comes back. It does not need to assert pixels; it needs
    to not crash and to leave the wind layer running.
 4. A clock-driven test for widget staleness.
-5. A health check that can fail, so the deploy smoke can assert on it.
+5. Done: the health check can fail, and the deploy smoke asserts on it.
 
 Everything marked eyeball above was looked at in the simulator this week.
 Everything marked phone has not been seen on a device since build 86.

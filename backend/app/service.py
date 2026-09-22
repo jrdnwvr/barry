@@ -188,6 +188,10 @@ class PressureService:
         self.registry.restore(persist.load("registry") or [])
         # GLM flashes (sources/glm.py), fed by the scheduler's minute poll.
         self.flashes = flashes_mod.FlashStore()
+        # Contour builds are seconds of numpy each. Two at a time keeps a
+        # sweep of distinct map centres from taking every core and, through
+        # the GIL, the event loop with it; the rest wait their turn.
+        self._grid_sem = asyncio.Semaphore(2)
 
     # ---- pressure (observed) -------------------------------------------------
 
@@ -758,9 +762,10 @@ class PressureService:
             table = await self.metar_bulk() or []
             now = _now()
             tend_pts = self._tendency_points(now) if self.history_span_h(now) >= 3.5 else None
-            isobars, isallobars, pgrid, tgrid, textrema = await asyncio.to_thread(
-                pressure_field.build, table, q_lat, q_lon, q_lat_span, q_lon_span,
-                tend_pts=tend_pts)
+            async with self._grid_sem:
+                isobars, isallobars, pgrid, tgrid, textrema = await asyncio.to_thread(
+                    pressure_field.build, table, q_lat, q_lon, q_lat_span, q_lon_span,
+                    tend_pts=tend_pts)
             return PressureFieldResponse(isobars=isobars, isallobars=isallobars,
                                          pressureGrid=pgrid, tendencyGrid=tgrid,
                                          tendencyExtrema=textrema,

@@ -22,8 +22,9 @@ class _Entry(Generic[T]):
     expires_at: float
 
 
-class CachedFailure(Exception):
-    """An upstream failed recently and the failure is still being remembered.
+class CachedFailure(LookupError):
+    """A LookupError, so every route that already turns "could not get it"
+    into a 503 handles the remembered failure the same way as the first. An upstream failed recently and the failure is still being remembered.
     Raised by `fetch` without calling the fetcher again."""
 
 
@@ -106,6 +107,9 @@ class TTLCache:
                 await self.set(key, _Failure(type(exc).__name__), ttl=negative_ttl)
             if not fut.done():
                 fut.set_exception(exc)
+                # Nobody may be waiting on the future; reading the exception
+                # here keeps asyncio from logging it as never retrieved.
+                fut.exception()
             raise
         else:
             await self.set(key, value, ttl=ttl(value) if callable(ttl) else ttl)

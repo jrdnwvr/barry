@@ -25,6 +25,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from . import stations
 from .scheduler import Scheduler
+from .cache import CachedFailure
 from .guards import InvalidStation, IPLimiter, RateLimited, client_key
 from .service import PressureService
 
@@ -88,6 +89,15 @@ async def _per_ip_budget(request: Request, call_next):
 @app.exception_handler(InvalidStation)
 async def _invalid_station(_request, _exc):
     return JSONResponse(status_code=422, content={"detail": "station must be 3 or 4 letters or digits"})
+
+
+@app.exception_handler(CachedFailure)
+async def _cached_failure(request: Request, exc: CachedFailure):
+    # A route that caught nothing met an upstream failure remembered from
+    # a minute ago. Same answer as the first failure got, no detail.
+    log.warning("%s: upstream failure still cached (%s)", request.url.path, exc)
+    return JSONResponse({"detail": "upstream unavailable"}, status_code=503,
+                        headers={"Retry-After": "60"})
 
 
 @app.exception_handler(RateLimited)

@@ -31,6 +31,12 @@ final class PressureStore: ObservableObject {
     /// observed/forecast split agree.
     @Published private(set) var now: Date = Date()
 
+    /// True while the reading on screen is the one saved at the last run
+    /// and no fetch has replaced it yet. The hero says so.
+    @Published private(set) var isStale = false
+    /// Why the last refresh behind a stale reading failed, for the hero.
+    @Published private(set) var refreshError: String?
+
     private let api: BarryAPI
     private let location: LocationManager
     /// The device's last known position (nil before the first fix).
@@ -99,6 +105,17 @@ final class PressureStore: ObservableObject {
         // a @MainActor initializer.
         self.location = location ?? LocationManager()
         self.station = station
+        #if os(iOS)
+        // Cold start: the payload saved at the last run goes on screen at
+        // once, marked stale, and the first fetch replaces it. Without a
+        // network the app opens on yesterday's reading and says so instead
+        // of on an error.
+        if let stored = CombinedStore.load(), stored.station == station {
+            state = .loaded(stored.combined)
+            atAirport = airportSelected
+            isStale = true
+        }
+        #endif
     }
 
     var combined: CombinedResponse? {
@@ -125,12 +142,20 @@ final class PressureStore: ObservableObject {
     /// flashing the full-screen spinner, and leaves the last good data in place if a
     /// transient refresh fails — so glancing at an open app never blanks out.
     func load(lat: Double? = nil, lon: Double? = nil, silent: Bool = false) async {
+        // A saved reading for another station is not worth keeping on screen.
+        if isStale, let c = combined, c.pressure.station != station {
+            state = .loading
+            isStale = false
+        }
         let hadData = combined != nil
         if !(silent && hadData) { state = .loading }
         now = Date()
         do {
-            let combined = try await api.combined(station: station, lat: lat, lon: lon)
+            let client = silent ? api.patient : api
+            let combined = try await client.combined(station: station, lat: lat, lon: lon)
             state = .loaded(combined)
+            isStale = false
+            refreshError = nil
             atAirport = isAtAirport(combined)
             #if os(iOS)
             // The home screen widgets draw from this same payload.
@@ -165,8 +190,13 @@ final class PressureStore: ObservableObject {
             }
             #endif
         } catch {
-            if silent && hadData { return }  // keep showing the last good reading
             let message = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            if silent && hadData {
+                // Keep showing the last good reading; a stale one says why
+                // it is still stale.
+                if isStale { refreshError = message }
+                return
+            }
             state = .failed(message)
         }
     }

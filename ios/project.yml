@@ -47,6 +47,7 @@ targets:
     scheme:
       testTargets:
         - BarryTests
+        - BarryUITests
 
   # ---- iPhone widget (lock screen + home screen, WidgetKit extension) -------
   BarryPhoneWidget:
@@ -69,10 +70,30 @@ targets:
     platform: iOS
     sources:
       - Barry/iOSAppTests
+      # Fixtures shared with the backend's tests, so the two sides are
+      # checked against the same numbers.
+      - path: ../backend/tests/fixtures/tendency_cases.json
+        buildPhase: resources
+      - path: ../backend/tests/fixtures/combined_kluk.json
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: me.wvr.barry.tests
         GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: Barry
+
+  # ---- iOS UI tests --------------------------------------------------------
+  BarryUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - Barry/iOSAppUITests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: me.wvr.barry.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Barry
     dependencies:
       - target: Barry
 

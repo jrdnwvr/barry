@@ -20,6 +20,12 @@ struct BarryApp: App {
     private var hasOnboarded: Bool = false
 
     init() {
+        // A UI test run starts from a known state: onboarded, KLUK selected,
+        // the radar's default layers. Nothing else reads this flag.
+        if UITestSupport.active { UITestSupport.prepare() }
+        // MetricKit's daily launch, hang, crash and battery reports go to
+        // Barry's own server. See Diagnostics.swift and the privacy page.
+        DiagnosticsReporter.shared.start()
         // Let storm alerts surface as banners even while the app is open.
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
         // RainViewer serves every radar tile with a two day max-age and an

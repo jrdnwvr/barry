@@ -56,8 +56,8 @@ final class SavedLocationsStore: ObservableObject {
         didSet { save() }
     }
 
-    private static let listKey = "savedLocations.v1"
-    private static let selectedKey = "savedLocations.selected.v1"
+    static let listKey = "savedLocations.v1"
+    static let selectedKey = "savedLocations.selected.v1"
 
     var selected: SavedLocation {
         locations.first { $0.id == selectedID } ?? locations[0]

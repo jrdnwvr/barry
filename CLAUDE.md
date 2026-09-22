@@ -217,7 +217,10 @@ real strike positions (GOES GLM would be the source), APNs push.
   Simulator,name=iPhone 17 Pro' CODE_SIGNING_ALLOWED=NO` runs BarryTests
   (unit; fixtures come from `backend/tests/fixtures/`, wired in
   project.yml) and BarryUITests (the radar walk; launches with `-uitest`,
-  which `UITestSupport.prepare()` turns into a known state). The tendency
+  which `UITestSupport.prepare()` turns into a known state). Give the UI
+  test a specific simulator: `-destination 'platform=iOS Simulator,id=<udid>'`.
+  The name "iPhone 17 Pro" matches one device per installed runtime, and the
+  iOS 27 beta one hung the run for twenty minutes without a line of output. The tendency
   table is checked on both sides against `tendency_cases.json`;
   regenerate it with `backend/tools/gen_tendency_fixture.py` after
   changing `tendency.py`, then mirror the change in `Tendency.swift`.

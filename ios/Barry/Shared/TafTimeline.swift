@@ -45,7 +45,11 @@ struct TafTimeline {
         guard let taf = combined.taf, !taf.periods.isEmpty else { return nil }
         self.now = now
         let cal = Calendar.current
-        let start = cal.date(bySetting: .minute, value: 0, of: now).map { cal.date(bySetting: .second, value: 0, of: $0) ?? $0 } ?? now
+        // The hour now is in, from its top. Setting the minute to zero
+        // through the calendar moved forward to the next hour, so at ten
+        // past the timeline began an hour ahead and the current hour was
+        // missing; the fixture test caught it.
+        let start = cal.dateInterval(of: .hour, for: now)?.start ?? now
         let end = start.addingTimeInterval(24 * 3600)
         self.start = start
         self.end = end

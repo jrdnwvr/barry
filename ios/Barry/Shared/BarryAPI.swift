@@ -26,12 +26,39 @@ struct BarryAPI {
     let baseURL: URL
     let session: URLSession
 
-    init(baseURL: URL = AppConfig.backendBaseURL, session: URLSession = .shared) {
+    /// The session behind a spinner: twelve seconds and then an answer,
+    /// not the system's sixty. No waiting for connectivity: offline is an
+    /// answer too, and the cold-start cache is what the screen shows then.
+    static let interactiveSession: URLSession = {
+        let cfg = URLSessionConfiguration.default
+        cfg.timeoutIntervalForRequest = 12
+        cfg.timeoutIntervalForResource = 20
+        cfg.waitsForConnectivity = false
+        return URLSession(configuration: cfg)
+    }()
+
+    /// The session for refreshes nobody is watching: it may wait for the
+    /// radio to come back rather than fail at once.
+    static let patientSession: URLSession = {
+        let cfg = URLSessionConfiguration.default
+        cfg.timeoutIntervalForRequest = 15
+        cfg.timeoutIntervalForResource = 45
+        cfg.waitsForConnectivity = true
+        return URLSession(configuration: cfg)
+    }()
+
+    init(baseURL: URL = AppConfig.backendBaseURL, session: URLSession = BarryAPI.interactiveSession) {
         self.baseURL = baseURL
         self.session = session
     }
 
-    private static let decoder: JSONDecoder = {
+    /// The same client on the patient session. A client built on its own
+    /// session (the widgets, tests) keeps it.
+    var patient: BarryAPI {
+        session === Self.interactiveSession ? BarryAPI(baseURL: baseURL, session: Self.patientSession) : self
+    }
+
+    static let decoder: JSONDecoder = {
         let d = JSONDecoder()
         d.dateDecodingStrategy = .iso8601
         return d
@@ -154,6 +181,21 @@ struct BarryAPI {
             URLQueryItem(name: "lon", value: String(lon)),
         ]
         return try await get(comps?.url)
+    }
+
+    /// One MetricKit payload to the server's drop box. Fire and forget:
+    /// the caller never waits on it and a failure is not retried; MetricKit
+    /// hands the same report over again next time if it was not consumed.
+    func postDiagnostics(_ body: Data, kind: String) async throws {
+        var req = URLRequest(url: baseURL.appendingPathComponent("diagnostics"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(kind, forHTTPHeaderField: "X-Barry-Kind")
+        req.httpBody = body
+        let (_, response) = try await Self.patientSession.data(for: req)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError.http((response as? HTTPURLResponse)?.statusCode ?? -1)
+        }
     }
 
     private func get<T: Decodable>(_ url: URL?) async throws -> T {

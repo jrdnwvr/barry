@@ -706,6 +706,7 @@ struct RadarMapView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> MKMapView {
         let map = MKMapView()
+        map.accessibilityIdentifier = "radar.map"
         map.delegate = context.coordinator
         // Dark Sky rule: mute everything that isn't rain.
         let cfg = MKStandardMapConfiguration(emphasisStyle: .muted)

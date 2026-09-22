@@ -29,6 +29,10 @@ struct HeroView: View {
     /// Lock-screen follow (Live Activity) for the next hours.
     var isFollowing: Bool = false
     var onFollow: (() -> Void)? = nil
+    /// The reading came from disk at launch and has not been refreshed.
+    var stale: Bool = false
+    /// What the refresh behind a stale reading said, if it failed.
+    var staleReason: String? = nil
 
     @State private var showComparison = false
     @State private var showGuide = false
@@ -107,7 +111,8 @@ struct HeroView: View {
 
     private var statusRow: some View {
         StatusRow(combined: combined, barometer: barometer, now: now,
-                  barometerEnabled: barometerEnabled, localAt: localReading?.at,
+                  barometerEnabled: barometerEnabled, stale: stale, staleReason: staleReason,
+                  localAt: localReading?.at,
                   locations: locations, selectedLocationID: selectedLocationID,
                   onSelectLocation: onSelectLocation,
                   isFollowing: isFollowing, onFollow: onFollow)
@@ -327,6 +332,8 @@ private struct StatusRow: View {
     @ObservedObject var barometer: BarometerManager
     let now: Date
     var barometerEnabled: Bool
+    var stale: Bool = false
+    var staleReason: String? = nil
     /// When a recent local reading is being shown, its timestamp — surfaced as an age
     /// so the header reflects "we're showing local" rather than the raw motion state.
     var localAt: Date?
@@ -413,9 +420,17 @@ private struct StatusRow: View {
                 Text(metarAge)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("refreshed \(combined.pressure.cachedAt.formatted(date: .omitted, time: .shortened))")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                if stale {
+                    Text(staleReason == nil
+                         ? "saved \(combined.pressure.cachedAt.formatted(date: .omitted, time: .shortened)), refreshing"
+                         : "saved \(combined.pressure.cachedAt.formatted(date: .omitted, time: .shortened)), can't refresh")
+                        .font(.caption2)
+                        .foregroundStyle(staleReason == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.orange))
+                } else {
+                    Text("refreshed \(combined.pressure.cachedAt.formatted(date: .omitted, time: .shortened))")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
             }
             .lineLimit(1)
         }

@@ -420,6 +420,7 @@ struct RadarPanel: View {
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("Expand radar")
+                        .accessibilityIdentifier("radar.expand")
                         }
                     }
                     .padding(10)
@@ -494,6 +495,7 @@ struct RadarPanel: View {
                 .accessibilityLabel("More options")
             }
         }
+        .accessibilityIdentifier("radar.chips")
     }
 
     /// Pressure and Change share one slot: turning one on turns the other off.
@@ -514,6 +516,7 @@ struct RadarPanel: View {
         }
         .buttonStyle(ChipStyle(on: isOn.wrappedValue))
         .accessibilityAddTraits(isOn.wrappedValue ? .isSelected : [])
+        .accessibilityIdentifier("radar.chip.\(title)")
     }
 
     // MARK: - Timeline (belongs to the base)

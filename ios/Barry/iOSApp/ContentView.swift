@@ -201,7 +201,8 @@ struct ContentView: View {
                  selectedLocationID: savedLocations.selectedID,
                  onSelectLocation: { savedLocations.selectedID = $0 },
                  isFollowing: LiveActivityManager.shared.isFollowing,
-                 onFollow: { Task { await LiveActivityManager.shared.toggleFollow(combined, atAirport: isAtAirport(combined)) } })
+                 onFollow: { Task { await LiveActivityManager.shared.toggleFollow(combined, atAirport: isAtAirport(combined)) } },
+                 stale: store.isStale, staleReason: store.refreshError)
 
         // The cards, in the user's order (Settings > Home screen). Each one
         // still decides whether it has anything to say.
@@ -486,8 +487,11 @@ struct ContentView: View {
     }
 
     private func initialLoad() async {
-        if store.combined != nil { return }
-        await loadForCurrentMode()
+        // Fresh data already on screen: nothing to do. A saved reading
+        // from the last run is on screen at a cold start; refresh behind
+        // it rather than replacing it with a spinner.
+        if store.combined != nil && !store.isStale { return }
+        await loadForCurrentMode(silent: store.combined != nil)
     }
 
     private func reload() async { await loadForCurrentMode(silent: true) }

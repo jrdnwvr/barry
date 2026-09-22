@@ -475,6 +475,17 @@ class FakeUpstream:
         return httpx.Response(404)
 
 
+@pytest.fixture(autouse=True)
+def _no_per_ip_budget():
+    """Every test shares one app object, and with it one per-address
+    budget; the suite as a whole is well over sixty requests a minute.
+    Tests about the budget install their own limiter."""
+    from app.guards import IPLimiter
+    from app.main import app
+    app.state.ip_limiter = IPLimiter(per_minute=0)
+    yield
+
+
 @pytest.fixture
 def upstream():
     return FakeUpstream()

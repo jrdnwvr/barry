@@ -1,0 +1,165 @@
+{
+ "_": "3 h pressure tendency: the class and intensity both apps must agree on for each delta (hPa). Generated from backend/app/tendency.py, the source of truth; read by tests/test_tendency_fixture.py and ios/Barry/iOSAppTests/TendencyParityTests.swift. Regenerate with tools/gen_tendency_fixture.py.",
+ "cases": [
+  {
+   "delta3h": -6.0,
+   "class": "falling_fast",
+   "intensity": 1.0
+  },
+  {
+   "delta3h": -4.5,
+   "class": "falling_fast",
+   "intensity": 1.0
+  },
+  {
+   "delta3h": -4.0,
+   "class": "falling_fast",
+   "intensity": 1.0
+  },
+  {
+   "delta3h": -3.99,
+   "class": "falling_fast",
+   "intensity": 0.996
+  },
+  {
+   "delta3h": -3.5,
+   "class": "falling_fast",
+   "intensity": 0.8
+  },
+  {
+   "delta3h": -3.01,
+   "class": "falling_fast",
+   "intensity": 0.604
+  },
+  {
+   "delta3h": -3.0,
+   "class": "falling_fast",
+   "intensity": 0.6
+  },
+  {
+   "delta3h": -2.99,
+   "class": "falling_mod",
+   "intensity": 0.596
+  },
+  {
+   "delta3h": -2.4,
+   "class": "falling_mod",
+   "intensity": 0.36
+  },
+  {
+   "delta3h": -2.0,
+   "class": "falling_mod",
+   "intensity": 0.2
+  },
+  {
+   "delta3h": -1.51,
+   "class": "falling_mod",
+   "intensity": 0.004
+  },
+  {
+   "delta3h": -1.5,
+   "class": "falling_mod",
+   "intensity": 0.0
+  },
+  {
+   "delta3h": -1.49,
+   "class": "falling",
+   "intensity": 0.0
+  },
+  {
+   "delta3h": -1.0,
+   "class": "falling",
+   "intensity": 0.0
+  },
+  {
+   "delta3h": -0.51,
+   "class": "falling",
+   "intensity": 0.0
+  },
+  {
+   "delta3h": -0.5,
+   "class": "falling",
+   "intensity": 0.0
+  },
+  {
+   "delta3h": -0.49,
+   "class": "steady",
+   "intensity": 0.0
+  },
+  {
+   "delta3h": -0.1,
+   "class": "steady",
+   "intensity": 0.0
+  },
+  {
+   "delta3h": 0.0,
+   "class": "steady",
+   "intensity": 0.0
+  },
+  {
+   "delta3h": 0.1,
+   "class": "steady",
+   "intensity": 0.0
+  },
+  {
+   "delta3h": 0.49,
+   "class": "steady",
+   "intensity": 0.0
+  },
+  {
+   "delta3h": 0.5,
+   "class": "rising",
+   "intensity": 0.0
+  },
+  {
+   "delta3h": 0.51,
+   "class": "rising",
+   "intensity": 0.0
+  },
+  {
+   "delta3h": 1.0,
+   "class": "rising",
+   "intensity": 0.0
+  },
+  {
+   "delta3h": 1.49,
+   "class": "rising",
+   "intensity": 0.0
+  },
+  {
+   "delta3h": 1.5,
+   "class": "rising_fast",
+   "intensity": 0.0
+  },
+  {
+   "delta3h": 1.51,
+   "class": "rising_fast",
+   "intensity": 0.004
+  },
+  {
+   "delta3h": 2.0,
+   "class": "rising_fast",
+   "intensity": 0.2
+  },
+  {
+   "delta3h": 3.0,
+   "class": "rising_fast",
+   "intensity": 0.6
+  },
+  {
+   "delta3h": 4.0,
+   "class": "rising_fast",
+   "intensity": 1.0
+  },
+  {
+   "delta3h": 4.5,
+   "class": "rising_fast",
+   "intensity": 1.0
+  },
+  {
+   "delta3h": 6.0,
+   "class": "rising_fast",
+   "intensity": 1.0
+  }
+ ]
+}

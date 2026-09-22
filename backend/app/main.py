@@ -10,6 +10,8 @@ Routes (brief §5):
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -21,9 +23,10 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi import Path as PathParam   # pathlib.Path is the file one below
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 
-from . import stations
+from . import diagnostics, stations
+from .guards import RateGate
 from .scheduler import Scheduler
 from .cache import CachedFailure
 from .guards import InvalidStation, IPLimiter, RateLimited, client_key
@@ -163,6 +166,31 @@ async def healthz(strict: bool = Query(False)):
     }
     failing = bool(dead) or (strict and bool(stale))
     return JSONResponse(body, status_code=503 if failing else 200)
+
+
+# Whatever the app count, the box writes at most this many diagnostics
+# files a minute; a phone sends one or two a day.
+_diag_gate = RateGate(per_minute=30)
+
+
+@app.post("/diagnostics", status_code=202, include_in_schema=False)
+async def post_diagnostics(request: Request):
+    """MetricKit payloads from the app. See app/diagnostics.py. The body is
+    read in chunks against a hard cap, checked to be JSON, and written as a
+    file; nothing in it is parsed or indexed."""
+    _diag_gate.require()
+    body = bytearray()
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > diagnostics.DIAG_MAX_BYTES:
+            raise HTTPException(status_code=413, detail="too large")
+    try:
+        json.loads(bytes(body))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="not json")
+    kind = request.headers.get("X-Barry-Kind", "metric")
+    await asyncio.to_thread(diagnostics.store, kind, bytes(body))
+    return Response(status_code=202)
 
 
 @app.get("/pressure/{station}")

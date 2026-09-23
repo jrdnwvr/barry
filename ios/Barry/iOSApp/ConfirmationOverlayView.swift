@@ -23,8 +23,6 @@ struct ConfirmationOverlayView: View {
     private var tempUnitRaw: String = TemperatureUnit.celsius.rawValue
     private var tempUnit: TemperatureUnit { TemperatureUnit(rawValue: tempUnitRaw) ?? .celsius }
     /// Which series is on the axis, and which are hidden, across launches.
-    @AppStorage("forecastCard.primary", store: AppConfig.sharedDefaults)
-    private var primaryRaw: String = Series.precip.rawValue
     @AppStorage("forecastCard.hidden", store: AppConfig.sharedDefaults)
     private var hiddenRaw: String = ""
 
@@ -54,7 +52,8 @@ struct ConfirmationOverlayView: View {
         }
     }
 
-    private var primary: Series { Series(rawValue: primaryRaw) ?? .precip }
+    /// The axis always reads rain chance; wind and temperature ride on it.
+    private let primary: Series = .precip
     private var hidden: Set<Series> { Set(hiddenRaw.split(separator: ",").compactMap { Series(rawValue: String($0)) }) }
     private func isShown(_ s: Series) -> Bool { s == primary || !hidden.contains(s) }
     private func toggle(_ s: Series) {
@@ -76,19 +75,6 @@ struct ConfirmationOverlayView: View {
     private var xDomain: ClosedRange<Date> {
         let first = hours.first?.t ?? now
         return first.addingTimeInterval(-1200)...first.addingTimeInterval(Double(Self.windowHours) * 3600 + 3600)
-    }
-
-    /// A label near either edge of the plot leans inward instead of clipping.
-    private func edgeAware(_ t: Date, top: Bool) -> AnnotationPosition {
-        let span = xDomain.upperBound.timeIntervalSince(xDomain.lowerBound)
-        let f = t.timeIntervalSince(xDomain.lowerBound) / span
-        // A trailing position hangs the text off the point's right side,
-        // which is what a point near the left edge needs; the mirror on the
-        // right. A fifth of the plot either side is enough for the label.
-        // A low near an edge sits beside its point: under it is the bars.
-        if f < 0.2 { return top ? .topTrailing : .trailing }
-        if f > 0.8 { return top ? .topLeading : .leading }
-        return top ? .top : .bottom
     }
 
     // MARK: Ranges, in the unit shown
@@ -135,7 +121,7 @@ struct ConfirmationOverlayView: View {
 
     /// Temperature sits inside the plot with room above and below for the
     /// high and low labels.
-    private static let tempBand = 0.12...0.88
+    private static let tempBand = 0.2...0.86
 
     private func norm(_ s: Series, _ v: Double) -> Double {
         switch s {
@@ -147,18 +133,8 @@ struct ConfirmationOverlayView: View {
         }
     }
 
-    /// The axis ticks for the primary series: bottom, middle, top.
-    private var axisTicks: [(Double, String)] {
-        switch primary {
-        case .precip: return [(0, "0%"), (0.5, "50%"), (1, "100%")]
-        case .wind: return [0, 0.5, 1].map { ($0, "\(Int(($0 * windTop).rounded())) \(windUnit.label)") }
-        case .temp:
-            let lo = tempRange.lowerBound, hi = tempRange.upperBound
-            let b = Self.tempBand
-            return [(b.lowerBound, 0.0), ((b.lowerBound + b.upperBound) / 2, 0.5), (b.upperBound, 1.0)]
-                .map { ($0.0, TemperatureUnit.degrees(lo + (hi - lo) * $0.1)) }
-        }
-    }
+    /// The axis ticks: rain chance, bottom, middle, top.
+    private let axisTicks: [(Double, String)] = [(0, "0%"), (0.5, "50%"), (1, "100%")]
 
     // MARK: Current readings for the chips
 
@@ -191,14 +167,8 @@ struct ConfirmationOverlayView: View {
             VStack(alignment: .leading, spacing: 10) {
                 chips
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("\(primary.title) · \(Self.windowHours) h")
-                            .font(.subheadline.weight(.semibold))
-                        Spacer()
-                        Text("Tap a value for its scale")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
+                    Text("Next \(Self.windowHours) hours")
+                        .font(.subheadline.weight(.semibold))
                     legend
                     chart
                     if let sel = selection { readout(sel) }
@@ -211,7 +181,7 @@ struct ConfirmationOverlayView: View {
     }
 
     private var chips: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 14) {
             chip(.precip, precipChip)
             chip(.wind, windChip)
             if let t = tempChip { chip(.temp, t) }
@@ -221,27 +191,22 @@ struct ConfirmationOverlayView: View {
         .minimumScaleFactor(0.8)
     }
 
-    /// The reading, as a button that puts the series on the axis, and for
-    /// the two off the axis a small button that hides or shows them.
+    /// The reading now, and for wind and temperature a small button that
+    /// hides or shows that line on the chart.
     private func chip(_ s: Series, _ value: String) -> some View {
         HStack(spacing: 6) {
-            Button { primaryRaw = s.rawValue } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: s.icon)
-                        .font(.subheadline)
-                        .foregroundStyle(s.color)
-                    Text(value)
-                        .font(.subheadline.weight(.medium))
-                        .monospacedDigit()
-                        .foregroundStyle(isShown(s) ? Color.primary : Color.secondary)
-                }
-                .padding(.horizontal, s == primary ? 10 : 2)
-                .padding(.vertical, 6)
-                .background(s == primary ? Color(.tertiarySystemFill) : Color.clear, in: RoundedRectangle(cornerRadius: 10))
+            HStack(spacing: 5) {
+                Image(systemName: s.icon)
+                    .font(.subheadline)
+                    .foregroundStyle(s.color)
+                Text(value)
+                    .font(.subheadline.weight(.medium))
+                    .monospacedDigit()
+                    .foregroundStyle(isShown(s) ? Color.primary : Color.secondary)
             }
-            .buttonStyle(.plain)
+            .padding(.vertical, 6)
+            .accessibilityElement(children: .combine)
             .accessibilityLabel("\(s.title) \(value)")
-            .accessibilityHint(s == primary ? "On the axis" : "Puts this on the axis")
             if s != primary {
                 Button { toggle(s) } label: {
                     Image(systemName: hidden.contains(s) ? "plus" : "minus")
@@ -289,20 +254,43 @@ struct ConfirmationOverlayView: View {
 
     private func legendItem(_ s: Series, _ text: String) -> some View {
         HStack(spacing: 5) {
-            Path { p in p.move(to: .zero); p.addLine(to: CGPoint(x: 18, y: 0)) }
-                .stroke(s.color, style: StrokeStyle(lineWidth: 2, lineCap: .round,
-                                                    dash: s == .wind ? [5, 3] : (s == .temp ? [1, 3] : [])))
-                .frame(width: 18, height: 2)
+            if s == .precip {
+                // The bars are the rain, so its key is a bar's colour, square.
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(s.color.opacity(0.85))
+                    .frame(width: 10, height: 10)
+            } else {
+                Path { p in p.move(to: .zero); p.addLine(to: CGPoint(x: 18, y: 0)) }
+                    .stroke(s.color, style: StrokeStyle(lineWidth: 2, lineCap: .round,
+                                                        dash: s == .wind ? [5, 3] : [1, 3]))
+                    .frame(width: 18, height: 2)
+            }
             Text(text).lineLimit(1)
         }
     }
 
     // MARK: Chart
 
+    /// The high and the low, when temperature is on and they are two hours.
+    private struct Extreme: Identifiable {
+        let t: Date
+        let v: Double
+        let high: Bool
+        var id: String { high ? "H" : "L" }
+        var text: String { (high ? "H " : "L ") + TemperatureUnit.degrees(v) }
+    }
+
+    private var extremes: [Extreme] {
+        guard isShown(.temp), let hi = tempValues.max(by: { $0.v < $1.v }) else { return [] }
+        var out = [Extreme(t: hi.t, v: hi.v, high: true)]
+        if let lo = tempValues.min(by: { $0.v < $1.v }), lo.t != hi.t {
+            out.append(Extreme(t: lo.t, v: lo.v, high: false))
+        }
+        return out
+    }
+
     private var chart: some View {
-        let tHi = tempValues.max { $0.v < $1.v }
-        let tLo = tempValues.min { $0.v < $1.v }
-        return Chart {
+        Chart {
             // The clock's edge: a thin blue rule at now.
             RuleMark(x: .value("Now", now))
                 .foregroundStyle(Series.precip.color.opacity(0.8))
@@ -339,25 +327,9 @@ struct ConfirmationOverlayView: View {
                         .lineStyle(StrokeStyle(lineWidth: 2, dash: [1, 3]))
                         .interpolationMethod(.catmullRom)
                 }
-                if let tHi {
-                    PointMark(x: .value("Time", tHi.t), y: .value("Temperature", norm(.temp, tHi.v)))
+                ForEach(extremes) { e in
+                    PointMark(x: .value("Time", e.t), y: .value("Temperature", norm(.temp, e.v)))
                         .symbol { hollow(Series.temp.color) }
-                        .annotation(position: edgeAware(tHi.t, top: true), spacing: 2) {
-                            Text("H \(TemperatureUnit.degrees(tHi.v))")
-                                .font(.caption2.weight(.semibold)).foregroundStyle(Series.temp.color)
-                                .padding(.horizontal, 3)
-                                .background(Color(.secondarySystemBackground).opacity(0.85), in: RoundedRectangle(cornerRadius: 3))
-                        }
-                }
-                if let tLo, tLo.t != tHi?.t {
-                    PointMark(x: .value("Time", tLo.t), y: .value("Temperature", norm(.temp, tLo.v)))
-                        .symbol { hollow(Series.temp.color) }
-                        .annotation(position: edgeAware(tLo.t, top: false), spacing: 2) {
-                            Text("L \(TemperatureUnit.degrees(tLo.v))")
-                                .font(.caption2.weight(.semibold)).foregroundStyle(Series.temp.color)
-                                .padding(.horizontal, 3)
-                                .background(Color(.secondarySystemBackground).opacity(0.85), in: RoundedRectangle(cornerRadius: 3))
-                        }
                 }
             }
 
@@ -397,10 +369,48 @@ struct ConfirmationOverlayView: View {
         }
         .chartOverlay { proxy in
             GeometryReader { geo in
-                Rectangle().fill(.clear).contentShape(Rectangle())
-                    .gesture(SpatialTapGesture().onEnded { value in select(at: value.location, proxy: proxy, geo: geo) })
+                ZStack(alignment: .topLeading) {
+                    Rectangle().fill(.clear).contentShape(Rectangle())
+                        .gesture(SpatialTapGesture().onEnded { value in select(at: value.location, proxy: proxy, geo: geo) })
+                    ForEach(placements(proxy: proxy, geo: geo)) { item in
+                        extremeTag(item.extreme).position(item.at)
+                    }
+                }
             }
         }
+    }
+
+    private struct Placed: Identifiable {
+        let extreme: Extreme
+        let at: CGPoint
+        var id: String { extreme.id }
+    }
+
+    /// Each label sits straight above (the high) or below (the low) its own
+    /// point, at the point's plotted position, nudged in only far enough to
+    /// stay inside the plot. The chart's own annotations moved them to
+    /// wherever they fit, which read as floating.
+    private func placements(proxy: ChartProxy, geo: GeometryProxy) -> [Placed] {
+        guard let plot = proxy.plotFrame else { return [] }
+        let frame = geo[plot]
+        var out: [Placed] = []
+        for e in extremes {
+            guard let p = proxy.position(for: (x: e.t, y: norm(.temp, e.v))) else { continue }
+            let x = min(max(frame.minX + p.x, frame.minX + 22), frame.maxX - 22)
+            let y = frame.minY + p.y + (e.high ? -14 : 14)
+            out.append(Placed(extreme: e, at: CGPoint(x: x, y: y)))
+        }
+        return out
+    }
+
+    private func extremeTag(_ e: Extreme) -> some View {
+        Text(e.text)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(Series.temp.color)
+            .padding(.horizontal, 3)
+            .background(Color(.secondarySystemBackground).opacity(0.85), in: RoundedRectangle(cornerRadius: 3))
+            .fixedSize()
+            .allowsHitTesting(false)
     }
 
     private func hollow(_ color: Color) -> some View {

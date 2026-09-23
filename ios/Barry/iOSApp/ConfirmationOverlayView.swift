@@ -382,7 +382,8 @@ struct ConfirmationOverlayView: View {
                 AxisValueLabel(anchor: hh == Self.windowHours ? .topTrailing : .top, collisionResolution: .disabled) {
                     if let d = v.as(Date.self) {
                         let h = Int((d.timeIntervalSince(hours[0].t) / 3600).rounded())
-                        Text(h == 0 ? "now" : "+\(h) h")
+                        // Clock times, so the chart reads against the day: "now", then 5 PM, 8 PM...
+                        Text(h == 0 ? "now" : d.formatted(.dateTime.hour()))
                             .font(.caption2.weight(h == 0 ? .semibold : .regular))
                             .foregroundStyle(h == 0 ? Series.precip.color : Color.secondary)
                     }

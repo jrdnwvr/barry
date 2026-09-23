@@ -48,8 +48,8 @@ struct ConfirmationOverlayView: View {
         var color: Color {
             switch self {
             case .precip: return .blue
-            case .wind: return .green
-            case .temp: return .orange
+            case .wind: return Color(red: 0.22, green: 0.69, blue: 0.88)   // a sky blue, apart from the rain's
+            case .temp: return Color(red: 0.87, green: 0.22, blue: 0.20)
             }
         }
     }
@@ -82,8 +82,11 @@ struct ConfirmationOverlayView: View {
     private func edgeAware(_ t: Date, top: Bool) -> AnnotationPosition {
         let span = xDomain.upperBound.timeIntervalSince(xDomain.lowerBound)
         let f = t.timeIntervalSince(xDomain.lowerBound) / span
-        if f < 0.12 { return top ? .topTrailing : .bottomTrailing }
-        if f > 0.88 { return top ? .topLeading : .bottomLeading }
+        // A trailing position hangs the text off the point's right side,
+        // which is what a point near the left edge needs; the mirror on the
+        // right. A fifth of the plot either side is enough for the label.
+        if f < 0.2 { return top ? .topTrailing : .bottomTrailing }
+        if f > 0.8 { return top ? .topLeading : .bottomLeading }
         return top ? .top : .bottom
     }
 
@@ -118,18 +121,28 @@ struct ConfirmationOverlayView: View {
         let top = windValues.map { max($0.w, $0.g ?? 0) }.max() ?? 10
         return max(5, (top / 5).rounded(.up) * 5)
     }
+    /// Never narrower than a real change, so a flat day draws flat instead
+    /// of a one-degree wobble filling the plot.
     private var tempRange: ClosedRange<Double> {
         let vals = tempValues.map(\.v)
         guard let lo = vals.min(), let hi = vals.max() else { return 0...10 }
-        let pad = max(1, (hi - lo) * 0.15)
-        return (lo - pad)...(hi + pad)
+        let minSpan = tempUnit == .celsius ? 6.0 : 10.0
+        let span = max(hi - lo, minSpan)
+        let mid = (hi + lo) / 2
+        return (mid - span / 2)...(mid + span / 2)
     }
+
+    /// Temperature sits inside the plot with room above and below for the
+    /// high and low labels.
+    private static let tempBand = 0.12...0.88
 
     private func norm(_ s: Series, _ v: Double) -> Double {
         switch s {
         case .precip: return v / 100
         case .wind: return v / windTop
-        case .temp: return (v - tempRange.lowerBound) / (tempRange.upperBound - tempRange.lowerBound)
+        case .temp:
+            let f = (v - tempRange.lowerBound) / (tempRange.upperBound - tempRange.lowerBound)
+            return Self.tempBand.lowerBound + f * (Self.tempBand.upperBound - Self.tempBand.lowerBound)
         }
     }
 
@@ -140,7 +153,9 @@ struct ConfirmationOverlayView: View {
         case .wind: return [0, 0.5, 1].map { ($0, "\(Int(($0 * windTop).rounded())) \(windUnit.label)") }
         case .temp:
             let lo = tempRange.lowerBound, hi = tempRange.upperBound
-            return [0, 0.5, 1].map { ($0, TemperatureUnit.degrees(lo + (hi - lo) * $0)) }
+            let b = Self.tempBand
+            return [(b.lowerBound, 0.0), ((b.lowerBound + b.upperBound) / 2, 0.5), (b.upperBound, 1.0)]
+                .map { ($0.0, TemperatureUnit.degrees(lo + (hi - lo) * $0.1)) }
         }
     }
 
@@ -363,7 +378,8 @@ struct ConfirmationOverlayView: View {
         }
         .chartXAxis {
             AxisMarks(values: stride(from: 0, through: Self.windowHours, by: 3).map { hours[0].t.addingTimeInterval(Double($0) * 3600) }) { v in
-                AxisValueLabel {
+                let hh = v.as(Date.self).map { Int(($0.timeIntervalSince(hours[0].t) / 3600).rounded()) } ?? 0
+                AxisValueLabel(anchor: hh == Self.windowHours ? .topTrailing : .top, collisionResolution: .disabled) {
                     if let d = v.as(Date.self) {
                         let h = Int((d.timeIntervalSince(hours[0].t) / 3600).rounded())
                         Text(h == 0 ? "now" : "+\(h) h")

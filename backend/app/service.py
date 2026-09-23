@@ -60,6 +60,7 @@ from .tendency import resolve_tendency
 from .verdict import build_verdict
 
 ALOFT_TTL = 60 * 60.0     # the model updates hourly; the column follows it
+ALOFT_STALE_MAX = 12 * 3600.0   # how long a last good column may stand in
 PRESSURE_TTL = 12 * 60.0  # METARs update ~hourly; 12 min keeps it fresh-ish & cheap
 FORECAST_TTL = 30 * 60.0  # forecasts move slowly; 30 min is plenty
 FRONT_TTL = 15 * 60.0     # regional bbox fetch is the priciest call; ring METARs
@@ -819,6 +820,8 @@ class PressureService:
         the cost is one Open-Meteo call per watched cell per hour whatever
         the number of phones looking."""
         lat, lon = round(lat, 1), round(lon, 1)
+        key = f"aloft:{lat}:{lon}"
+        last_good_key = f"{key}:lastgood"
 
         async def _pull() -> AloftResponse:
             self.om_gate.require()
@@ -826,9 +829,24 @@ class PressureService:
             hours = om.parse_aloft(raw, now=_now())
             if not hours:
                 raise LookupError("no aloft data")
-            return AloftResponse(hours=hours, source="open-meteo", cachedAt=_now())
+            resp = AloftResponse(hours=hours, source="open-meteo", cachedAt=_now())
+            await self.cache.set(last_good_key, resp, ttl=ALOFT_STALE_MAX)
+            return resp
 
-        return await self.cache.fetch(f"aloft:{lat}:{lon}", _pull, ttl=ALOFT_TTL, negative_ttl=60.0)
+        try:
+            return await self.cache.fetch(key, _pull, ttl=ALOFT_TTL, negative_ttl=60.0)
+        except Exception:
+            # Stale-if-error, like the forecast: Open-Meteo's pressure levels
+            # fail in bursts, and the last good column, trimmed to the hours
+            # still ahead, beats an empty screen.
+            last = await self.cache.get(last_good_key)
+            if last is None:
+                raise
+            hour = _now().replace(minute=0, second=0, microsecond=0)
+            ahead = [h for h in last.hours if h.t >= hour]
+            if len(ahead) < 2:
+                raise
+            return last.model_copy(update={"hours": ahead, "stale": True})
 
     # ---- GOES GLM lightning ---------------------------------------------------
 

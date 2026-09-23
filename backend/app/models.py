@@ -332,6 +332,9 @@ class AloftResponse(BaseModel):
     hours: List[AloftHour] = Field(default_factory=list)
     source: str = "open-meteo"
     cachedAt: datetime
+    # The model did not answer and this is the last good column, trimmed to
+    # the hours still ahead. Clients may say so.
+    stale: bool = False
 
 
 class TafPeriod(BaseModel):

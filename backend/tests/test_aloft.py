@@ -60,3 +60,18 @@ async def test_one_call_per_cell_per_hour_and_a_route(client, upstream):
         upstream.om_fail = True
         s.cache._store.clear()
         assert (await c.get("/aloft?lat=45&lon=-100")).status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_a_failed_refresh_serves_the_last_good_column(client, upstream):
+    s = PressureService(client)
+    good = await s.get_aloft(39.1, -84.4)
+    assert not good.stale and len(good.hours) == 3
+    # The hour's cache runs out and Open-Meteo is down: the last good column stands in.
+    s.cache._store.pop("aloft:39.1:-84.4")
+    upstream.om_fail = True
+    stale = await s.get_aloft(39.1, -84.4)
+    assert stale.stale and [h.t for h in stale.hours] == [h.t for h in good.hours]
+    # A cell never fetched has nothing to stand in.
+    with pytest.raises(Exception):
+        await s.get_aloft(45.0, -100.0)

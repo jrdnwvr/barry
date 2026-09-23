@@ -526,13 +526,6 @@ struct HourlyForecastCard: View {
             Text(i == 0 ? "now" : ShortTermForecast.clock(h.t))
                 .font(.caption2.weight(i == 0 ? .semibold : .regular))
                 .foregroundStyle(i == 0 ? Color.blue : Color.secondary)
-            let sym = Self.symbol(code: h.code, cloud: h.cloud, rain: h.rain, night: isNight(h.t))
-            let tint = Self.tint(sym)
-            Image(systemName: sym)
-                .symbolRenderingMode(.palette)
-                .foregroundStyle(tint.0, tint.1)
-                .font(.system(size: 18))
-                .frame(height: 22)
             Text(h.tempC.map(temp.format) ?? "–")
                 .font(.subheadline.weight(.semibold))
                 .monospacedDigit()
@@ -565,6 +558,14 @@ struct HourlyForecastCard: View {
                     .foregroundStyle(h.rain >= 30 ? ForecastPalette.rain : Color.secondary)
                     .monospacedDigit()
             }
+            // The sky for the hour, under the rain it goes with.
+            let sym = Self.symbol(code: h.code, cloud: h.cloud, rain: h.rain, night: isNight(h.t))
+            let tint = Self.tint(sym)
+            Image(systemName: sym)
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(tint.0, tint.1)
+                .font(.system(size: 18))
+                .frame(height: 22)
         }
         .frame(width: 50)
         .accessibilityElement(children: .ignore)

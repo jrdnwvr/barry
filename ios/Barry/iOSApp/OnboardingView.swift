@@ -3,17 +3,21 @@
 //
 //  First-run flow, shown once (hasOnboarded flag in the shared suite):
 //    1. The thesis — change matters, not the number.
-//    2. What's inside — where the station comes from, and the cockpit tools.
-//    3. Units — writes straight to the same keys Settings uses.
-//    4. Local readings opt-in — sets phoneBarometerEnabled; iOS permission
-//       prompts then fire naturally when the sensor starts.
+//    2. Where — use the phone's location and confirm the nearest station,
+//       or pick an airport. The location prompt fires here, with the reason
+//       on screen, never cold on the dashboard.
+//    3. Units — pressure, wind, temperature; defaults follow the region and
+//       write straight to the keys Settings uses.
+//    4. Local readings opt-in — only on a device with a barometer; the
+//       motion prompt fires at the tap.
 //    5. Alerts opt-in — pressure changes and storms as separate switches,
 //       plus the lock screen; permission is requested at the moment of intent.
 //  Skip (bottom right, every page) bails out of the whole flow: marks
-//  onboarding done, keeps defaults, enables nothing. The ghost buttons on
-//  pages 3/4 decline just that feature and keep going.
+//  onboarding done, keeps defaults, enables nothing.
 
+import CoreMotion
 import SwiftUI
+import UIKit
 
 struct OnboardingView: View {
     @AppStorage("hasOnboarded", store: AppConfig.sharedDefaults)
@@ -22,40 +26,47 @@ struct OnboardingView: View {
     private var unitRaw: String = PressureUnit.inHg.rawValue
     @AppStorage("windUnit", store: AppConfig.sharedDefaults)
     private var windUnitRaw: String = WindUnit.mph.rawValue
+    @AppStorage(TemperatureUnit.key, store: AppConfig.sharedDefaults)
+    private var tempUnitRaw: String = TemperatureUnit.celsius.rawValue
     @AppStorage("phoneBarometerEnabled", store: AppConfig.sharedDefaults)
     private var phoneBarometerEnabled: Bool = false
     @AppStorage(StormAlerter.enabledKey, store: AppConfig.sharedDefaults)
     private var stormAlertsEnabled: Bool = false
     @AppStorage(StormAlerter.pressureKey, store: AppConfig.sharedDefaults)
     private var pressureAlertsEnabled: Bool = false
-    /// The page's own choices; written to the switches only on "Turn on".
-    @State private var wantPressure = true
-    @State private var wantStorms = true
     @AppStorage(LiveActivityManager.enabledKey, store: AppConfig.sharedDefaults)
     private var liveActivityEnabled: Bool = false
+    /// The alerts page's own choices; written to the switches only on "Turn on".
+    @State private var wantPressure = true
+    @State private var wantStorms = true
+
+    // The where page.
+    @StateObject private var locations = SavedLocationsStore()
+    @StateObject private var locator = LocationManager()
+    private enum Where: Equatable {
+        case idle, locating, found(String, String), noFix, airport(String, String)
+    }
+    @State private var whereState: Where = .idle
+    @State private var showSearch = false
+    @State private var airportQuery = ""
+    @State private var matches: [StationSearchResult] = []
 
     @State private var page = 0
-    private let pageCount = 5
+
+    private enum Page { case idea, whereAmI, units, sensor, alerts }
+    private var hasBarometer: Bool { CMAltimeter.isRelativeAltitudeAvailable() }
+    private var pages: [Page] {
+        hasBarometer ? [.idea, .whereAmI, .units, .sensor, .alerts] : [.idea, .whereAmI, .units, .alerts]
+    }
 
     private var unit: PressureUnit { PressureUnit(rawValue: unitRaw) ?? .inHg }
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text("\(page + 1) of \(pageCount)")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                Spacer()
-            }
-            .padding(.horizontal, 28)
-            .padding(.top, 20)
-
             TabView(selection: $page) {
-                ideaPage.tag(0)
-                insidePage.tag(1)
-                unitsPage.tag(2)
-                sensorPage.tag(3)
-                alertsPage.tag(4)
+                ForEach(Array(pages.enumerated()), id: \.offset) { i, p in
+                    pageView(p).tag(i)
+                }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
 
@@ -67,6 +78,30 @@ struct OnboardingView: View {
         // wide — cap the flow to a phone-ish column, centered.
         .frame(maxWidth: 560)
         .frame(maxWidth: .infinity)
+        .onAppear(perform: seedUnits)
+    }
+
+    @ViewBuilder private func pageView(_ p: Page) -> some View {
+        switch p {
+        case .idea: ideaPage
+        case .whereAmI: wherePage
+        case .units: unitsPage
+        case .sensor: sensorPage
+        case .alerts: alertsPage
+        }
+    }
+
+    /// A fresh install starts on the region's units, knots for wind
+    /// everywhere: that is what the tower says. Anything already chosen
+    /// stays.
+    private func seedUnits() {
+        let d = AppConfig.sharedDefaults
+        let us = Locale.current.measurementSystem == .us
+        if d.object(forKey: "pressureUnit") == nil { unitRaw = (us ? PressureUnit.inHg : .hPa).rawValue }
+        if d.object(forKey: "windUnit") == nil { windUnitRaw = WindUnit.knots.rawValue }
+        if d.object(forKey: TemperatureUnit.key) == nil {
+            tempUnitRaw = (us ? TemperatureUnit.fahrenheit : .celsius).rawValue
+        }
     }
 
     // MARK: - Pages
@@ -95,30 +130,126 @@ struct OnboardingView: View {
         }
     }
 
-    private var insidePage: some View {
+    private var wherePage: some View {
         pageLayout {
-            Image(systemName: "airplane")
+            Image(systemName: "location")
                 .font(.system(size: 30))
                 .foregroundStyle(.blue)
-            Text("Built for the cockpit")
+            Text("Where are you flying?")
                 .font(.title2.weight(.semibold))
                 .multilineTextAlignment(.center)
-            Text("Barry finds the nearest reporting airport from your location. Pick any airport, or save a place, in Settings.")
+            Text("Barry reads the nearest reporting airport. Use your location, or pick an airport.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            VStack(alignment: .leading, spacing: 6) {
-                checkRow("At an airport, the big number is the field's altimeter setting")
-                checkRow("Runway winds on a compass, density altitude, clouds, and the ride below the boundary layer")
-                checkRow("Radar with fronts, station barbs, and live lightning from NOAA's satellites")
-                checkRow("What else agrees with the pressure: the model, the TAF, the stations around you")
+
+            switch whereState {
+            case .idle:
+                EmptyView()
+            case .locating:
+                ProgressView("Finding the nearest station")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            case .found(let id, let name):
+                stationCard(label: "Nearest station", id: id, name: name)
+            case .airport(let id, let name):
+                stationCard(label: "Your airport", id: id, name: name)
+            case .noFix:
+                Text("No location fix. Pick an airport instead, or try again outside.")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+                    .multilineTextAlignment(.center)
             }
-            .padding(12)
-            .background(Color(.secondarySystemBackground),
-                        in: RoundedRectangle(cornerRadius: 10))
+
+            if showSearch {
+                VStack(spacing: 0) {
+                    TextField("Airport ID or name", text: $airportQuery)
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
+                        .padding(10)
+                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+                        .accessibilityIdentifier("onboarding.airport")
+                        .task(id: airportQuery) {
+                            let q = airportQuery.trimmingCharacters(in: .whitespaces)
+                            guard q.count >= 2 else { matches = []; return }
+                            try? await Task.sleep(for: .milliseconds(250))
+                            guard !Task.isCancelled else { return }
+                            matches = (try? await BarryAPI().searchStations(q)) ?? []
+                        }
+                    ForEach(matches.prefix(4)) { m in
+                        Button { choose(m) } label: {
+                            HStack(spacing: 8) {
+                                Text(m.station).font(.footnote.weight(.semibold)).monospaced()
+                                Text(m.name).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                                Spacer()
+                            }
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 10)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
         } buttons: {
-            primaryButton("Continue") { advance() }
+            switch whereState {
+            case .found, .airport:
+                primaryButton("Continue") { advance() }
+                ghostButton("Change") { whereState = .idle; showSearch = false; airportQuery = ""; matches = [] }
+            default:
+                primaryButton("Use my location") { locate() }
+                if !showSearch {
+                    ghostButton("Pick an airport") { showSearch = true }
+                }
+            }
         }
+    }
+
+    private func stationCard(label: String, id: String, name: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label).font(.caption).foregroundStyle(.secondary)
+                Text(name.isEmpty ? id : "\(id) · \(name)")
+                    .font(.footnote.weight(.semibold))
+                    .lineLimit(1)
+            }
+            Spacer()
+        }
+        .padding(12)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    /// One fix, the nearest station named, the selection set to "My location".
+    private func locate() {
+        whereState = .locating
+        showSearch = false
+        Task {
+            guard let loc = await locator.requestLocation(timeout: 10) else {
+                whereState = .noFix
+                showSearch = true
+                return
+            }
+            if let mine = locations.locations.first(where: { $0.isPhysical }) {
+                locations.selectedID = mine.id
+            }
+            if let n = try? await BarryAPI().nearestStation(lat: loc.coordinate.latitude, lon: loc.coordinate.longitude) {
+                AppConfig.sharedDefaults.set(n.station, forKey: AppConfig.syncStationKey)
+                whereState = .found(n.station, n.name)
+            } else {
+                whereState = .found("Location set", "")
+            }
+        }
+    }
+
+    private func choose(_ m: StationSearchResult) {
+        locations.add(SavedLocation(kind: .airport(icao: m.station)), select: true)
+        AppConfig.sharedDefaults.set(m.station, forKey: AppConfig.syncStationKey)
+        whereState = .airport(m.station, m.name)
+        showSearch = false
+        airportQuery = ""
+        matches = []
     }
 
     private var unitsPage: some View {
@@ -153,6 +284,21 @@ struct OnboardingView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                Text(windUnitRaw == WindUnit.knots.rawValue ? "knots, what the tower says" : " ")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Temperature")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Picker("Temperature unit", selection: $tempUnitRaw) {
+                    ForEach(TemperatureUnit.allCases) { u in
+                        Text(u.label).tag(u.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
             }
 
             Text("You can change these later in settings")
@@ -168,7 +314,7 @@ struct OnboardingView: View {
             Image(systemName: "gauge.with.needle")
                 .font(.system(size: 30))
                 .foregroundStyle(.orange)
-            Text("Your iPhone has a barometer")
+            Text(UIDevice.current.userInterfaceIdiom == .pad ? "Your iPad has a barometer" : "Your iPhone has a barometer")
                 .font(.title2.weight(.semibold))
                 .multilineTextAlignment(.center)
             Text("Stations report about once an hour. Your phone's barometer reads every second, so changes show up sooner.")
@@ -178,7 +324,7 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 6) {
                 checkRow("Live readings between station reports")
                 checkRow("Calibrates itself, no setup")
-                checkRow("Needs motion and location access")
+                checkRow("Asks for motion access when you turn it on")
             }
             .padding(12)
             .background(Color(.secondarySystemBackground),
@@ -304,7 +450,7 @@ struct OnboardingView: View {
             Text("Skip").opacity(0)
             Spacer()
             HStack(spacing: 7) {
-                ForEach(0..<pageCount, id: \.self) { i in
+                ForEach(0..<pages.count, id: \.self) { i in
                     Circle()
                         .fill(i == page ? Color.primary : Color(.systemGray4))
                         .frame(width: 7, height: 7)

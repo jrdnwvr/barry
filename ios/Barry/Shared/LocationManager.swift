@@ -14,6 +14,7 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
 
     private let manager = CLLocationManager()
     private var continuation: CheckedContinuation<CLLocation?, Never>?
+    private var authContinuation: CheckedContinuation<Void, Never>?
 
     /// Station lookup only needs ~km fixes; altitude-reference sampling (barometer
     /// calibration) asks for `kCLLocationAccuracyBest` to get a usable vertical fix.
@@ -33,8 +34,22 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
     /// iPads, permission dialog pending) must never hang the app's initial load.
     func requestLocation(timeout: TimeInterval = 8) async -> CLLocation? {
         if authorization == .notDetermined {
+            // Ask, then wait for the answer before asking for a fix: a fix
+            // requested while the prompt is still up fails at once as
+            // "denied", which used to send every first launch to the default
+            // station whatever the user tapped.
             requestAuthorization()
+            await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+                authContinuation = cont
+                DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
+                    Task { @MainActor [weak self] in
+                        self?.authContinuation?.resume()
+                        self?.authContinuation = nil
+                    }
+                }
+            }
         }
+        guard authorization == .authorizedWhenInUse || authorization == .authorizedAlways else { return nil }
         // A second caller supersedes the first — resume the old continuation
         // (with the best we have) instead of leaking it, which would hang that
         // caller's task forever.
@@ -55,7 +70,14 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        Task { @MainActor in self.authorization = manager.authorizationStatus }
+        let status = manager.authorizationStatus
+        Task { @MainActor in
+            self.authorization = status
+            if status != .notDetermined {
+                self.authContinuation?.resume()
+                self.authContinuation = nil
+            }
+        }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager,

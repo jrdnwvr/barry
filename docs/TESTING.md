@@ -64,7 +64,7 @@ Cards, in the order the home screen shows them by default.
 | Sources card | | eyeball | | |
 | Home screen editor: reorder, hide, presets, TAF off by default | | eyeball | | |
 | Live Activity: opt in, events, banner | | | yes | permission prompt |
-| Onboarding first run | | eyeball | | |
+| Onboarding first run: location prompt in the flow with the nearest station confirmed, airport search, units seeded by region, sensor page only with a barometer, alerts split | | walked in the simulator 2026-09-23 | | the location manager now waits for the permission answer before asking for a fix |
 | Saved locations switcher | | eyeball | | |
 | Cold start shows the saved reading marked "saved", refreshes behind it | | eyeball | | 12 s interactive timeout, patient session for silent refreshes |
 | MetricKit reports reach /diagnostics | | | yes | needs a day on a device |

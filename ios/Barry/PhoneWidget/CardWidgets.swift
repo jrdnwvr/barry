@@ -194,10 +194,11 @@ struct FieldGlanceView: View {
                             if let ceiling = ceilingText(cur) { row(isCeiling(cur) ? "Ceiling" : "Clouds", ceiling) }
                             // Both from the field's METAR: air temperature, then dew point.
                             if let t = cur.temp {
+                                let unit = TemperatureUnit.current
                                 if let d = cur.dewpoint {
-                                    row("Temp / dew", "\(Int(t.rounded()))° / \(Int(d.rounded()))°")
+                                    row("Temp / dew", "\(unit.format(t)) / \(unit.format(d))")
                                 } else {
-                                    row("Temp", "\(Int(t.rounded()))°")
+                                    row("Temp", unit.format(t))
                                 }
                             }
                         }

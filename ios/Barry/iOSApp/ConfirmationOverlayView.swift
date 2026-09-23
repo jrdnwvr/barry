@@ -15,6 +15,9 @@ struct ConfirmationOverlayView: View {
     @AppStorage("windUnit", store: AppConfig.sharedDefaults)
     private var windUnitRaw: String = WindUnit.mph.rawValue
     private var windUnit: WindUnit { WindUnit(rawValue: windUnitRaw) ?? .mph }
+    @AppStorage(TemperatureUnit.key, store: AppConfig.sharedDefaults)
+    private var tempUnitRaw: String = TemperatureUnit.celsius.rawValue
+    private var tempUnit: TemperatureUnit { TemperatureUnit(rawValue: tempUnitRaw) ?? .celsius }
 
     private var hours: [ForecastHour] {
         (combined.forecast?.hourly ?? [])
@@ -124,8 +127,8 @@ struct ConfirmationOverlayView: View {
     private var tempRangeText: String? {
         let temps = next6h.compactMap { $0.temperature }
         guard let lo = temps.min(), let hi = temps.max() else { return nil }
-        let a = Int(lo.rounded()), b = Int(hi.rounded())
-        return a == b ? "\(a)°" : "\(a)–\(b)°"
+        let a = tempUnit.format(lo), b = tempUnit.format(hi)
+        return a == b ? a : "\(a.dropLast())–\(b)"
     }
 
     private var summaryRow: some View {
@@ -316,23 +319,25 @@ struct ConfirmationOverlayView: View {
 
     // MARK: - Temperature chart (°C, with the dew point)
 
+    /// In the display unit, padded, never thinner than a few degrees.
     private var tempDomain: ClosedRange<Double> {
-        let vals = tempHours.compactMap { $0.temperature } + tempHours.compactMap { $0.dewpoint }
-        let lo = (vals.min() ?? 0).rounded(.down) - 2
-        let hi = (vals.max() ?? 10).rounded(.up) + 2
-        return lo...max(hi, lo + 6)
+        let vals = (tempHours.compactMap { $0.temperature } + tempHours.compactMap { $0.dewpoint }).map(tempUnit.convert)
+        let pad = tempUnit == .celsius ? 2.0 : 4.0
+        let lo = (vals.min() ?? 0).rounded(.down) - pad
+        let hi = (vals.max() ?? 10).rounded(.up) + pad
+        return lo...max(hi, lo + 3 * pad)
     }
 
     private var tempChart: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Label("Temperature (°C)", systemImage: "thermometer.medium")
+            Label("Temperature (\(tempUnit.label))", systemImage: "thermometer.medium")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
 
             Chart {
                 // Freezing, when the day crosses it: the one line that changes plans.
-                if tempDomain.contains(0) {
-                    RuleMark(y: .value("Freezing", 0))
+                if tempDomain.contains(tempUnit.freezing) {
+                    RuleMark(y: .value("Freezing", tempUnit.freezing))
                         .foregroundStyle(.blue.opacity(0.5))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 3]))
                 }
@@ -340,7 +345,7 @@ struct ConfirmationOverlayView: View {
                     if let d = h.dewpoint {
                         LineMark(
                             x: .value("Time", h.t),
-                            y: .value("Dew point", d),
+                            y: .value("Dew point", tempUnit.convert(d)),
                             series: .value("Series", "dew")
                         )
                         .foregroundStyle(.green.opacity(0.6))
@@ -352,7 +357,7 @@ struct ConfirmationOverlayView: View {
                     if let t = h.temperature {
                         LineMark(
                             x: .value("Time", h.t),
-                            y: .value("Temperature", t),
+                            y: .value("Temperature", tempUnit.convert(t)),
                             series: .value("Series", "temp")
                         )
                         .foregroundStyle(.orange)

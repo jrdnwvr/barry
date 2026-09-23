@@ -32,6 +32,18 @@ struct CardRenderTests {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("rainwind.png")
         try img.pngData()?.write(to: url)
         NSLog("rainwind card saved to %@", url.path)
+
+        // The same card in Fahrenheit, then the setting goes back.
+        let defaults = AppConfig.sharedDefaults
+        let before = defaults.string(forKey: TemperatureUnit.key)
+        defaults.set(TemperatureUnit.fahrenheit.rawValue, forKey: TemperatureUnit.key)
+        defer { defaults.set(before, forKey: TemperatureUnit.key) }
+        let rf = ImageRenderer(content: ConfirmationOverlayView(combined: combined, now: Fixtures.fixtureNow)
+            .padding(12).background(Color(.systemBackground))
+            .frame(width: 358).fixedSize(horizontal: false, vertical: true))
+        rf.scale = 3
+        let imgF = try #require(rf.uiImage)
+        try imgF.pngData()?.write(to: FileManager.default.temporaryDirectory.appendingPathComponent("rainwind-f.png"))
     }
 
     @Test func tafRunwayAndHeroCardsRenderAtEveryPhoneWidth() throws {

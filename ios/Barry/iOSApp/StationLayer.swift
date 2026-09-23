@@ -442,8 +442,9 @@ struct StationDetailSheet: View {
 
     private var tempText: String {
         guard let t = obs.temp else { return "Not reported" }
-        let d = obs.dewpoint.map { " / \(Int($0.rounded()))°" } ?? ""
-        return "\(Int(t.rounded()))°\(d) C"
+        let unit = TemperatureUnit.current
+        let d = obs.dewpoint.map { " / \(unit.format($0))" } ?? ""
+        return "\(unit.format(t))\(d) \(unit.label.dropFirst())"
     }
 
     private var altimText: String {

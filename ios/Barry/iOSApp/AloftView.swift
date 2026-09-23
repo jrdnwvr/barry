@@ -73,6 +73,8 @@ struct AloftScreen: View {
     @StateObject private var model = AloftModel()
     @AppStorage(AloftLayer.ceilingKey, store: AppConfig.sharedDefaults) private var ceilingFt: Int = 18000
     @AppStorage(AloftLayer.key, store: AppConfig.sharedDefaults) private var layersRaw: String = "clouds,wind,temp,icing"
+    @AppStorage(TemperatureUnit.key, store: AppConfig.sharedDefaults) private var tempUnitRaw: String = TemperatureUnit.celsius.rawValue
+    private var tempUnit: TemperatureUnit { TemperatureUnit(rawValue: tempUnitRaw) ?? .celsius }
     @State private var hourOffset: Double = 0
     @State private var picked: AloftLevel?
 
@@ -110,7 +112,7 @@ struct AloftScreen: View {
         .task { await model.load(lat: lat, lon: lon) }
         .sensoryFeedback(.selection, trigger: hourIndex)
         .sheet(item: $picked) { lv in
-            AloftLevelSheet(level: lv, hour: hour, groundFt: groundFt)
+            AloftLevelSheet(level: lv, hour: hour, groundFt: groundFt, unit: tempUnit)
                 .presentationDetents([.height(300)])
         }
     }
@@ -271,7 +273,7 @@ struct AloftScreen: View {
                 AloftRule(style: .dotted, color: AloftColors.tint)
                     .frame(width: W - cloudsX, height: 1.5)
                     .position(x: cloudsX + (W - cloudsX) / 2, y: yy)
-                AloftPill(text: "0 °C · \(AloftFormat.feet(frz)) ft", color: AloftColors.tint)
+                AloftPill(text: "\(tempUnit.formatWithUnit(0)) · \(AloftFormat.feet(frz)) ft", color: AloftColors.tint)
                     .offset(x: cloudsX, y: yy + 4)
             }
 
@@ -292,11 +294,11 @@ struct AloftScreen: View {
                     Color.clear.frame(width: 36)
                     Color.clear.frame(width: cloudsW)
                     if layers.contains(.temp) {
-                        Text(AloftFormat.degrees(lv.tempC))
+                        Text(tempUnit.format(lv.tempC))
                             .fontWeight(.semibold)
                             .foregroundStyle(lv.tempC < 0 ? AloftColors.tint : Color(.label))
                             .frame(width: 50, alignment: .trailing)
-                        Text(lv.dewC.map(AloftFormat.degrees) ?? "")
+                        Text(lv.dewC.map(tempUnit.format) ?? "")
                             .foregroundStyle(.secondary)
                             .frame(width: 40, alignment: .trailing)
                     } else {
@@ -324,7 +326,7 @@ struct AloftScreen: View {
                 .onTapGesture { picked = lv }
                 .position(x: W / 2, y: yy)
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(AloftFormat.feet(lv.ft)) feet, \(AloftFormat.degrees(lv.tempC)), wind \(lv.dirDeg.map(AloftFormat.direction) ?? "calm") \(Int((lv.spdKt ?? 0).rounded())) knots")
+                .accessibilityLabel("\(AloftFormat.feet(lv.ft)) feet, \(tempUnit.formatWithUnit(lv.tempC)), wind \(lv.dirDeg.map(AloftFormat.direction) ?? "calm") \(Int((lv.spdKt ?? 0).rounded())) knots")
             }
 
             // surface band
@@ -352,7 +354,7 @@ struct AloftScreen: View {
             parts.append(kt == 0 ? "00000KT" : "\(dir)\(String(format: "%02d", kt))KT")
         }
         if let t = cur.temp, let d = cur.dewpoint {
-            parts.append("\(Int(t.rounded()))/\(Int(d.rounded()))")
+            parts.append("\(tempUnit.format(t))/\(tempUnit.format(d))")
         }
         return parts.isEmpty ? "METAR" : "METAR " + parts.joined(separator: " · ")
     }
@@ -558,6 +560,7 @@ struct AloftLevelSheet: View {
     let level: AloftLevel
     let hour: AloftHour?
     let groundFt: Int
+    var unit: TemperatureUnit = .celsius
 
     private var icingRisk: String {
         guard let cover = level.cloudPct, cover >= 30 else { return "No cloud at this level." }
@@ -573,10 +576,10 @@ struct AloftLevelSheet: View {
             Text("\(AloftFormat.feet(level.ft - groundFt)) ft above the field · \(level.hPa) hPa")
                 .foregroundStyle(.secondary)
             Divider()
-            LabeledContent("Temperature", value: AloftFormat.degrees(level.tempC) + "C")
+            LabeledContent("Temperature", value: unit.formatWithUnit(level.tempC))
             if let d = level.dewC {
-                LabeledContent("Dew point", value: AloftFormat.degrees(d) + "C")
-                LabeledContent("Spread", value: AloftFormat.degrees(level.tempC - d))
+                LabeledContent("Dew point", value: unit.formatWithUnit(d))
+                LabeledContent("Spread", value: unit.formatDelta(level.tempC - d))
             }
             if let dir = level.dirDeg, let spd = level.spdKt {
                 LabeledContent("Wind", value: "\(AloftFormat.direction(dir)) at \(Int(spd.rounded())) kt")

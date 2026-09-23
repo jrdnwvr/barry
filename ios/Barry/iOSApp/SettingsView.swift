@@ -20,6 +20,8 @@ struct SettingsView: View {
     private var unitRaw: String = PressureUnit.inHg.rawValue
     @AppStorage("windUnit", store: AppConfig.sharedDefaults)
     private var windUnitRaw: String = WindUnit.mph.rawValue
+    @AppStorage(TemperatureUnit.key, store: AppConfig.sharedDefaults)
+    private var tempUnitRaw: String = TemperatureUnit.celsius.rawValue
 
     @EnvironmentObject var barometer: BarometerManager
     @AppStorage("phoneBarometerEnabled", store: AppConfig.sharedDefaults)
@@ -122,6 +124,13 @@ struct SettingsView: View {
 
                     Picker("Wind", selection: $windUnitRaw) {
                         ForEach(WindUnit.allCases) { u in
+                            Text(u.label).tag(u.rawValue)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Picker("Temperature", selection: $tempUnitRaw) {
+                        ForEach(TemperatureUnit.allCases) { u in
                             Text(u.label).tag(u.rawValue)
                         }
                     }

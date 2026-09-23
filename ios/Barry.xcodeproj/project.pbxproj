@@ -51,6 +51,7 @@
 		4253341F1F79930A611AD743 /* CardIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0023323B71268E669397009E /* CardIcons.swift */; };
 		429B2C6D5EF4DF4EF52A8A2F /* PhoneSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82E8C122995032DFD8C5C5EC /* PhoneSync.swift */; };
 		4517F602E94072402651DC30 /* CombinedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 623D8012B9E2B6A8E0CE08AE /* CombinedStore.swift */; };
+		477EA6029C0DB811A8D25AE0 /* TemperatureUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6CF08B2A13F495A8EFA7C89 /* TemperatureUnit.swift */; };
 		483CBC3B0160B52142C82C61 /* TendencyProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A24A6845ECB66698D61771D /* TendencyProvider.swift */; };
 		4841725627A1F0AC607A52BE /* SharedSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */; };
 		496D420D268C7B1C34C7AD34 /* WatchBarometer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 886DA735AE684A5A59D95000 /* WatchBarometer.swift */; };
@@ -67,6 +68,7 @@
 		528E622AA0E8C3F459B35D03 /* AloftMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BC26DD5017BF6D7F4EC0346 /* AloftMath.swift */; };
 		54E71FA035FE1F8FF06685BA /* Backcountry.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDA74BE38B6BB03051B074EF /* Backcountry.swift */; };
 		54FC2F6A3476132FE681E5E6 /* RadarPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6BB37965D5198DB8A9DCE65 /* RadarPalette.swift */; };
+		5509E66CDDFB4B17F97DFE97 /* TemperatureUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6CF08B2A13F495A8EFA7C89 /* TemperatureUnit.swift */; };
 		55E5298970D9B65C1E5B4F44 /* ComplicationDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42AF37A1FEB24BB66E9E0A34 /* ComplicationDial.swift */; };
 		55E8BB521F31C0CE57FC313A /* RunwayWindDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD313083D4B2A9BAD12BAB92 /* RunwayWindDial.swift */; };
 		5674736757CC86B2ECD79A39 /* BarryPhoneWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 078B13121EBACB3059A82BC9 /* BarryPhoneWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -98,6 +100,7 @@
 		7D0122F48329169FE2A913E7 /* RangeAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EBD287C6CB46A536198173F /* RangeAnalysis.swift */; };
 		7D4E858B190A8B961B283BE6 /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E7AD448DB8DDD1CE1C73553 /* LiveActivityManager.swift */; };
 		7DDE0AE0EEA91898EC721A08 /* HomeLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14751C812932452AF8884F79 /* HomeLayout.swift */; };
+		803013AB14E6B43C770397EE /* TemperatureUnitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ED4E8ACC4DA64C6E1076B59 /* TemperatureUnitTests.swift */; };
 		811727C7296B6B80F9E3F81C /* BarryPhoneWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 830E6CE85533F8C3169A8E97 /* BarryPhoneWidget.swift */; };
 		81C789D5AD14654F306BDA4C /* SharedSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */; };
 		82CB6BDE544D2A474D0C9968 /* PressureActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECFAFB3674B651E14D4FEC8B /* PressureActivity.swift */; };
@@ -130,6 +133,7 @@
 		AE283E279AEC60F9B0C8D74D /* FlightCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB485493ACD08C4C6CD5804F /* FlightCategory.swift */; };
 		B0DD843032BBA29B2C4097D0 /* PressureHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */; };
 		B0ED75F3A2F54154E9DC25F8 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0094727B647701DDDCF17BD2 /* LocationManager.swift */; };
+		B3E297CC66494AC1EDAD48B7 /* TemperatureUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6CF08B2A13F495A8EFA7C89 /* TemperatureUnit.swift */; };
 		B5956053A3566C6DBCDAAF14 /* StationLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3DE49EE7CDCB4E59BB8E97F /* StationLayer.swift */; };
 		B6C1F06B0CF86454EA147E72 /* FlightCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB485493ACD08C4C6CD5804F /* FlightCategory.swift */; };
 		B6D9791F6FAE018A283A6A45 /* RunwayMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85C6CB170A65E1A614F64BB1 /* RunwayMath.swift */; };
@@ -164,6 +168,7 @@
 		F9FAEAFFE5323B1757725A34 /* WatchContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A4A8464736F548F6F72A42 /* WatchContentView.swift */; };
 		FB1449121DF56602057E312B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 4763C8EEB9FBC9182028B8E2 /* PrivacyInfo.xcprivacy */; };
 		FBC05BDAC2F9A55BFB1380E2 /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34C2B97E09DCD235BF42063C /* Diagnostics.swift */; };
+		FC65E37CDC22F836338240C1 /* TemperatureUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6CF08B2A13F495A8EFA7C89 /* TemperatureUnit.swift */; };
 		FE972C0AD5114B4A692A5BAD /* AloftTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FAC7EA8699F6D188EF92090 /* AloftTests.swift */; };
 		FEBD3AFFDBBDF5EEA682BC93 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B6858331167EFEA8CE241D78 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
@@ -319,6 +324,7 @@
 		9639018DA53DA80272AC71E9 /* Barry.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Barry.entitlements; sourceTree = "<group>"; };
 		9B661E997E72021B37CCFFD4 /* UITestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestSupport.swift; sourceTree = "<group>"; };
 		9C9E7A347455A6781BAB196E /* WindFlow.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = WindFlow.metal; sourceTree = "<group>"; };
+		9ED4E8ACC4DA64C6E1076B59 /* TemperatureUnitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemperatureUnitTests.swift; sourceTree = "<group>"; };
 		A376D4EE445D8849427A861E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A59F4AD2D2CF0AC8FB31B534 /* ConfirmationOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmationOverlayView.swift; sourceTree = "<group>"; };
 		AD313083D4B2A9BAD12BAB92 /* RunwayWindDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayWindDial.swift; sourceTree = "<group>"; };
@@ -346,6 +352,7 @@
 		F3DE49EE7CDCB4E59BB8E97F /* StationLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StationLayer.swift; sourceTree = "<group>"; };
 		F4C5676D3E1E52D59CDFED12 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F4F0EF3938BA8F192FB71228 /* WatchSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSettingsView.swift; sourceTree = "<group>"; };
+		F6CF08B2A13F495A8EFA7C89 /* TemperatureUnit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemperatureUnit.swift; sourceTree = "<group>"; };
 		F776D233FE3E44CDDD61C05B /* BarryWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BarryWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F83C3064588614F2B8DEAA34 /* RunwayWindsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayWindsView.swift; sourceTree = "<group>"; };
 		FA32F779F49D1C628F2BC52E /* BarometerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarometerEngine.swift; sourceTree = "<group>"; };
@@ -389,6 +396,7 @@
 				29ED804DF107D966F7295562 /* RunwayMathTests.swift */,
 				0E50753B814745AF734760F1 /* SnapshotStalenessTests.swift */,
 				29C7E17624E3FBD582130C1E /* TafTimelineTests.swift */,
+				9ED4E8ACC4DA64C6E1076B59 /* TemperatureUnitTests.swift */,
 				0E7A086EE5185D61C26B5533 /* TendencyParityTests.swift */,
 			);
 			path = iOSAppTests;
@@ -415,6 +423,7 @@
 				05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */,
 				5D63A9351C0871620CA4A195 /* TafStrip.swift */,
 				72EC9A1E421849C76710D333 /* TafTimeline.swift */,
+				F6CF08B2A13F495A8EFA7C89 /* TemperatureUnit.swift */,
 				2542DA2C850B2399B31A9069 /* Tendency.swift */,
 				1A24A6845ECB66698D61771D /* TendencyProvider.swift */,
 				8E3203C0CBC7B1D5F0A57759 /* WindUnit.swift */,
@@ -822,6 +831,7 @@
 				99DBC62DAB0A16C1295609C3 /* RunwayMathTests.swift in Sources */,
 				4B7660EBAD37CF36FA22AAA6 /* SnapshotStalenessTests.swift in Sources */,
 				DFDEE353D4F787864B64BCCD /* TafTimelineTests.swift in Sources */,
+				803013AB14E6B43C770397EE /* TemperatureUnitTests.swift in Sources */,
 				7CF4014037C06AD763D6389F /* TendencyParityTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -852,6 +862,7 @@
 				0A97A6AB092391F5F45D58FC /* SharedSnapshot.swift in Sources */,
 				2BF26B141D9A63C4291EF0DF /* TafStrip.swift in Sources */,
 				C4F305519CC385B7AF7DADBB /* TafTimeline.swift in Sources */,
+				FC65E37CDC22F836338240C1 /* TemperatureUnit.swift in Sources */,
 				62FB812E1EB219CC6E616BBC /* Tendency.swift in Sources */,
 				483CBC3B0160B52142C82C61 /* TendencyProvider.swift in Sources */,
 				161F54967F58CB6AF2EAE650 /* WindUnit.swift in Sources */,
@@ -893,6 +904,7 @@
 				81C789D5AD14654F306BDA4C /* SharedSnapshot.swift in Sources */,
 				311D6022468091383C78CE7C /* TafStrip.swift in Sources */,
 				8B58FFB790A3822998F44285 /* TafTimeline.swift in Sources */,
+				5509E66CDDFB4B17F97DFE97 /* TemperatureUnit.swift in Sources */,
 				57789B75BDC58D0AACC5CA36 /* Tendency.swift in Sources */,
 				25F2CA5D0A085C6A963656C0 /* TendencyProvider.swift in Sources */,
 				E05FC95492D2378F98823D23 /* WindUnit.swift in Sources */,
@@ -956,6 +968,7 @@
 				BE243D5806C72810E6127F89 /* TafStrip.swift in Sources */,
 				D3C402CAC4DD221E088344E1 /* TafTimeline.swift in Sources */,
 				C10944BA3D2626C8FF342DCD /* TafTimelineCard.swift in Sources */,
+				477EA6029C0DB811A8D25AE0 /* TemperatureUnit.swift in Sources */,
 				7917511FB9F6E4E7614296AA /* Tendency.swift in Sources */,
 				50F708BB96C5BBFE917DE01A /* TendencyProvider.swift in Sources */,
 				D6FF8AA397153E989437EDAB /* UITestSupport.swift in Sources */,
@@ -990,6 +1003,7 @@
 				E1F631B6FE1E863E001704F2 /* SharedSnapshot.swift in Sources */,
 				30107468C2B3DA9A60DEE0D1 /* TafStrip.swift in Sources */,
 				5DBD0FC19C6288F1D8E8B24C /* TafTimeline.swift in Sources */,
+				B3E297CC66494AC1EDAD48B7 /* TemperatureUnit.swift in Sources */,
 				62FE249CDA4A80409C304F3D /* Tendency.swift in Sources */,
 				A9923E0C299F9CDF05E02D70 /* TendencyProvider.swift in Sources */,
 				496D420D268C7B1C34C7AD34 /* WatchBarometer.swift in Sources */,

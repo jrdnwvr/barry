@@ -46,6 +46,36 @@ struct CardRenderTests {
         try imgF.pngData()?.write(to: FileManager.default.temporaryDirectory.appendingPathComponent("rainwind-f.png"))
     }
 
+    /// Every forecast card style on the front night, saved as pictures to
+    /// set side by side. The setting goes back to what it was.
+    @Test func everyForecastStyleRendersTheFrontNight() throws {
+        let combined = try Fixtures.combinedFrontNight()
+        let defaults = AppConfig.sharedDefaults
+        let before = (defaults.string(forKey: ForecastCardStyle.key), defaults.string(forKey: "windUnit"),
+                      defaults.string(forKey: TemperatureUnit.key))
+        defaults.set("knots", forKey: "windUnit")
+        defaults.set(TemperatureUnit.fahrenheit.rawValue, forKey: TemperatureUnit.key)
+        defer {
+            defaults.set(before.0, forKey: ForecastCardStyle.key)
+            defaults.set(before.1, forKey: "windUnit")
+            defaults.set(before.2, forKey: TemperatureUnit.key)
+        }
+        for style in ForecastCardStyle.allCases {
+            defaults.set(style.rawValue, forKey: ForecastCardStyle.key)
+            let card: AnyView = style == .hourly
+                ? AnyView(HourlyForecastCard(combined: combined, now: Fixtures.fixtureNow, scrolls: false))
+                : AnyView(ShortTermForecastCard(combined: combined, now: Fixtures.fixtureNow))
+            let view = card
+                .padding(12)
+                .background(Color(.systemBackground))
+            let r = ImageRenderer(content: view.frame(width: 390).fixedSize(horizontal: false, vertical: true))
+            r.scale = 3
+            let img = try #require(r.uiImage, "\(style.rawValue) did not render")
+            #expect(img.size.height > 120, "\(style.rawValue) rendered too short")
+            try img.pngData()?.write(to: FileManager.default.temporaryDirectory.appendingPathComponent("forecast-\(style.rawValue).png"))
+        }
+    }
+
     @Test func tafRunwayAndHeroCardsRenderAtEveryPhoneWidth() throws {
         let combined = try Fixtures.combinedKLUK()
         let now = Fixtures.fixtureNow

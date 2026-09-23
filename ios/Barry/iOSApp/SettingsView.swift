@@ -49,6 +49,8 @@ struct SettingsView: View {
     private var radarAutoplay: Bool = true
     @AppStorage(AloftLayer.ceilingKey, store: AppConfig.sharedDefaults)
     private var aloftCeilingFt: Int = 18000
+    @AppStorage(ForecastCardStyle.key, store: AppConfig.sharedDefaults)
+    private var forecastStyleRaw: String = ForecastCardStyle.fallback.rawValue
 
     @State private var newICAO: String = ""
     /// Live matches from /stations/search while the airport field has text.
@@ -176,6 +178,19 @@ struct SettingsView: View {
                     Text("Wind card")
                 } footer: {
                     Text(RunwayWindsMode(rawValue: runwayWindsRaw)?.footer ?? "")
+                }
+
+                Section {
+                    Picker("Forecast card", selection: $forecastStyleRaw) {
+                        ForEach(ForecastCardStyle.allCases) { s in
+                            Text(s.label).tag(s.rawValue)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Forecast card")
+                } footer: {
+                    Text((ForecastCardStyle(rawValue: forecastStyleRaw) ?? .fallback).footer)
                 }
 
                 Section {

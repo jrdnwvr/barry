@@ -55,7 +55,7 @@ Cards, in the order the home screen shows them by default.
 | Lightning row: nearest, motion, count within 100 mi | | eyeball | | |
 | Pressure chart 6 h / 48 h, forecast dashed, drag to read | | eyeball | | |
 | TAF card: sentence, strip, sunset and sunrise marks | yes, timeline from a real KLUK TAF; renders at three widths | eyeball | | found the start hour rounding forward |
-| Rain and wind row | | eyeball | | |
+| Forecast card, four styles chosen in Settings (Summary, Changes, Hourly, Chart) | changes found and worded from a front night and a quiet one; every style rendered | Summary drag and Hourly scroll checked | | styles to be cut down after testing |
 | Conditions: density altitude, clouds, boundary layer, fog | | eyeball | | |
 | Backcountry strip card off field, altimeter estimate | | eyeball | | |
 | Runway winds dial and sentence | yes, components, order, sentences | | | |

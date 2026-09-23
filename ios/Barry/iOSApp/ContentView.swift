@@ -253,7 +253,7 @@ struct ContentView: View {
                 TafTimelineCard(combined: combined, now: store.now)
             }
         case .rainWind:
-            if layout == .phone { ConfirmationOverlayView(combined: combined, now: store.now) }
+            if layout == .phone { ShortTermForecastCard(combined: combined, now: store.now) }
         case .conditions:
             // DA now + trend, clouds, boundary layer, storm and fog outlooks
             // when they exist. Never an empty card.
@@ -392,7 +392,7 @@ struct ContentView: View {
                             VStack(spacing: 12) {
                                 trendSection(combined, chartHeight: 200)
                                 if homeLayout.isVisible(.rainWind) {
-                                    ConfirmationOverlayView(combined: combined, now: store.now)
+                                    ShortTermForecastCard(combined: combined, now: store.now)
                                 }
                             }
                         }
@@ -404,7 +404,7 @@ struct ContentView: View {
                         VStack(spacing: 12) {
                             trendSection(combined, chartHeight: 200)
                             if homeLayout.isVisible(.rainWind) {
-                                ConfirmationOverlayView(combined: combined, now: store.now)
+                                ShortTermForecastCard(combined: combined, now: store.now)
                             }
                             radarColumn(combined)
                         }

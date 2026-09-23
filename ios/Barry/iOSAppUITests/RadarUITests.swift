@@ -126,6 +126,9 @@ final class RadarUITests: XCTestCase {
         XCTAssertTrue(ceiling.waitForExistence(timeout: 15), "Aloft did not open")
         let time = app.staticTexts["aloft.time"].firstMatch
         XCTAssertTrue(time.waitForExistence(timeout: 20))
+        // The column has loaded once the label carries a clock time.
+        let loaded = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS 'M'"), object: time)
+        XCTAssertEqual(XCTWaiter().wait(for: [loaded], timeout: 30), .completed, "the column never loaded: \(time.label)")
         XCTAssertTrue(time.label.hasPrefix("Now"), time.label)
 
         for name in ["clouds", "wind", "temp", "icing", "layer"] {

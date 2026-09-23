@@ -85,8 +85,9 @@ struct ConfirmationOverlayView: View {
         // A trailing position hangs the text off the point's right side,
         // which is what a point near the left edge needs; the mirror on the
         // right. A fifth of the plot either side is enough for the label.
-        if f < 0.2 { return top ? .topTrailing : .bottomTrailing }
-        if f > 0.8 { return top ? .topLeading : .bottomLeading }
+        // A low near an edge sits beside its point: under it is the bars.
+        if f < 0.2 { return top ? .topTrailing : .trailing }
+        if f > 0.8 { return top ? .topLeading : .leading }
         return top ? .top : .bottom
     }
 
@@ -307,6 +308,14 @@ struct ConfirmationOverlayView: View {
                 .foregroundStyle(Series.precip.color.opacity(0.8))
                 .lineStyle(StrokeStyle(lineWidth: 1.5))
 
+            if isShown(.precip) {
+                ForEach(precipValues) { p in
+                    BarMark(x: .value("Time", p.t, unit: .hour), y: .value("Precip", max(0.04, norm(.precip, p.v))), width: .ratio(0.42))
+                        .foregroundStyle(Series.precip.color.opacity(0.85))
+                        .cornerRadius(3)
+                }
+            }
+
             if isShown(.wind) {
                 ForEach(windValues) { p in
                     if let g = p.g, g > p.w {
@@ -336,6 +345,8 @@ struct ConfirmationOverlayView: View {
                         .annotation(position: edgeAware(tHi.t, top: true), spacing: 2) {
                             Text("H \(TemperatureUnit.degrees(tHi.v))")
                                 .font(.caption2.weight(.semibold)).foregroundStyle(Series.temp.color)
+                                .padding(.horizontal, 3)
+                                .background(Color(.secondarySystemBackground).opacity(0.85), in: RoundedRectangle(cornerRadius: 3))
                         }
                 }
                 if let tLo, tLo.t != tHi?.t {
@@ -344,15 +355,9 @@ struct ConfirmationOverlayView: View {
                         .annotation(position: edgeAware(tLo.t, top: false), spacing: 2) {
                             Text("L \(TemperatureUnit.degrees(tLo.v))")
                                 .font(.caption2.weight(.semibold)).foregroundStyle(Series.temp.color)
+                                .padding(.horizontal, 3)
+                                .background(Color(.secondarySystemBackground).opacity(0.85), in: RoundedRectangle(cornerRadius: 3))
                         }
-                }
-            }
-
-            if isShown(.precip) {
-                ForEach(precipValues) { p in
-                    BarMark(x: .value("Time", p.t, unit: .hour), y: .value("Precip", max(0.04, norm(.precip, p.v))), width: .ratio(0.42))
-                        .foregroundStyle(Series.precip.color.opacity(0.85))
-                        .cornerRadius(3)
                 }
             }
 

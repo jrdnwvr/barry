@@ -51,6 +51,7 @@
 		4253341F1F79930A611AD743 /* CardIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0023323B71268E669397009E /* CardIcons.swift */; };
 		429B2C6D5EF4DF4EF52A8A2F /* PhoneSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82E8C122995032DFD8C5C5EC /* PhoneSync.swift */; };
 		4517F602E94072402651DC30 /* CombinedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 623D8012B9E2B6A8E0CE08AE /* CombinedStore.swift */; };
+		45EAD611C530761B5DCE50C4 /* ShortTermForecast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DE60DC6DE47C32A4A2F20A6 /* ShortTermForecast.swift */; };
 		477EA6029C0DB811A8D25AE0 /* TemperatureUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6CF08B2A13F495A8EFA7C89 /* TemperatureUnit.swift */; };
 		483CBC3B0160B52142C82C61 /* TendencyProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A24A6845ECB66698D61771D /* TendencyProvider.swift */; };
 		4841725627A1F0AC607A52BE /* SharedSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */; };
@@ -140,6 +141,7 @@
 		B6D9791F6FAE018A283A6A45 /* RunwayMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85C6CB170A65E1A614F64BB1 /* RunwayMath.swift */; };
 		B75A870FF81FADA19E72223D /* RunwayMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85C6CB170A65E1A614F64BB1 /* RunwayMath.swift */; };
 		BE243D5806C72810E6127F89 /* TafStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D63A9351C0871620CA4A195 /* TafStrip.swift */; };
+		BF6E49201E9E4A6A26A9C857 /* ForecastCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68F0E9DED173121E56E48C0B /* ForecastCards.swift */; };
 		C10944BA3D2626C8FF342DCD /* TafTimelineCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBA1D35A89B06FE9E7708D10 /* TafTimelineCard.swift */; };
 		C1FA94A165B7428939C8372D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CD077DE63D0DE437229C43CC /* Assets.xcassets */; };
 		C2BB4B03167622269DA26352 /* PressureFieldOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 763CE62FEE3C1CA173ABA1C3 /* PressureFieldOverlay.swift */; };
@@ -162,6 +164,7 @@
 		EAD163F4794C18F66265455E /* FlightCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB485493ACD08C4C6CD5804F /* FlightCategory.swift */; };
 		EF29D661015A900FB9D47F02 /* RunwayWindsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F83C3064588614F2B8DEAA34 /* RunwayWindsView.swift */; };
 		F0637246A729C97719EA086D /* BarometerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA32F779F49D1C628F2BC52E /* BarometerEngine.swift */; };
+		F1692F2A13D80C1E31C80FA5 /* ShortTermForecastTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 779DF49061F06FC05038FBE1 /* ShortTermForecastTests.swift */; };
 		F1A6FC2E3347FCA151FA44A1 /* CoreMotion.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 292532F4A2C2D5C39CC797B1 /* CoreMotion.framework */; };
 		F608BB8C623D3D3E0CA89E04 /* PressureActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECFAFB3674B651E14D4FEC8B /* PressureActivity.swift */; };
 		F622C89A1421128F895C8A28 /* RunwayMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85C6CB170A65E1A614F64BB1 /* RunwayMath.swift */; };
@@ -272,6 +275,7 @@
 		29C7E17624E3FBD582130C1E /* TafTimelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TafTimelineTests.swift; sourceTree = "<group>"; };
 		29ED804DF107D966F7295562 /* RunwayMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayMathTests.swift; sourceTree = "<group>"; };
 		2BB3C628CF8662B6BEF5A73F /* BarryWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryWatchApp.swift; sourceTree = "<group>"; };
+		2DE60DC6DE47C32A4A2F20A6 /* ShortTermForecast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortTermForecast.swift; sourceTree = "<group>"; };
 		34019275BE3EADB1E1E1739B /* BarryPhoneWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BarryPhoneWidget.entitlements; sourceTree = "<group>"; };
 		34C2B97E09DCD235BF42063C /* Diagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics.swift; sourceTree = "<group>"; };
 		35839C2045A30D70938041B6 /* FrontsOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontsOverlay.swift; sourceTree = "<group>"; };
@@ -295,6 +299,7 @@
 		623D8012B9E2B6A8E0CE08AE /* CombinedStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CombinedStore.swift; sourceTree = "<group>"; };
 		6662DFD4A743261C8134B535 /* RadarMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarMapView.swift; sourceTree = "<group>"; };
 		68D08500DD9FA42C666DFF25 /* ComplicationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComplicationViews.swift; sourceTree = "<group>"; };
+		68F0E9DED173121E56E48C0B /* ForecastCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForecastCards.swift; sourceTree = "<group>"; };
 		6978CE026B8EEE1A560877C0 /* PressureGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureGuideView.swift; sourceTree = "<group>"; };
 		6E6BAE232810713F08EFD574 /* AlertTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertTests.swift; sourceTree = "<group>"; };
 		6FE1451AAFD8A470C4CB228A /* FrontWatchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontWatchView.swift; sourceTree = "<group>"; };
@@ -306,6 +311,7 @@
 		75CA082BD890DE5E1469223E /* CardRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardRenderTests.swift; sourceTree = "<group>"; };
 		763CE62FEE3C1CA173ABA1C3 /* PressureFieldOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureFieldOverlay.swift; sourceTree = "<group>"; };
 		778E430DEB72ECE6B1DB5CCA /* PressureChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureChartView.swift; sourceTree = "<group>"; };
+		779DF49061F06FC05038FBE1 /* ShortTermForecastTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortTermForecastTests.swift; sourceTree = "<group>"; };
 		77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryAPI.swift; sourceTree = "<group>"; };
 		7C00F07F019E06DA06E95BD0 /* BarometerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarometerTests.swift; sourceTree = "<group>"; };
 		7CB1EFCBAEC1FFFB0EF24917 /* BackgroundRefresh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundRefresh.swift; sourceTree = "<group>"; };
@@ -397,6 +403,7 @@
 				024F41291A68B29C57129A86 /* Fixtures.swift */,
 				C4258044D160E9F49F088BAF /* RadarPaletteTests.swift */,
 				29ED804DF107D966F7295562 /* RunwayMathTests.swift */,
+				779DF49061F06FC05038FBE1 /* ShortTermForecastTests.swift */,
 				0E50753B814745AF734760F1 /* SnapshotStalenessTests.swift */,
 				29C7E17624E3FBD582130C1E /* TafTimelineTests.swift */,
 				9ED4E8ACC4DA64C6E1076B59 /* TemperatureUnitTests.swift */,
@@ -551,6 +558,7 @@
 				4EB1F388C1A5FE3D18F1D62E /* ContentView.swift */,
 				34C2B97E09DCD235BF42063C /* Diagnostics.swift */,
 				52B4C35AC0CE61C4C1CCE6D5 /* FieldConditionsView.swift */,
+				68F0E9DED173121E56E48C0B /* ForecastCards.swift */,
 				031482E889A2274CBD689E88 /* ForecastCaveatView.swift */,
 				35839C2045A30D70938041B6 /* FrontsOverlay.swift */,
 				6FE1451AAFD8A470C4CB228A /* FrontWatchView.swift */,
@@ -574,6 +582,7 @@
 				F83C3064588614F2B8DEAA34 /* RunwayWindsView.swift */,
 				DA12AC45B8A41856114FD9A7 /* SensorComparisonView.swift */,
 				72812DF1800A9DF0CF5EF2C3 /* SettingsView.swift */,
+				2DE60DC6DE47C32A4A2F20A6 /* ShortTermForecast.swift */,
 				F3DE49EE7CDCB4E59BB8E97F /* StationLayer.swift */,
 				E569F3B3B9FAB65C07970B1A /* StormAlerter.swift */,
 				CBA1D35A89B06FE9E7708D10 /* TafTimelineCard.swift */,
@@ -833,6 +842,7 @@
 				9A3EF5B92F7E694E33F31FFC /* Fixtures.swift in Sources */,
 				DE9BEC621A1206759924685E /* RadarPaletteTests.swift in Sources */,
 				99DBC62DAB0A16C1295609C3 /* RunwayMathTests.swift in Sources */,
+				F1692F2A13D80C1E31C80FA5 /* ShortTermForecastTests.swift in Sources */,
 				4B7660EBAD37CF36FA22AAA6 /* SnapshotStalenessTests.swift in Sources */,
 				DFDEE353D4F787864B64BCCD /* TafTimelineTests.swift in Sources */,
 				803013AB14E6B43C770397EE /* TemperatureUnitTests.swift in Sources */,
@@ -935,6 +945,7 @@
 				FBC05BDAC2F9A55BFB1380E2 /* Diagnostics.swift in Sources */,
 				1499AE344651937BC57A3E81 /* FieldConditionsView.swift in Sources */,
 				EAD163F4794C18F66265455E /* FlightCategory.swift in Sources */,
+				BF6E49201E9E4A6A26A9C857 /* ForecastCards.swift in Sources */,
 				17B2F3F6A33ED2C6DB766640 /* ForecastCaveatView.swift in Sources */,
 				83C8C470DA68480C043EF623 /* FrontWatchView.swift in Sources */,
 				70D7BA6937527AE4D263FF9A /* FrontsOverlay.swift in Sources */,
@@ -967,6 +978,7 @@
 				8B662BF9297E88CBB93B370B /* SensorComparisonView.swift in Sources */,
 				8C6BCDDE909F4DDEBB5F16AA /* SettingsView.swift in Sources */,
 				4841725627A1F0AC607A52BE /* SharedSnapshot.swift in Sources */,
+				45EAD611C530761B5DCE50C4 /* ShortTermForecast.swift in Sources */,
 				B5956053A3566C6DBCDAAF14 /* StationLayer.swift in Sources */,
 				20AD2A1B5CC1C7738EAEF8F5 /* StormAlerter.swift in Sources */,
 				BE243D5806C72810E6127F89 /* TafStrip.swift in Sources */,

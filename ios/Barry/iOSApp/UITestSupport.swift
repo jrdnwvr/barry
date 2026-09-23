@@ -31,5 +31,6 @@ enum UITestSupport {
         d.set("off", forKey: "radarStations")
         d.set(false, forKey: "phoneBarometerEnabled")
         d.set(false, forKey: StormAlerter.enabledKey)
+        d.set(false, forKey: StormAlerter.pressureKey)
     }
 }

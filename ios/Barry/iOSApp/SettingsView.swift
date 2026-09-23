@@ -28,6 +28,8 @@ struct SettingsView: View {
     private var phoneBarometerEnabled: Bool = false
     @AppStorage(StormAlerter.enabledKey, store: AppConfig.sharedDefaults)
     private var stormAlertsEnabled: Bool = false
+    @AppStorage(StormAlerter.pressureKey, store: AppConfig.sharedDefaults)
+    private var pressureAlertsEnabled: Bool = false
     @AppStorage(RunwayWindsMode.key, store: AppConfig.sharedDefaults)
     private var runwayWindsRaw: String = RunwayWindsMode.auto.rawValue
     @AppStorage(FieldConditionsCard.blReferenceKey, store: AppConfig.sharedDefaults)
@@ -93,23 +95,49 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Toggle("Storm alerts", isOn: $stormAlertsEnabled)
-                    Text("A notification when pressure moves fast. Timing depends on iOS background checks.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Toggle(isOn: $pressureAlertsEnabled) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Pressure changes")
+                            Text("When it moves fast at your station.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Toggle(isOn: $stormAlertsEnabled) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Storms")
+                            Text("Lightning nearby and heading your way, or thunderstorms likely soon.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                     if notifDenied {
                         Text("Notifications are turned off for Barry. Turn them on in iOS Settings › Notifications › Barry.")
                             .font(.caption)
                             .foregroundStyle(.orange)
                     }
-                    if stormAlertsEnabled && !notifDenied {
-                        Button("Send a test alert") { StormAlerter.sendTestAlert() }
+                    if (stormAlertsEnabled || pressureAlertsEnabled) && !notifDenied {
+                        Button("Send a test alert") {
+                            StormAlerter.sendTestAlert(pressure: pressureAlertsEnabled, storms: stormAlertsEnabled)
+                        }
                     }
-                    Toggle("Live Activity on the lock screen", isOn: $liveActivityEnabled)
+                    Toggle(isOn: $liveActivityEnabled) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Lock screen")
+                            Text("The trend as a Live Activity while a change is under way.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 } header: {
-                    Text("Storm alerts")
+                    Text("Alerts")
+                } footer: {
+                    Text("Checked in the background, as often as iOS allows.")
                 }
                 .onChange(of: stormAlertsEnabled) { _, on in
+                    if on { Task { notifDenied = !(await StormAlerter.requestAuthorization()) } }
+                }
+                .onChange(of: pressureAlertsEnabled) { _, on in
                     if on { Task { notifDenied = !(await StormAlerter.requestAuthorization()) } }
                 }
                 .task { notifDenied = await StormAlerter.authorizationStatus() == .denied }

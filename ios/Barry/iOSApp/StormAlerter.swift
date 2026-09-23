@@ -1,24 +1,44 @@
 //  StormAlerter.swift
 //  Barry — iOS
 //
-//  Local "storm alert" notifications on a rapid pressure change. When a background
-//  refresh sees the 3-hour tendency cross into falling_fast (a storm drop) or
-//  rising_fast (a gust front / sharp clearing), Barry posts a local notification —
-//  the app's core promise, delivered without opening it.
-//
-//  No push server: everything is local, driven by the existing BGAppRefreshTask
-//  (BackgroundRefresh). Throttled with a per-class latch so an ongoing event alerts
-//  at most once per cooldown, and the two fast classes are tracked separately (a
-//  drop and a later rise are distinct events).
+//  Local notifications, two kinds, each its own switch:
+//    Pressure changes: the 3-hour tendency crosses into falling_fast (weather
+//      on the way) or rising_fast (a gust front, sharp clearing).
+//    Storms: lightning within reach and heading this way, or thunderstorms
+//      likely at the station in the next few hours.
+//  No push server: everything is local, driven by the existing
+//  BGAppRefreshTask (BackgroundRefresh). Each kind has a latch so an ongoing
+//  event alerts once per cooldown, not once per background check.
 
 import Foundation
 import UserNotifications
 
 enum StormAlerter {
-    /// One ongoing event alerts at most once per this window.
-    static let cooldown: TimeInterval = 3 * 3600
+    /// The user-facing switches (shared suite). `enabledKey` kept its old
+    /// name so nobody's storms switch resets; pressure alerts got their own
+    /// and are seeded from it once (migrateKeys).
+    static let enabledKey = "stormAlertsEnabled"
+    static let pressureKey = "pressureAlertsEnabled"
+    private static let migratedKey = "alerts.migrated.v2"
 
-    /// AppStorage key for the user-facing toggle (shared suite).
+    static let pressureCooldown: TimeInterval = 3 * 3600
+    static let lightningCooldown: TimeInterval = 1 * 3600
+    static let forecastCooldown: TimeInterval = 6 * 3600
+    static let lightningRangeMi = 25
+    static let lightningCloseMi = 10
+    static let forecastWindow: TimeInterval = 3 * 3600
+
+    /// Before the split, one switch meant pressure alerts. Anyone who had it
+    /// on keeps them, and gets storms as well, which is what the switch said.
+    static func migrateKeys() {
+        let d = AppConfig.sharedDefaults
+        guard !d.bool(forKey: migratedKey) else { return }
+        if d.object(forKey: pressureKey) == nil, d.bool(forKey: enabledKey) {
+            d.set(true, forKey: pressureKey)
+        }
+        d.set(true, forKey: migratedKey)
+    }
+
     /// "3.2 hPa" or "0.09 inHg": the 3 h change in the unit the user chose.
     static func magnitude(_ deltaHPa: Double) -> String {
         let unit = PressureUnit(rawValue: AppConfig.sharedDefaults.string(forKey: "pressureUnit") ?? "") ?? .inHg
@@ -26,14 +46,8 @@ enum StormAlerter {
         return String(format: unit == .hPa ? "%.1f %@" : "%.2f %@", v, unit.label)
     }
 
-    static let enabledKey = "stormAlertsEnabled"
-
-    private static let lastClassKey = "stormAlert.lastClass"
-    private static let lastDateKey = "stormAlert.lastDate"
-
     // MARK: - Authorization
 
-    /// Ask for notification permission. Returns whether alerts are authorized.
     @discardableResult
     static func requestAuthorization() async -> Bool {
         do {
@@ -48,86 +62,142 @@ enum StormAlerter {
         await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
     }
 
+    // MARK: - Decisions (pure, so they test)
+
+    struct Alert: Equatable {
+        let latch: String          // which ongoing event this is
+        let cooldown: TimeInterval
+        let title: String
+        let body: String
+    }
+
+    /// The pressure alert the reading calls for, if any.
+    static func pressureAlert(_ combined: CombinedResponse) -> Alert? {
+        guard let tendency = combined.tendency else { return nil }
+        let place = combined.pressure.name ?? combined.pressure.station
+        let mag = magnitude(tendency.delta3h)
+        switch tendency.cls {
+        case .fallingFast:
+            return Alert(latch: "pressure.falling_fast", cooldown: pressureCooldown,
+                         title: "Pressure dropping fast",
+                         body: "Down \(mag) in 3 h at \(place). \(combined.verdict)")
+        case .risingFast:
+            return Alert(latch: "pressure.rising_fast", cooldown: pressureCooldown,
+                         title: "Pressure rising sharply",
+                         body: "Up \(mag) in 3 h at \(place). \(combined.verdict)")
+        default:
+            return nil
+        }
+    }
+
+    /// The storm alert the reading calls for, if any. Lightning wins over a
+    /// forecast: something real and close beats something likely and later.
+    static func stormAlert(_ combined: CombinedResponse, now: Date = Date()) -> Alert? {
+        let place = combined.pressure.name ?? combined.pressure.station
+        let clock = { (d: Date) in d.formatted(date: .omitted, time: .shortened) }
+        if let l = combined.lightningNearby,
+           now.timeIntervalSince(l.at) <= 30 * 60,
+           l.distanceMi <= lightningRangeMi,
+           l.towardYou == true || l.distanceMi <= lightningCloseMi {
+            var body = l.distanceMi < 3 ? "At \(place)." : "\(l.distanceMi) mi to the \(l.cardinal.lowercased()) of \(place)"
+            if l.distanceMi >= 3 {
+                if l.towardYou == true {
+                    body += l.etaAt.map { ", moving this way. About \(clock($0))." } ?? ", moving this way."
+                } else {
+                    body += "."
+                }
+            }
+            return Alert(latch: "storm.lightning", cooldown: lightningCooldown,
+                         title: "Lightning nearby", body: body)
+        }
+        if let s = combined.conditions?.storm {
+            if s.risk == "observed", let d = s.distanceMi, d <= lightningCloseMi {
+                return Alert(latch: "storm.lightning", cooldown: lightningCooldown,
+                             title: "Thunderstorms at \(place)", body: s.detail)
+            }
+            if s.risk == "likely", s.start.map({ $0.timeIntervalSince(now) <= forecastWindow }) ?? true,
+               s.end.map({ $0 > now }) ?? true {
+                var body = "At \(place)"
+                if let a = s.start, let b = s.end, b > a { body += " from \(clock(a)) to \(clock(b))" }
+                else if let a = s.start { body += " around \(clock(a))" }
+                body += "."
+                return Alert(latch: "storm.forecast", cooldown: forecastCooldown,
+                             title: "Thunderstorms likely", body: body)
+            }
+        }
+        return nil
+    }
+
     // MARK: - Evaluate
 
-    /// Evaluate the latest reading and post a notification if it just crossed into a
-    /// fast-changing class we haven't already alerted for (within the cooldown).
-    /// Safe to call from a background task; a no-op unless enabled + authorized.
-    static func evaluate(_ combined: CombinedResponse?, enabled: Bool, now: Date = Date()) async {
-        guard enabled, let combined, let tendency = combined.tendency else { return }
-        let cls = tendency.cls
-        guard cls == .fallingFast || cls == .risingFast else { return }
-        guard shouldAlert(for: cls, now: now) else { return }
-        guard await authorizationStatus() == .authorized else { return }
+    /// Post whatever the reading calls for, once per event. Safe from a
+    /// background task; a no-op unless a switch is on and iOS allows it.
+    static func evaluate(_ combined: CombinedResponse?, pressure: Bool, storms: Bool,
+                         now: Date = Date()) async {
+        guard pressure || storms, let combined else { return }
+        var due: [Alert] = []
+        if pressure, let a = pressureAlert(combined) { due.append(a) }
+        if storms, let a = stormAlert(combined, now: now) { due.append(a) }
+        due = due.filter { shouldAlert($0, now: now) }
+        guard !due.isEmpty, await authorizationStatus() == .authorized else { return }
+        for a in due {
+            let c = UNMutableNotificationContent()
+            c.title = a.title
+            c.body = a.body
+            c.sound = .default
+            let request = UNNotificationRequest(identifier: "\(a.latch)_\(Int(now.timeIntervalSince1970))",
+                                                content: c, trigger: nil)
+            try? await UNUserNotificationCenter.current().add(request)
+            latch(a, now: now)
+        }
+    }
 
-        let content = makeContent(cls: cls, tendency: tendency, combined: combined)
-        let request = UNNotificationRequest(
-            identifier: "storm_alert_\(Int(now.timeIntervalSince1970))",
-            content: content, trigger: nil)  // nil trigger = deliver now
-        try? await UNUserNotificationCenter.current().add(request)
-        latch(cls: cls, now: now)
+    /// The old entry point, kept for anything still calling it.
+    static func evaluate(_ combined: CombinedResponse?, enabled: Bool, now: Date = Date()) async {
+        await evaluate(combined, pressure: enabled, storms: enabled, now: now)
     }
 
     // MARK: - Test
 
-    /// Fire a sample alert (used by the Settings "Send a test alert" button) so
-    /// testers can confirm permission + see what an alert looks like. Delayed a few
-    /// seconds so the phone can be locked to see it land on the lock screen.
-    static func sendTestAlert() {
-        let c = UNMutableNotificationContent()
-        c.title = "⚠️ Pressure dropping fast"
-        c.body = "Down \(Self.magnitude(-3.2)) in 3h at your station. Storm may be approaching. (Test alert)"
-        c.sound = .default
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false)
-        let req = UNNotificationRequest(identifier: "storm_alert_test", content: c, trigger: trigger)
-        UNUserNotificationCenter.current().add(req)
+    /// A sample of each kind that is on, a few seconds out so the phone can
+    /// be locked to see it land.
+    static func sendTestAlert(pressure: Bool, storms: Bool) {
+        var samples: [(String, String, String)] = []
+        if pressure {
+            samples.append(("test_pressure", "Pressure dropping fast",
+                            "Down \(magnitude(-3.2)) in 3 h at your station. Weather on the way. (Test)"))
+        }
+        if storms {
+            samples.append(("test_storm", "Lightning nearby",
+                            "12 mi to the west of your station, moving this way. (Test)"))
+        }
+        for (i, (id, title, body)) in samples.enumerated() {
+            let c = UNMutableNotificationContent()
+            c.title = title
+            c.body = body
+            c.sound = .default
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 3 + Double(i) * 2, repeats: false)
+            UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: c, trigger: trigger))
+        }
     }
+
+    static func sendTestAlert() { sendTestAlert(pressure: true, storms: false) }
 
     // MARK: - Throttle latch
 
-    private static func shouldAlert(for cls: TendencyClass, now: Date) -> Bool {
-        let d = AppConfig.sharedDefaults
-        let lastClass = d.string(forKey: lastClassKey)
-        let lastDate = d.object(forKey: lastDateKey) as? Date
-        // Same ongoing class still within the cooldown → stay quiet.
-        if lastClass == cls.rawValue, let lastDate, now.timeIntervalSince(lastDate) < cooldown {
-            return false
-        }
-        return true
+    private static func shouldAlert(_ a: Alert, now: Date) -> Bool {
+        guard let last = AppConfig.sharedDefaults.object(forKey: "alert.latch.\(a.latch)") as? Date else { return true }
+        return now.timeIntervalSince(last) >= a.cooldown
     }
 
-    private static func latch(cls: TendencyClass, now: Date) {
-        let d = AppConfig.sharedDefaults
-        d.set(cls.rawValue, forKey: lastClassKey)
-        d.set(now, forKey: lastDateKey)
-    }
-
-    // MARK: - Content
-
-    private static func makeContent(cls: TendencyClass, tendency: TendencyOut,
-                                    combined: CombinedResponse) -> UNMutableNotificationContent {
-        let c = UNMutableNotificationContent()
-        let place = combined.pressure.name ?? combined.pressure.station
-        let mag = Self.magnitude(tendency.delta3h)
-        switch cls {
-        case .fallingFast:
-            c.title = "⚠️ Pressure dropping fast"
-            c.body = "Down \(mag) in 3h at \(place). \(combined.verdict)"
-        case .risingFast:
-            c.title = "Pressure rising sharply"
-            c.body = "Up \(mag) in 3h at \(place). \(combined.verdict)"
-        default:
-            c.title = "Pressure change"
-            c.body = combined.verdict
-        }
-        c.sound = .default
-        return c
+    private static func latch(_ a: Alert, now: Date) {
+        AppConfig.sharedDefaults.set(now, forKey: "alert.latch.\(a.latch)")
     }
 }
 
 // MARK: - Foreground presentation
 
-/// Lets storm alerts surface as a banner even while Barry is open — useful for the
+/// Lets alerts surface as a banner even while Barry is open — useful for the
 /// test button and any alert that lands mid-session.
 final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationDelegate()

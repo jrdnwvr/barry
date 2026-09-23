@@ -16,6 +16,8 @@ struct BarryApp: App {
     private var phoneBarometerEnabled: Bool = false
     @AppStorage(StormAlerter.enabledKey, store: AppConfig.sharedDefaults)
     private var stormAlertsEnabled: Bool = false
+    @AppStorage(StormAlerter.pressureKey, store: AppConfig.sharedDefaults)
+    private var pressureAlertsEnabled: Bool = false
     @AppStorage("hasOnboarded", store: AppConfig.sharedDefaults)
     private var hasOnboarded: Bool = false
 
@@ -23,6 +25,7 @@ struct BarryApp: App {
         // A UI test run starts from a known state: onboarded, KLUK selected,
         // the radar's default layers. Nothing else reads this flag.
         if UITestSupport.active { UITestSupport.prepare() }
+        StormAlerter.migrateKeys()
         // MetricKit's daily launch, hang, crash and battery reports go to
         // Barry's own server. See Diagnostics.swift and the privacy page.
         DiagnosticsReporter.shared.start()
@@ -57,7 +60,7 @@ struct BarryApp: App {
                     case .background:
                         barometer.stop()
                         // Ask for background slots when either background feature is on.
-                        if phoneBarometerEnabled || stormAlertsEnabled {
+                        if phoneBarometerEnabled || stormAlertsEnabled || pressureAlertsEnabled {
                             BackgroundRefresh.schedule()
                         }
                     default:
@@ -71,6 +74,7 @@ struct BarryApp: App {
         .backgroundTask(.appRefresh(BackgroundRefresh.taskID)) {
             await BackgroundRefresh.run(store: store, barometer: barometer,
                                         sensorEnabled: phoneBarometerEnabled,
+                                        pressureAlertsEnabled: pressureAlertsEnabled,
                                         stormAlertsEnabled: stormAlertsEnabled)
             BackgroundRefresh.schedule()  // chain the next opportunistic refresh
         }

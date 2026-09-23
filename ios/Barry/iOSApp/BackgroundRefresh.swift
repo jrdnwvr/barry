@@ -39,15 +39,15 @@ enum BackgroundRefresh {
     /// the task's runtime budget.
     @MainActor
     static func run(store: PressureStore, barometer: BarometerManager,
-                    sensorEnabled: Bool, stormAlertsEnabled: Bool) async {
+                    sensorEnabled: Bool, pressureAlertsEnabled: Bool, stormAlertsEnabled: Bool) async {
         await store.load()
         if sensorEnabled, let ref = store.combined?.calibrationReference {
             await barometer.recalibrateInBackground(
                 stationAltim: ref,
                 observedAt: store.combined?.observedSeries.last?.t)
         }
-        // Fresh reading in hand — check whether it just turned stormy.
-        await StormAlerter.evaluate(store.combined, enabled: stormAlertsEnabled)
+        // Fresh reading in hand: anything worth a tap on the shoulder?
+        await StormAlerter.evaluate(store.combined, pressure: pressureAlertsEnabled, storms: stormAlertsEnabled)
         if let c = store.combined {
             await LiveActivityManager.shared.sync(c, atAirport: store.atAirport, foreground: false)
         }

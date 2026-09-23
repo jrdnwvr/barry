@@ -7,8 +7,8 @@
 //    3. Units — writes straight to the same keys Settings uses.
 //    4. Local readings opt-in — sets phoneBarometerEnabled; iOS permission
 //       prompts then fire naturally when the sensor starts.
-//    5. Storm alerts opt-in — flips the flag and requests notification
-//       permission right at the moment of stated intent.
+//    5. Alerts opt-in — pressure changes and storms as separate switches,
+//       plus the lock screen; permission is requested at the moment of intent.
 //  Skip (bottom right, every page) bails out of the whole flow: marks
 //  onboarding done, keeps defaults, enables nothing. The ghost buttons on
 //  pages 3/4 decline just that feature and keep going.
@@ -26,6 +26,11 @@ struct OnboardingView: View {
     private var phoneBarometerEnabled: Bool = false
     @AppStorage(StormAlerter.enabledKey, store: AppConfig.sharedDefaults)
     private var stormAlertsEnabled: Bool = false
+    @AppStorage(StormAlerter.pressureKey, store: AppConfig.sharedDefaults)
+    private var pressureAlertsEnabled: Bool = false
+    /// The page's own choices; written to the switches only on "Turn on".
+    @State private var wantPressure = true
+    @State private var wantStorms = true
     @AppStorage(LiveActivityManager.enabledKey, store: AppConfig.sharedDefaults)
     private var liveActivityEnabled: Bool = false
 
@@ -192,49 +197,58 @@ struct OnboardingView: View {
             Image(systemName: "bell")
                 .font(.system(size: 30))
                 .foregroundStyle(.blue)
-            Text("Barry can watch for storms")
+            Text("Get a heads-up")
                 .font(.title2.weight(.semibold))
                 .multilineTextAlignment(.center)
-            Text("A notification when pressure moves fast. A big drop usually means a storm, a sharp rise gusty wind.")
+            Text("Barry can check in the background and let you know.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Pressure dropping fast")
-                    .font(.footnote.weight(.semibold))
-                Text("Down \(unit == .hPa ? "3.2 hPa" : "0.09 inHg") in 3h at your station. Storm may be approaching.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            VStack(spacing: 8) {
+                optionRow("Pressure changes",
+                          "When it moves fast at your station. A sharp fall usually means weather on the way, a sharp rise gusty wind.",
+                          isOn: $wantPressure)
+                optionRow("Storms",
+                          "Lightning within \(StormAlerter.lightningRangeMi) miles and heading your way, or thunderstorms likely in the next few hours.",
+                          isOn: $wantStorms)
+                optionRow("Lock screen",
+                          "The trend as a Live Activity while a change is under way.",
+                          isOn: $liveActivityEnabled)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(Color(.secondarySystemBackground),
-                        in: RoundedRectangle(cornerRadius: 10))
-            Toggle(isOn: $liveActivityEnabled) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Also on the lock screen")
-                        .font(.footnote.weight(.semibold))
-                    Text("While a change is under way, the trend as a Live Activity.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding(12)
-            .background(Color(.secondarySystemBackground),
-                        in: RoundedRectangle(cornerRadius: 10))
-            Text("Checks in the background.")
+            Text("Checked in the background, as often as iOS allows.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         } buttons: {
-            primaryButton("Turn on storm alerts") {
-                stormAlertsEnabled = true
-                Task {
-                    _ = await StormAlerter.requestAuthorization()
-                    finish()
+            if wantPressure || wantStorms {
+                primaryButton("Turn on") {
+                    pressureAlertsEnabled = wantPressure
+                    stormAlertsEnabled = wantStorms
+                    Task {
+                        _ = await StormAlerter.requestAuthorization()
+                        finish()
+                    }
                 }
+                ghostButton("Not now, start Barry") { finish() }
+            } else {
+                primaryButton("Start Barry") { finish() }
             }
-            ghostButton("Not now, start Barry") { finish() }
         }
+    }
+
+    private func optionRow(_ title: String, _ detail: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.footnote.weight(.semibold))
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .background(Color(.secondarySystemBackground),
+                    in: RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: - Shared layout pieces

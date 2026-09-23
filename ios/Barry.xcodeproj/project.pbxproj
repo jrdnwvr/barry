@@ -89,6 +89,7 @@
 		69FA11493C9F04A3A79384A3 /* HorizontalDragGesture.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB906A0DF0FCEFBE609EBF06 /* HorizontalDragGesture.swift */; };
 		70D7BA6937527AE4D263FF9A /* FrontsOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35839C2045A30D70938041B6 /* FrontsOverlay.swift */; };
 		71A3F386AC931B1BD311F583 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A376D4EE445D8849427A861E /* PrivacyInfo.xcprivacy */; };
+		72AEB7C7D074A422FD0AA881 /* AlertTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E6BAE232810713F08EFD574 /* AlertTests.swift */; };
 		73C115787B3F6EB1F3D44776 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918B4D14CC966B0E820FC1AC /* Models.swift */; };
 		7492FC46266CE19D8B710E51 /* RectangularComplications.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAFA9596978A2666CDFADAB4 /* RectangularComplications.swift */; };
 		772708512B575F16B6A02B14 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0094727B647701DDDCF17BD2 /* LocationManager.swift */; };
@@ -295,6 +296,7 @@
 		6662DFD4A743261C8134B535 /* RadarMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarMapView.swift; sourceTree = "<group>"; };
 		68D08500DD9FA42C666DFF25 /* ComplicationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComplicationViews.swift; sourceTree = "<group>"; };
 		6978CE026B8EEE1A560877C0 /* PressureGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureGuideView.swift; sourceTree = "<group>"; };
+		6E6BAE232810713F08EFD574 /* AlertTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertTests.swift; sourceTree = "<group>"; };
 		6FE1451AAFD8A470C4CB228A /* FrontWatchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontWatchView.swift; sourceTree = "<group>"; };
 		711E43480463B0F36F74E35A /* Barry.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Barry.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7124BFCE70A82D184062809B /* BarryComplication.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BarryComplication.entitlements; sourceTree = "<group>"; };
@@ -388,6 +390,7 @@
 		25FA9FE4534CDB72E7FC40FA /* iOSAppTests */ = {
 			isa = PBXGroup;
 			children = (
+				6E6BAE232810713F08EFD574 /* AlertTests.swift */,
 				8FAC7EA8699F6D188EF92090 /* AloftTests.swift */,
 				7C00F07F019E06DA06E95BD0 /* BarometerTests.swift */,
 				75CA082BD890DE5E1469223E /* CardRenderTests.swift */,
@@ -823,6 +826,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				72AEB7C7D074A422FD0AA881 /* AlertTests.swift in Sources */,
 				FE972C0AD5114B4A692A5BAD /* AloftTests.swift in Sources */,
 				77A46CEAE1569CD88532A37F /* BarometerTests.swift in Sources */,
 				5B4110D0966F6475A5E665D5 /* CardRenderTests.swift in Sources */,

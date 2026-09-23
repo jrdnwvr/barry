@@ -1,9 +1,13 @@
 //  ConfirmationOverlayView.swift
 //  Barry — iOS
 //
-//  Wind + precip confirmation (brief §4.2, §6). A pressure fall confirmed by rising
-//  wind and climbing precip probability is the real frontal-passage tell. Two separate
-//  mini-charts with correct individual scales so neither channel is misread.
+//  The next twelve hours on one chart: rain chance as bars, wind as a
+//  dashed line with its gust band, temperature as a dotted line with the
+//  high and low marked. Three values across the top are the current
+//  readings; tapping one puts its scale on the axis, and the small button
+//  beside the others hides or shows that series. Everything is drawn on one
+//  0 to 1 plot with each series normalised to its own range, which is what
+//  lets three units share a picture without one flattening the others.
 
 import SwiftUI
 import Charts
@@ -18,425 +22,402 @@ struct ConfirmationOverlayView: View {
     @AppStorage(TemperatureUnit.key, store: AppConfig.sharedDefaults)
     private var tempUnitRaw: String = TemperatureUnit.celsius.rawValue
     private var tempUnit: TemperatureUnit { TemperatureUnit(rawValue: tempUnitRaw) ?? .celsius }
+    /// Which series is on the axis, and which are hidden, across launches.
+    @AppStorage("forecastCard.primary", store: AppConfig.sharedDefaults)
+    private var primaryRaw: String = Series.precip.rawValue
+    @AppStorage("forecastCard.hidden", store: AppConfig.sharedDefaults)
+    private var hiddenRaw: String = ""
+
+    enum Series: String, CaseIterable, Identifiable {
+        case precip, wind, temp
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .precip: return "Precip probability"
+            case .wind: return "Wind"
+            case .temp: return "Temperature"
+            }
+        }
+        var icon: String {
+            switch self {
+            case .precip: return "cloud.rain"
+            case .wind: return "wind"
+            case .temp: return "thermometer.medium"
+            }
+        }
+        var color: Color {
+            switch self {
+            case .precip: return .blue
+            case .wind: return .green
+            case .temp: return .orange
+            }
+        }
+    }
+
+    private var primary: Series { Series(rawValue: primaryRaw) ?? .precip }
+    private var hidden: Set<Series> { Set(hiddenRaw.split(separator: ",").compactMap { Series(rawValue: String($0)) }) }
+    private func isShown(_ s: Series) -> Bool { s == primary || !hidden.contains(s) }
+    private func toggle(_ s: Series) {
+        var h = hidden
+        if h.contains(s) { h.remove(s) } else { h.insert(s) }
+        hiddenRaw = Series.allCases.filter { h.contains($0) }.map(\.rawValue).joined(separator: ",")
+    }
+
+    static let windowHours = 12
 
     private var hours: [ForecastHour] {
         (combined.forecast?.hourly ?? [])
-            .filter { $0.t >= now }
-            .prefix(24)
+            .filter { $0.t >= now.addingTimeInterval(-1800) }
+            .prefix(Self.windowHours + 1)
             .map { $0 }
     }
 
-    private var precipHours: [ForecastHour] { hours.filter { $0.precip_prob != nil } }
-    private var windHours: [ForecastHour] { hours.filter { $0.windspeed != nil } }
-    private var tempHours: [ForecastHour] { hours.filter { $0.temperature != nil } }
-
-    /// Every chart on the card shares this, so 3 PM is the same pixel in
-    /// each of them whatever hours a channel happens to have.
+    /// Half an hour of air past the last bar, so it and the "+12 h" label fit.
     private var xDomain: ClosedRange<Date> {
         let first = hours.first?.t ?? now
-        let last = hours.last?.t ?? now.addingTimeInterval(23 * 3600)
-        return first...max(last, first.addingTimeInterval(3600))
+        return first.addingTimeInterval(-1200)...first.addingTimeInterval(Double(Self.windowHours) * 3600 + 3600)
     }
-    /// The y-axis labels are all this wide, on the leading side, for the same reason.
-    private static let axisWidth: CGFloat = 30
 
-    // Only surface the panel when at least one channel has something to show.
-    private var hasMeaningfulPrecip: Bool { precipHours.contains { ($0.precip_prob ?? 0) > 5 } }
-    private var hasMeaningfulWind: Bool { windHours.contains { ($0.windspeed ?? 0) > 2 } }
+    /// A label near either edge of the plot leans inward instead of clipping.
+    private func edgeAware(_ t: Date, top: Bool) -> AnnotationPosition {
+        let span = xDomain.upperBound.timeIntervalSince(xDomain.lowerBound)
+        let f = t.timeIntervalSince(xDomain.lowerBound) / span
+        if f < 0.12 { return top ? .topTrailing : .bottomTrailing }
+        if f > 0.88 { return top ? .topLeading : .bottomLeading }
+        return top ? .top : .bottom
+    }
 
-    // --- collapsed summary (next 6h) ------------------------------------------
-    private var next6h: [ForecastHour] {
-        hours.filter { $0.t <= now.addingTimeInterval(6 * 3600) }
-    }
-    private var precipMaxPct: Int { next6h.compactMap { $0.precip_prob }.max() ?? 0 }
+    // MARK: Ranges, in the unit shown
 
-    // Current wind: METAR-first — the station's measured wind beats the model's
-    // value for "now"; the forecast hour is only the fallback (old backend / no obs).
-    private var metarWind: CurrentObs? {
-        combined.pressure.current.windspeed != nil ? combined.pressure.current : nil
-    }
-    private var windNowKmh: Double {
-        metarWind?.windspeed ?? (next6h.first ?? hours.first)?.windspeed ?? 0
-    }
-    /// Wind direction (degrees the wind blows *from*: 0 = N, 90 = E), if reported.
-    private var windDirNow: Double? {
-        metarWind?.winddir ?? (next6h.first ?? hours.first)?.winddir
-    }
-    /// Gusts only display when they meaningfully exceed sustained (~3 kt) — below
-    /// that, "0 G 1 kts" is technically true and practically noise.
-    private static let gustDisplayMarginKmh = 5.5
-    /// Direction is meaningless in near-calm air (vane just drifts) — hide it
-    /// below ~2 kt so "0 kts · 360°" can't happen.
-    private static let dirDisplayMinKmh = 3.7
+    private struct Pt: Identifiable { let t: Date; let v: Double; var id: Date { t } }
+    private struct WindPt: Identifiable { let t: Date; let w: Double; let g: Double?; var id: Date { t } }
 
-    /// Current gust: a METAR gust is inherently notable (stations only report one
-    /// when peaks exceed the sustained wind meaningfully). A forecast-derived gust
-    /// is model output, so it must clearly exceed sustained before we surface it.
-    private var windGustNow: Double? {
+    private var precipValues: [Pt] {
+        var out: [Pt] = []
+        for h in hours { if let p = h.precip_prob { out.append(Pt(t: h.t, v: Double(p))) } }
+        return out
+    }
+    private var windValues: [WindPt] {
+        var out: [WindPt] = []
+        for h in hours {
+            if let w = h.windspeed {
+                let g: Double? = h.windgust.map { windUnit.convert($0) }
+                out.append(WindPt(t: h.t, w: windUnit.convert(w), g: g))
+            }
+        }
+        return out
+    }
+    private var tempValues: [Pt] {
+        var out: [Pt] = []
+        for h in hours { if let t = h.temperature { out.append(Pt(t: h.t, v: tempUnit.convert(t))) } }
+        return out
+    }
+
+    /// Wind's axis runs from calm to just past the strongest gust.
+    private var windTop: Double {
+        let top = windValues.map { max($0.w, $0.g ?? 0) }.max() ?? 10
+        return max(5, (top / 5).rounded(.up) * 5)
+    }
+    private var tempRange: ClosedRange<Double> {
+        let vals = tempValues.map(\.v)
+        guard let lo = vals.min(), let hi = vals.max() else { return 0...10 }
+        let pad = max(1, (hi - lo) * 0.15)
+        return (lo - pad)...(hi + pad)
+    }
+
+    private func norm(_ s: Series, _ v: Double) -> Double {
+        switch s {
+        case .precip: return v / 100
+        case .wind: return v / windTop
+        case .temp: return (v - tempRange.lowerBound) / (tempRange.upperBound - tempRange.lowerBound)
+        }
+    }
+
+    /// The axis ticks for the primary series: bottom, middle, top.
+    private var axisTicks: [(Double, String)] {
+        switch primary {
+        case .precip: return [(0, "0%"), (0.5, "50%"), (1, "100%")]
+        case .wind: return [0, 0.5, 1].map { ($0, "\(Int(($0 * windTop).rounded())) \(windUnit.label)") }
+        case .temp:
+            let lo = tempRange.lowerBound, hi = tempRange.upperBound
+            return [0, 0.5, 1].map { ($0, TemperatureUnit.degrees(lo + (hi - lo) * $0)) }
+        }
+    }
+
+    // MARK: Current readings for the chips
+
+    private var metarWind: CurrentObs? { combined.pressure.current.windspeed != nil ? combined.pressure.current : nil }
+    private var windNowKmh: Double { metarWind?.windspeed ?? hours.first?.windspeed ?? 0 }
+    private var gustNowKmh: Double? {
         if let g = metarWind?.windgust { return g }
-        guard metarWind == nil,
-              let g = (next6h.first ?? hours.first)?.windgust,
-              g > windNowKmh + 8 else { return nil }
+        guard metarWind == nil, let g = hours.first?.windgust, g > windNowKmh + 8 else { return nil }
         return g
     }
-
-    /// "12 mph G 22 · 230°" — METAR-style: speed, gust when notable, direction.
-    private var windText: String {
-        var s = "\(windUnit.format(windNowKmh))"
-        if let g = windGustNow {
-            s += " G \(windUnit.format(g))"
-        }
-        s += " \(windUnit.label)"
-        if let dir = windDirNow, windNowKmh >= Self.dirDisplayMinKmh {
-            s += " · \(Int(dir.rounded()))°"
-        }
-        return s
+    private var windChip: String {
+        var s = windUnit.format(windNowKmh)
+        if let g = gustNowKmh { s += " G\(windUnit.format(g))" }
+        return s + " \(windUnit.label)"
+    }
+    private var precipChip: String { "\(Int(hours.first?.precip_prob ?? 0))%" }
+    private var tempChip: String? {
+        (combined.pressure.current.temp ?? hours.first?.temperature).map(tempUnit.format)
     }
 
-    /// The forecast hour the user last tapped on the wind chart.
-    private struct WindSelection: Equatable {
-        let date: Date
-        let speedKmh: Double
-        let gustKmh: Double?
-        let dir: Double?
-    }
-    @State private var windSelection: WindSelection?
+    private struct Selection: Equatable { let date: Date }
+    @State private var selection: Selection?
+
+    // MARK: Body
 
     var body: some View {
-        if hours.isEmpty {
+        if hours.count < 2 {
             EmptyView()
         } else {
-            VStack(alignment: .leading, spacing: 12) {
-                summaryRow
-
-                if hasMeaningfulPrecip { precipChart }
-                if hasMeaningfulWind { windChart }
-                if !hasMeaningfulPrecip && !hasMeaningfulWind {
-                    Text("Calm and dry through the forecast window.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 10) {
+                chips
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("\(primary.title) · \(Self.windowHours) h")
+                            .font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Text("Tap a value for its scale")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    legend
+                    chart
+                    if let sel = selection { readout(sel) }
                 }
-                if tempHours.count >= 2 { tempChart }
+                .padding(12)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
             }
-            // Fresh forecast → any tapped point may no longer exist; clear it.
-            .onChange(of: combined) { _, _ in windSelection = nil }
+            .onChange(of: combined) { _, _ in selection = nil }
         }
     }
 
-    /// "16–21°": the coming six hours' low and high, one number when flat.
-    private var tempRangeText: String? {
-        let temps = next6h.compactMap { $0.temperature }
-        guard let lo = temps.min(), let hi = temps.max() else { return nil }
-        let a = tempUnit.format(lo), b = tempUnit.format(hi)
-        return a == b ? a : "\(a.dropLast())–\(b)"
-    }
-
-    private var summaryRow: some View {
-        HStack(spacing: 14) {
-            Label("\(precipMaxPct)%", systemImage: "cloud.rain")
-            Label(windText, systemImage: "wind")
-            if let t = tempRangeText {
-                Label(t, systemImage: "thermometer.medium")
-            }
-            Text("next 6h").foregroundStyle(.secondary)
-            Spacer()
+    private var chips: some View {
+        HStack(spacing: 6) {
+            chip(.precip, precipChip)
+            chip(.wind, windChip)
+            if let t = tempChip { chip(.temp, t) }
+            Spacer(minLength: 0)
         }
-        .font(.subheadline)
         .lineLimit(1)
-        .minimumScaleFactor(0.85)
+        .minimumScaleFactor(0.8)
     }
 
-    // MARK: - Precip chart (0–100 %)
-
-    private var precipChart: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label("Precip probability", systemImage: "cloud.rain")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-
-            Chart {
-                ForEach(precipHours) { h in
-                    BarMark(
-                        x: .value("Time", h.t, unit: .hour),
-                        y: .value("Precip %", h.precip_prob ?? 0)
-                    )
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.blue.opacity(0.65), .blue.opacity(0.25)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
+    /// The reading, as a button that puts the series on the axis, and for
+    /// the two off the axis a small button that hides or shows them.
+    private func chip(_ s: Series, _ value: String) -> some View {
+        HStack(spacing: 6) {
+            Button { primaryRaw = s.rawValue } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: s.icon)
+                        .font(.subheadline)
+                        .foregroundStyle(s.color)
+                    Text(value)
+                        .font(.subheadline.weight(.medium))
+                        .monospacedDigit()
+                        .foregroundStyle(isShown(s) ? Color.primary : Color.secondary)
                 }
-            }
-            .frame(height: 56)
-            .chartXScale(domain: xDomain)
-            .chartYScale(domain: 0...100)
-            .chartYAxis {
-                AxisMarks(position: .leading, values: [0, 50, 100]) { v in
-                    AxisGridLine().foregroundStyle(.secondary.opacity(0.2))
-                    AxisValueLabel {
-                        if let pct = v.as(Int.self) {
-                            Text("\(pct)%").font(.system(size: 9))
-                                .frame(width: Self.axisWidth, alignment: .trailing)
-                        }
-                    }
-                }
-            }
-            .chartXAxis {
-                AxisMarks(values: .stride(by: .hour, count: 6)) {
-                    AxisGridLine().foregroundStyle(.secondary.opacity(0.2))
-                    AxisValueLabel(format: .dateTime.hour()).font(.system(size: 9))
-                }
-            }
-        }
-    }
-
-    // MARK: - Wind chart (km/h + direction arrows)
-
-    // Every 4th hourly point, offset by 2, so arrows land mid-quadrant of each 6h block.
-    private var sparseWindHours: [ForecastHour] {
-        windHours.enumerated().compactMap { i, h in i % 4 == 2 ? h : nil }
-    }
-
-    private var windChart: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label("Wind (\(windUnit.label))", systemImage: "wind")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-
-            Chart {
-                // Sustained wind: just the line — no under-fill (the old 0→wind
-                // area read as a mystery wedge once the gust band was added).
-                ForEach(windHours) { h in
-                    if let w = h.windspeed {
-                        LineMark(
-                            x: .value("Time", h.t),
-                            y: .value("Wind", windUnit.convert(w)),
-                            series: .value("Series", "wind")
-                        )
-                        .foregroundStyle(.teal)
-                        .lineStyle(StrokeStyle(lineWidth: 1.5))
-                        .interpolationMethod(.catmullRom)
-                    }
-                }
-
-                // Gust band: shaded from sustained up to the gust forecast, with a
-                // faint dashed ceiling. Drawn at EVERY hour (zero-width where gusts
-                // don't exceed sustained) so its bottom edge interpolates through
-                // the same points as the line and stays glued to it — skipping
-                // hours makes the band detach and float. Dashed because gusts here
-                // are model output, not observations.
-                ForEach(windHours) { h in
-                    if let w = h.windspeed, let g = h.windgust {
-                        AreaMark(
-                            x: .value("Time", h.t),
-                            yStart: .value("Wind", windUnit.convert(w)),
-                            yEnd: .value("Gust", windUnit.convert(max(g, w)))
-                        )
-                        .foregroundStyle(.teal.opacity(0.16))
-                        .interpolationMethod(.catmullRom)
-
-                        LineMark(
-                            x: .value("Time", h.t),
-                            y: .value("Gust", windUnit.convert(max(g, w))),
-                            series: .value("Series", "gust")
-                        )
-                        .foregroundStyle(.teal.opacity(0.45))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                        .interpolationMethod(.catmullRom)
-                    }
-                }
-
-                // Direction arrows at sparse intervals — winddir is "from" degrees
-                // (0 = N, 90 = E) so rotating arrow.up by winddir degrees points
-                // the arrow back toward the wind's source (standard vane convention).
-                // The >4 km/h gate stays on the raw value so the threshold is stable
-                // regardless of display unit.
-                ForEach(sparseWindHours) { h in
-                    if let w = h.windspeed, let dir = h.winddir, w > 4 {
-                        PointMark(
-                            x: .value("Time", h.t),
-                            y: .value("Wind", windUnit.convert(w))
-                        )
-                        .foregroundStyle(.clear)
-                        .annotation(position: .overlay) {
-                            Image(systemName: "arrow.up")
-                                .font(.system(size: 8, weight: .semibold))
-                                .foregroundStyle(.teal.opacity(0.85))
-                                .rotationEffect(.degrees(dir))
-                        }
-                    }
-                }
-
-                // Tap-to-read selection — same pattern as the pressure chart.
-                if let sel = windSelection {
-                    RuleMark(x: .value("Selected", sel.date))
-                        .foregroundStyle(.primary.opacity(0.25))
-                        .lineStyle(StrokeStyle(lineWidth: 1))
-                    PointMark(x: .value("Selected", sel.date),
-                              y: .value("Wind", windUnit.convert(sel.speedKmh)))
-                        .foregroundStyle(.teal)
-                        .symbolSize(60)
-                }
-            }
-            .frame(height: 56)
-            .chartXScale(domain: xDomain)
-            .chartYAxis {
-                AxisMarks(position: .leading) { v in
-                    AxisGridLine().foregroundStyle(.secondary.opacity(0.2))
-                    AxisValueLabel {
-                        if let d = v.as(Double.self) {
-                            Text(d.formatted(.number.precision(.fractionLength(0))))
-                                .font(.system(size: 9))
-                                .frame(width: Self.axisWidth, alignment: .trailing)
-                        }
-                    }
-                }
-            }
-            .chartXAxis {
-                AxisMarks(values: .stride(by: .hour, count: 6)) {
-                    AxisGridLine().foregroundStyle(.secondary.opacity(0.2))
-                    AxisValueLabel(format: .dateTime.hour()).font(.system(size: 9))
-                }
-            }
-            .chartOverlay { proxy in
-                GeometryReader { geo in
-                    Rectangle().fill(.clear).contentShape(Rectangle())
-                        .gesture(
-                            SpatialTapGesture().onEnded { value in
-                                selectWind(at: value.location, proxy: proxy, geo: geo)
-                            }
-                        )
-                }
-            }
-
-            if let sel = windSelection {
-                windReadout(sel)
-            }
-        }
-    }
-
-    // MARK: - Temperature chart (°C, with the dew point)
-
-    /// In the display unit, padded, never thinner than a few degrees.
-    private var tempDomain: ClosedRange<Double> {
-        let vals = (tempHours.compactMap { $0.temperature } + tempHours.compactMap { $0.dewpoint }).map(tempUnit.convert)
-        let pad = tempUnit == .celsius ? 2.0 : 4.0
-        let lo = (vals.min() ?? 0).rounded(.down) - pad
-        let hi = (vals.max() ?? 10).rounded(.up) + pad
-        return lo...max(hi, lo + 3 * pad)
-    }
-
-    private var tempChart: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label("Temperature (\(tempUnit.label))", systemImage: "thermometer.medium")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-
-            Chart {
-                // Freezing, when the day crosses it: the one line that changes plans.
-                if tempDomain.contains(tempUnit.freezing) {
-                    RuleMark(y: .value("Freezing", tempUnit.freezing))
-                        .foregroundStyle(.blue.opacity(0.5))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 3]))
-                }
-                ForEach(tempHours) { h in
-                    if let d = h.dewpoint {
-                        LineMark(
-                            x: .value("Time", h.t),
-                            y: .value("Dew point", tempUnit.convert(d)),
-                            series: .value("Series", "dew")
-                        )
-                        .foregroundStyle(.green.opacity(0.6))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                        .interpolationMethod(.catmullRom)
-                    }
-                }
-                ForEach(tempHours) { h in
-                    if let t = h.temperature {
-                        LineMark(
-                            x: .value("Time", h.t),
-                            y: .value("Temperature", tempUnit.convert(t)),
-                            series: .value("Series", "temp")
-                        )
-                        .foregroundStyle(.orange)
-                        .lineStyle(StrokeStyle(lineWidth: 1.5))
-                        .interpolationMethod(.catmullRom)
-                    }
-                }
-            }
-            .frame(height: 56)
-            .chartXScale(domain: xDomain)
-            .chartYScale(domain: tempDomain)
-            .chartYAxis {
-                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { v in
-                    AxisGridLine().foregroundStyle(.secondary.opacity(0.2))
-                    AxisValueLabel {
-                        if let d = v.as(Double.self) {
-                            Text("\(Int(d.rounded()))°")
-                                .font(.system(size: 9))
-                                .frame(width: Self.axisWidth, alignment: .trailing)
-                        }
-                    }
-                }
-            }
-            .chartXAxis {
-                AxisMarks(values: .stride(by: .hour, count: 6)) {
-                    AxisGridLine().foregroundStyle(.secondary.opacity(0.2))
-                    AxisValueLabel(format: .dateTime.hour()).font(.system(size: 9))
-                }
-            }
-
-            HStack(spacing: 10) {
-                Label { Text("temperature") } icon: { Rectangle().fill(.orange).frame(width: 10, height: 2) }
-                Label { Text("dew point") } icon: { Rectangle().fill(.green.opacity(0.6)).frame(width: 10, height: 2) }
-            }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-        }
-    }
-
-    private func selectWind(at location: CGPoint, proxy: ChartProxy, geo: GeometryProxy) {
-        guard let plotFrame = proxy.plotFrame else { return }
-        let xInPlot = location.x - geo[plotFrame].origin.x
-        guard let date: Date = proxy.value(atX: xInPlot),
-              let nearest = windHours.min(by: {
-                  abs($0.t.timeIntervalSince(date)) < abs($1.t.timeIntervalSince(date))
-              }),
-              let speed = nearest.windspeed
-        else { return }
-        windSelection = WindSelection(date: nearest.t, speedKmh: speed,
-                                      gustKmh: nearest.windgust, dir: nearest.winddir)
-    }
-
-    private func windReadout(_ sel: WindSelection) -> some View {
-        HStack(spacing: 8) {
-            Circle().fill(.teal).frame(width: 8, height: 8)
-            Text(sel.date, format: .dateTime.weekday(.abbreviated).hour().minute())
-                .font(.caption).foregroundStyle(.secondary)
-            // G only when the gust meaningfully exceeds sustained; direction only
-            // when there's enough wind for it to mean anything.
-            Text({
-                if let g = sel.gustKmh, g >= sel.speedKmh + Self.gustDisplayMarginKmh {
-                    return "\(windUnit.format(sel.speedKmh)) G \(windUnit.format(g)) \(windUnit.label)"
-                }
-                return "\(windUnit.format(sel.speedKmh)) \(windUnit.label)"
-            }())
-                .font(.caption.weight(.semibold)).monospacedDigit()
-            if let dir = sel.dir, sel.speedKmh >= Self.dirDisplayMinKmh {
-                Text("\(Int(dir.rounded()))°")
-                    .font(.caption).foregroundStyle(.secondary).monospacedDigit()
-            }
-            Text("forecast")
-                .font(.caption2).foregroundStyle(.secondary)
-            Spacer()
-            Button { windSelection = nil } label: {
-                Image(systemName: "xmark.circle.fill")
+                .padding(.horizontal, s == primary ? 10 : 2)
+                .padding(.vertical, 6)
+                .background(s == primary ? Color(.tertiarySystemFill) : Color.clear, in: RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
-            .foregroundStyle(.tertiary)
-            .accessibilityLabel("Clear selection")
+            .accessibilityLabel("\(s.title) \(value)")
+            .accessibilityHint(s == primary ? "On the axis" : "Puts this on the axis")
+            if s != primary {
+                Button { toggle(s) } label: {
+                    Image(systemName: hidden.contains(s) ? "plus" : "minus")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 22, height: 22)
+                        .background(Color(.systemGray3), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(hidden.contains(s) ? "Show \(s.title.lowercased())" : "Hide \(s.title.lowercased())")
+            }
+        }
+    }
+
+    private var legend: some View {
+        let gusts = windValues.compactMap(\.g)
+        let gustText: String = {
+            guard let lo = gusts.min(), let hi = gusts.max() else { return "" }
+            return " · gusts \(Int(lo.rounded()))–\(Int(hi.rounded())) \(windUnit.label)"
+        }()
+        let tempText: String = {
+            let v = tempValues.map(\.v)
+            guard let lo = v.min(), let hi = v.max() else { return "" }
+            return " \(TemperatureUnit.degrees(lo).dropLast())–\(TemperatureUnit.degrees(hi))"
+        }()
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 14) { legendItems(gustText, tempText) }
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 14) {
+                    if isShown(.precip) { legendItem(.precip, "Precip probability") }
+                    if isShown(.wind) { legendItem(.wind, "Wind\(gustText)") }
+                }
+                if isShown(.temp) { legendItem(.temp, "Temperature\(tempText)") }
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+
+    @ViewBuilder private func legendItems(_ gustText: String, _ tempText: String) -> some View {
+        if isShown(.precip) { legendItem(.precip, "Precip probability") }
+        if isShown(.wind) { legendItem(.wind, "Wind\(gustText)") }
+        if isShown(.temp) { legendItem(.temp, "Temperature\(tempText)") }
+    }
+
+    private func legendItem(_ s: Series, _ text: String) -> some View {
+        HStack(spacing: 5) {
+            Path { p in p.move(to: .zero); p.addLine(to: CGPoint(x: 18, y: 0)) }
+                .stroke(s.color, style: StrokeStyle(lineWidth: 2, lineCap: .round,
+                                                    dash: s == .wind ? [5, 3] : (s == .temp ? [1, 3] : [])))
+                .frame(width: 18, height: 2)
+            Text(text).lineLimit(1)
+        }
+    }
+
+    // MARK: Chart
+
+    private var chart: some View {
+        let tHi = tempValues.max { $0.v < $1.v }
+        let tLo = tempValues.min { $0.v < $1.v }
+        return Chart {
+            // The clock's edge: a thin blue rule at now.
+            RuleMark(x: .value("Now", now))
+                .foregroundStyle(Series.precip.color.opacity(0.8))
+                .lineStyle(StrokeStyle(lineWidth: 1.5))
+
+            if isShown(.wind) {
+                ForEach(windValues) { p in
+                    if let g = p.g, g > p.w {
+                        AreaMark(x: .value("Time", p.t), yStart: .value("Wind", norm(.wind, p.w)), yEnd: .value("Gust", norm(.wind, g)))
+                            .foregroundStyle(Series.wind.color.opacity(0.18))
+                            .interpolationMethod(.catmullRom)
+                    }
+                }
+                ForEach(windValues) { p in
+                    LineMark(x: .value("Time", p.t), y: .value("Wind", norm(.wind, p.w)), series: .value("Series", "wind"))
+                        .foregroundStyle(Series.wind.color)
+                        .lineStyle(StrokeStyle(lineWidth: 1.6, dash: [5, 3]))
+                        .interpolationMethod(.catmullRom)
+                }
+            }
+
+            if isShown(.temp) {
+                ForEach(tempValues) { p in
+                    LineMark(x: .value("Time", p.t), y: .value("Temperature", norm(.temp, p.v)), series: .value("Series", "temp"))
+                        .foregroundStyle(Series.temp.color)
+                        .lineStyle(StrokeStyle(lineWidth: 2, dash: [1, 3]))
+                        .interpolationMethod(.catmullRom)
+                }
+                if let tHi {
+                    PointMark(x: .value("Time", tHi.t), y: .value("Temperature", norm(.temp, tHi.v)))
+                        .symbol { hollow(Series.temp.color) }
+                        .annotation(position: edgeAware(tHi.t, top: true), spacing: 2) {
+                            Text("H \(TemperatureUnit.degrees(tHi.v))")
+                                .font(.caption2.weight(.semibold)).foregroundStyle(Series.temp.color)
+                        }
+                }
+                if let tLo, tLo.t != tHi?.t {
+                    PointMark(x: .value("Time", tLo.t), y: .value("Temperature", norm(.temp, tLo.v)))
+                        .symbol { hollow(Series.temp.color) }
+                        .annotation(position: edgeAware(tLo.t, top: false), spacing: 2) {
+                            Text("L \(TemperatureUnit.degrees(tLo.v))")
+                                .font(.caption2.weight(.semibold)).foregroundStyle(Series.temp.color)
+                        }
+                }
+            }
+
+            if isShown(.precip) {
+                ForEach(precipValues) { p in
+                    BarMark(x: .value("Time", p.t, unit: .hour), y: .value("Precip", max(0.04, norm(.precip, p.v))), width: .ratio(0.42))
+                        .foregroundStyle(Series.precip.color.opacity(0.85))
+                        .cornerRadius(3)
+                }
+            }
+
+            if let sel = selection {
+                RuleMark(x: .value("Selected", sel.date))
+                    .foregroundStyle(.primary.opacity(0.25))
+            }
+        }
+        .frame(height: 170)
+        .chartXScale(domain: xDomain)
+        .chartYScale(domain: 0...1.08)
+        .chartYAxis {
+            AxisMarks(position: .trailing, values: axisTicks.map(\.0)) { v in
+                AxisGridLine().foregroundStyle(.secondary.opacity(0.2))
+                AxisValueLabel {
+                    if let d = v.as(Double.self), let tick = axisTicks.first(where: { abs($0.0 - d) < 0.01 }) {
+                        Text(tick.1)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(primary.color)
+                    }
+                }
+            }
+        }
+        .chartXAxis {
+            AxisMarks(values: stride(from: 0, through: Self.windowHours, by: 3).map { hours[0].t.addingTimeInterval(Double($0) * 3600) }) { v in
+                AxisValueLabel {
+                    if let d = v.as(Date.self) {
+                        let h = Int((d.timeIntervalSince(hours[0].t) / 3600).rounded())
+                        Text(h == 0 ? "now" : "+\(h) h")
+                            .font(.caption2.weight(h == 0 ? .semibold : .regular))
+                            .foregroundStyle(h == 0 ? Series.precip.color : Color.secondary)
+                    }
+                }
+            }
+        }
+        .chartOverlay { proxy in
+            GeometryReader { geo in
+                Rectangle().fill(.clear).contentShape(Rectangle())
+                    .gesture(SpatialTapGesture().onEnded { value in select(at: value.location, proxy: proxy, geo: geo) })
+            }
+        }
+    }
+
+    private func hollow(_ color: Color) -> some View {
+        Circle().strokeBorder(color, lineWidth: 2)
+            .background(Circle().fill(Color(.secondarySystemBackground)))
+            .frame(width: 10, height: 10)
+    }
+
+    private func select(at location: CGPoint, proxy: ChartProxy, geo: GeometryProxy) {
+        guard let plot = proxy.plotFrame else { return }
+        let x = location.x - geo[plot].origin.x
+        guard let date: Date = proxy.value(atX: x),
+              let nearest = hours.min(by: { abs($0.t.timeIntervalSince(date)) < abs($1.t.timeIntervalSince(date)) })
+        else { return }
+        selection = selection?.date == nearest.t ? nil : Selection(date: nearest.t)
+    }
+
+    /// The tapped hour in words: every series that is on, in its unit.
+    private func readout(_ sel: Selection) -> some View {
+        let h = hours.first { $0.t == sel.date }
+        var parts: [String] = []
+        if isShown(.precip), let p = h?.precip_prob { parts.append("\(Int(p))%") }
+        if isShown(.wind), let w = h?.windspeed {
+            var s = "\(windUnit.format(w))"
+            if let g = h?.windgust, g > w + 5.5 { s += " G\(windUnit.format(g))" }
+            parts.append(s + " \(windUnit.label)")
+        }
+        if isShown(.temp), let t = h?.temperature { parts.append(tempUnit.format(t)) }
+        return HStack(spacing: 8) {
+            Text(sel.date, format: .dateTime.weekday(.abbreviated).hour().minute())
+                .font(.caption).foregroundStyle(.secondary)
+            Text(parts.joined(separator: " · "))
+                .font(.caption.weight(.semibold)).monospacedDigit()
+            Text("forecast").font(.caption2).foregroundStyle(.secondary)
+            Spacer()
+            Button { selection = nil } label: { Image(systemName: "xmark.circle.fill") }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tertiary)
+                .accessibilityLabel("Clear selection")
         }
     }
 }

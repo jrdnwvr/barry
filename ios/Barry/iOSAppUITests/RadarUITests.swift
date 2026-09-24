@@ -66,6 +66,12 @@ final class RadarUITests: XCTestCase {
             XCTAssertLessThan(attempt, 2, "expand never opened the radar\n\(app.debugDescription)")
         }
 
+        // The chips sit behind the Layers button; open the bar first.
+        let layersButton = app.buttons["radar.layers"]
+        XCTAssertTrue(layersButton.waitForExistence(timeout: 5), "no Layers button\n\(app.debugDescription)")
+        layersButton.tap()
+        XCTAssertTrue(app.scrollViews["radar.chips"].waitForExistence(timeout: 5), "the chip bar did not open")
+
         let layers = ["Pressure", "Change", "Isobars", "Wind", "Fronts", "Troughs", "Stations", "Lightning"]
         for name in layers {
             tapChip(app, name)

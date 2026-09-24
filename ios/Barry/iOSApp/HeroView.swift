@@ -2,13 +2,14 @@
 //  Barry — iOS
 //
 //  The glance. One block answers "what's the pressure doing here, right now, and is
-//  weather coming?" — and makes the SOURCE of the number unmistakable:
-//    • station + freshness (live dot when the sensor is trusted, else METAR age)
-//    • the current pressure — the live calibrated sensor value (extra precision +
-//      a LOCAL tag) when trusted, otherwise the coarser METAR value
-//    • tap the value to compare phone vs station
-//    • the live micro-trend (flagged when it's sharper than the station's 3h trend)
-//    • the plain-language verdict (honesty note only when confidence is low)
+//  weather coming?" in as few lines as it can (thinned 2026-09-24):
+//    • station and one freshness word (live dot when the sensor is trusted,
+//      else the METAR age)
+//    • the number and the 3 h badge; extra precision when it is the sensor
+//    • one quiet line saying which number it is, only when that is not the
+//      plain sea-level reading (altimeter setting, or phone against station)
+//    • the verdict, and one grey line of reasoning that rolls up on a tap;
+//      the sensor's own trend joins it when the phone is the source
 //  Calibration status and the Recalibrate control live on the Sensor vs
 //  Station screen (SensorComparisonView), not here.
 
@@ -35,7 +36,6 @@ struct HeroView: View {
     /// What the refresh behind a stale reading said, if it failed.
     var staleReason: String? = nil
 
-    @State private var showComparison = false
     @State private var showGuide = false
 
     private var tendency: TendencyOut? { combined.tendency }
@@ -69,14 +69,15 @@ struct HeroView: View {
         return localReading?.value ?? combined.currentPressure
     }
 
-    /// The words under the number can roll up (a tap on the chevron or the
-    /// bar); the choice sticks. Open by default.
+    /// The grey line under the verdict rolls up on a tap (the verdict or
+    /// its bar); the choice sticks. Open by default.
     @AppStorage("heroWordsExpanded", store: AppConfig.sharedDefaults)
     private var wordsExpanded: Bool = true
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            // The instrument: station, number, tag, badge, in a soft card.
+        VStack(alignment: .leading, spacing: 16) {
+            // The instrument: station, number, badge, and at most one quiet
+            // line saying which number it is, in a soft card.
             VStack(alignment: .leading, spacing: 10) {
                 statusRow
                 numberBlock
@@ -86,23 +87,16 @@ struct HeroView: View {
             .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
 
             // The words hang off a bar in the tendency's color. The verdict
-            // always shows; the supporting grey lines roll up behind the
-            // chevron at the top of the bar.
+            // always shows; the one supporting line rolls up on a tap.
             HStack(alignment: .top, spacing: 10) {
-                VStack(spacing: 4) {
-                    Image(systemName: wordsExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 12, height: 12)
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(tendency?.cls.color(intensity: tendency?.intensity ?? 0) ?? .secondary)
-                        .frame(width: 3)
-                }
-                .padding(.leading, 2)
-                .contentShape(Rectangle())
-                .onTapGesture { withAnimation(.snappy(duration: 0.25)) { wordsExpanded.toggle() } }
-                .accessibilityLabel(wordsExpanded ? "Hide the reasoning" : "Show the reasoning")
-                .accessibilityAddTraits(.isButton)
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(tendency?.cls.color(intensity: tendency?.intensity ?? 0) ?? .secondary)
+                    .frame(width: 3)
+                    .padding(.leading, 2)
+                    .contentShape(Rectangle())
+                    .onTapGesture { withAnimation(.snappy(duration: 0.25)) { wordsExpanded.toggle() } }
+                    .accessibilityLabel(wordsExpanded ? "Hide the reasoning" : "Show the reasoning")
+                    .accessibilityAddTraits(.isButton)
                 wordsBlock
             }
             .padding(.horizontal, 2)
@@ -120,32 +114,30 @@ struct HeroView: View {
     }
 
     private var numberBlock: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top, spacing: 8) {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        if let v = displayValue {
-                            valueLabel(v)
-                        }
-                        Button { showGuide = true } label: {
-                            Image(systemName: "info.circle")
-                                .font(.title3)
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("What do pressure changes mean?")
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    if let v = displayValue {
+                        valueLabel(v)
                     }
-                    if showsAltimeter {
-                        altimeterRow
-                            .padding(.top, -2)
+                    Button { showGuide = true } label: {
+                        Image(systemName: "info.circle")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("What do pressure changes mean?")
                 }
                 Spacer(minLength: 8)
                 if let t = tendency { TendencyBadge(tendency: t, unit: unit) }
             }
-            if isLocal {
-                provenanceRow
-                if let trend = barometer.microTrend { microLead(trend) }
+            if let line = sourceLine {
+                Text(line)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
         }
     }
@@ -162,42 +154,28 @@ struct HeroView: View {
                     .foregroundStyle(lt.status == "thunderstorm" ? Color.red : Color.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if wordsExpanded, let scale = rateContext {
-                Text(scale)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            if wordsExpanded, let why = combined.reading?.explanation?.summary, !why.isEmpty {
-                Text(why)
+            if wordsExpanded, let line = supportingLine {
+                Text(line)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if wordsExpanded, let note = honestyNote {
-                Text(note).font(.caption).foregroundStyle(.secondary)
+            if wordsExpanded, isLocal, let trend = barometer.microTrend {
+                microLead(trend)
             }
         }
     }
 
-    // MARK: - Value (tap to compare)
+    // MARK: - Value
 
-    @ViewBuilder
     private func valueLabel(_ v: Double) -> some View {
-        let content = HStack(alignment: .firstTextBaseline, spacing: 4) {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
             Text(valueString(v, live: isLocal))
                 .font(.system(size: 44, weight: .semibold, design: .rounded))
                 .monospacedDigit()
             Text(unit.label)
                 .font(.headline)
                 .foregroundStyle(.secondary)
-        }
-        if isLocal {
-            Button { withAnimation(.snappy(duration: 0.2)) { showComparison.toggle() } } label: {
-                content
-            }
-            .buttonStyle(.plain)
-        } else {
-            content
         }
     }
 
@@ -212,59 +190,25 @@ struct HeroView: View {
         return String(format: "%.\(dp)f", unit.convert(hPa))
     }
 
-    // MARK: - Altimeter tag
+    // MARK: - Which number this is
 
-    /// "ALTIMETER · as reported at KLUK · sea level 30.24": says which number
-    /// this is, and keeps the trend's own baseline one glance away.
-    private var altimeterRow: some View {
-        HStack(spacing: 8) {
-            Text("ALTIMETER")
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(.blue)
-                .padding(.horizontal, 6).padding(.vertical, 2)
-                .background(Color.blue.opacity(0.14), in: Capsule())
-            Text(altimeterCaption)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+    /// One quiet line under the number, and none at all for the plain
+    /// sea-level reading: "Altimeter setting · sea level 30.24" at the
+    /// field, or "Phone sensor · station 29.92 · +0.04" when the phone's
+    /// own reading is the headline. It replaced two capsules and a
+    /// tap-to-compare.
+    private var sourceLine: String? {
+        if showsAltimeter {
+            guard let slp = combined.currentPressure else { return "Altimeter setting" }
+            return "Altimeter setting · sea level \(valueString(slp, live: false))"
         }
-    }
-
-    private var altimeterCaption: String {
-        var t = "as reported at \(combined.pressure.station)"
-        if let slp = combined.currentPressure {
-            t += " · sea level \(valueString(slp, live: false))"
-        }
-        return t
-    }
-
-    // MARK: - Provenance / comparison
-
-    private var provenanceRow: some View {
-        HStack(spacing: 8) {
-            Text("LOCAL")
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(.orange)
-                .padding(.horizontal, 6).padding(.vertical, 2)
-                .background(Color.orange.opacity(0.15), in: Capsule())
-
-            if showComparison, let cmp = comparisonText {
-                Text(cmp).font(.caption).foregroundStyle(.secondary).monospacedDigit()
-            } else {
-                Text("tap to compare").font(.caption2).foregroundStyle(.tertiary)
-            }
-        }
-    }
-
-    /// "station 29.92 · phone −0.04" — how far the phone has moved off the station.
-    private var comparisonText: String? {
-        guard let local = localReading?.value, let station = combined.currentPressure else { return nil }
+        guard isLocal else { return nil }
+        guard let local = localReading?.value, let station = combined.currentPressure else { return "Phone sensor" }
         let diff = unit.convertDelta(local - station)
         let dp = unit == .inHg ? 3 : 1
         let mag = String(format: "%.\(dp)f", abs(diff))
         let sign = diff > 0.0005 ? "+" : (diff < -0.0005 ? "−" : "±")
-        return "station \(valueString(station, live: false)) · phone \(sign)\(mag)"
+        return "Phone sensor · station \(valueString(station, live: false)) · \(sign)\(mag)"
     }
 
     // MARK: - Micro-trend lead
@@ -296,7 +240,21 @@ struct HeroView: View {
         return abs(local3h) > abs(metar3h) + 0.7 && (local3h * metar3h >= 0 || abs(metar3h) < 0.3)
     }
 
-    // MARK: - Honesty note
+    // MARK: - The one line under the verdict
+
+    /// What agrees or disagrees with the verdict, or failing that how fast
+    /// the change is, with "Low confidence." on the end when the reading
+    /// deserves to be held loosely. One line, not three.
+    private var supportingLine: String? {
+        var parts: [String] = []
+        if let why = combined.reading?.explanation?.summary, !why.isEmpty {
+            parts.append(why)
+        } else if let rate = rateContext {
+            parts.append(rate)
+        }
+        if let note = honestyNote { parts.append(note) }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
+    }
 
     /// "How fast is fast": the rate in the user's unit per hour, with a
     /// comparison to what fronts and storms typically do. Silent when the
@@ -414,26 +372,20 @@ private struct StatusRow: View {
                     .font(.caption.weight(.medium))
                     .foregroundStyle(status.live ? Color.green : Color.secondary)
             }
+        } else if stale {
+            // A reading from disk: when it was saved, orange once the
+            // refresh behind it has failed.
+            Text("saved \(combined.pressure.cachedAt.formatted(date: .omitted, time: .shortened))")
+                .font(.caption)
+                .foregroundStyle(staleReason == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.orange))
+                .lineLimit(1)
         } else {
-            // Two facts, stacked: how old the report is (the one that
-            // matters in the air) and when Barry last checked for a new one.
-            VStack(alignment: .trailing, spacing: 1) {
-                Text(metarAge)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                if stale {
-                    Text(staleReason == nil
-                         ? "saved \(combined.pressure.cachedAt.formatted(date: .omitted, time: .shortened)), refreshing"
-                         : "saved \(combined.pressure.cachedAt.formatted(date: .omitted, time: .shortened)), can't refresh")
-                        .font(.caption2)
-                        .foregroundStyle(staleReason == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.orange))
-                } else {
-                    Text("refreshed \(combined.pressure.cachedAt.formatted(date: .omitted, time: .shortened))")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            .lineLimit(1)
+            // One fact: how old the report is, the thing that matters in
+            // the air. When Barry last checked is not worth a line.
+            Text(metarAge)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
     }
 

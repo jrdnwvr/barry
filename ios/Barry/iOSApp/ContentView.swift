@@ -616,10 +616,13 @@ private struct DataSourceFootnote: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("\(combined.pressure.name ?? combined.pressure.station) · \(combined.pressure.source)")
-            // CC-BY 4.0 requires visible credit for the forecast data.
+            // CC-BY 4.0 requires visible credit for the forecast data, and
+            // RainViewer asks for its name somewhere visible. This card
+            // cannot be hidden, so the map's credit line moved here.
             if combined.sources?.forecast != nil {
                 Text("Forecast · Open-Meteo.com (CC-BY 4.0)")
             }
+            Text("Radar · RainViewer, NOAA NEXRAD · lightning NOAA GOES · fronts NWS WPC")
             Text("Updated \(combined.pressure.cachedAt.formatted(date: .omitted, time: .shortened))")
         }
         .font(.caption2)

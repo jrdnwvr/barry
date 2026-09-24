@@ -104,15 +104,16 @@ under every control, a pill on every line, a note for every empty state,
 chips where a sentence would do, and a header row where none is needed.
 Barry has some of each. From the inventory:
 
-- **The hero.** Up to nine lines under the number. Keep the number, the
-  verdict and one line. The tap that already collapses the rest can hide
-  the freshness detail, the rate, the explanation and the tags.
-- **The radar's bottom card.** Chips, a timeline, a frame time, three
-  possible notes, and an attribution line. Put the chips behind the
-  Layers button on the full screen as well as the embed. Fold the three
-  notes into one line that is usually empty. The attribution can live in
-  the key sheet and the Data sources card, which keeps RainViewer's
-  "somewhere visible" request satisfied.
+- **The hero.** Done the same evening. Was up to nine lines under the
+  number; now the number, the badge, one quiet source line only at a field
+  or on the phone sensor, the verdict, and one grey line of reasoning that
+  rolls up. The two capsules, the chevron, the tap-to-compare, the
+  "refreshed" time and the separate rate and confidence lines are gone.
+- **The radar's bottom card.** Done the same evening. The chips sit behind
+  a Layers button on the full screen as on the embed, the three notes are
+  one line that is usually empty, the credit line moved to the key sheet
+  and the Data sources card, and with Radar off the card disappears
+  altogether.
 - **Aloft.** A six-column header row, pills on every line ("BKN045 ·
   METAR", "0°C · 8,500 ft", "Boundary layer · 3,200 AGL", "ICING"), five
   chips plus a More menu, and a footer of sources. Drop the header row;

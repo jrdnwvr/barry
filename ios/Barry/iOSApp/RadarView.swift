@@ -124,10 +124,11 @@ struct RadarPanel: View {
     private var autoplay: Bool = true
 
     @State private var recenterToken = 0
-    /// The dashboard embed keeps the chip bar behind a button: the layers
-    /// are shared with the full screen (same stored settings), so the small
-    /// map follows whatever was chosen there and rarely needs its own bar.
-    @State private var showEmbeddedChips = false
+    /// The chip bar sits behind the Layers button on both the embed and the
+    /// full screen (thinned 2026-09-24): the layers are stored settings, so
+    /// the map opens the way it was left and the card below it holds only
+    /// the timeline until someone wants to change a layer.
+    @State private var showChips = false
     @State private var showKey = false
     @State private var showMore = false
     @State private var selectedStation: StationObs?
@@ -361,8 +362,9 @@ struct RadarPanel: View {
                 .ignoresSafeArea(edges: .bottom)
 
             VStack(spacing: 0) {
-                HStack(alignment: .top) {
+                HStack(alignment: .top, spacing: 8) {
                     Spacer()
+                    layersButton
                     keyButton
                 }
                 .padding(12)
@@ -379,9 +381,13 @@ struct RadarPanel: View {
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
 
-                bottomCard
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 10)
+                // With Radar off and the chips away there is nothing to hold,
+                // so the map gets the whole screen.
+                if showChips || showRadar || noteText != nil {
+                    bottomCard
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 10)
+                }
             }
         }
     }
@@ -443,17 +449,6 @@ struct RadarPanel: View {
         }
     }
 
-    /// Above the surface, say so: the other layers are still ground level.
-    @ViewBuilder private var altitudeNote: some View {
-        if showWind, model.windLevel != 0 {
-            Text("Wind at about \(WindAltitude.stop(model.windLevel).ft.formatted()) ft. Other layers stay at the surface.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier("radar.altitudeNote")
-        }
-    }
-
     /// The Maps convention: a location arrow that glides the map back to
     /// the home station at the opening zoom.
     private var recenterButton: some View {
@@ -480,17 +475,7 @@ struct RadarPanel: View {
                 }
                 .overlay(alignment: .topTrailing) {
                     HStack(spacing: 8) {
-                        Button {
-                            withAnimation(.snappy(duration: 0.2)) { showEmbeddedChips.toggle() }
-                        } label: {
-                            Image(systemName: "square.3.layers.3d")
-                                .font(.system(size: 14, weight: .semibold))
-                                .frame(width: 20, height: 20)
-                                .padding(9)
-                                .background(.thinMaterial, in: Circle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(showEmbeddedChips ? "Hide layers" : "Layers")
+                        layersButton
                         keyButton
                         if let onExpand {
                             Button(action: onExpand) {
@@ -507,13 +492,29 @@ struct RadarPanel: View {
                     .padding(10)
                 }
 
-            if showEmbeddedChips {
+            if showChips {
                 chipBar
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
             timeline
-            attribution
         }
+    }
+
+    /// Shows or hides the chip bar. The layers themselves are remembered;
+    /// whether the bar is open is not.
+    private var layersButton: some View {
+        Button {
+            withAnimation(.snappy(duration: 0.2)) { showChips.toggle() }
+        } label: {
+            Image(systemName: "square.3.layers.3d")
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 20, height: 20)
+                .padding(9)
+                .background(.thinMaterial, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(showChips ? "Hide layers" : "Layers")
+        .accessibilityIdentifier("radar.layers")
     }
 
     private var keyButton: some View {
@@ -528,23 +529,19 @@ struct RadarPanel: View {
         .accessibilityLabel("Map key")
     }
 
-    /// The things you actually touch: the chip bar, the base's timeline, and
-    /// the one-line attribution that must stay on screen.
+    /// The things you actually touch: the timeline, and the chip bar when
+    /// it has been asked for. The sources credit lives in the key sheet and
+    /// on the Data sources card, so it is not a line here.
     private var bottomCard: some View {
         VStack(spacing: 8) {
-            chipBar
+            if showChips {
+                chipBar
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
             timeline
-            attribution
         }
         .padding(12)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
-    }
-
-    private var attribution: some View {
-        Text("Radar RainViewer · NOAA NEXRAD · Lightning NOAA GOES · Wind Open-Meteo · Fronts NWS WPC · Stations AWC")
-            .font(.system(size: 8))
-            .foregroundStyle(.tertiary)
-            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Chip bar
@@ -606,19 +603,34 @@ struct RadarPanel: View {
         if showRadar {
             radarControls
         }
-        altitudeNote
-        windCalmNote
-        stormsNote
+        noteLine
     }
 
-    /// Lightning on but the server's mapper feed is stale: say so, or an
-    /// empty map reads as "no lightning".
-    @ViewBuilder private var stormsNote: some View {
+    /// At most one line under the timeline, and usually none: the altitude
+    /// the wind is drawn at (the other layers stay at the surface), a stale
+    /// lightning feed (an empty map would read as "no lightning"), or a calm
+    /// map with the wind layer on (it would read as broken). In that order.
+    private var noteText: (text: String, id: String)? {
+        if showWind, model.windLevel != 0 {
+            return ("Wind at about \(WindAltitude.stop(model.windLevel).ft.formatted()) ft. Other layers stay at the surface.",
+                    "radar.altitudeNote")
+        }
         if showStorms, let r = model.lightning.response, !r.coverage {
-            Text("Lightning feed catching up.")
+            return ("Lightning feed catching up.", "radar.note")
+        }
+        if showWind, model.windLevel == 0, model.windSampled, model.windArrows.isEmpty {
+            return ("Wind under 3 kt across the map.", "radar.note")
+        }
+        return nil
+    }
+
+    @ViewBuilder private var noteLine: some View {
+        if let n = noteText {
+            Text(n.text)
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier(n.id)
         }
     }
 
@@ -630,16 +642,6 @@ struct RadarPanel: View {
 
     private var frontValidText: String {
         "WPC fronts \(frontChipTime), to about 50 mi"
-    }
-
-    /// A toggled-on layer that draws nothing must say why, or it reads as broken.
-    @ViewBuilder private var windCalmNote: some View {
-        if showWind, model.windLevel == 0, model.windSampled, model.windArrows.isEmpty {
-            Text("Wind under 3 kt across the map.")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
     }
 
     /// Now parks the map on the freshest observation and keeps it there.

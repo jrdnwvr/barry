@@ -111,11 +111,14 @@ For: everyone. Fixed at the top; not a card.
 - Data: `pressure.station`, `pressure.name`, `SavedLocationsStore`.
 
 ### home.hero.freshness
-- Seen: "Local · now", "Local · carried", "Local · Nm ago" when a sensor
-  reading is shown; otherwise "Calibrating…", "Settling…", "Paused"; or
-  "METAR Nm ago" over "refreshed HH:MM".
+- Seen: one short word on the right of the station row: "Local · now",
+  "Local · carried", "Local · Nm ago" when a sensor reading is shown;
+  otherwise "Calibrating…", "Settling…", "Paused"; otherwise "METAR Nm
+  ago"; or "saved HH:MM" for a reading from disk, orange once the refresh
+  behind it has failed.
 - Rules: once a local reading shows, the label reports its trust tier and
-  age, never the raw motion classifier.
+  age, never the raw motion classifier. The "refreshed HH:MM" second line
+  went in the 2026-09-24 thinning.
 
 ### home.hero.value
 - Seen: the big number with its unit. inHg shows 3 decimals for a live
@@ -128,22 +131,27 @@ For: everyone. Fixed at the top; not a card.
   is at least as new as the METAR or under an hour old, and under 2 h old.
 - Tests: `CardRenderTests` (render).
 
-### home.hero.altimeterTag
-- Seen: a blue ALTIMETER capsule and "as reported at KLUK · sea level
-  30.24".
-- Rules: shown when an airport is selected or the device is within 3 NM
-  (`PressureStore.isAtAirport`). The altimeter is never blended with the
-  phone's calibration; LOCAL never shows at an airport.
-- For: P.
+### home.hero.sourceLine
+- Seen: one quiet caption under the number, and none for the plain
+  sea-level reading: "Altimeter setting · sea level 30.24" at the field, or
+  "Phone sensor · station 29.92 · +0.04" when the phone's reading is the
+  headline.
+- Lives: `HeroView.sourceLine`.
+- Rules: the altimeter shows when an airport is selected or the device is
+  within 3 NM (`PressureStore.isAtAirport`); it is never blended with the
+  phone's calibration, and the phone never headlines at an airport. This
+  line replaced the ALTIMETER and LOCAL capsules and the tap-to-compare
+  (2026-09-24).
+- For: P E B.
 
-### home.hero.localCompare and home.hero.microTrend
-- Seen: an orange LOCAL capsule, "tap to compare" ("station 29.92 · phone
-  −0.04"); "sensor ↓ 0.03 inHg in last 42 min", orange with "falling faster
-  than the station shows" when the sensor is sharper.
+### home.hero.microTrend
+- Seen: "sensor ↓ 0.03 inHg in last 42 min", orange with "falling faster
+  than the station shows" when the sensor is sharper. Sits with the
+  reasoning under the verdict, so it rolls up with it.
 - Data: `BarometerManager.microTrend` (60 min buffer, 3 trusted points over
   5 min), `tendency.delta3h`.
-- Rules: sharper means the local 3 h rate exceeds the METAR's by 0.7 hPa
-  with the same sign.
+- Rules: only when the phone is the headline. Sharper means the local 3 h
+  rate exceeds the METAR's by 0.7 hPa with the same sign.
 - For: E B.
 
 ### home.hero.tendencyBadge
@@ -154,16 +162,20 @@ For: everyone. Fixed at the top; not a card.
 - Tests: `TendencyParityTests` against the Python fixture.
 - Rules: mirrored by hand in `backend/app/tendency.py`.
 
-### home.hero.verdict, home.hero.rateContext, home.hero.explanation, home.hero.honestyNote, home.hero.wordsCollapse
-- Seen: the verdict in headline type with a colour bar; "0.03 inHg per
-  hour, front pace" (silent under 1.5 hPa per 3 h, "storm pace" at 3.0);
-  one grey line saying what agrees or disagrees; "Low confidence." when the
-  caveats say so or confidence is under 0.5; tap to collapse the supporting
-  lines.
-- Data: `/combined.verdict`, `reading.rate3h`, `reading.explanation.summary`,
+### home.hero.verdict and home.hero.supportingLine
+- Seen: the verdict in headline type beside a bar in the tendency colour,
+  then one grey line: what agrees or disagrees with it, or failing that
+  the rate ("0.03 inHg per hour, front pace", silent under 1.5 hPa per 3 h,
+  "storm pace" at 3.0), with "Low confidence." on the end when the caveats
+  say so or confidence is under 0.5. A tap on the verdict or the bar rolls
+  the line up.
+- Lives: `HeroView.wordsBlock`, `supportingLine`, `rateContext`, `honestyNote`.
+- Data: `/combined.verdict`, `reading.explanation.summary`, `reading.rate3h`,
   `reading.caveats`, `reading.confidence`.
 - Settings: `heroWordsExpanded` true.
-- Rules: the reason for low confidence is deliberately not shown.
+- Rules: the reason for low confidence is deliberately not shown. The
+  chevron and the separate rate and confidence lines went in the
+  2026-09-24 thinning.
 
 ### home.hero.lightningLine
 - Seen: "Thunderstorm at the field since 3:10 PM, moving east." in red or
@@ -320,7 +332,8 @@ hidden). A card shows only when it is not hidden and has something to say.
 
 ### card.sources
 - Seen: the station and its source, "Forecast · Open-Meteo.com (CC-BY
-  4.0)", and the update time.
+  4.0)", the map's credit line ("Radar · RainViewer, NOAA NEXRAD ·
+  lightning NOAA GOES · fronts NWS WPC"), and the update time.
 - Lives: `ContentView.swift` › `DataSourceFootnote`.
 - Rules: it carries the forecast data's required credit, so like the chart
   it can move but not hide.
@@ -466,11 +479,17 @@ stored keys, but each has its own model, so they fetch separately.
 - Rules: when the station coordinate changes the pin moves and the map
   glides. `radar.button.recenter` glides back to 3.2° on the station.
 
-### radar.attribution
-- Seen: "Radar RainViewer · NOAA NEXRAD · Lightning NOAA GOES · Wind
-  Open-Meteo · Fronts NWS WPC · Stations AWC". Must stay on screen.
+### radar.credit
+- Seen: nothing on the map itself since 2026-09-24. The sources paragraph
+  in the key sheet and a line on the Data sources card ("Radar ·
+  RainViewer, NOAA NEXRAD · lightning NOAA GOES · fronts NWS WPC") carry
+  the credit RainViewer asks for; that card cannot be hidden.
 
 ### radar.layers (the model)
+- The chip bar sits behind the Layers button (`radar.layers`, top right
+  beside the key) on the full screen and the embed alike; whether it is
+  open is not remembered, the layers are. With Radar off and the bar
+  closed the bottom card disappears and the map has the whole screen.
 - Chip order: Radar, Pressure, Change, Isobars, Wind, Fronts, Troughs,
   Stations, Lightning, then More.
 - Exclusive: Pressure and Change share `radarField`. Barbs or Speeds for
@@ -515,7 +534,9 @@ stored keys, but each has its own model, so they fetch separately.
 - Rules: the loop steps every 0.55 s from the oldest frame to now and dwells
   three ticks on the newest. Nowcast frames are never looped, only scrubbed
   to. Scrubbing pauses. Nothing refreshes the frame list while the screen
-  stays open; it loads on appear and on Try again.
+  stays open; it loads on appear and on Try again. Under the frame time
+  there is at most one note (`radar.note`): the wind altitude first, then a
+  stale lightning feed, then a calm map with Wind on; usually none.
 - Tests: the UI test checks Now, scrub and loop selection states.
 
 ### radar.timeline.modelFrames (parked)
@@ -562,15 +583,16 @@ stored keys, but each has its own model, so they fetch separately.
 - Rules: particles scale with view area (70 to 240), 30 fps cap, CPU
   simulation and one Metal draw call, anchored to the ground so pans need
   nothing, respawn after a big zoom, a new grid bends existing streaks.
-  Arrows under 6 km/h are dropped. `radar.note.windCalm` says "Wind under
-  3 kt across the map." at the surface when nothing draws.
+  Arrows under 6 km/h are dropped. The one note line says "Wind under 3 kt
+  across the map." at the surface when nothing draws.
 - Tests: the UI test turns Wind on.
 - For: P S D M W.
 
 ### radar.rail.altitude
 - Seen: a vertical rail, highest stop on top: SFC, 2.5k, 5k, 10k, 14k, 18k.
-  Tap or drag. Full screen only, while Wind is on. `radar.note.altitude`
-  says "Wind at about N ft. Other layers stay at the surface."
+  Tap or drag. Full screen only, while Wind is on. The note line
+  (`radar.altitudeNote`) says "Wind at about N ft. Other layers stay at the
+  surface."
 - Lives: `RadarView.swift` › `altitudeRail`; `RadarModel.swift` › `WindAltitude`.
 - Data: `/radar/field/levels` once per region, all levels in one call
   (925, 850, 700, 600, 500 hPa).
@@ -630,8 +652,8 @@ stored keys, but each has its own model, so they fetch separately.
 - Seen: GOES flash dots coloured by age (white new, lavender, violet, dim
   purple), a white arrival pulse on new cells, violet cluster outlines,
   METAR bolt markers when Stations is off, the radar dimmed. Chip
-  "Lightning". `radar.note.lightningCoverage` says "Lightning feed catching
-  up." when the feed is stale.
+  "Lightning". The note line says "Lightning feed catching up." when the
+  feed is stale.
 - Lives: `LightningOverlay.swift`; `LightningMarkerView` in `StationLayer.swift`.
 - Data: `/lightning` (0.02° cells, 20 min window, clusters, coverage),
   refetched every 60 s, on a move over 1.5°, and on region change. The
@@ -1022,4 +1044,6 @@ caching failures; `/stations/search` accepting one character.
 
 - 2026-09-24: first version, from a full read of the sources by three
   sweeps (main page; radar and Aloft; watch, widgets and backend). The
-  defects the read found were fixed the same day; see Known defects.
+  defects the read found were fixed the same day; see Known defects. The
+  hand-made thinning pass started the same evening with the hero and the
+  radar card (docs/REVIEW.md).

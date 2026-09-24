@@ -32,5 +32,6 @@ enum UITestSupport {
         d.set(false, forKey: "phoneBarometerEnabled")
         d.set(false, forKey: StormAlerter.enabledKey)
         d.set(false, forKey: StormAlerter.pressureKey)
+        RouteSettings.clear()
     }
 }

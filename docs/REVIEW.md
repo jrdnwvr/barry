@@ -207,12 +207,12 @@ Hand-made pass:
 Customisation:
 - [ ] Onboarding asks "What will you use Barry for?"; Pilot, Soaring, Drone, Marine, Everyday and Weather presets as bundles of existing keys, editable after.
 - [ ] A gear on each card for its own two or three options; Settings shrinks to units, alerts, locations and the sensor.
-- [ ] Alert thresholds and quiet hours.
+- [x] Alert thresholds and quiet hours: "Alert on" fast, moderate or small changes; quiet hours deliver silently.
 
 Audiences, smallest useful change each:
 - [ ] Soaring: a cloud base line on Conditions from the spread.
 - [ ] Drone: a "flyable now, next N hours" line on the Wind card from the 80 m wind.
-- [ ] Everyday: a threshold slider on the pressure alert.
+- [x] Everyday: a threshold on the pressure alert (a three-step picker rather than a slider; small is 1 hPa in 3 h).
 - [ ] Weather watchers: radar layer presets (ROADMAP G6).
 - [ ] Backcountry: cache the last reading on the watch too; "as of" everywhere when offline.
 - [ ] Marine: buoys as stations, once the station layer takes a non-airport source.

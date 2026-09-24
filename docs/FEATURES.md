@@ -404,9 +404,10 @@ hidden). A card shows only when it is not hidden and has something to say.
 
 ### settings.screen
 - Seen: one short list, no footers (thinned 2026-09-24): a first group with
-  Live phone sensor, Cards and Backcountry; Alerts (pressure changes and
-  storms each with a one-line subtitle, the permission warning when
-  denied, Send a test alert, Lock screen); Units (three segmented
+  Live phone sensor, Cards and Backcountry; Alerts (pressure changes with
+  an "Alert on" picker under it while on, storms, each with a one-line
+  subtitle; "Quiet hours" while either is on; the permission warning when
+  denied; Send a test alert; Lock screen); Units (three segmented
   pickers); "Cards and screens" with one row each for the Wind card, the
   Forecast card, how the Radar opens, the Aloft ceiling and the Boundary
   layer reference, the value on the right; Locations.
@@ -428,8 +429,8 @@ cooldown.
 
 | Slug | Trigger | Text | Cooldown | Switch |
 |---|---|---|---|---|
-| `alert.pressure.fallingFast` | class falling fast (−3.0 hPa per 3 h) | "Pressure dropping fast", the change, the place, the verdict | 3 h | `pressureAlertsEnabled` |
-| `alert.pressure.risingFast` | class rising fast (+1.5) | "Pressure rising sharply" | 3 h | `pressureAlertsEnabled` |
+| `alert.pressure.fall` | the 3 h change at or past the level's fall: fast −3.0, moderate −1.5, small −1.0 hPa | "Pressure dropping fast" from −3.0, else "Pressure falling"; the change, the place, the verdict | 3 h | `pressureAlertsEnabled`, `pressureAlertLevel` |
+| `alert.pressure.rise` | at or past the level's rise: fast and moderate +1.5, small +1.0 | "Pressure rising sharply" from +1.5, else "Pressure rising" | 3 h | `pressureAlertsEnabled`, `pressureAlertLevel` |
 | `alert.storm.lightning` | lightning reported within 30 min, within 25 mi, and heading this way or within 10 mi | "Lightning nearby", distance, direction, ETA | 1 h | `stormAlertsEnabled` |
 | `alert.storm.observed` | storm risk observed within 10 mi | "Thunderstorms at PLACE" | 1 h | `stormAlertsEnabled` |
 | `alert.storm.forecast` | storm risk likely, starting within 3 h | "Thunderstorms likely" with the window | 6 h | `stormAlertsEnabled` |
@@ -441,7 +442,14 @@ cooldown.
   statuses must never feed notifications. Directions are spelled out and
   the storm sentence's `{eta}` slot is filled, as on the card. The migration turns pressure alerts on for anyone
   who had the old single storms switch.
-- Tests: `AlertTests` (decisions); the latch is untested.
+- Quiet hours (`alertsQuietHours`: off, 10 PM to 7 AM, 11 PM to 6 AM,
+  9 PM to 8 AM): alerts in the window arrive with no sound and at the
+  passive interruption level, waiting in Notification Center; nothing is
+  dropped. The fall and rise latches keep their pre-level names
+  (`pressure.falling_fast`, `pressure.rising_fast`) so an update did not
+  reset cooldowns.
+- Tests: `AlertTests` (decisions, levels, quiet window across midnight);
+  the latch is untested.
 - For: E M P.
 
 ### bg.refresh
@@ -974,6 +982,8 @@ each device (the watch keeps its own copies).
 | `pressureAlertsEnabled` | false | migrated once from the storms key | Settings, onboarding |
 | `stormAlertsEnabled` | false | the historical single switch | Settings, onboarding |
 | `alerts.migrated.v2` | false | migration guard | StormAlerter |
+| `pressureAlertLevel` | fast | fast, moderate, small (hPa per 3 h to alert on) | Settings › Alerts |
+| `alertsQuietHours` | off | off, 22-7, 23-6, 21-8 (local hours; alerts arrive silently) | Settings › Alerts |
 | `alert.latch.*` | unset | cooldown dates for the four alert kinds | StormAlerter |
 | `liveActivityEnabled` | false | | Settings › Alerts, onboarding |
 | `liveActivity.followUntil` | unset | now + 6 h | the hero menu |

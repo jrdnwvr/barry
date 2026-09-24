@@ -39,6 +39,10 @@ struct SettingsView: View {
     @AppStorage(Backcountry.acknowledgedKey, store: AppConfig.sharedDefaults)
     private var backcountryAcknowledged: Bool = false
     @State private var showBackcountryAck = false
+    @AppStorage(StormAlerter.levelKey, store: AppConfig.sharedDefaults)
+    private var alertLevelRaw: String = StormAlerter.Level.fast.rawValue
+    @AppStorage(StormAlerter.quietKey, store: AppConfig.sharedDefaults)
+    private var quietRaw: String = StormAlerter.Quiet.off.rawValue
     @AppStorage(LiveActivityManager.enabledKey, store: AppConfig.sharedDefaults)
     private var liveActivityEnabled: Bool = false
     @AppStorage(RadarPanel.autoplayKey, store: AppConfig.sharedDefaults)
@@ -76,6 +80,13 @@ struct SettingsView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    if pressureAlertsEnabled {
+                        Picker("Alert on", selection: $alertLevelRaw) {
+                            ForEach(StormAlerter.Level.allCases) { l in
+                                Text(l.label).tag(l.rawValue)
+                            }
+                        }
+                    }
                     Toggle(isOn: $stormAlertsEnabled) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Storms")
@@ -88,6 +99,13 @@ struct SettingsView: View {
                         Text("Notifications are turned off for Barry. Turn them on in iOS Settings › Notifications › Barry.")
                             .font(.caption)
                             .foregroundStyle(.orange)
+                    }
+                    if stormAlertsEnabled || pressureAlertsEnabled {
+                        Picker("Quiet hours", selection: $quietRaw) {
+                            ForEach(StormAlerter.Quiet.allCases) { q in
+                                Text(q.label).tag(q.rawValue)
+                            }
+                        }
                     }
                     if (stormAlertsEnabled || pressureAlertsEnabled) && !notifDenied {
                         Button("Send a test alert") {

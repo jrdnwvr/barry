@@ -34,6 +34,31 @@ struct AlertTests {
         #expect(rise.title == "Pressure rising sharply" && rise.body.hasPrefix("Up "))
     }
 
+    @Test func theLevelDecidesHowBigAChangeAlerts() throws {
+        let gentle = try combined(delta3h: -1.2)
+        #expect(StormAlerter.pressureAlert(gentle, level: .fast) == nil)
+        #expect(StormAlerter.pressureAlert(gentle, level: .moderate) == nil)
+        let small = try #require(StormAlerter.pressureAlert(gentle, level: .small))
+        #expect(small.title == "Pressure falling" && small.latch == "pressure.falling_fast")
+        let moderate = try #require(StormAlerter.pressureAlert(try combined(delta3h: -2.0), level: .moderate))
+        #expect(moderate.title == "Pressure falling")
+        let sharp = try #require(StormAlerter.pressureAlert(try combined(delta3h: -3.4), level: .small))
+        #expect(sharp.title == "Pressure dropping fast")
+        let rise = try #require(StormAlerter.pressureAlert(try combined(delta3h: 1.1), level: .small))
+        #expect(rise.title == "Pressure rising")
+        #expect(StormAlerter.pressureAlert(try combined(delta3h: 1.1), level: .moderate) == nil)
+    }
+
+    @Test func quietHoursWrapMidnight() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York")!
+        func at(_ h: Int) -> Date { cal.date(from: DateComponents(year: 2026, month: 9, day: 24, hour: h))! }
+        let q = StormAlerter.Quiet.h22to7
+        #expect(q.contains(at(23), calendar: cal) && q.contains(at(3), calendar: cal))
+        #expect(!q.contains(at(7), calendar: cal) && !q.contains(at(21), calendar: cal))
+        #expect(!StormAlerter.Quiet.off.contains(at(2), calendar: cal))
+    }
+
     @Test func lightningAlertsWhenCloseOrComing() throws {
         let now = Date()
         func bolt(_ mi: Int, toward: Bool?, age: TimeInterval = 60) -> LightningNearby {

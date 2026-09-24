@@ -2,13 +2,15 @@
 //  Barry — iOS
 //
 //  Local notifications, two kinds, each its own switch:
-//    Pressure changes: the 3-hour tendency crosses into falling_fast (weather
-//      on the way) or rising_fast (a gust front, sharp clearing).
+//    Pressure changes: the 3-hour change passes the chosen level (fast by
+//      default: a fall of 3.0 hPa or a rise of 1.5, the tendency table's
+//      fast bands; moderate and small for people who feel it).
 //    Storms: lightning within reach and heading this way, or thunderstorms
 //      likely at the station in the next few hours.
 //  No push server: everything is local, driven by the existing
-//  BGAppRefreshTask (BackgroundRefresh). Each kind has a latch so an ongoing
-//  event alerts once per cooldown, not once per background check.
+//  BGAppRefreshTask (BackgroundRefresh) and the app's own loads. Each kind
+//  has a latch so an ongoing event alerts once per cooldown, not once per
+//  check. Quiet hours deliver silently rather than drop anything.
 
 import Foundation
 import UserNotifications
@@ -20,6 +22,66 @@ enum StormAlerter {
     static let enabledKey = "stormAlertsEnabled"
     static let pressureKey = "pressureAlertsEnabled"
     private static let migratedKey = "alerts.migrated.v2"
+
+    /// How big a 3 h change the pressure alert waits for, and when alerts
+    /// arrive without a sound. Both default to today's behaviour.
+    static let levelKey = "pressureAlertLevel"
+    static let quietKey = "alertsQuietHours"
+
+    /// Fast is the tendency table's own fast bands (a fall of 3.0 hPa or a
+    /// rise of 1.5 in 3 h). Moderate and small are for people who feel the
+    /// weather before they see it.
+    enum Level: String, CaseIterable, Identifiable {
+        case fast, moderate, small
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .fast: return "Fast changes"
+            case .moderate: return "Moderate changes"
+            case .small: return "Small changes"
+            }
+        }
+        /// hPa over 3 h: (fall, rise), both as positive magnitudes.
+        var thresholds: (fall: Double, rise: Double) {
+            switch self {
+            case .fast: return (3.0, 1.5)
+            case .moderate: return (1.5, 1.5)
+            case .small: return (1.0, 1.0)
+            }
+        }
+        static var stored: Level {
+            Level(rawValue: AppConfig.sharedDefaults.string(forKey: levelKey) ?? "") ?? .fast
+        }
+    }
+
+    /// Quiet hours: alerts still arrive, but silently, and wait in
+    /// Notification Center. Nothing is dropped, so a storm overnight is
+    /// still there in the morning.
+    enum Quiet: String, CaseIterable, Identifiable {
+        case off, h22to7 = "22-7", h23to6 = "23-6", h21to8 = "21-8"
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .off: return "Off"
+            case .h22to7: return "10 PM to 7 AM"
+            case .h23to6: return "11 PM to 6 AM"
+            case .h21to8: return "9 PM to 8 AM"
+            }
+        }
+        /// Start and end hour, local time; the window wraps midnight.
+        var hours: (start: Int, end: Int)? {
+            let parts = rawValue.split(separator: "-").compactMap { Int($0) }
+            return parts.count == 2 ? (parts[0], parts[1]) : nil
+        }
+        func contains(_ date: Date, calendar: Calendar = .current) -> Bool {
+            guard let (start, end) = hours else { return false }
+            let h = calendar.component(.hour, from: date)
+            return start > end ? (h >= start || h < end) : (h >= start && h < end)
+        }
+        static var stored: Quiet {
+            Quiet(rawValue: AppConfig.sharedDefaults.string(forKey: quietKey) ?? "") ?? .off
+        }
+    }
 
     static let pressureCooldown: TimeInterval = 3 * 3600
     static let lightningCooldown: TimeInterval = 1 * 3600
@@ -71,23 +133,26 @@ enum StormAlerter {
         let body: String
     }
 
-    /// The pressure alert the reading calls for, if any.
-    static func pressureAlert(_ combined: CombinedResponse) -> Alert? {
+    /// The pressure alert the reading calls for, if any, at the chosen
+    /// level. The latch names predate the levels and are kept so an update
+    /// does not reset anyone's cooldown.
+    static func pressureAlert(_ combined: CombinedResponse, level: Level = .fast) -> Alert? {
         guard let tendency = combined.tendency else { return nil }
         let place = combined.pressure.name ?? combined.pressure.station
         let mag = magnitude(tendency.delta3h)
-        switch tendency.cls {
-        case .fallingFast:
+        let d = tendency.delta3h
+        let t = level.thresholds
+        if d <= -t.fall {
             return Alert(latch: "pressure.falling_fast", cooldown: pressureCooldown,
-                         title: "Pressure dropping fast",
+                         title: d <= -3.0 ? "Pressure dropping fast" : "Pressure falling",
                          body: "Down \(mag) in 3 h at \(place). \(combined.verdict)")
-        case .risingFast:
-            return Alert(latch: "pressure.rising_fast", cooldown: pressureCooldown,
-                         title: "Pressure rising sharply",
-                         body: "Up \(mag) in 3 h at \(place). \(combined.verdict)")
-        default:
-            return nil
         }
+        if d >= t.rise {
+            return Alert(latch: "pressure.rising_fast", cooldown: pressureCooldown,
+                         title: d >= 1.5 ? "Pressure rising sharply" : "Pressure rising",
+                         body: "Up \(mag) in 3 h at \(place). \(combined.verdict)")
+        }
+        return nil
     }
 
     /// The storm alert the reading calls for, if any. Lightning wins over a
@@ -140,15 +205,21 @@ enum StormAlerter {
                          now: Date = Date()) async {
         guard pressure || storms, let combined else { return }
         var due: [Alert] = []
-        if pressure, let a = pressureAlert(combined) { due.append(a) }
+        if pressure, let a = pressureAlert(combined, level: Level.stored) { due.append(a) }
         if storms, let a = stormAlert(combined, now: now) { due.append(a) }
         due = due.filter { shouldAlert($0, now: now) }
         guard !due.isEmpty, await authorizationStatus() == .authorized else { return }
+        let quiet = Quiet.stored.contains(now)
         for a in due {
             let c = UNMutableNotificationContent()
             c.title = a.title
             c.body = a.body
-            c.sound = .default
+            if quiet {
+                c.sound = nil
+                c.interruptionLevel = .passive
+            } else {
+                c.sound = .default
+            }
             let request = UNNotificationRequest(identifier: "\(a.latch)_\(Int(now.timeIntervalSince1970))",
                                                 content: c, trigger: nil)
             try? await UNUserNotificationCenter.current().add(request)

@@ -127,3 +127,12 @@ render tests only prove the cards draw.
 
 Everything marked eyeball above was looked at in the simulator this week.
 Everything marked phone has not been seen on a device since build 86.
+
+## Feature registry check (2026-09-24)
+
+`python3 tools/check_features.py` reads every `@AppStorage` and `static let
+...Key` string in the Swift sources and every route in `backend/app/main.py`,
+and fails if one is not named in docs/FEATURES.md. It runs in CI
+(`.github/workflows/registry.yml`) on any push touching `ios/`, `main.py`
+or the registry. It cannot tell whether an entry is accurate, only whether
+it exists.

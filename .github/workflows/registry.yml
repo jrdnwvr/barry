@@ -1,0 +1,14 @@
+name: feature registry
+
+on:
+  push:
+    paths: ["ios/**", "backend/app/main.py", "docs/FEATURES.md", "tools/check_features.py", ".github/workflows/registry.yml"]
+  pull_request:
+    paths: ["ios/**", "backend/app/main.py", "docs/FEATURES.md", "tools/check_features.py", ".github/workflows/registry.yml"]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/check_features.py

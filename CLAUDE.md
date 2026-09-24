@@ -11,7 +11,8 @@ at-a-glance watch complication.
   18/11 on 2026-09-21 and reverted: a Pilots tester's iPhone is on 17.0.3 and
   is the most active one. On-screen detection uses GeometryReader instead of
   iOS 18's `onScrollVisibilityChange`.
-- **Bundle IDs:** `me.wvr.barry`, `.watchkitapp`, `.watchkitapp.complication`.
+- **Bundle IDs:** `me.wvr.barry`, `.widget` (phone widgets), `.watchkitapp`,
+  `.watchkitapp.BarryWidget` (complications).
   App Group: `group.me.wvr.barry`.
 - **Backend prod host (when deployed):** `https://barry.wide-stack.com`. Local dev
   default: `http://127.0.0.1:8077`.
@@ -153,7 +154,7 @@ from WPC's 12 h prog) — enrichment only, the backtested status logic is untouc
 The radar is its own pushed screen (`RadarScreen`; map full-bleed, floating
 bottom card, collapsible Layers panel) and has a **station layer**: the
 backend holds AWC's bulk METAR cache (`metars.cache.csv.gz`, every station,
-refreshed every 5 min by the scheduler) and `/metars?lat&lon&half=3` slices
+refreshed every 10 min by the scheduler) and `/metars?lat&lon&half=3` slices
 a box out of it in milliseconds with grid thinning to ~350 (no per-user AWC
 call; the old bbox query is only the fallback). `StationLayer.swift` draws
 METAR wind barbs or speed labels (Off/Barbs/Speeds, `@AppStorage("radarStations")`); tapping a
@@ -189,7 +190,7 @@ within 100 mi with motion relative to the user), `ConditionsOut.storm`
 (model weather_code/CAPE + TAF). Absent lightning means "nothing reported",
 never "no lightning". **Strike positions** come from NOAA's GOES lightning
 mapper (`backend/app/sources/glm.py`, public S3, anonymous, polled per
-minute by the scheduler; `flashes.py` holds 15 min; `/lightning` slices
+minute by the scheduler; `flashes.py` holds 20 min; `/lightning` slices
 0.02° bins; `LightningOverlay.swift` draws them). Fixed server cost, zero
 per user; `BARRY_GLM=0` disables the poll.
 
@@ -210,6 +211,17 @@ bucket layouts, latencies, field sizes and decode timings in it were measured;
 read it before touching any weather source. Open-Meteo's public API is
 non-commercial only and RainViewer's is personal use only, which is the
 reason for the plan.
+
+**docs/FEATURES.md (2026-09-24)** is the feature registry: every user-facing
+feature with a stable slug, where it lives, what data and settings it uses,
+its tests, and the defects found on the day. A change that adds, removes or
+changes a feature updates it in the same commit; `python3
+tools/check_features.py` fails when a settings key or route is missing.
+**docs/REVIEW.md** holds the dated ten-thousand-foot reviews (structure,
+audiences, customisation, the hand-made look, direction, fix-first list).
+Read both before planning new work. The app must look and read as made by
+a hobbyist: no caption under every control, no pill on every line, white
+space over labels.
 
 Not yet: courtesy emails to RainViewer + IEM before public App Store, App
 Store listing copy, verdict track record (built, hidden until rescored),

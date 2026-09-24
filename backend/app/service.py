@@ -29,6 +29,7 @@ from . import stations
 from .cache import CachedFailure, StationRegistry, TTLCache
 from .interpreter import Sample, interpret
 from .models import (
+    FieldLevelsResponse,
     AloftResponse,
     FieldGridResponse,
     LightningResponse,
@@ -60,6 +61,7 @@ from .tendency import resolve_tendency
 from .verdict import build_verdict
 
 ALOFT_TTL = 60 * 60.0     # the model updates hourly; the column follows it
+FIELD_LEVELS_TTL = 30 * 60.0   # winds aloft over a map region
 ALOFT_STALE_MAX = 12 * 3600.0   # how long a last good column may stand in
 PRESSURE_TTL = 12 * 60.0  # METARs update ~hourly; 12 min keeps it fresh-ish & cheap
 FORECAST_TTL = 30 * 60.0  # forecasts move slowly; 30 min is plenty
@@ -799,12 +801,7 @@ class PressureService:
         if cached is not None:
             return cached
 
-        cols, rows, inset = self.FIELD_COLS, self.FIELD_ROWS, self.FIELD_INSET
-        h = q_lat_span * (1 - 2 * inset)
-        w = q_lon_span * (1 - 2 * inset)
-        lat0, lon0 = q_lat - h / 2, q_lon - w / 2
-        lats = [lat0 + h * r / (rows - 1) for r in range(rows) for _ in range(cols)]
-        lons = [lon0 + w * c / (cols - 1) for _ in range(rows) for c in range(cols)]
+        lats, lons = self._field_points(q_lat, q_lon, q_lat_span, q_lon_span)
         now = _now()
         self.om_gate.require()
         points = await om.fetch_field_grid(lats, lons, self._client, now=now)
@@ -847,6 +844,42 @@ class PressureService:
             if len(ahead) < 2:
                 raise
             return last.model_copy(update={"hours": ahead, "stale": True})
+
+    def _field_points(self, q_lat: float, q_lon: float, q_lat_span: float, q_lon_span: float):
+        """The 7x5 sample grid for a quantized map region."""
+        cols, rows, inset = self.FIELD_COLS, self.FIELD_ROWS, self.FIELD_INSET
+        h = q_lat_span * (1 - 2 * inset)
+        w = q_lon_span * (1 - 2 * inset)
+        lat0, lon0 = q_lat - h / 2, q_lon - w / 2
+        lats = [lat0 + h * r / (rows - 1) for r in range(rows) for _ in range(cols)]
+        lons = [lon0 + w * c / (cols - 1) for _ in range(rows) for c in range(cols)]
+        return lats, lons
+
+    async def get_field_levels(self, lat: float, lon: float,
+                               lat_span: float, lon_span: float) -> FieldLevelsResponse:
+        """The radar's wind grid at every altitude stop, for the same
+        quantized region as get_field_grid. Only asked for when someone
+        moves the altitude slider off the surface; winds aloft change
+        slowly, so a region is held for half an hour."""
+        lat_span = max(0.05, min(30.0, lat_span))
+        lon_span = max(0.05, min(60.0, lon_span))
+        q_lat, q_lon = round(lat * 20) / 20, round(lon * 20) / 20
+
+        def q_span(v):
+            return round(v * 2) / 2 if v >= 1 else round(v, 1)
+        q_lat_span, q_lon_span = q_span(lat_span), q_span(lon_span)
+
+        async def _pull() -> FieldLevelsResponse:
+            lats, lons = self._field_points(q_lat, q_lon, q_lat_span, q_lon_span)
+            now = _now()
+            self.om_gate.require()
+            points = await om.fetch_field_levels(lats, lons, self._client, now=now)
+            if not points:
+                raise LookupError("no winds aloft")
+            return FieldLevelsResponse(points=points, cachedAt=now)
+
+        return await self.cache.fetch(f"fieldlv:{q_lat}:{q_lon}:{q_lat_span}:{q_lon_span}", _pull,
+                                      ttl=FIELD_LEVELS_TTL, negative_ttl=60.0)
 
     # ---- GOES GLM lightning ---------------------------------------------------
 

@@ -13,8 +13,8 @@ from typing import List, Optional
 
 import httpx
 
-from ..models import (AloftCloud, AloftHour, AloftLevel, AloftSurface, FieldPoint, ForecastHour,
-                      SunTimes)
+from ..models import (AloftCloud, AloftHour, AloftLevel, AloftSurface, FieldLevelPoint, FieldPoint,
+                      ForecastHour, LevelWind, SunTimes)
 
 BASE_URL = "https://api.open-meteo.com/v1/forecast"
 USER_AGENT = "Barry/1.0 (jrdn@wvr.me)"
@@ -305,3 +305,47 @@ def parse_aloft(data: dict, *, now: datetime, hours: int = 25) -> List[AloftHour
             blAglFt=int(round(blh * FT_PER_M)) if blh is not None else None,
         ))
     return out
+
+
+# ---- Radar field at altitude: winds at the slider's stops ------------------
+
+# About 2,500, 5,000, 10,000, 14,000 and 18,000 ft. Two variables each is
+# ten, which Open-Meteo counts as one call per location.
+FIELD_LEVELS = [925, 850, 700, 600, 500]
+
+
+def parse_field_levels(data, now: datetime) -> List[FieldLevelPoint]:
+    """Multi-location response -> the current hour's wind at each level."""
+    items = data if isinstance(data, list) else [data]
+    hour_key = now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H")
+    out: List[FieldLevelPoint] = []
+    for it in items:
+        hourly = it.get("hourly") or {}
+        times = hourly.get("time") or []
+        i = next((k for k, t in enumerate(times) if t.startswith(hour_key)), None)
+        if i is None:
+            continue
+        levels: List[LevelWind] = []
+        for p in FIELD_LEVELS:
+            spd = (hourly.get(f"wind_speed_{p}hPa") or [None] * (i + 1))[i]
+            deg = (hourly.get(f"wind_direction_{p}hPa") or [None] * (i + 1))[i]
+            if spd is None or deg is None:
+                continue
+            levels.append(LevelWind(hPa=p, windKmh=float(spd), windDeg=float(deg)))
+        if levels:
+            out.append(FieldLevelPoint(lat=it["latitude"], lon=it["longitude"], levels=levels))
+    return out
+
+
+async def fetch_field_levels(lats, lons, client: httpx.AsyncClient, *, now: datetime) -> List[FieldLevelPoint]:
+    """Winds at the altitude stops at many points, one request."""
+    params = {
+        "latitude": ",".join(f"{v:.3f}" for v in lats),
+        "longitude": ",".join(f"{v:.3f}" for v in lons),
+        "hourly": ",".join(f"{v}_{p}hPa" for p in FIELD_LEVELS for v in ("wind_speed", "wind_direction")),
+        "forecast_days": "1",
+        "timezone": "UTC",
+    }
+    r = await client.get(BASE_URL, params=params, headers={"User-Agent": USER_AGENT}, timeout=15.0)
+    r.raise_for_status()
+    return parse_field_levels(r.json(), now)

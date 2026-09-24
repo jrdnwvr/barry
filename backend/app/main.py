@@ -372,6 +372,24 @@ async def get_aloft(
     return resp.model_dump(mode="json", by_alias=True)
 
 
+@app.get("/radar/field/levels")
+async def radar_field_levels(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    latSpan: float = Query(..., gt=0, le=180),
+    lonSpan: float = Query(..., gt=0, le=360),
+):
+    """Model wind at each altitude stop on the radar's sample grid. Asked
+    for only when the altitude slider leaves the surface; one upstream call
+    per region cell per half hour."""
+    try:
+        resp = await get_service().get_field_levels(lat, lon, latSpan, lonSpan)
+    except Exception as exc:
+        log.warning("winds aloft unavailable: %s: %s", type(exc).__name__, exc)
+        raise HTTPException(status_code=503, detail="winds aloft unavailable")
+    return resp.model_dump(mode="json", by_alias=True)
+
+
 @app.get("/radar/field")
 async def radar_field(
     lat: float = Query(..., ge=-90, le=90),

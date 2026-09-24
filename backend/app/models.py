@@ -289,6 +289,26 @@ class FieldGridResponse(BaseModel):
     cachedAt: datetime
 
 
+class LevelWind(BaseModel):
+    """Model wind at one pressure level, km/h and the direction it blows from."""
+    hPa: int
+    windKmh: float
+    windDeg: float
+
+
+class FieldLevelPoint(BaseModel):
+    lat: float
+    lon: float
+    levels: List[LevelWind] = Field(default_factory=list)
+
+
+class FieldLevelsResponse(BaseModel):
+    """The map's wind grid at every altitude stop, for the radar's altitude
+    slider: the same 35 points as /radar/field, the current hour."""
+    points: List[FieldLevelPoint] = Field(default_factory=list)
+    cachedAt: datetime
+
+
 # ---- Aloft: the vertical column at a point ---------------------------------
 
 class AloftLevel(BaseModel):

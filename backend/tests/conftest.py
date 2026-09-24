@@ -252,6 +252,23 @@ def sample_aloft(request):
             "hourly_units": {"wind_speed_1000hPa": "kn"}, "hourly": hourly}
 
 
+def sample_field_levels(request):
+    """Winds at each level for every grid point: stronger and veering with
+    height, 10 km/h more per level, from 200 degrees plus 15 per level."""
+    lats = [float(v) for v in request.url.params["latitude"].split(",")]
+    lons = [float(v) for v in request.url.params["longitude"].split(",")]
+    start = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    times = [(start + timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M") for i in range(3)]
+    out = []
+    for la, lo in zip(lats, lons):
+        hourly = {"time": times}
+        for k, p in enumerate([925, 850, 700, 600, 500]):
+            hourly[f"wind_speed_{p}hPa"] = [20.0 + 10 * k] * 3
+            hourly[f"wind_direction_{p}hPa"] = [200.0 + 15 * k] * 3
+        out.append({"latitude": la, "longitude": lo, "hourly": hourly})
+    return out
+
+
 def sample_field_grid(request):
     """Open-Meteo's multi-location shape: a list, one dict per point, with
     `current` wind and a day of hourly boundary-layer heights. Wind speed
@@ -496,6 +513,9 @@ class FakeUpstream:
             self.om_calls.append(request)
             if self.om_fail:
                 return httpx.Response(503, text="down")
+            if "hPa" in request.url.params.get("hourly", "") and "," in request.url.params.get("latitude", ""):
+                self.field_level_calls = getattr(self, "field_level_calls", 0) + 1
+                return httpx.Response(200, json=sample_field_levels(request))
             if "hPa" in request.url.params.get("hourly", ""):
                 self.aloft_calls = getattr(self, "aloft_calls", 0) + 1
                 return httpx.Response(200, json=sample_aloft(request))

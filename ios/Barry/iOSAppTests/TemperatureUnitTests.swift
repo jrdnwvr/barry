@@ -76,6 +76,11 @@ struct AudienceTests {
         #expect(Audience.everyday.alertLevel == .moderate && Audience.pilot.alertLevel == .fast)
         #expect(Audience.marine.radarLayers.isobars && Audience.marine.windUnit == .knots)
     }
+
+    @Test func justTheRadarIsJustTheRadar() {
+        let r = Audience.RadarLayers.justRadar
+        #expect(r.radar && !r.lightning && !r.wind && !r.isobars && !r.fronts && r.stations == "off")
+    }
 }
 
 struct DroneWindTests {

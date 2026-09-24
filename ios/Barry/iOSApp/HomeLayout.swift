@@ -178,10 +178,27 @@ enum Audience: String, CaseIterable, Identifiable {
 
     var alertLevel: StormAlerter.Level { self == .everyday ? .moderate : .fast }
 
-    /// The radar layers that open by default.
+    /// The radar layers that open by default. Also the radar's own layer
+    /// sets (Map options), so a weather watcher can jump between them.
     struct RadarLayers: Equatable {
         var radar = true, isobars = false, troughs = false, wind = false, fronts = false
         var stations = "off", lightning = true
+
+        static let justRadar = RadarLayers(lightning: false)
+
+        /// Write them to the radar's stored switches; the map follows.
+        func apply() {
+            let d = AppConfig.sharedDefaults
+            d.set(radar, forKey: "radarShowRadar")
+            d.set("off", forKey: "radarField")
+            d.set(isobars, forKey: "radarIsobars")
+            d.set(troughs, forKey: "radarTroughs")
+            d.set(wind, forKey: "radarWindArrows")
+            d.set(fronts, forKey: "radarFronts")
+            d.set(stations, forKey: "radarStations")
+            if stations != "off" { d.set(stations, forKey: "radarStationStyleLast") }
+            d.set(lightning, forKey: "radarStorms")
+        }
     }
 
     var radarLayers: RadarLayers {
@@ -204,16 +221,7 @@ enum Audience: String, CaseIterable, Identifiable {
         d.set(runwayWinds.rawValue, forKey: RunwayWindsMode.key)
         d.set(aloftCeilingFt, forKey: AloftLayer.ceilingKey)
         d.set(alertLevel.rawValue, forKey: StormAlerter.levelKey)
-        let r = radarLayers
-        d.set(r.radar, forKey: "radarShowRadar")
-        d.set("off", forKey: "radarField")
-        d.set(r.isobars, forKey: "radarIsobars")
-        d.set(r.troughs, forKey: "radarTroughs")
-        d.set(r.wind, forKey: "radarWindArrows")
-        d.set(r.fronts, forKey: "radarFronts")
-        d.set(r.stations, forKey: "radarStations")
-        if r.stations != "off" { d.set(r.stations, forKey: "radarStationStyleLast") }
-        d.set(r.lightning, forKey: "radarStorms")
+        radarLayers.apply()
         if let store {
             store.apply(layout)
         } else if let data = try? JSONEncoder().encode(layout.normalized()) {

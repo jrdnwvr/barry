@@ -759,9 +759,14 @@ stored keys, but each has its own model, so they fetch separately.
 - Lives: `RadarSheets.swift` › `RadarKeySheet`.
 
 ### radar.sheet.more
-- Seen: "Map options": four front toggles, Flow or Arrows, Barbs or Speeds,
-  each with a caption.
-- Lives: `RadarSheets.swift` › `RadarMoreSheet`.
+- Seen: "Map options": layer sets first (Flying, Wind, On the water,
+  Weather, Just the radar; one tap sets every chip and closes the sheet),
+  then four front toggles, Flow or Arrows, Barbs or Speeds, each with a
+  caption.
+- Lives: `RadarSheets.swift` › `RadarMoreSheet`; the sets are
+  `Audience.RadarLayers` (`HomeLayout.swift`), the same bundles "Set up
+  for" opens the radar with, written by `RadarLayers.apply()`.
+- Tests: `AudienceTests.justTheRadarIsJustTheRadar`.
 
 ### radar.region.debounce
 - Rules: each pan or zoom records the region; per layer only the last

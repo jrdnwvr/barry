@@ -220,12 +220,40 @@ struct RadarMoreSheet: View {
     @Binding var frontPips: Bool
     @Binding var frontWeak: Bool
     @Binding var frontCenters: Bool
+    @Environment(\.dismiss) private var dismiss
+
+    /// Layer sets: one tap sets every chip, then the sheet gets out of the
+    /// way. The same bundles the "Set up for" choice opens the radar with.
+    private let sets: [(String, Audience.RadarLayers)] = [
+        ("Flying", Audience.pilot.radarLayers),
+        ("Wind", Audience.soaring.radarLayers),
+        ("On the water", Audience.marine.radarLayers),
+        ("Weather", Audience.weather.radarLayers),
+        ("Just the radar", .justRadar),
+    ]
 
     var body: some View {
         ScrollView {
         VStack(alignment: .leading, spacing: 18) {
             Text("Map options")
                 .font(.title3.weight(.semibold))
+
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Layer sets", systemImage: "square.3.layers.3d")
+                    .font(.subheadline.weight(.semibold))
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(sets, id: \.0) { name, layers in
+                            Button(name) {
+                                layers.apply()
+                                dismiss()
+                            }
+                            .buttonStyle(.bordered)
+                            .accessibilityIdentifier("radar.set.\(name)")
+                        }
+                    }
+                }
+            }
 
             VStack(alignment: .leading, spacing: 6) {
                 Label("Fronts", systemImage: "line.diagonal")

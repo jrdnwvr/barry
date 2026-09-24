@@ -8,8 +8,9 @@
 //      a LOCAL tag) when trusted, otherwise the coarser METAR value
 //    • tap the value to compare phone vs station
 //    • the live micro-trend (flagged when it's sharper than the station's 3h trend)
-//    • calibration freshness + a manual Recalibrate control
 //    • the plain-language verdict (honesty note only when confidence is low)
+//  Calibration status and the Recalibrate control live on the Sensor vs
+//  Station screen (SensorComparisonView), not here.
 
 import SwiftUI
 

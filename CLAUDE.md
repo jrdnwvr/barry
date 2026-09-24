@@ -2,7 +2,7 @@
 
 A barometric **pressure-tendency** app for Apple Watch + iPhone, with a small
 caching backend. The signal that weather is coming is the *rate of change* of
-pressure, not the absolute value. Barry shows the −24h observed / +24h forecast
+pressure, not the absolute value. Barry shows the −24h observed / +48h forecast
 pressure curve and turns the 3-hour tendency into a plain-language verdict and an
 at-a-glance watch complication.
 
@@ -255,7 +255,7 @@ says so. The level is not remembered between opens.
 
 ## Tests and checks (added 2026-09-22)
 
-- Backend: `cd backend && .venv/bin/pytest -q` (294 tests; Hypothesis
+- Backend: `cd backend && .venv/bin/pytest -q` (304 tests; Hypothesis
   property tests read the app's own OpenAPI document). CI runs the suite,
   pip-audit, the image build and trivy on every push touching `backend/`.
   `tools/loadtest.py` against a local uvicorn started with

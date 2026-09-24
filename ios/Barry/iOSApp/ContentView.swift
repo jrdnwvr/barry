@@ -257,7 +257,7 @@ struct ContentView: View {
         case .conditions:
             // DA now + trend, clouds, boundary layer, storm and fog outlooks
             // when they exist. Never an empty card.
-            if let cond = combined.conditions, cond.hasContent {
+            if let cond = combined.conditions, cond.hasContent || combined.pressure.current.hasClouds {
                 FieldConditionsCard(conditions: cond, combined: combined, now: store.now,
                                     onAloft: { showAloft = true })
             }
@@ -350,7 +350,7 @@ struct ContentView: View {
             // Physical location ONLY: a remote station's SLP fed into the
             // calibration would corrupt the offset (and trip the altitude-
             // jump reset). The obs time keeps it one point per METAR.
-            .onChange(of: combined) { _, newCombined in
+            .onChange(of: combined, initial: true) { _, newCombined in
                 guard isPhysicalSelection else { return }
                 if let ref = newCombined.calibrationReference {
                     barometer.attemptCalibration(
@@ -398,15 +398,17 @@ struct ContentView: View {
                         }
                         .frame(maxWidth: .infinity)
 
-                        radarColumn(combined)
-                            .frame(width: max(320, geo.size.width * 0.30))
+                        if homeLayout.isVisible(.radar) {
+                            radarColumn(combined)
+                                .frame(width: max(320, geo.size.width * 0.30))
+                        }
                     } else {
                         VStack(spacing: 12) {
                             trendSection(combined, chartHeight: 200)
                             if homeLayout.isVisible(.rainWind) {
                                 ShortTermForecastCard(combined: combined, now: store.now)
                             }
-                            radarColumn(combined)
+                            if homeLayout.isVisible(.radar) { radarColumn(combined) }
                         }
                         .frame(maxWidth: .infinity)
                     }

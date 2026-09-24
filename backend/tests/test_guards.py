@@ -157,3 +157,14 @@ async def test_forecast_upstream_url_carries_the_cell_not_the_point(client, upst
     url = str(upstream.om_calls[0].url)
     assert "latitude=39.1&" in url and "longitude=-84.4&" in url
     assert "39.1234" not in url and "84.4321" not in url
+
+
+@pytest.mark.asyncio
+async def test_bbox_fallbacks_stay_inside_the_awc_budget(client, upstream):
+    from app.guards import RateLimited
+    s = PressureService(client)
+    s.awc_gate = RateGate(per_minute=0)
+    with pytest.raises(RateLimited):
+        await s._station_obs_bbox(39.1, -84.5)
+    assert await s._nearest_via_bbox(39.1, -84.5) is None
+    assert upstream.awc_calls == []

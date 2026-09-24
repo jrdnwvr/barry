@@ -97,8 +97,8 @@ tiles.
   340 pt card rail, the chart, the forecast card and the radar. Three
   columns when wider than tall and at least 1000 pt; otherwise two.
 - Lives: `ContentView.dashboard`, `glanceRail`, `radarColumn`.
-- Rules: the rail skips chart, forecast and radar. The radar column always
-  shows, even when the Radar card is hidden.
+- Rules: the rail skips chart, forecast and radar. The radar column follows
+  the Radar card's visibility.
 
 ## Home: the hero
 
@@ -194,7 +194,7 @@ hidden). A card shows only when it is not hidden and has something to say.
 | 7 | `wind` | Wind | yes | the METAR has wind |
 | 8 | `radar` | Radar | yes | phone layout, station has coordinates |
 | 9 | `sensor` | Sensor vs station | yes | sensor on and My location |
-| 10 | `sources` | Data sources | yes | always |
+| 10 | `sources` | Data sources | yes, cannot hide | always |
 
 ### settings.homeScreen.layout
 - Seen: Settings › Home screen: three presets (Pilot, Weather, Everything),
@@ -272,8 +272,8 @@ hidden). A card shows only when it is not hidden and has something to say.
 - Data: `/combined.conditions`, `current.clouds`, `forecast.hourly`.
 - Settings: `boundaryLayerReference` agl.
 - Tests: the Aloft UI test taps the row; nothing tests the logic.
-- Rules: the card exists only with density altitude, boundary layer, fog
-  or storm content; clouds alone do not count. The ride note says "for
+- Rules: the card exists only with density altitude, boundary layer, fog,
+  storm or cloud content. The ride note says "for
   advisement only, not a replacement for PIREPs".
 - For: P S D.
 
@@ -322,8 +322,8 @@ hidden). A card shows only when it is not hidden and has something to say.
 - Seen: the station and its source, "Forecast · Open-Meteo.com (CC-BY
   4.0)", and the update time.
 - Lives: `ContentView.swift` › `DataSourceFootnote`.
-- Rules: the comment says the credit is required, yet the card can be
-  hidden. See Known defects.
+- Rules: it carries the forecast data's required credit, so like the chart
+  it can move but not hide.
 
 ## Sensors
 
@@ -380,9 +380,10 @@ hidden). A card shows only when it is not hidden and has something to say.
 
 ## Alerts and background
 
-Lives: `StormAlerter.swift`, `BackgroundRefresh.swift`. All alerts are local
-notifications posted only from the background refresh, never from a
-foreground load. Each has a latch date and a cooldown.
+Lives: `StormAlerter.swift`, `BackgroundRefresh.swift`, `BarryApp.swift`. All
+alerts are local notifications, checked after every fresh reading (the
+app's own loads and the background refresh). Each has a latch date and a
+cooldown.
 
 | Slug | Trigger | Text | Cooldown | Switch |
 |---|---|---|---|---|
@@ -393,9 +394,11 @@ foreground load. Each has a latch date and a cooldown.
 | `alert.storm.forecast` | storm risk likely, starting within 3 h | "Thunderstorms likely" with the window | 6 h | `stormAlertsEnabled` |
 | `alert.test` | Settings › Send a test alert | samples at +3 and +5 s | none | either |
 
-- Rules: lightning beats a forecast storm; one storm alert per check; a
-  pressure and a storm alert can fire together. Front statuses must never
-  feed notifications. The migration turns pressure alerts on for anyone
+- Rules: evaluated after every fresh reading, foreground and background;
+  the latches stop repeats. Lightning beats a forecast storm; one storm
+  alert per check; a pressure and a storm alert can fire together. Front
+  statuses must never feed notifications. Directions are spelled out and
+  the storm sentence's `{eta}` slot is filled, as on the card. The migration turns pressure alerts on for anyone
   who had the old single storms switch.
 - Tests: `AlertTests` (decisions); the latch is untested.
 - For: E M P.
@@ -403,7 +406,8 @@ foreground load. Each has a latch date and a cooldown.
 ### bg.refresh
 - Rules: task `me.wvr.barry.refresh`, earliest 15 min out (a floor, not a
   schedule), scheduled only when the sensor or an alert switch is on. Each
-  run loads, recalibrates in the background if the sensor is on, evaluates
+  run loads, recalibrates in the background if the sensor is on and the
+  selection is My location (the same rule as the foreground), evaluates
   alerts, syncs the Live Activity, reschedules.
 
 ### diagnostics.metrickit
@@ -573,7 +577,7 @@ stored keys, but each has its own model, so they fetch separately.
 - Settings: capped by `aloftCeilingFt` (stops up to `max(5000, ceiling)`).
 - Rules: the streak ramp changes per stop (35 km/h at the surface to 130 at
   18k). The level is not remembered between opens. Other layers stay at the
-  surface; the key's wind text still says 10 m wind.
+  surface; the key's wind text names the level.
 - Tests: the UI test drags the rail and checks the note.
 - For: P S.
 
@@ -596,8 +600,8 @@ stored keys, but each has its own model, so they fetch separately.
 ### radar.layer.troughs
 - Seen: dashed orange-brown WPC trough lines. Chip "Troughs".
 - Settings: `radarTroughs` true.
-- Rules: see Known defects. Draws nothing unless Fronts and Front lines are
-  also on.
+- Rules: draws on its own; the Fronts chip's line toggle does not apply to
+  troughs (the renderer forces the line for `.trof`).
 
 ### radar.layer.stations
 - Seen: METAR wind barbs or speed pills tinted by flight category, a
@@ -780,7 +784,9 @@ station and which mode.
 - Lives: `WatchApp/WatchSettingsView.swift`.
 - Settings: `pressureUnit` inHg (watch's own copy), `watchBarometerEnabled`
   false.
-- Rules: see Known defects; the phone overwrites the barometer switch.
+- Rules: the phone's "use watch sensor" value is applied only when it
+  changes (`sync.watchSensor.lastFromPhone`), so a switch flipped on the
+  wrist survives the phone re-sending its context at launch.
 
 ## Complications
 
@@ -840,7 +846,9 @@ when there is no file). The app nudges WidgetKit after every load.
 - Settings: `liveActivityEnabled` false, switchable in Settings › Alerts,
   the home layout editor, and onboarding. `liveActivity.followUntil`.
 - Rules: starts only in the foreground, no push; stale after 2 h; ends 15
-  min after the event clears; after 90 min without an update it greys.
+  min after the event clears, or when the event changes kind (a new one
+  starts at the next foreground sync); after 90 min without an update it
+  greys.
 - Tests: none.
 
 ## Backend
@@ -890,7 +898,7 @@ without blocking the response.
 - Unhealthy (503, autoheal restarts): a loop exited or stalled (refresh
   1800 s, lightning 600 s). Degraded (200, or 503 with `strict`): the
   lightning feed or the bulk table is stale.
-- Tests: `backend/tests`, 300 tests; `test_property` reads the app's own
+- Tests: `backend/tests`, 304 tests; `test_property` reads the app's own
   OpenAPI document.
 
 ## Settings keys
@@ -946,6 +954,7 @@ each device (the watch keeps its own copies).
 | `watchBarometerEnabled` | false | watch Settings switch; overwritten by the phone sync | watch, PhoneSync |
 | `tendency.snapshot.v1` | none | the complication and lock widget snapshot | SnapshotStore |
 | `airportSelected`, `selectionPhysical` | false | watch sync keys, not phone settings | PhoneSync |
+| `sync.watchSensor.lastFromPhone` | unset | the last "use watch sensor" value the phone sent; the watch applies a new value only when it changes | PhoneSync |
 | `locationMode`, `placeLabel`, `placeLat`, `placeLon` | legacy | read once for migration | |
 
 Not a key: `combined.json` in the App Group container holds the last
@@ -974,77 +983,43 @@ control. docs/REVIEW.md lists the places that need thinning as of
 - `docs/ROUTES.md`: a design draft for `/glance` and `/route`; neither
   route exists.
 
-## Known defects (found during the 2026-09-24 inventory)
+## Known defects and limitations
 
-Main page, alerts and sensors:
-- Background calibration ignores the selection: `BackgroundRefresh.run`
-  recalibrates whenever the sensor is on, while the foreground path
-  calibrates only for My location. A selected remote airport can feed the
-  phone's calibration, which is the corruption the foreground comment
-  warns about.
-- The observed-storm alert posts `storm.detail` as-is, so the `{eta}`
-  placeholder the Conditions card substitutes can appear in a notification.
-- Lightning alerts abbreviate the direction ("to the w of KLUK"); every
-  other surface spells it out, and `AlertTests` expects the abbreviation.
-- The Data sources card can be hidden, which removes the CC BY credit its
-  own comment says is required.
-- Alerts never fire while the app is open; only background refreshes
-  check them.
-- The iPad dashboard shows the radar column even when the Radar card is
-  hidden.
-- The Conditions card does not count clouds as content, so a station with
-  clouds only gets no card.
-- Calibration does not run on the first payload shown (`onChange` without
-  `initial`).
-- The front watch UI (`FrontBanner`, `FrontDetailView`, `FrontCompass`) is
-  referenced by nothing; `/front` is fetched after every load and read only
-  for the complication snapshot, and the watch never receives it.
-- Stale comments: the hero header (calibration controls moved), the phone
-  trace (60 min, actually 48 h), the Settings header (three modes),
-  the 48h chart window is really −24 to +48.
+Found during the 2026-09-24 inventory; the code fixes landed the same day
+(commit after 33a2b50). What remains is either a limitation of the platform
+or a design choice recorded so nobody re-reports it.
 
-Radar and Aloft:
-- The Troughs chip draws nothing unless Fronts is also on and Front lines is
-  on: `RadarPanel.frontStyle` passes `lines: false, pips: false` and
-  `FrontGlyphs.draw` returns early on that.
-- Key and options texts disagree with the code: the nowcast is "the last
-  two" frames in the key but up to three from the server; the Wind key says
-  10 m wind at every rail stop; the More sheet says wind under 3 kt is not
-  drawn, which is true only for Arrows; the lightning window is 20 min on
-  the server, 20 in the key, 15 in the `BarryAPI` comment and 900 s in the
-  Swift default.
+- **Complications can lag a station change** until the watch app has run.
+  WatchConnectivity delivers the phone's context only to a running watch
+  app, which then reloads and rewrites the snapshot the complication reads.
+  Nothing on the phone side can shorten that.
+- **The front watch UI** (`FrontBanner`, `FrontDetailView`, `FrontCompass`
+  in `FrontWatchView.swift`) is parked: referenced by nothing, `/front` is
+  still fetched after every load for the complication snapshot's front
+  arrow, which only the unused rectangular view of the trend complication
+  draws. The DEBUG "Show sample front watch" button has no visible effect.
+- **The Aloft UI test leaves `aloftCeilingFt` at 12000** in the simulator
+  and runs before the radar test, so the rail then stops at 10k. Harmless
+  for the test; reset the key if a hands-on check needs 18k.
+- **The chart's 48h window is −24 h to +48 h.** The name stays; the label
+  matches what pilots asked for.
 
-Watch, complications and widgets:
-- The 3 h change is shown in hPa beside an inHg label on the small and
-  rectangular lock widgets and on `ComplicationView.rectangular`; the Graph
-  and METAR complications show hPa numbers with no unit. The watch page,
-  the medium trend widget and the Live Activity convert correctly.
-- The lock screen and small Pressure Trend widgets use sea-level pressure
-  (`currentPressureHPa`) and ignore the airport rule and the sensor; every
-  other surface uses `displayPressureHPa`.
-- The phone overwrites the watch's barometer switch on every sync, so a
-  value set on the watch reverts.
-- Complications can lag a station change until the watch app has run.
-- A background Live Activity update can change the event label while the
-  activity's kind stays the old one.
-
-Backend:
-- Three fallback paths call AWC outside the budget gate: the cold-start
-  `/front` query, `_station_obs_bbox`, `_nearest_via_bbox`.
-- `/combined` looks up runways with the ID the client typed, not the
-  corrected station.
-- `/radar/field` does not cache failures, so a failing upstream is retried
-  on every request up to the budget.
-- `/stations/search` accepts one character but returns nothing under two.
-
-Docs that disagree with the code:
-- CLAUDE.md says the bulk METAR table refreshes every 5 min (code: 600 s)
-  and that flashes are held 15 min (code: 20). The complication bundle ID
-  in CLAUDE.md is stale. The `/radar/pressure` docstring says isallobars at
-  ±1/2/3 hPa (code: every whole hPa, no cap). WIDGETS.md under-describes the
-  small Field widget.
+Fixed on 2026-09-24 (kept here for one release so testers' reports can be
+matched): the Troughs chip needing Fronts; the change shown in hPa beside an
+inHg label on the lock widgets and the Graph and METAR complications; the
+lock widgets ignoring the airport rule; background calibration for a remote
+station; the `{eta}` placeholder in the observed-storm alert; abbreviated
+directions in lightning alerts; the hideable Data sources card; alerts only
+firing from background refreshes; the iPad radar column ignoring a hidden
+Radar card; the Conditions card ignoring clouds; the first payload skipping
+calibration; the phone overwriting the watch's barometer switch; a
+background Live Activity update changing the label under the old kind; the
+key and options texts that disagreed with the code; three AWC calls outside
+the budget gate; runways looked up by the typed ID; `/radar/field` not
+caching failures; `/stations/search` accepting one character.
 
 ## Document log
 
 - 2026-09-24: first version, from a full read of the sources by three
-  sweeps (main page; radar and Aloft; watch, widgets and backend).
+  sweeps (main page; radar and Aloft; watch, widgets and backend). The
+  defects the read found were fixed the same day; see Known defects.

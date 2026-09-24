@@ -50,7 +50,14 @@ final class PhoneSync: NSObject, WCSessionDelegate {
         d.set(physical, forKey: AppConfig.syncPhysicalKey)
         // Settings the phone owns; the watch's own switches read these keys.
         if let b = ctx[AppConfig.syncBackcountryKey] as? Bool { d.set(b, forKey: AppConfig.syncBackcountryKey) }
-        if let w = ctx[AppConfig.syncWatchSensorKey] as? Bool { d.set(w, forKey: AppConfig.syncWatchSensorKey) }
+        // Only a CHANGE on the phone reaches the watch's own switch; the same
+        // context is re-applied at every launch and must not undo a choice
+        // made on the wrist.
+        if let w = ctx[AppConfig.syncWatchSensorKey] as? Bool,
+           (d.object(forKey: AppConfig.syncWatchSensorLastKey) as? Bool) != w {
+            d.set(w, forKey: AppConfig.syncWatchSensorKey)
+            d.set(w, forKey: AppConfig.syncWatchSensorLastKey)
+        }
         if changed { onUpdate?(station, selected, physical) }
     }
 

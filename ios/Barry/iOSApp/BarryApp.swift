@@ -70,10 +70,18 @@ struct BarryApp: App {
                 .onChange(of: phoneBarometerEnabled) { _, enabled in
                     if enabled { barometer.start() } else { barometer.stop() }
                 }
+                // Alerts on every fresh reading, not only the background ones:
+                // a fall that starts while the app is open on a kneeboard still
+                // deserves the tap on the shoulder. The latches stop repeats.
+                .onChange(of: store.combined) { _, c in
+                    guard c != nil, pressureAlertsEnabled || stormAlertsEnabled else { return }
+                    Task { await StormAlerter.evaluate(c, pressure: pressureAlertsEnabled, storms: stormAlertsEnabled) }
+                }
         }
         .backgroundTask(.appRefresh(BackgroundRefresh.taskID)) {
             await BackgroundRefresh.run(store: store, barometer: barometer,
                                         sensorEnabled: phoneBarometerEnabled,
+                                        physical: SavedLocationsStore().selected.isPhysical,
                                         pressureAlertsEnabled: pressureAlertsEnabled,
                                         stormAlertsEnabled: stormAlertsEnabled)
             BackgroundRefresh.schedule()  // chain the next opportunistic refresh

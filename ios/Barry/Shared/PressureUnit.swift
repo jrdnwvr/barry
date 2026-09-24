@@ -44,6 +44,15 @@ enum PressureUnit: String, CaseIterable, Codable, Identifiable {
         return s
     }
 
+    /// The delta converted and signed but without the unit, e.g. "−0.07",
+    /// for the small surfaces where the unit is already on the line above.
+    func formatDeltaBare(_ hPaDelta: Double) -> String {
+        let v = convertDelta(hPaDelta)
+        let digits = self == .hPa ? 1 : 2
+        let sign = v > 0 ? "+" : (v < 0 ? "−" : "")
+        return "\(sign)\(String(format: "%.\(digits)f", abs(v)))"
+    }
+
     /// Format a delta with explicit sign and unit, e.g. "−2.4 hPa".
     func formatDelta(_ hPaDelta: Double) -> String {
         let v = convertDelta(hPaDelta)

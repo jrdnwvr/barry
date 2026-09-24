@@ -396,9 +396,12 @@ final class FrontFieldRenderer: MKOverlayRenderer {
                 }
             guard touches else { continue }
             let pts = mapPts.map { point(for: $0) }
+            // A trough is only a line, and its own chip decided it is wanted
+            // (the filter above), so the Fronts chip's line toggle does not
+            // apply to it. Without this the Troughs chip drew nothing on its own.
             FrontGlyphs.draw(kind: f.kind, weak: f.weak, points: pts,
                              scale: scale, alpha: f.alpha, in: ctx,
-                             lines: style.lines, pips: style.pips)
+                             lines: f.kind == .trof || style.lines, pips: style.pips)
         }
     }
 }

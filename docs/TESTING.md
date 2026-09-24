@@ -8,7 +8,7 @@ Three columns of meaning: **Automated** is a test in the repo. **Sim** is a
 scripted or eyeballed check in the simulator. **Phone** is something only a
 real device can show. An empty cell means nothing checks it.
 
-## Backend (FastAPI, 294 tests, all through a mock transport unless noted; CI runs them on every push)
+## Backend (FastAPI, 304 tests, all through a mock transport unless noted; CI runs them on every push)
 
 | Behaviour | Automated | Notes |
 |---|---|---|
@@ -42,7 +42,7 @@ real device can show. An empty cell means nothing checks it.
 | Health check: 503 when a loop dies or stalls, degraded when upstream is silent | yes, through the app | strict form for an outside monitor |
 | Container runs as nobody, hashed install, pinned tunnel | deploy smoke | `docker exec id`, `docker inspect` |
 
-## iOS app (54 unit tests and one UI test; `xcodebuild test -scheme Barry`)
+## iOS app (76 unit tests and two UI tests; `xcodebuild test -scheme Barry`)
 
 Cards, in the order the home screen shows them by default.
 

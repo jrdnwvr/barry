@@ -25,9 +25,10 @@ struct PressureChartView: View {
     let combined: CombinedResponse
     let now: Date
     let unit: PressureUnit
-    /// Calibrated phone SLP trace for the last ~60 min. Empty when the feature is
-    /// off, uncalibrated, or the device is moving. Rendered as a short orange line
-    /// clearly distinct from the METAR observed (blue) line.
+    /// Calibrated phone SLP trace (ContentView passes the 48 h history). Empty
+    /// when the feature is off or uncalibrated. Rendered as an orange line
+    /// clearly distinct from the METAR observed (blue) line; bursts shorter
+    /// than 20 min draw as dots.
     var phoneTrace: [(Date, Double)] = []
     /// Visible time window around `now`. Defaults to the full view.
     var window: ChartWindow = .hours48

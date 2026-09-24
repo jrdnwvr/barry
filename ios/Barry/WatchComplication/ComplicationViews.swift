@@ -161,10 +161,7 @@ struct ComplicationView: View {
         }
     }
 
-    private var deltaShort: String {
-        let sign = delta > 0 ? "+" : (delta < 0 ? "−" : "")
-        return "\(sign)\(String(format: "%.1f", abs(delta)))"
-    }
+    private var deltaShort: String { unit.formatDeltaBare(delta) }
 
     /// Absolute pressure in the user's unit, no unit suffix — the surrounding
     /// label supplies that. Falls back to "—" if no snapshot yet.

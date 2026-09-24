@@ -41,3 +41,12 @@ async def test_privacy_and_support_pages():
         resp = await page()
         assert resp.media_type == "text/html"
         assert "Barry" in open(resp.path, encoding="utf-8").read()
+
+
+@pytest.mark.asyncio
+async def test_runways_follow_the_corrected_station(client):
+    # "LUK" is retried as KLUK; the runways must belong to the corrected id.
+    service = PressureService(client)
+    combined = await service.get_combined("LUK")
+    assert combined.pressure.station == "KLUK"
+    assert combined.runways, "the corrected station's runways"

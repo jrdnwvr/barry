@@ -99,7 +99,7 @@ enum StormAlerter {
            now.timeIntervalSince(l.at) <= 30 * 60,
            l.distanceMi <= lightningRangeMi,
            l.towardYou == true || l.distanceMi <= lightningCloseMi {
-            var body = l.distanceMi < 3 ? "At \(place)." : "\(l.distanceMi) mi to the \(l.cardinal.lowercased()) of \(place)"
+            var body = l.distanceMi < 3 ? "At \(place)." : "\(l.distanceMi) mi to the \(Cardinal.word(l.cardinal)) of \(place)"
             if l.distanceMi >= 3 {
                 if l.towardYou == true {
                     body += l.etaAt.map { ", moving this way. About \(clock($0))." } ?? ", moving this way."
@@ -112,8 +112,12 @@ enum StormAlerter {
         }
         if let s = combined.conditions?.storm {
             if s.risk == "observed", let d = s.distanceMi, d <= lightningCloseMi {
+                // The server's sentence carries an {eta} slot; the card fills
+                // it and so must the notification.
+                let detail = s.etaAt.map { s.detail.replacingOccurrences(of: "{eta}", with: clock($0)) }
+                    ?? s.detail.replacingOccurrences(of: " {eta}", with: "").replacingOccurrences(of: "{eta}", with: "")
                 return Alert(latch: "storm.lightning", cooldown: lightningCooldown,
-                             title: "Thunderstorms at \(place)", body: s.detail)
+                             title: "Thunderstorms at \(place)", body: detail)
             }
             if s.risk == "likely", s.start.map({ $0.timeIntervalSince(now) <= forecastWindow }) ?? true,
                s.end.map({ $0 > now }) ?? true {

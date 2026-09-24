@@ -16,3 +16,32 @@ struct TemperatureUnitTests {
         #expect(TemperatureUnit.allCases.map(\.label) == ["°C", "°F"])
     }
 }
+
+struct PressureUnitTests {
+    @Test func deltasFollowTheUnit() {
+        // −1.6 hPa is −0.05 inHg; the bare form carries no unit, the full form does.
+        #expect(PressureUnit.hPa.formatDeltaBare(-1.6) == "−1.6")
+        #expect(PressureUnit.inHg.formatDeltaBare(-1.6) == "−0.05")
+        #expect(PressureUnit.inHg.formatDeltaBare(0) == "0.00")
+        #expect(PressureUnit.hPa.formatDeltaBare(2.4) == "+2.4")
+        #expect(PressureUnit.inHg.formatDelta(-1.6) == "−0.05 inHg")
+    }
+
+    @Test func compassWords() {
+        #expect(Cardinal.word("W") == "west" && Cardinal.word("nw") == "northwest")
+        #expect(Cardinal.word("SSW") == "south-southwest")
+        #expect(Cardinal.word("ALQDS") == "alqds")
+    }
+
+    @Test func aReportWithCloudHasClouds() {
+        var obs = CurrentObs(slp: nil, presTend: nil)
+        #expect(!obs.hasClouds)
+        obs.ceilingFt = 4500
+        #expect(obs.hasClouds)
+        obs.ceilingFt = nil
+        obs.clouds = [CloudLayer(cover: "FEW", baseFt: 2500)]
+        #expect(obs.hasClouds)
+        obs.clouds = []
+        #expect(!obs.hasClouds)
+    }
+}

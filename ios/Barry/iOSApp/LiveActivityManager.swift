@@ -44,7 +44,7 @@ final class LiveActivityManager {
 
     private func detect(_ c: CombinedResponse) -> Event? {
         if let n = c.lightningNearby, n.distanceMi <= Self.lightningMiles {
-            return Event(kind: "lightning", label: "Lightning \(n.distanceMi) mi \(cardinalWord(n.cardinal))")
+            return Event(kind: "lightning", label: "Lightning \(n.distanceMi) mi \(Cardinal.word(n.cardinal))")
         }
         let feature = c.reading?.feature
         let cls = c.tendency?.cls
@@ -53,11 +53,6 @@ final class LiveActivityManager {
         if feature == "trough_passing" || feature == "front_knee" { return Event(kind: "front", label: "Front passing") }
         if isFollowing { return Event(kind: "follow", label: "Following") }
         return nil
-    }
-
-    private func cardinalWord(_ c: String) -> String {
-        ["N": "north", "NE": "northeast", "E": "east", "SE": "southeast",
-         "S": "south", "SW": "southwest", "W": "west", "NW": "northwest"][c] ?? c
     }
 
     private func state(_ c: CombinedResponse, atAirport: Bool, label: String) -> PressureActivityAttributes.ContentState {
@@ -88,10 +83,14 @@ final class LiveActivityManager {
         let s = state(c, atAirport: atAirport, label: event.label)
         let content = ActivityContent(state: s, staleDate: Date().addingTimeInterval(2 * 3600))
         if let running {
-            if running.attributes.kind == event.kind || !foreground {
+            if running.attributes.kind == event.kind {
                 await running.update(content)
                 return
             }
+            // A different event: the running activity's kind can't change, so
+            // end it rather than label a lightning activity "Falling fast".
+            // In the foreground a new one starts below; in the background it
+            // waits for the next open, since activities only start in front.
             await end(running, with: running.content.state)
         }
         guard foreground else { return }

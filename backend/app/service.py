@@ -415,7 +415,10 @@ class PressureService:
         else:
             try:
                 # Cold start (history still warming): 8 h of bbox history, the
-                # current ring plus the same ring TRACK_LAG_H earlier.
+                # current ring plus the same ring TRACK_LAG_H earlier. Inside
+                # the budget like every other AWC call; a spent budget means
+                # no ring, not a 503.
+                self.awc_gate.require()
                 parsed = await awc.fetch_metars_bbox(f_lat, f_lon, self._client, hours=8)
             except Exception:
                 parsed = {}  # no regional field -> at most a "forecast" status
@@ -641,6 +644,7 @@ class PressureService:
         cached = await self.cache.get(cache_key)
         if cached is not None:
             return cached
+        self.awc_gate.require()
         parsed = await awc.fetch_metars_bbox(lat, lon, self._client, hours=2)
         stations = []
         for sid, p in parsed.items():
@@ -697,6 +701,7 @@ class PressureService:
         best = None
         for half in (1.4, 4.0):
             try:
+                self.awc_gate.require()
                 parsed = await awc.fetch_metars_bbox(
                     lat, lon, self._client, hours=3, half_lat_deg=half)
             except Exception:
@@ -796,18 +801,17 @@ class PressureService:
         def q_span(v):
             return round(v * 2) / 2 if v >= 1 else round(v, 1)
         q_lat_span, q_lon_span = q_span(lat_span), q_span(lon_span)
-        cache_key = f"field:{q_lat}:{q_lon}:{q_lat_span}:{q_lon_span}"
-        cached = await self.cache.get(cache_key)
-        if cached is not None:
-            return cached
+        async def _pull() -> FieldGridResponse:
+            lats, lons = self._field_points(q_lat, q_lon, q_lat_span, q_lon_span)
+            now = _now()
+            self.om_gate.require()
+            points = await om.fetch_field_grid(lats, lons, self._client, now=now)
+            return FieldGridResponse(points=points, cachedAt=now)
 
-        lats, lons = self._field_points(q_lat, q_lon, q_lat_span, q_lon_span)
-        now = _now()
-        self.om_gate.require()
-        points = await om.fetch_field_grid(lats, lons, self._client, now=now)
-        resp = FieldGridResponse(points=points, cachedAt=now)
-        await self.cache.set(cache_key, resp, ttl=FIELD_TTL)
-        return resp
+        # A failure is remembered for a minute, like the levels grid, so a
+        # down model is probed once per window rather than on every pan.
+        return await self.cache.fetch(f"field:{q_lat}:{q_lon}:{q_lat_span}:{q_lon_span}", _pull,
+                                      ttl=FIELD_TTL, negative_ttl=60.0)
 
     # ---- Aloft: the column at a point -----------------------------------------
 
@@ -1062,7 +1066,7 @@ class PressureService:
             forecast=forecast,
             reading=reading_out,
             conditions=conditions,
-            runways=runways.for_station(station),
+            runways=runways.for_station(pressure.station),
             taf=taf,
             trackRecord=track_out,
             lightningNearby=nearby,

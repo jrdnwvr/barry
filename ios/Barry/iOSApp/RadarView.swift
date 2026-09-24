@@ -264,7 +264,8 @@ struct RadarPanel: View {
                           frontValidText: frontValidText, stations: stationsOn,
                           stationStyle: stationStyle, storms: showStorms,
                           pressureStations: model.pressureField?.stations ?? 0,
-                          lightningCoverage: model.lightning.response?.coverage)
+                          lightningCoverage: model.lightning.response?.coverage,
+                          windLevelFt: WindAltitude.stop(model.windLevel).ft)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }

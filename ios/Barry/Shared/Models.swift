@@ -539,7 +539,7 @@ struct LightningCluster: Codable, Hashable {
 struct LightningResponse: Codable, Hashable {
     var cells: [LightningCell] = []
     var clusters: [LightningCluster] = []
-    var windowSec: Int = 900
+    var windowSec: Int = 1200
     var binDeg: Double = 0.02
     /// False when the server's feed is stale: an empty map then means
     /// "unknown", never "no lightning".
@@ -802,5 +802,28 @@ extension CombinedResponse {
               let p3 = nearest(to: now.addingTimeInterval(3 * 3600))?.pressure_msl
         else { return nil }
         return p3 - p0
+    }
+}
+
+// MARK: - Small shared helpers
+
+/// Compass abbreviations as words, for sentences: "W" reads as "west".
+/// One table, so the alerts, the Live Activity and the cards agree.
+enum Cardinal {
+    static func word(_ abbrev: String) -> String {
+        let table = ["N": "north", "NNE": "north-northeast", "NE": "northeast", "ENE": "east-northeast",
+                     "E": "east", "ESE": "east-southeast", "SE": "southeast", "SSE": "south-southeast",
+                     "S": "south", "SSW": "south-southwest", "SW": "southwest", "WSW": "west-southwest",
+                     "W": "west", "WNW": "west-northwest", "NW": "northwest", "NNW": "north-northwest"]
+        return table[abbrev.uppercased()] ?? abbrev.lowercased()
+    }
+}
+
+extension CurrentObs {
+    /// The report says something about cloud: a layer list, or a ceiling.
+    /// The Conditions card's clouds row has something to show when this is true.
+    var hasClouds: Bool {
+        if let layers = clouds, !layers.isEmpty { return true }
+        return ceilingFt != nil
     }
 }

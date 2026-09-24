@@ -19,7 +19,9 @@ struct PhoneWidgetView: View {
     private var cls: TendencyClass { entry.snapshot?.cls ?? .steady }
     private var intensity: Double { entry.snapshot?.intensity ?? 0 }
     private var delta: Double { entry.snapshot?.delta3h ?? 0 }
-    private var currentHPa: Double? { entry.snapshot?.currentPressureHPa }
+    // The altimeter at an airport, the sensor when calibrated: the same
+    // number every other surface shows.
+    private var currentHPa: Double? { entry.snapshot?.displayPressureHPa }
     private var trendSymbol: String { entry.snapshot?.trendSymbolName ?? cls.symbolName }
 
     /// Data too old to present as current (same rule as the watch complication).
@@ -35,10 +37,7 @@ struct PhoneWidgetView: View {
         return String(format: unit == .hPa ? "%.0f" : "%.2f", unit.convert(hPa))
     }
 
-    private var deltaShort: String {
-        let sign = delta > 0 ? "+" : (delta < 0 ? "−" : "")
-        return "\(sign)\(String(format: "%.1f", abs(delta)))"
-    }
+    private var deltaShort: String { unit.formatDeltaBare(delta) }
 
     var body: some View {
         Group {

@@ -44,6 +44,10 @@ enum AppConfig {
     /// applied to the watch's own settings keys on arrival.
     static let syncBackcountryKey = "backcountryEnabled"
     static let syncWatchSensorKey = "watchBarometerEnabled"
+    /// The last "use watch sensor" value the phone sent. The watch applies a
+    /// new value only when this changes, so a switch flipped on the watch
+    /// survives the phone re-sending the same old context at every launch.
+    static let syncWatchSensorLastKey = "sync.watchSensor.lastFromPhone"
 }
 
 /// How Barry chooses the "where am I" coordinates for forecast + station lookup.

@@ -133,7 +133,7 @@ struct BarryAPI {
         return try await get(comps?.url)
     }
 
-    /// GOES lightning-mapper flashes over the last 15 minutes around a
+    /// GOES lightning-mapper flashes over the last 20 minutes around a
     /// point, binned, from the server's memory (it polls NOAA, not the phone).
     func lightning(lat: Double, lon: Double) async throws -> LightningResponse {
         var comps = URLComponents(url: baseURL.appendingPathComponent("lightning"),

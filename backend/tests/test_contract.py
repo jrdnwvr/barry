@@ -24,7 +24,7 @@ async def api(client):
     "/radar/pressure?lat=0&lon=0&latSpan=0&lonSpan=1", "/radar/pressure?lat=0&lon=0&latSpan=-1&lonSpan=1",
     "/radar/pressure?lat=0&lon=0&latSpan=nan&lonSpan=1", "/radar/field?lat=0&lon=0&latSpan=1&lonSpan=inf",
     "/combined?station=KLUK&tz=100000", "/combined?station=KLUK&lat=95",
-    "/stations/search?q=", "/stations/search?q=" + "x" * 41, "/stations/search?q=K&limit=0",
+    "/stations/search?q=", "/stations/search?q=K", "/stations/search?q=" + "x" * 41, "/stations/search?q=K&limit=0",
     "/stations/nearest?lat=0", "/pressure/KLUK?hours=0",
 ])
 async def test_out_of_range_and_non_finite_inputs_are_422(api, url):

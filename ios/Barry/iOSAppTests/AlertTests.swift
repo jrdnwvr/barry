@@ -45,11 +45,21 @@ struct AlertTests {
         #expect(StormAlerter.stormAlert(try combined(lightning: bolt(20, toward: false)), now: now) == nil)    // near, but going away
         #expect(StormAlerter.stormAlert(try combined(lightning: bolt(20, toward: true, age: 3600)), now: now) == nil)  // old news
         let coming = try #require(StormAlerter.stormAlert(try combined(lightning: bolt(20, toward: true)), now: now))
-        #expect(coming.title == "Lightning nearby" && coming.body.hasPrefix("20 mi to the w") && coming.body.contains("moving this way"))
+        #expect(coming.title == "Lightning nearby" && coming.body.hasPrefix("20 mi to the west") && coming.body.contains("moving this way"))
         let close = try #require(StormAlerter.stormAlert(try combined(lightning: bolt(6, toward: nil)), now: now))
         #expect(close.body.hasPrefix("6 mi") && !close.body.contains("moving"))
         let here = try #require(StormAlerter.stormAlert(try combined(lightning: bolt(1, toward: nil)), now: now))
         #expect(here.body.hasPrefix("At "))
+    }
+
+    @Test func observedStormsFillTheEtaSlot() throws {
+        let now = Date()
+        let s = StormOut(risk: "observed", start: nil, end: nil, detail: "Moving east, toward you. Here around {eta}.",
+                         distanceMi: 8, cardinal: "west", moving: "E", towardYou: true,
+                         etaAt: now.addingTimeInterval(30 * 60))
+        let a = try #require(StormAlerter.stormAlert(try combined(storm: s), now: now))
+        #expect(a.title.hasPrefix("Thunderstorms at") && a.body.hasPrefix("Moving east"))
+        #expect(!a.body.contains("{eta}") && a.body.contains("Here around "))
     }
 
     @Test func forecastStormsAlertWhenLikelyAndSoon() throws {

@@ -164,7 +164,9 @@ coverage, paid data, and anything whose cost scales with users.
 
 ### Fix first
 
-Found by reading, not by users. Ordered by what a user would notice.
+Found by reading, not by users. Ordered by what a user would notice. All
+eight were fixed the same day, along with the smaller items in the
+registry; the list stays as the record of what the review caught.
 
 1. The Troughs chip draws nothing unless Fronts and Front lines are on.
 2. The small and lock-screen Pressure Trend widgets show the change in hPa

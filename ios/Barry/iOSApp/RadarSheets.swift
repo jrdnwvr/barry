@@ -22,6 +22,8 @@ struct RadarKeySheet: View {
     let storms: Bool
     let pressureStations: Int
     var lightningCoverage: Bool? = nil
+    /// The altitude rail's stop in feet, 0 at the surface.
+    var windLevelFt: Int = 0
     @AppStorage("pressureUnit", store: AppConfig.sharedDefaults)
     private var pressureUnitRaw: String = PressureUnit.inHg.rawValue
     private var inHg: Bool { pressureUnitRaw == PressureUnit.inHg.rawValue }
@@ -36,9 +38,12 @@ struct RadarKeySheet: View {
 
                 if wind {
                     section("Wind", icon: "wind") {
+                        let level = windLevelFt > 0
+                            ? "the model's wind at about \(windLevelFt.formatted()) ft"
+                            : "the model's 10 m wind"
                         Text(windStyle == "arrows"
-                             ? "Arrows follow the model's 10 m wind and scale with speed."
-                             : "Streaks drift with the model's 10 m wind.")
+                             ? "Arrows follow \(level) and scale with speed."
+                             : "Streaks drift with \(level).")
                     }
                 }
 
@@ -130,7 +135,7 @@ struct RadarKeySheet: View {
                     swatch(Color(red: 0.84, green: 0.13, blue: 0.13), "Severe 55+")
                     swatch(Color(red: 0.90, green: 0.16, blue: 0.86), "Hail likely 60+")
                 }
-                Text("Blues are rain. Orange is where an echo stops being just rain, in dBZ. Frames every 10 minutes; the last two (orange time) are a short nowcast.")
+                Text("Blues are rain. Orange is where an echo stops being just rain, in dBZ. Frames every 10 minutes; the ones with an orange time are a short nowcast.")
             }
         }
         switch field {
@@ -243,7 +248,7 @@ struct RadarMoreSheet: View {
                     Text("Arrows").tag("arrows")
                 }
                 .pickerStyle(.segmented)
-                Text("Wind under 3 kt is not drawn. Station barbs show calm as an open circle.")
+                Text("Arrows leave out wind under 3 kt; streaks drift everywhere. Station barbs show calm as an open circle.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

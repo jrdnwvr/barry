@@ -1,11 +1,11 @@
 //  SettingsView.swift
 //  Barry — iOS
 //
-//  Settings (brief §6): unit, then a "where to read pressure" picker with three
-//  modes — device location, a saved geocoded place, or an explicit airport.
-//  The chosen mode drives only the *station/forecast lookup*. Any local sensor
-//  reading from the iPhone barometer (CMAltimeter, future) stays tied to the
-//  device and is intentionally NOT controlled here.
+//  Settings: the sensor, the home screen layout, Backcountry, alerts, units,
+//  the card and screen options, and the saved locations list (My location,
+//  airports, places), which replaced the old three-mode picker. The selected
+//  location drives only the station and forecast lookup; the phone sensor
+//  stays tied to the device.
 
 import CoreLocation
 import SwiftUI

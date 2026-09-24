@@ -42,3 +42,15 @@ async def test_upstream_failure_surfaces(client, upstream):
     upstream.om_fail = True
     with pytest.raises(Exception):
         await PressureService(client).get_field_grid(39.1, -84.5, 3.0, 3.0)
+
+
+@pytest.mark.asyncio
+async def test_a_failed_grid_is_not_retried_for_a_minute(client, upstream):
+    from app.cache import CachedFailure
+    service = PressureService(client)
+    upstream.om_fail = True
+    with pytest.raises(Exception):
+        await service.get_field_grid(39.1, -84.5, 3.0, 3.0)
+    with pytest.raises(CachedFailure):
+        await service.get_field_grid(39.1, -84.5, 3.0, 3.0)
+    assert len(upstream.om_calls) == 1

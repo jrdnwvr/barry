@@ -51,7 +51,7 @@ The METAR strip from the top of the app and the watch METAR complication,
 on the phone.
 
 - Small: station, category in its color, wind in TAF shorthand ("160@7"),
-  altimeter setting.
+  altimeter setting, ceiling, visibility, density altitude, report age.
 - Medium: the small row, then visibility, ceiling with cover, density
   altitude and field elevation, temperature and dew point, report age.
 - Category color rules: the observed category, derived from ceiling and

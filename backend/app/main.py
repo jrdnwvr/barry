@@ -1,11 +1,8 @@
 """FastAPI app: the cached proxy + data contract for the Barry clients.
 
-Routes (brief §5):
-  GET /pressure/{station}?hours=24
-  GET /forecast?lat=..&lon=..
-  GET /combined?station=..&lat=..&lon=..   <- primary client endpoint
-  GET /stations/nearest?lat=..&lon=..      <- convenience for location resolution
-  GET /healthz
+Routes: docs/FEATURES.md (the Backend table) lists every one with its
+parameters, sources, caching and the client that reads it. The primary
+client endpoint is GET /combined?station=..&lat=..&lon=..
 """
 
 from __future__ import annotations
@@ -324,8 +321,9 @@ async def radar_pressure(
     latSpan: float = Query(..., gt=0, le=180),   # le: inf is not a span
     lonSpan: float = Query(..., gt=0, le=360),
 ):
-    """Isobars (every 4 hPa) and isallobars (±1/2/3 hPa per 3 h) for a map
-    region, contoured from Barry's own station table. No upstream call."""
+    """Isobars (every 4 hPa) and isallobars (every whole hPa per 3 h, no cap)
+    for a map region, contoured from Barry's own station table. No upstream
+    call."""
     resp = await get_service().get_pressure_field(lat, lon, latSpan, lonSpan)
     return resp.model_dump(mode="json", by_alias=True)
 
@@ -421,7 +419,7 @@ async def get_fronts():
 
 
 @app.get("/stations/search")
-async def search_stations(q: str = Query(..., min_length=1, max_length=40),
+async def search_stations(q: str = Query(..., min_length=2, max_length=40),
                           limit: int = Query(15, ge=1, le=50)):
     """Station search by ICAO id prefix or name, METAR-issuing sites only."""
     return {"results": await get_service().search_stations(q, limit=limit)}

@@ -49,12 +49,13 @@ enum HomeCard: String, CaseIterable, Codable, Identifiable {
         case .wind:       return "Wind on the compass, runway components at an airport."
         case .radar:      return "The map."
         case .sensor:     return "The phone barometer against the station."
-        case .sources:    return "Where the numbers came from."
+        case .sources:    return "Where the numbers came from. Always shown."
         }
     }
 
-    /// The chart is the app; it can move but not hide.
-    var canHide: Bool { self != .chart }
+    /// The chart is the app; it can move but not hide. The sources line
+    /// carries the forecast data's required credit, so it stays too.
+    var canHide: Bool { self != .chart && self != .sources }
 }
 
 struct HomeLayout: Codable, Equatable {

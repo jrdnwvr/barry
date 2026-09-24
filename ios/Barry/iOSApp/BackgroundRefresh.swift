@@ -39,9 +39,13 @@ enum BackgroundRefresh {
     /// the task's runtime budget.
     @MainActor
     static func run(store: PressureStore, barometer: BarometerManager,
-                    sensorEnabled: Bool, pressureAlertsEnabled: Bool, stormAlertsEnabled: Bool) async {
+                    sensorEnabled: Bool, physical: Bool,
+                    pressureAlertsEnabled: Bool, stormAlertsEnabled: Bool) async {
         await store.load()
-        if sensorEnabled, let ref = store.combined?.calibrationReference {
+        // Same rule as the foreground: only a physical selection (My location)
+        // may calibrate. A saved remote airport's altimeter would corrupt the
+        // offset and trip the altitude-jump reset.
+        if sensorEnabled, physical, let ref = store.combined?.calibrationReference {
             await barometer.recalibrateInBackground(
                 stationAltim: ref,
                 observedAt: store.combined?.observedSeries.last?.t)

@@ -53,11 +53,7 @@ struct GraphComplicationView: View {
         return String(format: unit == .hPa ? "%.0f" : "%.2f", unit.convert(hPa))
     }
 
-    private var deltaShort: String {
-        let d = snap?.delta3h ?? 0
-        let sign = d > 0 ? "+" : (d < 0 ? "−" : "")
-        return "\(sign)\(String(format: "%.1f", abs(d)))"
-    }
+    private var deltaShort: String { unit.formatDeltaBare(snap?.delta3h ?? 0) }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -227,11 +223,7 @@ struct MetarComplicationView: View {
         return "\(v)\(unit.label)"
     }
 
-    private var deltaShort: String {
-        let d = snap?.delta3h ?? 0
-        let sign = d > 0 ? "+" : (d < 0 ? "−" : "")
-        return "\(sign)\(String(format: "%.1f", abs(d)))"
-    }
+    private var deltaShort: String { unit.formatDeltaBare(snap?.delta3h ?? 0) }
 
     private var trendWord: String {
         switch cls {

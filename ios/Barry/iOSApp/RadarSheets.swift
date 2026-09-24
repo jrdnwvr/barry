@@ -220,6 +220,7 @@ struct RadarMoreSheet: View {
     @Binding var frontPips: Bool
     @Binding var frontWeak: Bool
     @Binding var frontCenters: Bool
+    @Binding var buoys: Bool
     @Environment(\.dismiss) private var dismiss
 
     /// Layer sets: one tap sets every chip, then the sheet gets out of the
@@ -290,6 +291,7 @@ struct RadarMoreSheet: View {
                 }
                 .pickerStyle(.segmented)
                 .onChange(of: stationStyle) { _, style in onStationStyleChange(style) }
+                Toggle("Buoys and coastal stations", isOn: $buoys)
                 Text("Station names appear once you zoom in; the home station always keeps its name.")
                     .font(.caption)
                     .foregroundStyle(.secondary)

@@ -54,6 +54,7 @@ from .models import (
 from .sources import aviationweather as awc
 from .sources import glm
 from .sources import iem
+from .sources import ndbc
 from .sources import openmeteo as om
 from .sources import rainviewer as rv
 from .sources import wpc
@@ -101,6 +102,8 @@ HISTORY_STEP_MIN = 25.0
 HISTORY_KEEP_H = 9.5
 HISTORY_MIN_H = 7.5       # TRACK_LAG_H (4) + a 3 h delta at that epoch + slack
 STATIONS_MAX = 350        # most annotation views a phone map should carry
+BUOYS_TTL = 10 * 60.0     # NDBC's latest_obs: one fetch serves everyone
+BUOYS_MAX = 120           # buoys added to a station slice, nearest first
 
 # Stale-if-error: when Open-Meteo is down, re-serve the last good forecast for up
 # to this long (flagged stale=True) — a 6-hour-old forecast beats no forecast.
@@ -623,6 +626,27 @@ class PressureService:
         by_name.sort(key=lambda kv: (kv[1]["name"].upper().find(q), kv[1]["name"]))
         return [{"station": sid, "name": v["name"], "lat": v["lat"], "lon": v["lon"]}
                 for sid, v in (by_id + by_name)[:limit]]
+
+    async def buoys(self) -> List[StationObs]:
+        """Every NDBC buoy and coastal station's latest report, one fetch per
+        ten minutes for everyone; a failure is remembered for a minute."""
+        async def _pull():
+            return await ndbc.fetch(self._client, now=_now())
+        return await self.cache.fetch("buoys:all", _pull, ttl=BUOYS_TTL, negative_ttl=60.0)
+
+    async def get_station_obs_with_buoys(self, lat: float, lon: float, half: float = 3.0) -> StationsResponse:
+        """The METAR slice plus the buoys in the same box. Buoys are extra:
+        if NDBC is down the slice still answers."""
+        resp = await self.get_station_obs(lat, lon, half=half)
+        half = round(max(0.5, min(30.0, half)) * 2) / 2
+        lon_half = half / max(0.2, math.cos(math.radians(lat)))
+        try:
+            all_buoys = await self.buoys()
+        except Exception:
+            return resp
+        box = [b for b in all_buoys if abs(b.lat - lat) <= half and abs(b.lon - lon) <= lon_half]
+        box.sort(key=lambda b: (b.lat - lat) ** 2 + (b.lon - lon) ** 2)
+        return StationsResponse(stations=resp.stations + box[:BUOYS_MAX], cachedAt=resp.cachedAt)
 
     async def get_station_obs(self, lat: float, lon: float, half: float = 3.0) -> StationsResponse:
         """Stations within ±half degrees of a point, sliced from the in-memory

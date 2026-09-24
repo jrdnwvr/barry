@@ -91,6 +91,8 @@ struct RadarPanel: View {
     /// The style to come back to when the Stations chip is turned on again.
     @AppStorage("radarStationStyleLast", store: AppConfig.sharedDefaults)
     private var stationStyleLast: String = "barbs"
+    @AppStorage(RadarModel.buoysKey, store: AppConfig.sharedDefaults)
+    private var showBuoys: Bool = false
     /// Bolts where stations report lightning. On by default: a quiet day
     /// draws nothing, so it costs nothing to leave on.
     @AppStorage("radarStorms", store: AppConfig.sharedDefaults)
@@ -276,9 +278,13 @@ struct RadarPanel: View {
                                if stationsOn { stationStyleRaw = style }
                            },
                            frontLines: $frontLines, frontPips: $frontPips,
-                           frontWeak: $frontWeak, frontCenters: $frontCenters)
+                           frontWeak: $frontWeak, frontCenters: $frontCenters,
+                           buoys: $showBuoys)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+        }
+        .onChange(of: showBuoys) { _, _ in
+            Task { await model.fetchStations(region: model.lastRegion ?? initialRegion, force: true) }
         }
         .onChange(of: stationStyleRaw) { _, raw in
             if raw != "off" {

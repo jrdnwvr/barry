@@ -207,7 +207,7 @@ final class WindBarbView: MKAnnotationView {
     func configure(_ a: StationAnnotation) {
         glyph.knots = a.obs.windKt ?? 0
         glyph.directionDeg = a.obs.windDir
-        glyph.ink = FlightCategory.uiColor(a.obs.fltCat)
+        glyph.ink = a.obs.isBuoy ? .systemTeal : FlightCategory.uiColor(a.obs.fltCat)
         glyph.setNeedsDisplay()
         idLabel.text = a.obs.id
         isHome = a.isHome
@@ -266,7 +266,7 @@ final class SpeedLabelView: MKAnnotationView {
         // Flight category tints the label: VFR green, MVFR blue, IFR red,
         // LIFR magenta. No category (a station without ceiling/visibility)
         // stays neutral.
-        let cat = FlightCategory.uiColor(o.fltCat)
+        let cat = o.isBuoy ? UIColor.systemTeal : FlightCategory.uiColor(o.fltCat)
         label.textColor = cat
         label.layer.borderColor = cat.withAlphaComponent(0.55).cgColor
         label.layer.borderWidth = 1
@@ -356,7 +356,12 @@ struct StationDetailSheet: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            if let name = obs.name {
+            if obs.isBuoy {
+                Text("NOAA buoy or coastal station")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, -10)
+            } else if let name = obs.name {
                 Text(name)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -381,12 +386,21 @@ struct StationDetailSheet: View {
                                 GridItem(.flexible(), alignment: .leading)],
                       alignment: .leading, spacing: 10) {
                 fact("Wind", windText, icon: "wind")
-                fact("Visibility", visText, icon: "eye")
-                fact("Ceiling", ceilingText, icon: "cloud")
-                fact("Temp / dew", tempText, icon: "thermometer.medium")
-                fact("Altimeter", altimText, icon: "barometer")
-                if let wx = obs.wx {
-                    fact("Weather", wx, icon: "cloud.rain")
+                if obs.isBuoy {
+                    fact("Waves", waveText, icon: "water.waves")
+                    fact("Pressure", buoyPressureText, icon: "barometer")
+                    fact("Air / dew", tempText, icon: "thermometer.medium")
+                    if let w = obs.waterTempC {
+                        fact("Water", TemperatureUnit.current.formatWithUnit(w), icon: "drop")
+                    }
+                } else {
+                    fact("Visibility", visText, icon: "eye")
+                    fact("Ceiling", ceilingText, icon: "cloud")
+                    fact("Temp / dew", tempText, icon: "thermometer.medium")
+                    fact("Altimeter", altimText, icon: "barometer")
+                    if let wx = obs.wx {
+                        fact("Weather", wx, icon: "cloud.rain")
+                    }
                 }
             }
 
@@ -445,6 +459,23 @@ struct StationDetailSheet: View {
         let unit = TemperatureUnit.current
         let d = obs.dewpoint.map { " / \(unit.format($0))" } ?? ""
         return "\(unit.format(t))\(d) \(unit.label.dropFirst())"
+    }
+
+    /// "4 ft every 6 s", the significant height and dominant period.
+    private var waveText: String {
+        guard let ft = obs.waveFt else { return "Not reported" }
+        let h = ft < 10 ? String(format: "%.1f ft", ft) : "\(Int(ft.rounded())) ft"
+        return obs.wavePeriodS.map { "\(h) every \(Int($0)) s" } ?? h
+    }
+
+    /// Sea-level pressure in the chosen unit, with the buoy's own 3 h change
+    /// when it sent one.
+    private var buoyPressureText: String {
+        guard let hPa = obs.slp else { return "Not reported" }
+        let unit = PressureUnit(rawValue: AppConfig.sharedDefaults.string(forKey: "pressureUnit") ?? "") ?? .inHg
+        var t = "\(unit.format(hPa)) \(unit.label)"
+        if let d = obs.presTend { t += ", \(unit.formatDeltaBare(d)) in 3 h" }
+        return t
     }
 
     private var altimText: String {

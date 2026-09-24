@@ -305,12 +305,18 @@ async def get_metars(
     lat: float = Query(..., ge=-90, le=90),
     lon: float = Query(..., ge=-180, le=180),
     half: float = Query(3.0, ge=0.5, le=30.0),
+    buoys: bool = Query(False),
 ):
     """Latest report at every station within ±half degrees of a point, from
     the server's bulk METAR table (no upstream call per request): the radar's
-    wind-barb / speed-label layers and the station detail sheet."""
+    wind-barb / speed-label layers and the station detail sheet. With
+    `buoys=1`, NOAA's buoys and coastal stations in the same box too (one
+    NDBC fetch per ten minutes for everyone)."""
     service = get_service()
-    resp = await service.get_station_obs(lat, lon, half=half)
+    if buoys:
+        resp = await service.get_station_obs_with_buoys(lat, lon, half=half)
+    else:
+        resp = await service.get_station_obs(lat, lon, half=half)
     return resp.model_dump(mode="json", by_alias=True)
 
 

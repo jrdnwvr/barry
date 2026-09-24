@@ -382,6 +382,24 @@ def sample_s3_listing(now, sat="G19"):
             f'<Name>noaa-goes19</Name><KeyCount>2</KeyCount>{items}</ListBucketResult>')
 
 
+def sample_ndbc_latest(now):
+    """Three buoys near Cincinnati's box and one far away, the way NDBC's
+    latest_obs.txt lays them out; one is too old to count."""
+    t = now.replace(minute=0, second=0, microsecond=0)
+    old = t.replace(hour=(t.hour - 5) % 24) if t.hour >= 5 else t.replace(day=max(1, t.day - 1))
+    def row(stn, lat, lon, when, rest):
+        return f"{stn:<7} {lat:>7.3f} {lon:>8.3f} {when:%Y %m %d %H %M} {rest}"
+    lines = [
+        "#STN       LAT      LON  YYYY MM DD hh mm WDIR WSPD   GST WVHT  DPD APD MWD   PRES  PTDY  ATMP  WTMP  DEWP  VIS   TIDE",
+        "#text      deg      deg   yr mo day hr mn degT  m/s   m/s   m   sec sec degT   hPa   hPa  degC  degC  degC  nmi     ft",
+        row("45007", 38.9, -84.0, t, "240   6.0   8.5  1.2   6  MM 250 1012.4  -1.6  18.2  19.5  12.0   MM     MM"),
+        row("OHCM1", 39.3, -84.9, t, " MM    MM    MM   MM  MM  MM  MM 1013.0    MM  17.0    MM    MM   MM     MM"),
+        row("STALE", 39.0, -84.5, old, "180   3.0   4.0   MM  MM  MM  MM 1010.0    MM    MM    MM    MM   MM     MM"),
+        row("46026", 37.75, -122.838, t, "320   5.0   6.0  2.0  11  MM 300 1012.4    MM  14.0  14.7    MM   MM     MM"),
+    ]
+    return "\n".join(lines) + "\n"
+
+
 class FakeUpstream:
     """Records calls and serves canned AWC / Open-Meteo responses."""
 
@@ -472,6 +490,11 @@ class FakeUpstream:
             body = gzip.compress(sample_metar_cache(self.bulk_extra_rows).encode("utf-8"))
             return httpx.Response(200, content=body,
                                   headers={"content-type": "application/x-gzip"})
+        if "ndbc.noaa.gov" in url:
+            self.ndbc_calls = getattr(self, "ndbc_calls", 0) + 1
+            if getattr(self, "ndbc_fail", False):
+                return httpx.Response(503, text="down")
+            return httpx.Response(200, text=sample_ndbc_latest(self.clock()))
         if "rainviewer.com" in url:
             self.rv_calls += 1
             if self.rv_fail:

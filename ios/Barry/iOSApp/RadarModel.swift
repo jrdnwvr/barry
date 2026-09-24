@@ -102,10 +102,12 @@ final class RadarModel: ObservableObject {
         (max(3.0, min(30.0, r.span.latitudeDelta * 0.7)) * 2).rounded() / 2
     }
 
-    func fetchStations(region: MKCoordinateRegion) async {
+    static let buoysKey = "radarBuoys"
+
+    func fetchStations(region: MKCoordinateRegion, force: Bool = false) async {
         // Reuse what we have while the fetched box still comfortably covers
         // the map and the zoom has not changed much.
-        if let prev = stationsFetchedFor, !stationObs.isEmpty {
+        if !force, let prev = stationsFetchedFor, !stationObs.isEmpty {
             let ratio = region.span.latitudeDelta / prev.span.latitudeDelta
             let slack = Self.stationHalf(prev) * 0.5
             if ratio > 0.6, ratio < 1.6,
@@ -116,7 +118,9 @@ final class RadarModel: ObservableObject {
         }
         guard let resp = try? await BarryAPI().metars(lat: region.center.latitude,
                                                       lon: region.center.longitude,
-                                                      half: Self.stationHalf(region)) else { return }
+                                                      half: Self.stationHalf(region),
+                                                      buoys: AppConfig.sharedDefaults.bool(forKey: Self.buoysKey))
+        else { return }
         stationsFetchedFor = region
         stationObs = resp.stations
     }

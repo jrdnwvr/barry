@@ -75,6 +75,8 @@ struct AudienceTests {
         #expect(!Audience.everyday.layout.isVisible(.taf) && !Audience.everyday.layout.isVisible(.wind))
         #expect(Audience.everyday.alertLevel == .moderate && Audience.pilot.alertLevel == .fast)
         #expect(Audience.marine.radarLayers.isobars && Audience.marine.windUnit == .knots)
+        #expect(Audience.marine.radarLayers.buoys && Audience.marine.radarLayers.stations == "barbs")
+        #expect(!Audience.pilot.radarLayers.buoys)
     }
 
     @Test func justTheRadarIsJustTheRadar() {

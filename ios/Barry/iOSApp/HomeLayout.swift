@@ -182,7 +182,7 @@ enum Audience: String, CaseIterable, Identifiable {
     /// sets (Map options), so a weather watcher can jump between them.
     struct RadarLayers: Equatable {
         var radar = true, isobars = false, troughs = false, wind = false, fronts = false
-        var stations = "off", lightning = true
+        var stations = "off", lightning = true, buoys = false
 
         static let justRadar = RadarLayers(lightning: false)
 
@@ -198,6 +198,7 @@ enum Audience: String, CaseIterable, Identifiable {
             d.set(stations, forKey: "radarStations")
             if stations != "off" { d.set(stations, forKey: "radarStationStyleLast") }
             d.set(lightning, forKey: "radarStorms")
+            d.set(buoys, forKey: RadarModel.buoysKey)
         }
     }
 
@@ -205,7 +206,7 @@ enum Audience: String, CaseIterable, Identifiable {
         switch self {
         case .pilot: return RadarLayers(fronts: true, stations: "barbs")
         case .soaring, .drone: return RadarLayers(wind: true)
-        case .marine: return RadarLayers(isobars: true, wind: true, fronts: true)
+        case .marine: return RadarLayers(isobars: true, wind: true, fronts: true, stations: "barbs", buoys: true)
         case .everyday: return RadarLayers()
         case .weather: return RadarLayers(isobars: true, troughs: true, fronts: true)
         }

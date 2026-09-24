@@ -726,6 +726,13 @@ stored keys, but each has its own model, so they fetch separately.
   `radarStationStyleLast` "barbs".
 - Tests: none of the glyphs.
 - For: P W.
+- Buoys (`radarBuoys`, off; "Buoys and coastal stations" in Map options,
+  on in the "On the water" set and preset): NOAA's buoys and C-MAN
+  stations join the slice (`/metars?buoys=1`), drawn in teal instead of a
+  flight category. Their sheet shows wind, waves ("3.9 ft every 6 s"),
+  sea-level pressure in the chosen unit with the buoy's own 3 h change,
+  air and dew point, water temperature, and the NDBC row as the raw line.
+  For: M.
 
 ### radar.home.marker
 - Seen: the chosen station as its own barb or speed pill with a blue halo
@@ -998,7 +1005,7 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 | `GET /front` | `station`, `lat`, `lon` | status, headline, bearing, eta, nearestFront | bulk METAR history (7.5 h) or an AWC box, forecast, `/fronts` | 15 min per station and 0.1° | the phone's front banner only |
 | `GET /fronts` | none | WPC analysis plus 12 to 48 h progs | IEM AFOS (CODSUS, CODSRP) | 30 min, one entry | the radar |
 | `GET /radar/hrrr` | none | run time | IEM tile probe | 10 min | nobody (parked) |
-| `GET /metars` | `lat`, `lon`, `half` | stations with wind, category, visibility, ceiling, altimeter, lightning, raw | bulk table (AWC box fallback) | 2 min; centre 0.2°, half 0.5°; 350 stations | the radar station layer |
+| `GET /metars` | `lat`, `lon`, `half`, `buoys` | stations with wind, category, visibility, ceiling, altimeter, lightning, raw; with `buoys=1` also NDBC buoys and coastal stations (`kind` "buoy", waves, water temperature, pressure and its 3 h change) | bulk table (AWC box fallback); NDBC `latest_obs.txt` | 2 min; centre 0.2°, half 0.5°; 350 stations plus up to 120 buoys nearest first; NDBC once per 10 min for everyone, failures remembered 60 s and never block the stations | the radar station layer |
 | `GET /radar/pressure` | `lat`, `lon`, spans | isobars, isallobars, grids, extrema | bulk table and history, no upstream | 5 min; centre 0.1°, spans 0.5°; two builds at a time | the radar pressure layers |
 | `GET /lightning` | `lat`, `lon`, `half` | 0.02° cells, clusters, window 1200 s, coverage | GLM store | 60 s; centre 0.2°, half 0.5° | the radar lightning layer |
 | `GET /radar/frames` | none | host and frames | RainViewer | 2 min | the radar |
@@ -1075,6 +1082,7 @@ each device (the watch keeps its own copies).
 | `radarFrontLines`, `radarFrontPips`, `radarFrontWeak`, `radarFrontCenters` | true | | radar More sheet |
 | `radarStations` | off | off, barbs, speeds | radar |
 | `radarStationStyleLast` | barbs | style restored when the chip turns on | radar More sheet |
+| `radarBuoys` | false | buoys and coastal stations in the station layer | radar Map options, the water set and preset |
 | `radarStorms` | true | Lightning chip | radar |
 | `radarAutoplay` | true | play the last hour, or hold on the latest | Settings › Radar |
 | `aloftCeilingFt` | 18000 | 6000, 12000, 18000, 24000; also caps the radar rail | Settings › Aloft, the Aloft menu |

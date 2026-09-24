@@ -95,7 +95,7 @@ struct BarryAPI {
     /// `half` is the box half-width in degrees of latitude. The server thins
     /// to a fixed ceiling whatever the box, so a wide one spreads the same
     /// number of stations further rather than returning more of them.
-    func metars(lat: Double, lon: Double, half: Double? = nil) async throws -> StationsResponse {
+    func metars(lat: Double, lon: Double, half: Double? = nil, buoys: Bool = false) async throws -> StationsResponse {
         var comps = URLComponents(url: baseURL.appendingPathComponent("metars"),
                                   resolvingAgainstBaseURL: false)
         comps?.queryItems = [
@@ -103,6 +103,7 @@ struct BarryAPI {
             URLQueryItem(name: "lon", value: String(lon)),
         ]
         if let half { comps?.queryItems?.append(URLQueryItem(name: "half", value: String(half))) }
+        if buoys { comps?.queryItems?.append(URLQueryItem(name: "buoys", value: "1")) }
         return try await get(comps?.url)
     }
 

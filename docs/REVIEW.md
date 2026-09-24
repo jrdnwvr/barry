@@ -215,7 +215,7 @@ Audiences, smallest useful change each:
 - [x] Everyday: a threshold on the pressure alert (a three-step picker rather than a slider; small is 1 hPa in 3 h).
 - [x] Weather watchers: radar layer sets in Map options (Flying, Wind, On the water, Weather, Just the radar).
 - [x] Backcountry: the watch opens on its own saved page with "as of" when offline, like the phone; widgets, complications and the Live Activity already said "as of".
-- [ ] Marine: buoys as stations, once the station layer takes a non-airport source.
+- [x] Marine: NOAA buoys and coastal stations on the station layer (`/metars?buoys=1`), with waves, water temperature and the 3 h pressure change; on in the water preset.
 
 Direction:
 - [ ] Data independence, docs/NOAA.md phase by phase. Phase 0 done (weighted Open-Meteo budget, grids held for the model hour, last good grids). Phase 1 waits on Jordan: bridge first, or straight to NOAA (NOAA.md section 6).

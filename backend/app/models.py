@@ -269,7 +269,11 @@ class StationObs(BaseModel):
     presTend: Optional[float] = None    # station-reported 3 h tendency, hPa
     wx: Optional[str] = None            # present weather ("-TSRA BR")
     lightning: Optional[LightningOut] = None
-    raw: Optional[str] = None           # the METAR as transmitted
+    raw: Optional[str] = None           # the METAR as transmitted (a buoy's row as NDBC sends it)
+    kind: str = "metar"                 # "metar" | "buoy" (NDBC buoys and coastal stations)
+    waveFt: Optional[float] = None      # significant wave height, buoys only
+    wavePeriodS: Optional[float] = None # dominant wave period
+    waterTempC: Optional[float] = None
 
 
 class FieldPoint(BaseModel):

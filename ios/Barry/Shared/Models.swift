@@ -346,6 +346,15 @@ struct StationObs: Codable, Hashable, Identifiable {
     var wx: String?
     var lightning: LightningOut?
     var raw: String?
+    var slp: Double?
+    var presTend: Double?
+    /// "metar" or "buoy" (NOAA's buoys and coastal stations, with `buoys=1`).
+    var kind: String? = nil
+    var waveFt: Double?
+    var wavePeriodS: Double?
+    var waterTempC: Double?
+
+    var isBuoy: Bool { kind == "buoy" }
 }
 
 /// One runway, both ends, headings in degrees TRUE (same reference as the

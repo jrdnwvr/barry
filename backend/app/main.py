@@ -458,6 +458,24 @@ async def glance(
     return resp.model_dump(mode="json", by_alias=True)
 
 
+@app.get("/route")
+async def get_route(
+    dep: str = Query(..., min_length=3, max_length=4, alias="from"),
+    dest: str = Query(..., min_length=3, max_length=4, alias="to"),
+    speedKt: float = Query(100.0, ge=40, le=400),
+    tz: Optional[int] = Query(None, ge=-840, le=840),
+):
+    """From one field to another in still air: both ends, distance, time,
+    the destination at arrival by its TAF, and what lies along a 15 NM
+    corridor (stations, lightning, fronts). No upstream call of its own."""
+    a, b = check_station(dep), check_station(dest)
+    try:
+        resp = await get_service().get_route(a, b, speed_kt=speedKt, tz_minutes=tz)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="no position for one end of the route")
+    return resp.model_dump(mode="json", by_alias=True)
+
+
 @app.get("/stations/nearest")
 async def nearest_station(
     lat: float = Query(..., ge=-90, le=90),

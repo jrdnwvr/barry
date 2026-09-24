@@ -42,6 +42,8 @@ struct SettingsView: View {
     @AppStorage(Backcountry.acknowledgedKey, store: AppConfig.sharedDefaults)
     private var backcountryAcknowledged: Bool = false
     @State private var showBackcountryAck = false
+    @AppStorage(RouteSettings.speedKey, store: AppConfig.sharedDefaults)
+    private var cruiseSpeedKt: Int = 100
     @AppStorage(StormAlerter.levelKey, store: AppConfig.sharedDefaults)
     private var alertLevelRaw: String = StormAlerter.Level.fast.rawValue
     @AppStorage(StormAlerter.quietKey, store: AppConfig.sharedDefaults)
@@ -187,6 +189,11 @@ struct SettingsView: View {
                     Picker("Aloft ceiling", selection: $aloftCeilingFt) {
                         ForEach(AloftScale.ceilings, id: \.self) { ft in
                             Text("\(ft.formatted()) ft").tag(ft)
+                        }
+                    }
+                    Picker("Cruise speed", selection: $cruiseSpeedKt) {
+                        ForEach(Array(stride(from: 60, through: 200, by: 20)), id: \.self) { kt in
+                            Text("\(kt) kt").tag(kt)
                         }
                     }
                     Picker("Boundary layer", selection: $blReference) {

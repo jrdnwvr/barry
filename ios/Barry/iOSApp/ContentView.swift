@@ -32,6 +32,14 @@ struct ContentView: View {
     private var backcountryEnabled: Bool = false
     @Environment(\.horizontalSizeClass) private var hSizeClass
     @State private var showSettings = false
+    @State private var showRoutePlanner = false
+    // The route, if one is set (RouteSettings), and the cruise speed for it.
+    @AppStorage(RouteSettings.fromKey, store: AppConfig.sharedDefaults)
+    private var routeFrom: String = ""
+    @AppStorage(RouteSettings.toKey, store: AppConfig.sharedDefaults)
+    private var routeTo: String = ""
+    @AppStorage(RouteSettings.speedKey, store: AppConfig.sharedDefaults)
+    private var cruiseSpeedKt: Int = 100
     @State private var showRadarFullScreen = false
     @State private var showAloft = false
     /// The dashboard's radar card only animates while it is on screen.
@@ -72,6 +80,9 @@ struct ContentView: View {
                         Image(systemName: "gearshape")
                     }
                 }
+            }
+            .sheet(isPresented: $showRoutePlanner) {
+                RoutePlannerSheet(current: store.station, savedAirports: savedAirportIDs)
             }
             .sheet(isPresented: $showSettings) {
                 SettingsView()
@@ -217,6 +228,7 @@ struct ContentView: View {
                  onSelectLocation: { savedLocations.selectedID = $0 },
                  isFollowing: LiveActivityManager.shared.isFollowing,
                  onFollow: { Task { await LiveActivityManager.shared.toggleFollow(combined, atAirport: isAtAirport(combined)) } },
+                 onPlanRoute: { showRoutePlanner = true },
                  stale: store.isStale, staleReason: store.refreshError)
 
         // The cards, in the user's order (Settings > Home screen). Each one
@@ -251,6 +263,13 @@ struct ContentView: View {
         .padding(.top, 8)
     }
 
+    private var savedAirportIDs: [String] {
+        savedLocations.locations.compactMap { loc in
+            if case .airport(let icao) = loc.kind { return icao }
+            return nil
+        }
+    }
+
     /// A card's long-press menu: its own two or three options, then a way
     /// to hide it. No gear on the card; the options are where the card is,
     /// and Settings › Cards brings a hidden card back.
@@ -273,6 +292,14 @@ struct ContentView: View {
                 Text("Above sea level").tag("msl")
             }
             .pickerStyle(.inline)
+        case .route:
+            Button("Reverse", systemImage: "arrow.left.arrow.right") {
+                RouteSettings.set(from: routeTo, to: routeFrom)
+            }
+            Button("Plan another", systemImage: "point.topleft.down.to.point.bottomright.curvepath") {
+                showRoutePlanner = true
+            }
+            Button("Clear route", systemImage: "xmark", role: .destructive) { RouteSettings.clear() }
         case .strip:
             // The first turn-on shows a disclaimer, which lives in Settings;
             // after that the switch can live here too.
@@ -367,7 +394,15 @@ struct ContentView: View {
             if airports.count >= 2 {
                 FieldsCard(fields: airports, selectedID: savedLocations.selectedID, unit: unit,
                            reloadToken: combined.pressure.cachedAt,
-                           onSelect: { savedLocations.selectedID = $0 })
+                           onSelect: { savedLocations.selectedID = $0 },
+                           onRouteTo: { icao in RouteSettings.set(from: combined.pressure.station, to: icao) })
+            }
+        case .route:
+            // Only while a route is set; routes start from the station menu,
+            // a long press on a Fields line, or the planner.
+            if !routeFrom.isEmpty, !routeTo.isEmpty {
+                RouteCard(from: routeFrom, to: routeTo, speedKt: cruiseSpeedKt, unit: unit,
+                          reloadToken: combined.pressure.cachedAt)
             }
         case .sources:
             // Kept in the list so stored layouts still decode; drawn at the

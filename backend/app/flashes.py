@@ -93,6 +93,12 @@ class FlashStore:
     def fresh(self, now: datetime, max_age_s: float = 300.0) -> bool:
         return self.last_fetch is not None and (now - self.last_fetch).total_seconds() <= max_age_s
 
+    def recent(self, now: datetime) -> List[Flash]:
+        """Every flash still in the window, for callers with their own shape
+        to test against (the route's corridor)."""
+        cutoff = now.timestamp() - WINDOW_S
+        return [f for f in self._flashes if f.t >= cutoff]
+
     # ---- Map slice ----------------------------------------------------------
 
     def cells(self, lat: float, lon: float, half: float, now: datetime) -> List[LightningCell]:

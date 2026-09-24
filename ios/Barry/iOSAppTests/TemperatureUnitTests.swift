@@ -169,3 +169,27 @@ struct AdvisoryTests {
         #expect(AdvisoryInk.words("LGT-MOD") == "light to moderate" && AdvisoryInk.words("SEV") == "severe")
     }
 }
+
+struct RouteWordsTests {
+    private func glance(_ id: String, cat: String?) -> GlanceItem {
+        GlanceItem(station: id, fltCat: cat)
+    }
+
+    @Test func theMiddleLineNamesTheWorstLightningAndFronts() {
+        let worst = RouteStation(id: "KHAO", lat: 39.36, lon: -84.52, alongNm: 12, offNm: 3, fltCat: "MVFR")
+        let r = RouteResponse(dep: glance("KLUK", cat: "VFR"), dest: glance("KDAY", cat: "VFR"),
+                              depLat: 39.1, depLon: -84.4, destLat: 39.9, destLon: -84.2,
+                              distanceNm: 48.9, speedKt: 100, eteMin: 29, arriveAt: Date(),
+                              corridor: [worst], worst: worst,
+                              lightning: RouteLightning(alongNm: 20, offNm: 18.4, count: 12, ageSec: 60),
+                              fronts: [RouteFront(type: "cold", alongNm: 24)], cachedAt: Date())
+        #expect(RouteWords.enroute(r) == "MVFR at KHAO · lightning 18 NM off the line · cold front at 24 NM")
+    }
+
+    @Test func sunsetAndDurationWords() {
+        #expect(RouteWords.sunset(-52) == "52 min before sunset" && RouteWords.sunset(20) == "20 min after sunset")
+        #expect(RouteWords.sunset(nil) == nil)
+        #expect(RouteWords.duration(29) == "29 min" && RouteWords.duration(95) == "1 h 35 min")
+        #expect(RouteWords.wind(8, 240, 15) == "240@8G15" && RouteWords.wind(0.4, nil, nil) == "calm")
+    }
+}

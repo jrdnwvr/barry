@@ -24,12 +24,17 @@ from . import persist
 from . import pressure_field
 from . import track
 from . import runways
+from . import route as route_mod
 from . import front as front_mod
 from . import stations
 from .cache import CachedFailure, StationRegistry, TTLCache
 from .interpreter import Sample, interpret
 from .models import (
     AdvisoriesResponse,
+    RouteFront,
+    RouteLightning,
+    RouteResponse,
+    RouteStation,
     GlanceItem,
     GlanceResponse,
     FieldLevelsResponse,
@@ -632,6 +637,8 @@ class PressureService:
         return [{"station": sid, "name": v["name"], "lat": v["lat"], "lon": v["lon"]}
                 for sid, v in (by_id + by_name)[:limit]]
 
+    PIREPS_MAX = 150   # nearest first; a continental view would otherwise carry hundreds of markers
+
     async def get_advisories(self, lat: float, lon: float, half: float = 6.0) -> AdvisoriesResponse:
         """The AWC advisories that touch a box around a point, cut from three
         national feeds held for ten minutes. A feed that fails is left out
@@ -659,7 +666,8 @@ class PressureService:
 
         areas = [a for a in sigmets + gairmets if touches(a.points)]
         near = [p for p in pireps if lo_lat <= p.lat <= hi_lat and lo_lon <= p.lon <= hi_lon]
-        return AdvisoriesResponse(areas=areas, pireps=near, cachedAt=_now())
+        near.sort(key=lambda p: (p.lat - lat) ** 2 + (p.lon - lon) ** 2)
+        return AdvisoriesResponse(areas=areas, pireps=near[: self.PIREPS_MAX], cachedAt=_now())
 
     async def buoys(self) -> List[StationObs]:
         """Every NDBC buoy and coastal station's latest report, one fetch per
@@ -1052,6 +1060,23 @@ class PressureService:
 
     GLANCE_MAX = 8
 
+    def _glance_item(self, pressure, tz_minutes: Optional[int]) -> GlanceItem:
+        interp, local_offset = _run_interpreter(pressure, None)
+        if tz_minutes is not None:
+            local_offset = tz_minutes / 60.0
+        cls = pressure.tendency.cls if pressure.tendency else None
+        cur = pressure.current
+        kt = lambda kmh: round(kmh / 1.852, 1) if kmh is not None else None
+        return GlanceItem(
+            station=pressure.station, name=pressure.name, fltCat=cur.fltCat,
+            windKt=kt(cur.windspeed), windDir=cur.winddir, gustKt=kt(cur.windgust),
+            altim=cur.altim, slp=cur.slp,
+            delta3h=pressure.tendency.delta3h if pressure.tendency else None,
+            cls=cls,
+            verdict=build_verdict(cls, None, reading=interp, local_hour_offset=local_offset),
+            obsTime=pressure.series[-1].t if pressure.series else None,
+        )
+
     async def get_glance(self, station_ids: List[str], tz_minutes: Optional[int] = None) -> GlanceResponse:
         """Each saved field in one line, from the same cached reports and the
         same interpreter as /combined, minus the forecast. Saved fields are
@@ -1065,22 +1090,111 @@ class PressureService:
                 continue
             if not pressure.series:
                 continue
-            interp, local_offset = _run_interpreter(pressure, None)
-            if tz_minutes is not None:
-                local_offset = tz_minutes / 60.0
-            cls = pressure.tendency.cls if pressure.tendency else None
-            cur = pressure.current
-            kt = lambda kmh: round(kmh / 1.852, 1) if kmh is not None else None
-            items.append(GlanceItem(
-                station=pressure.station, name=pressure.name, fltCat=cur.fltCat,
-                windKt=kt(cur.windspeed), windDir=cur.winddir, gustKt=kt(cur.windgust),
-                altim=cur.altim, slp=cur.slp,
-                delta3h=pressure.tendency.delta3h if pressure.tendency else None,
-                cls=cls,
-                verdict=build_verdict(cls, None, reading=interp, local_hour_offset=local_offset),
-                obsTime=pressure.series[-1].t if pressure.series else None,
-            ))
+            items.append(self._glance_item(pressure, tz_minutes))
         return GlanceResponse(items=items, cachedAt=_now())
+
+    ROUTE_CORRIDOR_NM = 15.0
+    ROUTE_LIGHTNING_NM = 30.0
+
+    async def get_route(self, dep_id: str, dest_id: str, speed_kt: float = 100.0,
+                        tz_minutes: Optional[int] = None) -> RouteResponse:
+        """From one field to another in still air, from data already held:
+        the two ends' reports, the METAR table along the corridor, the
+        lightning store, the WPC analysis and the destination's TAF. Held
+        five minutes per pair and speed."""
+        key = f"route:{dep_id}:{dest_id}:{int(speed_kt)}"
+        cached = await self.cache.get(key)
+        if cached is not None:
+            return cached
+        dep_p = await self.get_pressure(dep_id)
+        dest_p = await self.get_pressure(dest_id)
+        if None in (dep_p.lat, dep_p.lon, dest_p.lat, dest_p.lon):
+            raise LookupError("no coordinates for one end of the route")
+        a, b = (dep_p.lat, dep_p.lon), (dest_p.lat, dest_p.lon)
+        dist = route_mod.distance_nm(*a, *b)
+        now = _now()
+        ete = int(round(dist / max(1.0, speed_kt) * 60))
+        arrive = now + timedelta(minutes=ete)
+
+        # Along the corridor, from the bulk table.
+        corridor: List[RouteStation] = []
+        table = await self.metar_bulk() or []
+        pad = self.ROUTE_CORRIDOR_NM / 60.0 + 0.5
+        lo_lat, hi_lat = min(a[0], b[0]) - pad, max(a[0], b[0]) + pad
+        lo_lon, hi_lon = min(a[1], b[1]) - pad * 1.5, max(a[1], b[1]) + pad * 1.5
+        for st in table:
+            if not (lo_lat <= st.lat <= hi_lat and lo_lon <= st.lon <= hi_lon):
+                continue
+            if st.id in (dep_p.station, dest_p.station):
+                continue
+            along, off = route_mod.track_position(a, b, (st.lat, st.lon))
+            if off <= self.ROUTE_CORRIDOR_NM and 0 <= along <= dist:
+                corridor.append(RouteStation(
+                    id=st.id, name=st.name, lat=st.lat, lon=st.lon,
+                    alongNm=round(along, 1), offNm=round(off, 1), fltCat=st.fltCat,
+                    windKt=st.windKt, windDir=st.windDir, gustKt=st.gustKt,
+                    lightning=st.lightning is not None))
+        corridor.sort(key=lambda r: r.alongNm)
+        worst_cat = route_mod.worst([r.fltCat for r in corridor])
+        worst_st = next((r for r in corridor if r.fltCat == worst_cat), None) if worst_cat else None
+
+        # Lightning near the line, from the GOES store.
+        near: Optional[RouteLightning] = None
+        if self.flashes.fresh(now):
+            best = None
+            count = 0
+            for f in self.flashes.recent(now):
+                if not (lo_lat - 1 <= f.lat <= hi_lat + 1 and lo_lon - 1 <= f.lon <= hi_lon + 1):
+                    continue
+                along, off = route_mod.track_position(a, b, (f.lat, f.lon))
+                if off <= self.ROUTE_LIGHTNING_NM and -10 <= along <= dist + 10:
+                    count += 1
+                    if best is None or off < best[1]:
+                        best = (along, off, f.t)
+            if best is not None:
+                near = RouteLightning(alongNm=round(max(0.0, best[0]), 1), offNm=round(best[1], 1),
+                                      count=count, ageSec=max(0, int(now.timestamp() - best[2])))
+
+        # Fronts the line crosses, from the WPC analysis.
+        crossings: List[RouteFront] = []
+        try:
+            fr = await self.get_fronts()
+            analysis = next((f for f in fr.frames if f.hours == 0), fr.frames[0] if fr.frames else None)
+            if analysis is not None:
+                crossings = [RouteFront(type=t, alongNm=round(d, 1))
+                             for t, d in route_mod.front_crossings(a, b, analysis.fronts)]
+        except Exception:
+            crossings = []
+
+        # The destination at the arrival time, by its TAF.
+        arrive_cat = arrive_wkt = arrive_wdir = tempo = None
+        has_taf = False
+        try:
+            taf = await self.get_taf(dest_p.station)
+        except Exception:
+            taf = None
+        if taf is not None and taf.periods:
+            has_taf = True
+            prevailing, temporary = route_mod.taf_at(taf.periods, arrive)
+            if prevailing is not None:
+                arrive_cat, arrive_wkt, arrive_wdir = prevailing.fltCat, prevailing.windKt, prevailing.windDir
+            worse = [p for p in temporary if p.fltCat and arrive_cat
+                     and route_mod.CATEGORY_RANK.get(p.fltCat, 9) < route_mod.CATEGORY_RANK.get(arrive_cat, 9)]
+            if worse:
+                p = min(worse, key=lambda q: route_mod.CATEGORY_RANK.get(q.fltCat, 9))
+                tempo = f"{p.change} {p.fltCat}"
+
+        resp = RouteResponse(
+            dep=self._glance_item(dep_p, tz_minutes), dest=self._glance_item(dest_p, tz_minutes),
+            depLat=a[0], depLon=a[1], destLat=b[0], destLon=b[1],
+            distanceNm=round(dist, 1), speedKt=speed_kt, eteMin=ete, arriveAt=arrive,
+            arriveCat=arrive_cat, arriveWindKt=arrive_wkt, arriveWindDir=arrive_wdir,
+            arriveTempo=tempo, hasTaf=has_taf,
+            sunsetMin=route_mod.minutes_from_sunset(b[0], b[1], arrive),
+            corridorNm=self.ROUTE_CORRIDOR_NM, corridor=corridor, worst=worst_st,
+            lightning=near, fronts=crossings, cachedAt=now)
+        await self.cache.set(key, resp, ttl=5 * 60.0)
+        return resp
 
     async def get_combined(
         self,

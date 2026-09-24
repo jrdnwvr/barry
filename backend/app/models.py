@@ -675,6 +675,63 @@ class AdvisoriesResponse(BaseModel):
     cachedAt: datetime
 
 
+class RouteStation(BaseModel):
+    """A reporting station within the corridor, in order along the line."""
+
+    id: str
+    name: Optional[str] = None
+    lat: float
+    lon: float
+    alongNm: float
+    offNm: float
+    fltCat: Optional[str] = None
+    windKt: Optional[float] = None
+    windDir: Optional[float] = None
+    gustKt: Optional[float] = None
+    lightning: bool = False
+
+
+class RouteLightning(BaseModel):
+    alongNm: float
+    offNm: float
+    count: int
+    ageSec: int
+
+
+class RouteFront(BaseModel):
+    type: str                  # cold | warm | stnry | ocfnt | trof
+    alongNm: float
+
+
+class RouteResponse(BaseModel):
+    """From one field to another, in still air: the two ends as the Fields
+    card shows them, how far and how long, the destination at the arrival
+    time by its TAF, and what lies along the corridor."""
+
+    dep: GlanceItem
+    dest: GlanceItem
+    depLat: float
+    depLon: float
+    destLat: float
+    destLon: float
+    distanceNm: float
+    speedKt: float
+    eteMin: int
+    arriveAt: datetime
+    arriveCat: Optional[str] = None      # the TAF's prevailing category at arrival
+    arriveWindKt: Optional[float] = None
+    arriveWindDir: Optional[float] = None
+    arriveTempo: Optional[str] = None    # "TEMPO IFR" when a temporary group covers arrival
+    hasTaf: bool = False
+    sunsetMin: Optional[int] = None      # arrival minus sunset at the destination
+    corridorNm: float = 15.0
+    corridor: List[RouteStation] = Field(default_factory=list)
+    worst: Optional[RouteStation] = None
+    lightning: Optional[RouteLightning] = None
+    fronts: List[RouteFront] = Field(default_factory=list)
+    cachedAt: datetime
+
+
 class CombinedResponse(BaseModel):
     """Primary client endpoint — the full -24h / +24h picture in one call."""
 

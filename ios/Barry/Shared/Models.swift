@@ -936,3 +936,56 @@ struct AdvisoriesResponse: Codable, Hashable {
     var pireps: [PirepOut] = []
     let cachedAt: Date
 }
+
+// MARK: - Route (/route)
+
+struct RouteStation: Codable, Hashable {
+    let id: String
+    var name: String?
+    let lat: Double
+    let lon: Double
+    let alongNm: Double
+    let offNm: Double
+    var fltCat: String?
+    var windKt: Double?
+    var windDir: Double?
+    var gustKt: Double?
+    var lightning: Bool = false
+}
+
+struct RouteLightning: Codable, Hashable {
+    let alongNm: Double
+    let offNm: Double
+    let count: Int
+    let ageSec: Int
+}
+
+struct RouteFront: Codable, Hashable {
+    let type: String
+    let alongNm: Double
+}
+
+struct RouteResponse: Codable, Hashable {
+    let dep: GlanceItem
+    let dest: GlanceItem
+    let depLat: Double
+    let depLon: Double
+    let destLat: Double
+    let destLon: Double
+    let distanceNm: Double
+    let speedKt: Double
+    let eteMin: Int
+    let arriveAt: Date
+    var arriveCat: String?
+    var arriveWindKt: Double?
+    var arriveWindDir: Double?
+    var arriveTempo: String?
+    var hasTaf: Bool = false
+    var sunsetMin: Int?
+    var corridorNm: Double = 15
+    var corridor: [RouteStation] = []
+    var worst: RouteStation?
+    var lightning: RouteLightning?
+    var fronts: [RouteFront] = []
+    let cachedAt: Date
+}

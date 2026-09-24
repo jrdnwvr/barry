@@ -122,6 +122,7 @@
 		967511152A1EBB2D602F2B9A /* SavedLocations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */; };
 		971C47371255C41380413D3E /* SavedLocations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */; };
 		98A632AA5A2B036CFA27697A /* PressureGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6978CE026B8EEE1A560877C0 /* PressureGuideView.swift */; };
+		99C92D6363B996DC08EC3A18 /* RouteViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7862164DF1A7B3BA33186444 /* RouteViews.swift */; };
 		99DBC62DAB0A16C1295609C3 /* RunwayMathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29ED804DF107D966F7295562 /* RunwayMathTests.swift */; };
 		9A3EF5B92F7E694E33F31FFC /* Fixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 024F41291A68B29C57129A86 /* Fixtures.swift */; };
 		9B711DD69DC404927EE59946 /* LightningBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB955C8C1263A03BA2C97A2F /* LightningBanner.swift */; };
@@ -315,6 +316,7 @@
 		778E430DEB72ECE6B1DB5CCA /* PressureChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureChartView.swift; sourceTree = "<group>"; };
 		779DF49061F06FC05038FBE1 /* ShortTermForecastTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortTermForecastTests.swift; sourceTree = "<group>"; };
 		77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryAPI.swift; sourceTree = "<group>"; };
+		7862164DF1A7B3BA33186444 /* RouteViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteViews.swift; sourceTree = "<group>"; };
 		7C00F07F019E06DA06E95BD0 /* BarometerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarometerTests.swift; sourceTree = "<group>"; };
 		7CB1EFCBAEC1FFFB0EF24917 /* BackgroundRefresh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundRefresh.swift; sourceTree = "<group>"; };
 		7E7AD448DB8DDD1CE1C73553 /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
@@ -585,6 +587,7 @@
 				C6BB37965D5198DB8A9DCE65 /* RadarPalette.swift */,
 				1666B232D9C24406F937CCE8 /* RadarSheets.swift */,
 				C0EBA6519DD65A01DF98B527 /* RadarView.swift */,
+				7862164DF1A7B3BA33186444 /* RouteViews.swift */,
 				F83C3064588614F2B8DEAA34 /* RunwayWindsView.swift */,
 				DA12AC45B8A41856114FD9A7 /* SensorComparisonView.swift */,
 				72812DF1800A9DF0CF5EF2C3 /* SettingsView.swift */,
@@ -979,6 +982,7 @@
 				4DC0A2667AD32E4946FA8106 /* RadarSheets.swift in Sources */,
 				06E7445D9EF69D7CD6C141EE /* RadarView.swift in Sources */,
 				2FC7F63C72023A1812F99D63 /* RangeAnalysis.swift in Sources */,
+				99C92D6363B996DC08EC3A18 /* RouteViews.swift in Sources */,
 				395DCB7F587238A3F9D7C739 /* RunwayMath.swift in Sources */,
 				D6D685CBFD1BD430889413FC /* RunwayWindDial.swift in Sources */,
 				EF29D661015A900FB9D47F02 /* RunwayWindsView.swift in Sources */,

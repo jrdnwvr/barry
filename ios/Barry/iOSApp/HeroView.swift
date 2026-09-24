@@ -31,6 +31,8 @@ struct HeroView: View {
     /// Lock-screen follow (Live Activity) for the next hours.
     var isFollowing: Bool = false
     var onFollow: (() -> Void)? = nil
+    /// Opens the route planner (the station menu's last item).
+    var onPlanRoute: (() -> Void)? = nil
     /// The reading came from disk at launch and has not been refreshed.
     var stale: Bool = false
     /// What the refresh behind a stale reading said, if it failed.
@@ -110,7 +112,7 @@ struct HeroView: View {
                   localAt: localReading?.at,
                   locations: locations, selectedLocationID: selectedLocationID,
                   onSelectLocation: onSelectLocation,
-                  isFollowing: isFollowing, onFollow: onFollow)
+                  isFollowing: isFollowing, onFollow: onFollow, onPlanRoute: onPlanRoute)
     }
 
     private var numberBlock: some View {
@@ -301,6 +303,7 @@ private struct StatusRow: View {
     var onSelectLocation: ((UUID) -> Void)? = nil
     var isFollowing: Bool = false
     var onFollow: (() -> Void)? = nil
+    var onPlanRoute: (() -> Void)? = nil
 
     private var hasLocationMenu: Bool { onSelectLocation != nil && locations.count > 1 }
 
@@ -326,6 +329,11 @@ private struct StatusRow: View {
                         Button(action: onFollow) {
                             Label(isFollowing ? "Stop following" : "Follow on lock screen",
                                   systemImage: isFollowing ? "pin.slash" : "pin")
+                        }
+                    }
+                    if let onPlanRoute {
+                        Button(action: onPlanRoute) {
+                            Label("Plan a route", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
                         }
                     }
                 } label: {

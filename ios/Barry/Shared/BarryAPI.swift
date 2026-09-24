@@ -107,6 +107,19 @@ struct BarryAPI {
         return try await get(comps?.url)
     }
 
+    /// From one field to another in still air (the Route card and screen).
+    func route(from: String, to: String, speedKt: Int, tzMinutes: Int? = nil) async throws -> RouteResponse {
+        var comps = URLComponents(url: baseURL.appendingPathComponent("route"),
+                                  resolvingAgainstBaseURL: false)
+        comps?.queryItems = [
+            URLQueryItem(name: "from", value: from),
+            URLQueryItem(name: "to", value: to),
+            URLQueryItem(name: "speedKt", value: String(speedKt)),
+        ]
+        if let tzMinutes { comps?.queryItems?.append(URLQueryItem(name: "tz", value: String(tzMinutes))) }
+        return try await get(comps?.url)
+    }
+
     /// The saved fields, one compact line each (the Fields card).
     func glance(stations: String, tzMinutes: Int? = nil) async throws -> GlanceResponse {
         var comps = URLComponents(url: baseURL.appendingPathComponent("glance"),

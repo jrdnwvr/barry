@@ -19,6 +19,8 @@ struct FieldsCard: View {
     /// Changes when the page reloads, so the lines refresh with it.
     let reloadToken: Date?
     let onSelect: (UUID) -> Void
+    /// A long press on a line routes from the current field to that one.
+    var onRouteTo: ((String) -> Void)? = nil
 
     @State private var items: [String: GlanceItem] = [:]
 
@@ -35,6 +37,13 @@ struct FieldsCard: View {
                     row(f, items[f.icao.uppercased()], selected: f.id == selectedID)
                 }
                 .buttonStyle(.plain)
+                .contextMenu {
+                    if let onRouteTo, f.id != selectedID {
+                        Button("Route to \(f.icao)", systemImage: "point.topleft.down.to.point.bottomright.curvepath") {
+                            onRouteTo(f.icao)
+                        }
+                    }
+                }
                 .accessibilityIdentifier("fields.\(f.icao)")
             }
         }

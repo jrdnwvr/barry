@@ -150,3 +150,21 @@ struct LayoutUpgradeTests {
         #expect(up.order.first == .lightning && up.order[1] == .radar)
     }
 }
+
+struct AdvisoryTests {
+    @Test func heightsReadTheWayPilotsSayThem() {
+        let a = AdvisoryArea(kind: "airmet", hazard: "TURB-LO", label: "AIRMET Turb", baseFt: 5000, topFt: 22000)
+        #expect(AdvisoryInk.heights(a) == "5,000 ft to FL220")
+        let c = AdvisoryArea(kind: "convective", hazard: "CONVECTIVE", label: "Convective SIGMET 38W", topFt: 43000)
+        #expect(AdvisoryInk.heights(c) == "Up to FL430" && AdvisoryInk.short(c) == "Conv")
+        let s = AdvisoryArea(kind: "airmet", hazard: "IFR", label: "AIRMET IFR")
+        #expect(AdvisoryInk.heights(s) == "" && AdvisoryInk.short(s) == "IFR")
+    }
+
+    @Test func intensityColours() {
+        #expect(AdvisoryInk.intensity("MOD") == .systemOrange)
+        #expect(AdvisoryInk.intensity("LGT-MOD") == .systemOrange)
+        #expect(AdvisoryInk.intensity("SEV") == .systemRed)
+        #expect(AdvisoryInk.intensity("NEG") == .systemGray)
+    }
+}

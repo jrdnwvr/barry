@@ -97,6 +97,10 @@ struct RadarPanel: View {
     /// draws nothing, so it costs nothing to leave on.
     @AppStorage("radarStorms", store: AppConfig.sharedDefaults)
     private var showStorms: Bool = true
+    /// SIGMETs, G-AIRMETs and pilot reports. Off by default.
+    @AppStorage("radarAdvisories", store: AppConfig.sharedDefaults)
+    private var showAdvisories: Bool = false
+    @State private var selectedAdvisory: AdvisoryDetailSheet.Item?
     /// "flow" (animated streaks, the default) or "arrows" (the static grid).
     @AppStorage("radarWindStyle", store: AppConfig.sharedDefaults)
     private var windStyle: String = "flow"
@@ -224,6 +228,9 @@ struct RadarPanel: View {
             if wantsPressure {
                 await model.fetchPressureField(region: model.lastRegion ?? initialRegion)
             }
+            if showAdvisories {
+                await model.fetchAdvisories(region: model.lastRegion ?? initialRegion)
+            }
         }
         .onReceive(lightningTicker) { _ in
             guard showStorms else { return }
@@ -255,6 +262,14 @@ struct RadarPanel: View {
                 fullScreenContent
             }
         }
+        .sheet(item: $selectedAdvisory) { item in
+            AdvisoryDetailSheet(item: item, now: Date())
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
+        .onChange(of: showAdvisories) { _, on in
+            if on { Task { await model.fetchAdvisories(region: model.lastRegion ?? initialRegion, force: true) } }
+        }
         .sheet(item: $selectedStation) { st in
             StationDetailSheet(obs: st, now: Date())
                 .presentationDetents([.medium])
@@ -266,6 +281,7 @@ struct RadarPanel: View {
                           fronts: showFronts, troughs: showTroughs,
                           frontValidText: frontValidText, stations: stationsOn,
                           stationStyle: stationStyle, storms: showStorms,
+                          advisories: showAdvisories,
                           pressureStations: model.pressureField?.stations ?? 0,
                           lightningCoverage: model.lightning.response?.coverage,
                           windLevelFt: WindAltitude.stop(model.windLevel).ft)
@@ -347,6 +363,8 @@ struct RadarPanel: View {
                      stationStyle: stationStyle,
                      showStorms: showStorms,
                      lightning: model.lightning,
+                     advisories: showAdvisories ? model.advisories : nil,
+                     onSelectAdvisory: { selectedAdvisory = $0 },
                      onSelectStation: { selectedStation = $0 },
                      home: home,
                      pressureState: pressureState,
@@ -356,7 +374,8 @@ struct RadarPanel: View {
                                                    wind: showWind,
                                                    stations: wantsStations,
                                                    pressure: wantsPressure,
-                                                   storms: showStorms)
+                                                   storms: showStorms,
+                                                   advisories: showAdvisories)
                      })
     }
 
@@ -569,6 +588,7 @@ struct RadarPanel: View {
                     get: { stationsOn },
                     set: { stationStyleRaw = $0 ? stationStyleLast : "off" }))
                 chip("Lightning", icon: "bolt.fill", isOn: $showStorms)
+                chip("Advisories", icon: "exclamationmark.triangle", isOn: $showAdvisories)
 
                 Button { showMore = true } label: {
                     Image(systemName: "ellipsis")

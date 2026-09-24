@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -490,6 +491,16 @@ class FakeUpstream:
             body = gzip.compress(sample_metar_cache(self.bulk_extra_rows).encode("utf-8"))
             return httpx.Response(200, content=body,
                                   headers={"content-type": "application/x-gzip"})
+        if "aviationweather.gov/api/data/airsigmet" in url or "aviationweather.gov/api/data/gairmet" in url \
+                or "aviationweather.gov/api/data/pirep" in url:
+            self.adv_calls = getattr(self, "adv_calls", 0) + 1
+            if getattr(self, "adv_fail", False):
+                return httpx.Response(503, text="down")
+            name = "awc_airsigmet" if "airsigmet" in url else ("awc_gairmet" if "gairmet" in url else "awc_pirep")
+            path = os.path.join(os.path.dirname(__file__), "fixtures", name + ".json")
+            with open(path, encoding="utf-8") as fh:
+                return httpx.Response(200, content=fh.read().encode("utf-8"),
+                                      headers={"content-type": "application/json"})
         if "ndbc.noaa.gov" in url:
             self.ndbc_calls = getattr(self, "ndbc_calls", 0) + 1
             if getattr(self, "ndbc_fail", False):

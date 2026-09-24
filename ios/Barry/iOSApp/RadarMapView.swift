@@ -41,6 +41,8 @@ struct RadarMapView: UIViewRepresentable {
     var showStorms: Bool = false
     /// GLM flash cells for the Storms overlay; nil draws nothing.
     var lightning: LightningState? = nil
+    var advisories: AdvisoriesResponse? = nil
+    var onSelectAdvisory: ((AdvisoryDetailSheet.Item) -> Void)? = nil
     var onSelectStation: ((StationObs) -> Void)? = nil
     /// nil: the red pin marks the station and the map shows the user's own
     /// blue dot. Otherwise the home station is drawn as itself (see HomeMarker).
@@ -238,6 +240,12 @@ struct RadarMapView: UIViewRepresentable {
             } else if let lt = view.annotation as? LightningAnnotation {
                 mapView.deselectAnnotation(lt, animated: false)
                 onSelectStation?(lt.obs)
+            } else if let a = view.annotation as? AdvisoryLabelAnnotation {
+                mapView.deselectAnnotation(a, animated: false)
+                onSelectAdvisory?(.area(a.area))
+            } else if let p = view.annotation as? PirepAnnotation {
+                mapView.deselectAnnotation(p, animated: false)
+                onSelectAdvisory?(.pirep(p.pirep))
             }
         }
         var shownArrows: [WindArrow] = []
@@ -447,7 +455,44 @@ struct RadarMapView: UIViewRepresentable {
             }
         }
 
+        // MARK: Advisories
+
+        var onSelectAdvisory: ((AdvisoryDetailSheet.Item) -> Void)?
+        private var shownAdvisories: AdvisoriesResponse?
+        private var advisoryPolygons: [AdvisoryPolygon] = []
+        private var advisoryAnnotations: [MKAnnotation] = []
+
+        /// Rebuild only when the set changed; updateUIView runs every tick.
+        func syncAdvisories(_ resp: AdvisoriesResponse?, on map: MKMapView) {
+            guard resp != shownAdvisories else { return }
+            shownAdvisories = resp
+            map.removeOverlays(advisoryPolygons)
+            map.removeAnnotations(advisoryAnnotations)
+            advisoryPolygons = []
+            advisoryAnnotations = []
+            guard let resp else { return }
+            for a in resp.areas where a.points.count >= 3 {
+                let poly = AdvisoryPolygon.make(a)
+                advisoryPolygons.append(poly)
+                let label = AdvisoryLabelAnnotation()
+                label.area = a
+                label.coordinate = poly.coordinate
+                advisoryAnnotations.append(label)
+            }
+            for p in resp.pireps {
+                let ann = PirepAnnotation()
+                ann.pirep = p
+                ann.coordinate = CLLocationCoordinate2D(latitude: p.lat, longitude: p.lon)
+                advisoryAnnotations.append(ann)
+            }
+            map.addOverlays(advisoryPolygons, level: .aboveRoads)
+            map.addAnnotations(advisoryAnnotations)
+        }
+
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            if let a = overlay as? AdvisoryPolygon {
+                return AdvisoryRenderers.renderer(a)
+            }
             if let p = overlay as? PressureFieldOverlay {
                 return PressureFieldRenderer(overlay: p)
             }
@@ -533,6 +578,22 @@ struct RadarMapView: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            if let a = annotation as? AdvisoryLabelAnnotation {
+                let id = "advisoryLabel"
+                let view = (mapView.dequeueReusableAnnotationView(withIdentifier: id) as? AdvisoryLabelView)
+                    ?? AdvisoryLabelView(annotation: a, reuseIdentifier: id)
+                view.annotation = a
+                view.configure(a)
+                return view
+            }
+            if let p = annotation as? PirepAnnotation {
+                let id = "pirep"
+                let view = (mapView.dequeueReusableAnnotationView(withIdentifier: id) as? PirepView)
+                    ?? PirepView(annotation: p, reuseIdentifier: id)
+                view.annotation = p
+                view.configure(p)
+                return view
+            }
             if let st = annotation as? StationAnnotation {
                 if shownStationStyle == .speeds && !(st.isHome && shownStations.isEmpty) {
                     let id = "stationSpeed"
@@ -779,6 +840,8 @@ struct RadarMapView: UIViewRepresentable {
         }
         context.coordinator.onRegionChange = onRegionChange
         context.coordinator.onSelectStation = onSelectStation
+        context.coordinator.onSelectAdvisory = onSelectAdvisory
+        context.coordinator.syncAdvisories(advisories, on: map)
         context.coordinator.syncHome(home, center: center, on: map)
         context.coordinator.syncArrows(showWind ? windArrows : [], on: map)
         context.coordinator.syncFronts(frontState, on: map)

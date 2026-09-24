@@ -29,6 +29,7 @@ from . import stations
 from .cache import CachedFailure, StationRegistry, TTLCache
 from .interpreter import Sample, interpret
 from .models import (
+    AdvisoriesResponse,
     GlanceItem,
     GlanceResponse,
     FieldLevelsResponse,
@@ -55,6 +56,7 @@ from .models import (
 )
 from .sources import aviationweather as awc
 from .sources import glm
+from .sources import advisories as adv
 from .sources import iem
 from .sources import ndbc
 from .sources import openmeteo as om
@@ -105,6 +107,7 @@ HISTORY_KEEP_H = 9.5
 HISTORY_MIN_H = 7.5       # TRACK_LAG_H (4) + a 3 h delta at that epoch + slack
 STATIONS_MAX = 350        # most annotation views a phone map should carry
 BUOYS_TTL = 10 * 60.0     # NDBC's latest_obs: one fetch serves everyone
+ADVISORIES_TTL = 10 * 60.0  # SIGMETs, G-AIRMETs, PIREPs: national feeds, one pull each for everyone
 BUOYS_MAX = 120           # buoys added to a station slice, nearest first
 
 # Stale-if-error: when Open-Meteo is down, re-serve the last good forecast for up
@@ -628,6 +631,35 @@ class PressureService:
         by_name.sort(key=lambda kv: (kv[1]["name"].upper().find(q), kv[1]["name"]))
         return [{"station": sid, "name": v["name"], "lat": v["lat"], "lon": v["lon"]}
                 for sid, v in (by_id + by_name)[:limit]]
+
+    async def get_advisories(self, lat: float, lon: float, half: float = 6.0) -> AdvisoriesResponse:
+        """The AWC advisories that touch a box around a point, cut from three
+        national feeds held for ten minutes. A feed that fails is left out
+        for a minute; the others still answer."""
+        async def pull(key, fn):
+            async def _p():
+                self.awc_gate.require()
+                return await fn(self._client)
+            try:
+                return await self.cache.fetch(key, _p, ttl=ADVISORIES_TTL, negative_ttl=60.0)
+            except Exception:
+                return []
+
+        sigmets = await pull("adv:sigmets", adv.fetch_sigmets)
+        gairmets = await pull("adv:gairmets", adv.fetch_gairmets)
+        pireps = await pull("adv:pireps", adv.fetch_pireps)
+        half = max(0.5, min(30.0, half))
+        lon_half = half / max(0.2, math.cos(math.radians(lat)))
+        lo_lat, hi_lat, lo_lon, hi_lon = lat - half, lat + half, lon - lon_half, lon + lon_half
+
+        def touches(points):
+            lats = [p[0] for p in points]
+            lons = [p[1] for p in points]
+            return not (max(lats) < lo_lat or min(lats) > hi_lat or max(lons) < lo_lon or min(lons) > hi_lon)
+
+        areas = [a for a in sigmets + gairmets if touches(a.points)]
+        near = [p for p in pireps if lo_lat <= p.lat <= hi_lat and lo_lon <= p.lon <= hi_lon]
+        return AdvisoriesResponse(areas=areas, pireps=near, cachedAt=_now())
 
     async def buoys(self) -> List[StationObs]:
         """Every NDBC buoy and coastal station's latest report, one fetch per

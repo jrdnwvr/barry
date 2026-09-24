@@ -95,6 +95,18 @@ struct BarryAPI {
     /// `half` is the box half-width in degrees of latitude. The server thins
     /// to a fixed ceiling whatever the box, so a wide one spreads the same
     /// number of stations further rather than returning more of them.
+    /// SIGMETs, G-AIRMETs and turbulence and icing reports around a point.
+    func advisories(lat: Double, lon: Double, half: Double) async throws -> AdvisoriesResponse {
+        var comps = URLComponents(url: baseURL.appendingPathComponent("advisories"),
+                                  resolvingAgainstBaseURL: false)
+        comps?.queryItems = [
+            URLQueryItem(name: "lat", value: String(lat)),
+            URLQueryItem(name: "lon", value: String(lon)),
+            URLQueryItem(name: "half", value: String(half)),
+        ]
+        return try await get(comps?.url)
+    }
+
     /// The saved fields, one compact line each (the Fields card).
     func glance(stations: String, tzMinutes: Int? = nil) async throws -> GlanceResponse {
         var comps = URLComponents(url: baseURL.appendingPathComponent("glance"),

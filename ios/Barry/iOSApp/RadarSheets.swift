@@ -20,6 +20,7 @@ struct RadarKeySheet: View {
     let stations: Bool
     let stationStyle: StationLayerStyle
     let storms: Bool
+    var advisories: Bool = false
     let pressureStations: Int
     var lightningCoverage: Bool? = nil
     /// The altitude rail's stop in feet, 0 at the surface.
@@ -74,6 +75,18 @@ struct RadarKeySheet: View {
                 if troughs, !fronts {
                     section("Troughs", icon: "point.topleft.down.to.point.bottomright.curvepath") {
                         Text("Dashed lines where the NWS marks a trough: a line of low pressure without a front's temperature change. Showers and a wind shift often ride along it.")
+                    }
+                }
+
+                if advisories {
+                    section("Advisories", icon: "exclamationmark.triangle") {
+                        HStack(spacing: 10) {
+                            swatch(Color(uiColor: .systemRed), "Convective")
+                            swatch(Color(uiColor: .systemPurple), "IFR")
+                            swatch(Color(uiColor: .systemBrown), "Turbulence")
+                            swatch(Color(uiColor: .systemBlue), "Icing")
+                        }
+                        Text("SIGMETs are solid, AIRMETs dashed; tap a label for the whole advisory. Waves are turbulence reports and snowflakes icing, from pilots in the last two hours, grey for smooth and red for severe.")
                     }
                 }
 

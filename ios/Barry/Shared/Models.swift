@@ -904,3 +904,35 @@ struct GlanceResponse: Codable, Hashable {
     var items: [GlanceItem] = []
     let cachedAt: Date
 }
+
+// MARK: - Advisories (/advisories)
+
+struct AdvisoryArea: Codable, Hashable {
+    let kind: String            // convective | sigmet | airmet
+    let hazard: String
+    let label: String
+    var baseFt: Int?
+    var topFt: Int?
+    var validFrom: Date?
+    var validTo: Date?
+    var points: [[Double]] = []
+    var raw: String?
+}
+
+struct PirepOut: Codable, Hashable {
+    let lat: Double
+    let lon: Double
+    var obsTime: Date?
+    var altFt: Int?
+    var aircraft: String?
+    var turbulence: String?
+    var icing: String?
+    var urgent: Bool = false
+    var raw: String = ""
+}
+
+struct AdvisoriesResponse: Codable, Hashable {
+    var areas: [AdvisoryArea] = []
+    var pireps: [PirepOut] = []
+    let cachedAt: Date
+}

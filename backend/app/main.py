@@ -320,6 +320,19 @@ async def get_metars(
     return resp.model_dump(mode="json", by_alias=True)
 
 
+@app.get("/advisories")
+async def get_advisories(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    half: float = Query(6.0, ge=0.5, le=30.0),
+):
+    """SIGMETs, G-AIRMETs at the current hour, and pilot reports of
+    turbulence and icing over the last two hours, around a point. Cut from
+    national feeds the server pulls once every ten minutes."""
+    resp = await get_service().get_advisories(lat, lon, half=half)
+    return resp.model_dump(mode="json", by_alias=True)
+
+
 @app.get("/radar/pressure")
 async def radar_pressure(
     lat: float = Query(..., ge=-90, le=90),

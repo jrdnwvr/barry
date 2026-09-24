@@ -640,6 +640,41 @@ class GlanceResponse(BaseModel):
     cachedAt: datetime
 
 
+class AdvisoryArea(BaseModel):
+    """A SIGMET or G-AIRMET area: what, how high, when, and its outline as
+    [lat, lon] pairs."""
+
+    kind: str                      # convective | sigmet | airmet
+    hazard: str                    # CONVECTIVE, TURB, ICE, IFR, MT_OBSC, TURB-HI, ...
+    label: str                     # "Convective SIGMET 38W", "AIRMET IFR"
+    baseFt: Optional[int] = None
+    topFt: Optional[int] = None
+    validFrom: Optional[datetime] = None
+    validTo: Optional[datetime] = None
+    points: List[List[float]] = Field(default_factory=list)
+    raw: Optional[str] = None      # the bulletin, or what the AIRMET is due to
+
+
+class PirepOut(BaseModel):
+    """A pilot report of turbulence or icing."""
+
+    lat: float
+    lon: float
+    obsTime: Optional[datetime] = None
+    altFt: Optional[int] = None
+    aircraft: Optional[str] = None
+    turbulence: Optional[str] = None   # NEG, LGT, LGT-MOD, MOD, MOD-SEV, SEV
+    icing: Optional[str] = None
+    urgent: bool = False
+    raw: str = ""
+
+
+class AdvisoriesResponse(BaseModel):
+    areas: List[AdvisoryArea] = Field(default_factory=list)
+    pireps: List[PirepOut] = Field(default_factory=list)
+    cachedAt: datetime
+
+
 class CombinedResponse(BaseModel):
     """Primary client endpoint — the full -24h / +24h picture in one call."""
 

@@ -17,6 +17,7 @@
 		09EEB08561CA15D52D6E6036 /* WatchSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F0EF3938BA8F192FB71228 /* WatchSettingsView.swift */; };
 		0A97A6AB092391F5F45D58FC /* SharedSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */; };
 		0C6CE77FC97065E5CF6D21D1 /* WindUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E3203C0CBC7B1D5F0A57759 /* WindUnit.swift */; };
+		0C8FB8C6770A2A2A48139A81 /* AdvisoriesOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE938A486C5E1C5DAA1FD2D3 /* AdvisoriesOverlay.swift */; };
 		0DBDAD9882985AF6C51BD205 /* ComplicationViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68D08500DD9FA42C666DFF25 /* ComplicationViews.swift */; };
 		0F0411FE134D2DF658D00A67 /* WatchSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFA4A69E8BBEEF268407FC68 /* WatchSync.swift */; };
 		0F22D62C5D40785243A56CD0 /* PressureUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D967187F3CE6292310A2937 /* PressureUnit.swift */; };
@@ -367,6 +368,7 @@
 		F83C3064588614F2B8DEAA34 /* RunwayWindsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayWindsView.swift; sourceTree = "<group>"; };
 		FA32F779F49D1C628F2BC52E /* BarometerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarometerEngine.swift; sourceTree = "<group>"; };
 		FB485493ACD08C4C6CD5804F /* FlightCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlightCategory.swift; sourceTree = "<group>"; };
+		FE938A486C5E1C5DAA1FD2D3 /* AdvisoriesOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvisoriesOverlay.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -547,6 +549,7 @@
 		CEA6BF2191949B48EFAF9B73 /* iOSApp */ = {
 			isa = PBXGroup;
 			children = (
+				FE938A486C5E1C5DAA1FD2D3 /* AdvisoriesOverlay.swift */,
 				5BC26DD5017BF6D7F4EC0346 /* AloftMath.swift */,
 				4BED6E2C5FCAA112FC377D73 /* AloftView.swift */,
 				CD077DE63D0DE437229C43CC /* Assets.xcassets */,
@@ -932,6 +935,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0C8FB8C6770A2A2A48139A81 /* AdvisoriesOverlay.swift in Sources */,
 				528E622AA0E8C3F459B35D03 /* AloftMath.swift in Sources */,
 				A2F7E5A35C84682589A607C9 /* AloftView.swift in Sources */,
 				A63CCB08373B1B5AE4CC5897 /* AppConfig.swift in Sources */,

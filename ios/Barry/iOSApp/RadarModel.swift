@@ -125,6 +125,27 @@ final class RadarModel: ObservableObject {
         stationObs = resp.stations
     }
 
+    /// SIGMETs, G-AIRMETs and PIREPs for the region (the server cuts them
+    /// from national feeds; refetched when the map moves well away).
+    @Published var advisories: AdvisoriesResponse?
+    private var advisoriesFetchedFor: MKCoordinateRegion?
+    private var advisoriesTask: Task<Void, Never>?
+
+    func fetchAdvisories(region: MKCoordinateRegion, force: Bool = false) async {
+        let half = max(3, min(30, region.span.latitudeDelta))
+        if !force, let prev = advisoriesFetchedFor, advisories != nil {
+            let ratio = region.span.latitudeDelta / prev.span.latitudeDelta
+            if ratio > 0.6, ratio < 1.6,
+               abs(prev.center.latitude - region.center.latitude) < half * 0.4,
+               abs(prev.center.longitude - region.center.longitude) < half * 0.4 { return }
+        }
+        guard let resp = try? await BarryAPI().advisories(lat: region.center.latitude,
+                                                          lon: region.center.longitude, half: half)
+        else { return }
+        advisoriesFetchedFor = region
+        advisories = resp
+    }
+
     /// GLM flashes for the Storms overlay (backend memory; polled per minute).
     @Published var lightning: LightningState = LightningState()
     private var lightningTask: Task<Void, Never>?
@@ -301,8 +322,16 @@ final class RadarModel: ObservableObject {
     /// Debounced reload — pans/zooms fire this; only the last one within ~0.7 s wins.
     func scheduleFieldReload(for region: MKCoordinateRegion, wind: Bool,
                              stations: Bool = false, pressure: Bool = false,
-                             storms: Bool = false) {
+                             storms: Bool = false, advisories: Bool = false) {
         lastRegion = region
+        if advisories {
+            advisoriesTask?.cancel()
+            advisoriesTask = Task {
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                guard !Task.isCancelled else { return }
+                await fetchAdvisories(region: region)
+            }
+        }
         if storms {
             lightningTask?.cancel()
             lightningTask = Task {

@@ -105,17 +105,16 @@ final class PressureStore: ObservableObject {
         // a @MainActor initializer.
         self.location = location ?? LocationManager()
         self.station = station
-        #if os(iOS)
         // Cold start: the payload saved at the last run goes on screen at
         // once, marked stale, and the first fetch replaces it. Without a
-        // network the app opens on yesterday's reading and says so instead
-        // of on an error.
+        // network the app opens on the last reading and says so instead of
+        // on an error. The watch does the same since 2026-09-24, for the
+        // wrist that is out of reach of both phone and network.
         if let stored = CombinedStore.load(), stored.station == station {
             state = .loaded(stored.combined)
             atAirport = airportSelected
             isStale = true
         }
-        #endif
     }
 
     var combined: CombinedResponse? {
@@ -157,10 +156,9 @@ final class PressureStore: ObservableObject {
             isStale = false
             refreshError = nil
             atAirport = isAtAirport(combined)
-            #if os(iOS)
-            // The home screen widgets draw from this same payload.
+            // The home screen widgets draw from this same payload, and both
+            // apps open on it next time.
             CombinedStore.save(combined, at: now)
-            #endif
             // Hand the complication a fresh snapshot and nudge it to redraw.
             SnapshotStore.save(TendencySnapshot(from: combined, updatedAt: now,
                                                 atAirport: atAirport))

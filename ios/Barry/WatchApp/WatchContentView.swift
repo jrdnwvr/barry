@@ -71,7 +71,12 @@ struct WatchContentView: View {
                 // A position first, so the 3 NM airport rule can apply.
                 await store.refreshLocation()
                 await followOwnPositionIfAlone()
-                if store.combined == nil { await store.load() }
+                if store.combined == nil {
+                    await store.load()
+                } else if store.isStale {
+                    // Opened on the saved reading: refresh behind it.
+                    await store.load(silent: true)
+                }
                 if barometerEnabled { barometer.start() }
             }
             .onChange(of: scenePhase) { _, phase in
@@ -178,7 +183,7 @@ struct WatchContentView: View {
                 .fixedSize(horizontal: false, vertical: true)
             Text(freshness(combined))
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(store.isStale && store.refreshError != nil ? AnyShapeStyle(.orange) : AnyShapeStyle(.tertiary))
         }
         .padding(.horizontal, 4)
     }
@@ -195,11 +200,14 @@ struct WatchContentView: View {
         return "\(sign)\(String(format: unit == .hPa ? "%.1f" : "%.2f", abs(v)))"
     }
 
-    /// "METAR 12 min ago", from the newest observation in the series.
+    /// "METAR 12 min ago", from the newest observation in the series, with
+    /// "as of" and the saved time while the page is a saved reading.
     private func freshness(_ combined: CombinedResponse) -> String {
         let last = combined.observedSeries.last?.t ?? combined.pressure.cachedAt
-        let m = max(0, Int(store.now.timeIntervalSince(last) / 60))
-        return m < 60 ? "METAR \(m) min ago" : "METAR \(m / 60) h \(m % 60) min ago"
+        let m = max(0, Int(Date().timeIntervalSince(last) / 60))
+        let age = m < 60 ? "METAR \(m) min ago" : "METAR \(m / 60) h \(m % 60) min ago"
+        guard store.isStale else { return age }
+        return "as of \(combined.pressure.cachedAt.formatted(date: .omitted, time: .shortened)) · " + age
     }
 
     @ViewBuilder private var fallbackOrSpinner: some View {

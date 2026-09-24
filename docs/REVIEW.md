@@ -214,7 +214,7 @@ Audiences, smallest useful change each:
 - [x] Drone: a line on the Wind card from the 80 m wind, now and the peak in the next six hours, shown when set up for drones. It reports rather than judges; a user-set limit could turn it into flyable or not later.
 - [x] Everyday: a threshold on the pressure alert (a three-step picker rather than a slider; small is 1 hPa in 3 h).
 - [x] Weather watchers: radar layer sets in Map options (Flying, Wind, On the water, Weather, Just the radar).
-- [ ] Backcountry: cache the last reading on the watch too; "as of" everywhere when offline.
+- [x] Backcountry: the watch opens on its own saved page with "as of" when offline, like the phone; widgets, complications and the Live Activity already said "as of".
 - [ ] Marine: buoys as stations, once the station layer takes a non-airport source.
 
 Direction:

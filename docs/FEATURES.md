@@ -75,7 +75,8 @@ tiles.
   refreshing" or, in orange, "saved HH:MM, can't refresh".
 - Lives: `ContentView.swift` › `content`, `ErrorStateView`; `PressureStore.init`;
   `CombinedStore`.
-- Rules: the saved reading is used only if its station matches.
+- Rules: the saved reading is used only if its station matches. The same
+  cold start runs on the watch (`watch.page.offline`).
 
 ### app.refresh
 - Seen: pull to refresh; a silent refresh every 300 s in front and on
@@ -876,8 +877,13 @@ station and which mode.
   and on foreground when older than 3 min.
 
 ### watch.page.offline
-- Seen: the last snapshot (glyph, pressure, verdict, "as of") while loading
-  or after a failure, with Retry.
+- Seen: since 2026-09-24 the watch opens on its last full page (chart,
+  verdict and all) saved on the watch itself (`CombinedStore`), with "as
+  of h:mm · METAR 3 h 10 min ago" at the foot, orange once the refresh
+  behind it has failed. Only with no saved page does it fall back to the
+  last snapshot (glyph, pressure, verdict) or Retry.
+- Rules: the saved page is used only for the same station. It refreshes
+  quietly behind the saved reading on open.
 
 ### watch.chart.6h
 - Seen: six hours observed coloured by slope, six hours of dashed model, a

@@ -202,6 +202,15 @@ review of everything since build 86 plus the backend, what was fixed the same
 day, and the ranked open items (backend fan-out and registry validation are the
 first two). Read it before any security or robustness work.
 
+**docs/NOAA.md (2026-09-24)** is the plan for replacing Open-Meteo and
+RainViewer with NOAA feeds processed on Tower (HRRR, NBM, MRMS by byte range
+from AWS Open Data; RRFS lands 2026-10-14 on the HRRR grid), in seven phases
+starting with a bridge (Open-Meteo's own server container on Tower). The
+bucket layouts, latencies, field sizes and decode timings in it were measured;
+read it before touching any weather source. Open-Meteo's public API is
+non-commercial only and RainViewer's is personal use only, which is the
+reason for the plan.
+
 Not yet: courtesy emails to RainViewer + IEM before public App Store, App
 Store listing copy, verdict track record (built, hidden until rescored),
 real strike positions (GOES GLM would be the source), APNs push.

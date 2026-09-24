@@ -210,7 +210,7 @@ Customisation:
 - [x] Alert thresholds and quiet hours: "Alert on" fast, moderate or small changes; quiet hours deliver silently.
 
 Audiences, smallest useful change each:
-- [ ] Soaring: a cloud base line on Conditions from the spread.
+- [x] Soaring: a cloud base line on Conditions from the spread, with "blue thermals" when the layer tops out below it.
 - [ ] Drone: a "flyable now, next N hours" line on the Wind card from the 80 m wind.
 - [x] Everyday: a threshold on the pressure alert (a three-step picker rather than a slider; small is 1 hPa in 3 h).
 - [ ] Weather watchers: radar layer presets (ROADMAP G6).

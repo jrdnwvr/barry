@@ -175,6 +175,18 @@ struct FieldConditionsCard: View {
     /// Where the boundary layer is headed over the next hours: the top of the
     /// bumpy, hazy air. Rising through the day is the normal story; the line
     /// only appears when it moves a real amount.
+    /// The soaring line: in daylight, where cumulus would form by the
+    /// spread, and whether the thermals reach it. At night it says nothing.
+    private var cloudBaseText: String? {
+        guard !SunTimes.isNight(now, sun: combined.forecast?.sun),
+              let base = CloudBase.aglFt(tempC: cur.temp, dewC: cur.dewpoint) else { return nil }
+        let shown = ft(base + blOffset) + blSuffix
+        if let top = conditions.boundaryLayerFt, Double(top) < Double(base) * 0.85 {
+            return "Blue thermals; cloud base would be \(shown)."
+        }
+        return "Cumulus base about \(shown)."
+    }
+
     private var blLine: (text: String, rising: Bool)? {
         guard let now = conditions.boundaryLayerFt else { return nil }
         let fc = conditions.blForecast
@@ -345,7 +357,8 @@ struct FieldConditionsCard: View {
                     }
                     // The ride, then where the top is headed, as one line.
                     (Text(rideText).foregroundColor(rideColor)
-                     + Text(blLine.map { " \($0.text)." } ?? "").foregroundColor(.secondary))
+                     + Text(blLine.map { " \($0.text)." } ?? "").foregroundColor(.secondary)
+                     + Text(cloudBaseText.map { " \($0)" } ?? "").foregroundColor(.secondary))
                         .font(.caption)
                         .fixedSize(horizontal: false, vertical: true)
                 }

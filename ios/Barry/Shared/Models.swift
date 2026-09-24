@@ -827,3 +827,43 @@ extension CurrentObs {
         return ceilingFt != nil
     }
 }
+
+extension SunTimes {
+    /// Between a sunset and the next sunrise, from the forecast's own sun
+    /// times; a plain clock guess when there are none.
+    static func isNight(_ t: Date, sun: SunTimes?) -> Bool {
+        let sets = sun?.sunset ?? [], rises = sun?.sunrise ?? []
+        let lastSet = sets.filter { $0 <= t }.max(), lastRise = rises.filter { $0 <= t }.max()
+        switch (lastSet, lastRise) {
+        case let (s?, r?): return s > r
+        case (.some, nil): return true
+        case (nil, .some): return false
+        default:
+            // Before any sun time we have: whichever comes next says which side of it we are on.
+            let nextRise = rises.filter { $0 > t }.min(), nextSet = sets.filter { $0 > t }.min()
+            if let r = nextRise { return nextSet.map { r < $0 } ?? true }
+            if nextSet != nil { return false }
+            let h = Calendar.current.component(.hour, from: t)
+            return h < 6 || h >= 20
+        }
+    }
+}
+
+/// Where cumulus would form, from the surface temperature and dew point:
+/// the spread closes about 2.5 °C per 1,000 ft in a rising parcel, so the
+/// base sits about 400 ft above the field for every degree of spread.
+enum CloudBase {
+    static let feetPerDegreeC = 400.0
+
+    /// Height above the field in feet, rounded to 100; nil when the spread
+    /// is too small to mean a cumulus base (fog, low stratus) or too large
+    /// to matter.
+    static func aglFt(tempC: Double?, dewC: Double?) -> Int? {
+        guard let t = tempC, let d = dewC else { return nil }
+        let spread = t - d
+        guard spread >= 1 else { return nil }
+        let ft = spread * feetPerDegreeC
+        guard ft <= 15_000 else { return nil }
+        return Int((ft / 100).rounded()) * 100
+    }
+}

@@ -45,3 +45,16 @@ struct PressureUnitTests {
         #expect(!obs.hasClouds)
     }
 }
+
+struct CloudBaseTests {
+    @Test func fourHundredFeetPerDegreeOfSpread() {
+        #expect(CloudBase.aglFt(tempC: 20, dewC: 8) == 4800)
+        #expect(CloudBase.aglFt(tempC: 15.3, dewC: 12.1) == 1300)
+    }
+
+    @Test func noBaseForFogOrADesert() {
+        #expect(CloudBase.aglFt(tempC: 10, dewC: 9.5) == nil)
+        #expect(CloudBase.aglFt(tempC: 40, dewC: -5) == nil)
+        #expect(CloudBase.aglFt(tempC: nil, dewC: 5) == nil)
+    }
+}

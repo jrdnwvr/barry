@@ -472,25 +472,7 @@ struct HourlyForecastCard: View {
         }
     }
 
-    /// Between a sunset and the next sunrise, from the forecast's own sun
-    /// times; a plain clock guess when there are none.
-    private func isNight(_ t: Date) -> Bool {
-        let sun = combined.forecast?.sun
-        let sets = sun?.sunset ?? [], rises = sun?.sunrise ?? []
-        let lastSet = sets.filter { $0 <= t }.max(), lastRise = rises.filter { $0 <= t }.max()
-        switch (lastSet, lastRise) {
-        case let (s?, r?): return s > r
-        case (.some, nil): return true
-        case (nil, .some): return false
-        default:
-            // Before any sun time we have: whichever comes next says which side of it we are on.
-            let nextRise = rises.filter { $0 > t }.min(), nextSet = sets.filter { $0 > t }.min()
-            if let r = nextRise { return nextSet.map { r < $0 } ?? true }
-            if nextSet != nil { return false }
-            let h = Calendar.current.component(.hour, from: t)
-            return h < 6 || h >= 20
-        }
-    }
+    private func isNight(_ t: Date) -> Bool { SunTimes.isNight(t, sun: combined.forecast?.sun) }
 
     var body: some View {
         let m = ShortTermForecast(forecast: combined.forecast?.hourly ?? [], now: now, windowHours: 24)

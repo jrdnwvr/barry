@@ -282,8 +282,10 @@ hidden). A card shows only when it is not hidden and has something to say.
   trend; clouds with the category and a chevron (the way into Aloft), the
   layer list and a 12 h trend when the cover changes by 40 points; the
   boundary layer top (AGL or MSL) with the ride sentence ("Bumpy below
-  4,200 ft, strong thermals.") and where the top is headed on the same
-  line; storms (at the field, in the area, likely, possible) with
+  4,200 ft, strong thermals."), where the top is headed, and in daylight
+  the cloud base by the spread ("Cumulus base about 4,800 ft AGL.", or
+  "Blue thermals; cloud base would be 4,800 ft AGL." when the layer tops
+  out below 85% of it), all on the same line; storms (at the field, in the area, likely, possible) with
   distance, motion and timing; fog (likely, possible, overnight).
   Thinned 2026-09-24: no dividers, no separate "Clouds and winds aloft"
   row, no ride info button, no "Cover holds near 60%" line.
@@ -291,11 +293,14 @@ hidden). A card shows only when it is not hidden and has something to say.
 - Data: `/combined.conditions`, `current.clouds`, `forecast.hourly`.
 - Settings: `boundaryLayerReference` agl.
 - Tests: the Aloft UI test taps the Clouds row (`conditions.clouds`);
-  nothing tests the logic.
+  `CloudBaseTests` covers the spread rule (`Shared/Models.swift` ›
+  `CloudBase`: 400 ft per °C of spread, nothing under 1 °C or over
+  15,000 ft). Night comes from `SunTimes.isNight`, shared with the hourly
+  forecast card.
 - Rules: the card exists only with density altitude, boundary layer, fog,
   storm or cloud content. The Clouds row always shows while there is a
   way into Aloft, "No report" when the station says nothing about the sky.
-- For: P S D.
+- For: P S D. The cloud base is the soaring line (review 2026-09-24).
 
 ### card.strip (Here, off-field) and Backcountry
 - Seen: "Here" with the nearest station, its distance, direction, height

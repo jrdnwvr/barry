@@ -77,3 +77,24 @@ struct AudienceTests {
         #expect(Audience.marine.radarLayers.isobars && Audience.marine.windUnit == .knots)
     }
 }
+
+struct DroneWindTests {
+    private func hour(_ offsetH: Double, _ kmh: Double?, now: Date) -> ForecastHour {
+        ForecastHour(t: now.addingTimeInterval(offsetH * 3600), pressure_msl: nil, windspeed: nil, winddir: nil,
+                     precip_prob: nil, wind80m: kmh)
+    }
+
+    @Test func nowAndTheBuild() {
+        let now = Date(timeIntervalSince1970: 1_790_035_800)
+        let hours = [hour(0, 18.5, now: now), hour(1, 22, now: now), hour(3, 37, now: now), hour(8, 60, now: now)]
+        let line = DroneWind.line(hours: hours, now: now)
+        #expect(line?.hasPrefix("At 260 ft: 10 kt now, 20 kt by ") == true, "\(line ?? "nil")")
+    }
+
+    @Test func aSteadyWindIsOneNumber() {
+        let now = Date(timeIntervalSince1970: 1_790_035_800)
+        let hours = [hour(0, 18.5, now: now), hour(2, 20, now: now)]
+        #expect(DroneWind.line(hours: hours, now: now) == "At 260 ft: 10 kt now.")
+        #expect(DroneWind.line(hours: [hour(0, nil, now: now)], now: now) == nil)
+    }
+}

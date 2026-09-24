@@ -28,6 +28,14 @@ struct RunwayWindsCard: View {
     private var modeRaw: String = RunwayWindsMode.auto.rawValue
 
     private var mode: RunwayWindsMode { RunwayWindsMode(rawValue: modeRaw) ?? .auto }
+    @AppStorage(Audience.key, store: AppConfig.sharedDefaults)
+    private var audienceRaw: String = ""
+    /// Set up for drones: one more line, the model's wind near the 400 ft
+    /// ceiling now and where it goes in the next hours.
+    private var droneText: String? {
+        guard audienceRaw == Audience.drone.rawValue else { return nil }
+        return DroneWind.line(hours: combined.forecast?.hourly ?? [], now: Date())
+    }
 
     private var useRunways: Bool { mode.usesRunways(atAirport: atAirport) }
 
@@ -175,6 +183,12 @@ struct RunwayWindsCard: View {
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
+                        if let d = droneText {
+                            Text(d)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
                 if expanded, list.count > 1 {
@@ -227,5 +241,26 @@ struct RunwayWindsCard: View {
         let side = w.crosswind > 0 ? "R" : "L"
         return "\(x) kt x-wind \(x > 0 ? side : "") · \(h) kt \(w.isTailwind ? "tail" : "head")"
             .replacingOccurrences(of: "  ", with: " ")
+    }
+}
+
+/// The wind a drone flies in: the model's 80 m wind (about 260 ft, near the
+/// 400 ft ceiling), now and its peak over the next six hours. Surface wind
+/// undersells it; this is the number that decides whether the flight holds
+/// station. No limit is applied here; it reports.
+enum DroneWind {
+    static func line(hours: [ForecastHour], now: Date) -> String? {
+        let kt = { (kmh: Double) in Int((kmh / 1.852).rounded()) }
+        let sorted = hours.filter { $0.wind80m != nil }.sorted { $0.t < $1.t }
+        guard let current = sorted.last(where: { $0.t <= now.addingTimeInterval(30 * 60) }) ?? sorted.first,
+              let c = current.wind80m else { return nil }
+        let nowKt = kt(c)
+        var text = "At 260 ft: \(nowKt) kt now"
+        let ahead = sorted.filter { $0.t > now && $0.t <= now.addingTimeInterval(6 * 3600) }
+        if let peak = ahead.max(by: { ($0.wind80m ?? 0) < ($1.wind80m ?? 0) }),
+           let p = peak.wind80m, kt(p) - nowKt >= 3 {
+            text += ", \(kt(p)) kt by \(peak.t.formatted(date: .omitted, time: .shortened))"
+        }
+        return text + "."
     }
 }

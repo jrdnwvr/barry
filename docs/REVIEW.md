@@ -211,7 +211,7 @@ Customisation:
 
 Audiences, smallest useful change each:
 - [x] Soaring: a cloud base line on Conditions from the spread, with "blue thermals" when the layer tops out below it.
-- [ ] Drone: a "flyable now, next N hours" line on the Wind card from the 80 m wind.
+- [x] Drone: a line on the Wind card from the 80 m wind, now and the peak in the next six hours, shown when set up for drones. It reports rather than judges; a user-set limit could turn it into flyable or not later.
 - [x] Everyday: a threshold on the pressure alert (a three-step picker rather than a slider; small is 1 hPa in 3 h).
 - [ ] Weather watchers: radar layer presets (ROADMAP G6).
 - [ ] Backcountry: cache the last reading on the watch too; "as of" everywhere when offline.

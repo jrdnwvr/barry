@@ -360,6 +360,11 @@ hidden). A card shows only when it is not hidden and has something to say.
 - Tests: `RunwayMathTests`, `CardRenderTests`.
 - Rules: parallels collapse to the number; Barry has no basis for choosing
   between them. Calm is under 1 kt.
+- Set up for drones (`audience` = drone): one more line, "At 260 ft: 12 kt
+  now, 20 kt by 5 PM.", from the model's 80 m wind (`forecast.hourly.wind80m`),
+  the peak over the next six hours when it is at least 3 kt more
+  (`RunwayWindsView.swift` › `DroneWind`). It reports; no limit is
+  applied. Tests: `DroneWindTests`.
 - For: P D M.
 
 ### card.sensor and sensor.detail

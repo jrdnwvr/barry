@@ -219,7 +219,7 @@ Audiences, smallest useful change each:
 
 Direction:
 - [ ] Data independence, docs/NOAA.md phase by phase. Phase 0 done (weighted Open-Meteo budget, grids held for the model hour, last good grids). Phase 1 waits on Jordan: bridge first, or straight to NOAA (NOAA.md section 6).
-- [ ] The second field and the route (docs/ROUTES.md), then the AWC advisories layer.
+- [ ] The second field and the route (docs/ROUTES.md), then the AWC advisories layer. Fields card done (every saved airport on one line, `/glance`); the route and the advisories layer remain.
 - [ ] Height contours (NOAA phase 2).
 
 Measuring:

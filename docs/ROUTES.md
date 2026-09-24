@@ -5,6 +5,13 @@ locations list that exists today, neither replacing it.
 
 ## 1. Fields card: the saved fields at a glance
 
+Built 2026-09-24 (`iOSApp/FieldsCard.swift`, `/glance`). Answers to the
+open questions below, as built: My location is not a row (only saved
+airports); a long press opens the card's menu (Hide card), not a per-row
+action; the card lists up to eight fields and does not scroll. On by
+default, shown only with two or more airports saved; hidden in the
+drone, water, everyday and weather presets.
+
 Today one saved field is selected at a time, switched through the menu
 in the hero. The Fields card shows them all, one line each:
 

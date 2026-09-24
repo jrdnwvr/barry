@@ -66,15 +66,20 @@ struct HomeLayout: Codable, Equatable {
 
     func isVisible(_ card: HomeCard) -> Bool { !hidden.contains(card) || !card.canHide }
 
-    /// Bring a stored layout up to date: drop ids that no longer exist,
-    /// append cards added since it was saved (hidden when they start that
-    /// way), never hide the chart.
+    /// Bring a stored layout up to date: drop ids that no longer exist, put
+    /// cards added since it was saved where the default order has them
+    /// (right after the card that precedes them there, hidden when they
+    /// start that way), never hide the chart.
     func normalized() -> HomeLayout {
         var seen = Set<HomeCard>()
         var order = self.order.filter { seen.insert($0).inserted }
         var hidden = self.hidden
-        for c in HomeCard.allCases where !seen.contains(c) {
-            order.append(c)
+        let all = HomeCard.allCases
+        for (i, c) in all.enumerated() where !seen.contains(c) {
+            let before = all[..<i].last { order.contains($0) }
+            let at = before.flatMap { order.firstIndex(of: $0) }.map { $0 + 1 } ?? 0
+            order.insert(c, at: at)
+            seen.insert(c)
             if Self.offByDefault.contains(c) { hidden.insert(c) }
         }
         return HomeLayout(order: order, hidden: hidden.filter { $0.canHide })

@@ -136,3 +136,17 @@ struct FieldsCardTests {
         #expect(r.items.first?.cls == .falling && r.items.first?.fltCat == "MVFR")
     }
 }
+
+struct LayoutUpgradeTests {
+    @Test func aNewCardLandsWhereTheDefaultOrderHasIt() {
+        // A layout saved before the Fields card existed, in a custom order.
+        let saved = HomeLayout(order: [.lightning, .radar, .chart, .taf, .rainWind, .conditions,
+                                       .strip, .wind, .sensor, .sources],
+                               hidden: [.taf])
+        let up = saved.normalized()
+        let i = up.order.firstIndex(of: .fields), c = up.order.firstIndex(of: .chart)
+        #expect(i != nil && c != nil && i! == c! + 1)
+        #expect(up.order.count == HomeCard.allCases.count && up.isVisible(.fields))
+        #expect(up.order.first == .lightning && up.order[1] == .radar)
+    }
+}

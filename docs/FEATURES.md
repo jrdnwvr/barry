@@ -200,6 +200,7 @@ hidden). A card shows only when it is not hidden and has something to say.
 |---|---|---|---|---|
 | 1 | `lightning` | Lightning nearby | yes | `lightningNearby` exists |
 | 2 | `chart` | Trend chart | yes, cannot hide | phone layout |
+| 2a | `fields` | Fields | yes | two or more airports saved |
 | 3 | `taf` | TAF timeline | no | the station has a TAF |
 | 4 | `rainWind` | Forecast | yes | phone layout, 2 or more hours |
 | 5 | `conditions` | Conditions | yes | density altitude, boundary layer, fog or storm present |
@@ -255,6 +256,20 @@ hidden). A card shows only when it is not hidden and has something to say.
   and Settings set those.
 - Tests: `AudienceTests` (every layout has every card once; the bundles'
   key choices).
+
+### card.fields
+- Seen: "Fields": every saved airport on its own line, the category dot,
+  the ID, wind as "240@8" (with "G15" when gusting 3 kt over), the
+  altimeter in the chosen unit, the trend arrow, and under it the first
+  sentence of that field's verdict. The selected field's line is tinted;
+  tap a line to switch to it. Shows only with two or more airports saved.
+- Lives: `iOSApp/FieldsCard.swift`; `ContentView.homeCard(.fields)`.
+- Data: `/glance?stations=KLUK,KI67&tz=` (up to eight), reloaded with the
+  page.
+- Rules: the verdict here is built without the forecast, so it can be
+  plainer than the hero's. Places and My location are not listed.
+- Tests: `FieldsCardTests`; backend `test_glance.py`.
+- For: P S.
 
 ### card.lightning
 - Seen: a tinted card: "Lightning 12 mi to the west" (or "at the field"
@@ -1013,6 +1028,7 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 | `GET /radar/field` | `lat`, `lon`, spans | 35 points of wind, boundary layer, CAPE | Open-Meteo multi-point (35 weighted calls) | until five past the next hour, at least 10 min; centre 0.05°, spans 0.5°; last good copy for 6 h when the budget is spent or the model fails | the radar wind layer |
 | `GET /radar/field/levels` | same | 35 points at five levels | Open-Meteo multi-point (35 weighted calls) | same hold and last good copy as `/radar/field` | the altitude rail |
 | `GET /stations/search` | `q`, `limit` | id and name matches, METAR stations only | AWC directory | directory 24 h | Settings, onboarding |
+| `GET /glance` | `stations` (comma list, up to 8), `tz` | one line per field: category, wind, altimeter, sea-level pressure, 3 h change and class, the verdict without forecast, observation time | the same cached reports as `/combined` (saved fields are watched stations) | none of its own; a field that cannot be read is left out | the Fields card |
 | `GET /stations/nearest` | `lat`, `lon` | station, name, distance | bulk table, AWC box, built-in table | 10 min per 0.2° | My location, the watch alone, onboarding |
 | `GET /healthz` | `strict` | status, problems, cycle counts | none | none | Docker, monitors |
 | `POST /diagnostics` | header `X-Barry-Kind` | 202 | none | 30 a minute, 1 MiB | MetricKit reports |

@@ -208,7 +208,9 @@ RainViewer with NOAA feeds processed on Tower (HRRR, NBM, MRMS by byte range
 from AWS Open Data; RRFS lands 2026-10-14 on the HRRR grid), in seven phases
 starting with a bridge (Open-Meteo's own server container on Tower). The
 bucket layouts, latencies, field sizes and decode timings in it were measured;
-read it before touching any weather source. Open-Meteo's public API is
+read it before touching any weather source. NOMADS is the fallback
+mirror for those, and the only home of LAMP, GTG turbulence and CIP icing
+(phase 1a). Tower's line has no data cap. Open-Meteo's public API is
 non-commercial only and RainViewer's is personal use only, which is the
 reason for the plan.
 

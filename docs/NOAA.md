@@ -84,6 +84,53 @@ Points that shape the design:
   and idles at 0.04% CPU. Lightning already pulls about 2.5 GB a day from
   NOAA on S3.
 
+### NOMADS (measured 2026-09-24)
+
+NOMADS (nomads.ncep.noaa.gov) is NCEP's own real-time server, the place
+the files are written first. The AWS buckets are copies of it.
+
+- **It is not meaningfully faster for the big models.** Last-Modified on
+  the same files, 38 HRRR surface files from seven cycles: AWS was 0.3 to
+  1.2 minutes behind NOMADS for 36 of them and 10 minutes behind for two.
+  NBM, 9 files: 1.4 to 3.8 minutes behind. RTMA rapid update: about a
+  minute. So AWS stays the primary for HRRR, NBM, MRMS and RTMA, and
+  NOMADS is the fallback mirror when an AWS file is late.
+- **It carries aviation products that are not on AWS.** No bucket found
+  for any of these:
+  - **LAMP** (`lmp/prod`), MDL's station guidance for 2,313 sites,
+    including fields with no TAF (KI69, KMWO, KI68 and KHAO all have it).
+    The full bulletin runs hourly at :30 and covers 25 hours: temperature,
+    dew point, wind, gust, precipitation and thunder probability, lightning
+    probability (`LP1`), ceiling and visibility categories, cloud cover.
+    4.4 MB of fixed-column text for every site. An extended bulletin
+    carries hours 26 to 38. Every 15 minutes a smaller run updates
+    ceiling, visibility and flight category (with probabilities for each
+    category) in 15 minute steps to 6 hours. Hourly lightning and
+    convection probability grids at 2.5 km come with it (6 to 8 MB each).
+  - **GTG nowcast** (`gtgn/prod`), turbulence as eddy dissipation rate
+    (EDR) every 1,000 ft from 100 to 50,000 ft MSL, on the HRRR grid,
+    every 15 minutes, 29 MB, about a minute after its valid time. In
+    production since NOMADS 2.3.19. Analysis only; no forecast hours.
+    Sampled on the day: 0.04 to 0.14 over KLUK (smooth), 0.12 to 0.24
+    over KDEN (light).
+  - **CIP v2.0** (`cip/para`), current icing: probability, severity
+    category and supercooled large drop potential every 500 ft from 500
+    to 30,000 ft MSL, on the HRRR grid, hourly, 40 MB, about 11 minutes
+    after the hour. Still "para", out for public evaluation, so it can
+    change or stop. Sampled on the day: nothing over KLUK, icing from
+    14,000 to 25,000 ft over KDEN.
+- **Rules of the road.** No per-minute cap is published. The grib filter
+  page asks scripts to wait 10 seconds between looped fetches and says
+  the server may block a client it mistakes for a denial of service. Use
+  a named User-Agent, build file names from the cycle time rather than
+  listing directories, and space requests. Directory listings come back
+  as an empty 200 over HTTP/2; ask for HTTP/1.1 when listing. NWS data is
+  public domain (weather.gov/disclaimer).
+- **Tower pulls it quickly.** 4.6 MB of LAMP in 0.3 s and a 30 MB GTG
+  file in 0.8 s over the fibre.
+- **Decoding** uses the same eccodes path as HRRR (GTG: 51 messages in
+  0.5 s; CIP: 180 in 0.1 s). LAMP needs no library at all.
+
 ## 2. What the papers change
 
 The published evaluations matter for how Barry words things, not just where
@@ -316,6 +363,35 @@ Done when: the whole test suite passes against the local server, the app
 works with the public API blocked at the firewall, and a day of the storm
 alerter's decisions matches the public API's.
 
+### Phase 1a. Aviation guidance from NOMADS
+
+Small, and independent of the bridge decision. The first piece needs no
+GRIB library.
+
+- **LAMP first.** Pull the hourly bulletin at :35 (and the extended one
+  for hours 26 to 38), parse the fixed columns into a table keyed by
+  station, hold the newest two runs. Serve it inside the payloads that
+  already exist rather than as a new screen: the route's arrival at a
+  field with no TAF (today "MVFR now"), the TAF card for a field with no
+  TAF, and the Fields card's line. LAMP's lightning probability can back
+  the thunder wording where the model's CAPE is all there is today.
+  About 110 MB a day; 390 MB with the 15 minute runs.
+- **Then GTG and CIP, once phase 2 has put eccodes in the image.** Read
+  one column at a location from each new file. Aloft gets a turbulence
+  layer (EDR by altitude, now only) and CIP replaces the column's own
+  icing guess for the current hour; later hours keep the guess, because
+  neither product has forecast hours on NOMADS. CIP ships behind a flag
+  until it leaves "para". About 2.8 GB a day for GTG at every 15 minutes
+  (1.1 GB hourly), 1 GB for CIP.
+- `app/sources/nomads.py` holds the mirror: file names from the cycle
+  time, a 10 second spacing between its own requests, the same retry and
+  failure memory as AWC. The HRRR and NBM fetchers try AWS first and
+  NOMADS when a file they expect is more than five minutes late.
+
+Done when: a route to KI69 shows an arrival category from LAMP, the
+Aloft screen at KDEN shows today's turbulence and icing, and a day of
+fetches in the logs shows no NOMADS error beyond a timeout.
+
 ### Phase 2. HRRR grids: map fields and height contours
 
 Medium. The foundation of the NOAA path and the first new feature.
@@ -362,8 +438,9 @@ Medium. Sharpens the column and moves it off the bridge.
   to their bucket. A reasonable choice if phase 1 has run clean for months.
 
 Data: about 52 MB per forecast hour; about 5 GB a day from the hourly
-cycles plus 4 GB from the 6-hourly ones. Pulling only f00 to f01 hourly
-brings it to about 7 GB. This is the expensive phase.
+cycles plus 4 GB from the 6-hourly ones. This was the expensive phase;
+with no data cap (2026-09-24) it needs no trimming, and pulling all 40
+levels, or the whole pressure file, is fine.
 
 Done when: the Aloft screen renders from the store with the same tests
 passing, and the column at KLUK matches the bridge within a degree and a
@@ -458,8 +535,8 @@ Small for the swap, larger for the products.
   Switch when it is at least as good; HRRR has no retirement date yet.
 - Remove the bridge container, the RainViewer code path, and their
   attribution lines. Update the privacy page to name NOAA.
-- Look at the Aviation Weather Center's icing and turbulence grids as a
-  replacement for the column's own icing guess. Not verified yet.
+- The icing and turbulence grids were verified on NOMADS (section 1) and
+  moved to phase 1a.
 
 ## 5. Budget
 
@@ -470,15 +547,16 @@ above:
 |---|---|
 | Lightning (today) | 2.5 |
 | Phase 1, bridge | under 0.5 |
+| Phase 1a, LAMP, GTG, CIP from NOMADS | 2.2 to 4.2 |
 | Phase 2, HRRR map fields | 2.4 |
 | Phase 3, HRRR column | 7 to 9 |
 | Phase 4, NBM plus HRRR extension | 3.4 to 5.7 |
 | Phase 5 and 6, MRMS | 1 |
-| Total, all phases | 17 to 21 |
+| Total, all phases | 19 to 25 |
 
-That is 500 to 650 GB a month, all inbound. Check the home connection's
-data cap before phase 3, which is the one worth trimming: fewer levels,
-fewer hours from the hourly cycles, or the Open-Meteo spatial files.
+That is 580 to 760 GB a month, all inbound. Tower is on gigabit fibre
+with no data cap (Jordan, 2026-09-24), so none of this needs trimming,
+and whole files are fine wherever they are simpler than byte ranges.
 
 Storage: two cycles of everything is under 15 GB on the NVMe cache, plus
 the bridge's cache. Memory: the backend needs about 1.5 GB working set,
@@ -494,7 +572,7 @@ with a credit line. The fixed costs stay the Apple fee and the domain.
 
 - **Bridge first, or straight to NOAA.** The bridge is an afternoon and
   buys time. Skipping it means the free-tier exposure lasts until phase 4.
-- **The data cap.** Phase 3's 7 to 9 GB a day is the swing item.
+- **The data cap.** Settled 2026-09-24: none. Gigabit fibre, no limit.
 - **Radar as pictures.** Cloudflare's free CDN terms allow web content and
   reserve the right to limit an origin serving "a disproportionate
   percentage of pictures". Small map tiles for an app are not what that
@@ -512,7 +590,13 @@ with a credit line. The fixed costs stay the Apple fee and the domain.
   with the `stale` flag the app already shows.
 - **RRFS transition.** Keep HRRR as the primary until RRFS has run clean
   for a season.
-- **Data caps.** The only real cost risk. Phase 3 is the lever.
+- **Data caps.** None on Tower's line (2026-09-24).
+- **NOMADS blocking a client.** It can block an address that fetches too
+  fast. Barry's pull is under ten files every 15 minutes, spaced, with a
+  named User-Agent; LAMP, GTG and CIP have no other home, so a block would
+  leave the last run showing as stale until it lifts.
+- **CIP is a parallel product.** It can change format or stop without
+  the notice a production product gets.
 - **One server.** Same as today; the backend already lives on Tower. Phase
   5 raises the stakes because tiles are traffic, so the Cloudflare cache
   matters. If the tunnel is down the app shows the last frames it holds.
@@ -540,6 +624,9 @@ Buckets, product pages and tools:
   https://github.com/NOAA-National-Severe-Storms-Laboratory/mrms-support
 - RRFS: https://registry.opendata.aws/noaa-rrfs-ops/ and SCN 26-48
   https://www.weather.gov/media/notification/pdf_2026/scn26-048_Updated_RRFS_and_REFS_Implementation_aad.pdf
+- NOMADS: https://nomads.ncep.noaa.gov/ ; grib filter help and fetch
+  spacing https://nomads.ncep.noaa.gov/info.php?page=gribfilter ; LAMP
+  https://vlab.noaa.gov/web/mdl/lamp ; terms https://www.weather.gov/disclaimer
 - Byte-range downloads:
   https://www.cpc.ncep.noaa.gov/products/wesley/fast_downloading_grib.html
 - Herbie: https://github.com/blaylockbk/Herbie

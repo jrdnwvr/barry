@@ -7,8 +7,8 @@ locations list that exists today, neither replacing it.
 
 Built 2026-09-24 (`iOSApp/FieldsCard.swift`, `/glance`). Answers to the
 open questions below, as built: My location is not a row (only saved
-airports); a long press opens the card's menu (Hide card), not a per-row
-action; the card lists up to eight fields and does not scroll. On by
+airports); a long press on a row offers "Route to" that field; the card's
+own menu is Hide card; the card lists up to eight fields and does not scroll. On by
 default, shown only with two or more airports saved; hidden in the
 drone, water, everyday and weather presets.
 
@@ -39,6 +39,16 @@ Open questions:
 - How many rows before the card scrolls or truncates?
 
 ## 2. Route: from X to Y
+
+Built 2026-09-24 (`iOSApp/RouteViews.swift`, `backend/app/route.py`,
+`/route`). Answers to the open questions below, as built: no alternate;
+the corridor is 15 NM fixed (lightning counts within 30 NM); still air
+only; one leg; nothing on the watch. The route screen draws the line on
+a plain map rather than the radar, so the radar keeps one job; the
+corridor stations carry their category colours. Arrival falls back to
+the destination's current report ("MVFR now") when it has no TAF, rather
+than to the model. On by default in the flying and soaring presets,
+shown only while a route is set. Five recent pairs are kept.
 
 A route is a departure and a destination, optionally an alternate, chosen
 from saved fields or search, with a cruise speed from Settings (default

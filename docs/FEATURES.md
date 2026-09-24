@@ -107,7 +107,8 @@ For: everyone. Fixed at the top; not a card.
 
 ### home.hero.stationRow
 - Seen: an airplane icon, "KLUK · Cincinnati/Lunken…", a chevron. The
-  menu lists saved locations and "Follow on lock screen".
+  menu lists saved locations, "Follow on lock screen" and "Plan a route"
+  (`card.route`).
 - Lives: `HeroView.swift` › `StatusRow`.
 - Data: `pressure.station`, `pressure.name`, `SavedLocationsStore`.
 
@@ -201,6 +202,7 @@ hidden). A card shows only when it is not hidden and has something to say.
 | 1 | `lightning` | Lightning nearby | yes | `lightningNearby` exists |
 | 2 | `chart` | Trend chart | yes, cannot hide | phone layout |
 | 2a | `fields` | Fields | yes | two or more airports saved |
+| 2b | `route` | Route | yes | a route is set |
 | 3 | `taf` | TAF timeline | no | the station has a TAF |
 | 4 | `rainWind` | Forecast | yes | phone layout, 2 or more hours |
 | 5 | `conditions` | Conditions | yes | density altitude, boundary layer, fog or storm present |
@@ -216,7 +218,8 @@ hidden). A card shows only when it is not hidden and has something to say.
   Changes, Hourly, Chart. Conditions: boundary layer above ground or sea
   level. Here: "Backcountry estimates" (only after the one-time disclaimer
   has been accepted in Settings). Lightning, TAF and Sensor have Hide card
-  alone. No gear or other chrome on the cards.
+  alone. Route: Reverse, Plan another, Clear route. No gear or other
+  chrome on the cards.
 - Lives: `ContentView.cardMenu`; `HomeCard.hasMenu`.
 - Settings: the same keys as Settings › Cards and screens, which keeps its
   rows so the options stay findable.
@@ -244,8 +247,8 @@ hidden). A card shows only when it is not hidden and has something to say.
 
 | | Cards shown, in order | Wind | Runway winds | Aloft ceiling | Alert on | Radar opens with |
 |---|---|---|---|---|---|---|
-| Flying | lightning, chart, conditions, wind, Here, forecast, radar | knots | auto | 18,000 | fast | radar, fronts, station barbs, lightning |
-| Soaring | lightning, chart, conditions, forecast, radar, wind, Here | knots | auto | 12,000 | fast | radar, wind, lightning |
+| Flying | lightning, chart, fields, route, conditions, wind, Here, forecast, radar | knots | auto | 18,000 | fast | radar, fronts, station barbs, lightning |
+| Soaring | lightning, chart, conditions, fields, route, forecast, radar, wind, Here | knots | auto | 12,000 | fast | radar, wind, lightning |
 | Drones | lightning, wind, forecast, chart, radar, conditions | knots | compass | 6,000 | fast | radar, wind, lightning |
 | On the water | lightning, chart, wind, forecast, radar | knots | compass | 6,000 | fast | radar, isobars, wind, fronts, lightning |
 | Everyday | lightning, chart, forecast, radar, sensor | mph in the US, else km/h | compass | 12,000 | moderate | radar, lightning |
@@ -267,8 +270,40 @@ hidden). A card shows only when it is not hidden and has something to say.
 - Data: `/glance?stations=KLUK,KI67&tz=` (up to eight), reloaded with the
   page.
 - Rules: the verdict here is built without the forecast, so it can be
-  plainer than the hero's. Places and My location are not listed.
+  plainer than the hero's. Places and My location are not listed. A long
+  press on a line other than the selected one offers "Route to KI67",
+  which sets a route from the current station (`card.route`).
 - Tests: `FieldsCardTests`; backend `test_glance.py`.
+- For: P S.
+
+### card.route, route.screen and route.planner
+- Seen: "KLUK → KDAY" and "49 NM · 29 min", then three lines: "Depart"
+  with the category, wind as "050@9" and the altimeter; the way ("MVFR at
+  KI69", "VFR along the line", "lightning 12 NM off the line", "cold
+  front at 20 NM"); "Arrive 6:06 PM MVFR 85 min before sunset", with the
+  TAF's TEMPO group in orange when one covers the arrival hour. Tap opens
+  the route screen: a map with the two fields and the great-circle line,
+  corridor stations coloured by category, and a list of them with
+  distance along the line and wind; a footnote says the time is still air
+  and the corridor is not an airway; Reverse and Clear route. The planner
+  is a sheet titled "Plan a route" with From and To fields, the saved
+  fields and the recent pairs to pick from.
+- Lives: `iOSApp/RouteViews.swift` (`RouteSettings`, `RouteWords`,
+  `RouteCard`, `RouteScreen`, `RoutePlannerSheet`);
+  `ContentView.homeCard(.route)`.
+- Starts from: the hero's station menu ("Plan a route", last item), a
+  long press on a Fields line ("Route to"), and the Route card's own menu
+  ("Plan another").
+- Data: `/route?from&to&speedKt&tz`.
+- Settings: `route.from`, `route.to`, `route.recent` (last five pairs),
+  `cruiseSpeedKt` (Settings › Cards and screens, 60 to 200 kt).
+- Rules: a route never changes the selected field; the hero and chart
+  stay on it. Still air only, no alternate, one leg. The corridor is 15
+  NM each side of the line; lightning counts within 30 NM. Arrival
+  category comes from the destination's TAF at that hour, else its
+  current report ("MVFR now"). The screen's map is a plain map, not the
+  radar.
+- Tests: `RouteWordsTests`; backend `test_route.py`.
 - For: P S.
 
 ### card.lightning
@@ -1053,6 +1088,7 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 | `GET /radar/field/levels` | same | 35 points at five levels | Open-Meteo multi-point (35 weighted calls) | same hold and last good copy as `/radar/field` | the altitude rail |
 | `GET /stations/search` | `q`, `limit` | id and name matches, METAR stations only | AWC directory | directory 24 h | Settings, onboarding |
 | `GET /glance` | `stations` (comma list, up to 8), `tz` | one line per field: category, wind, altimeter, sea-level pressure, 3 h change and class, the verdict without forecast, observation time | the same cached reports as `/combined` (saved fields are watched stations) | none of its own; a field that cannot be read is left out | the Fields card |
+| `GET /route` | `from`, `to`, `speedKt` (40 to 400, default 100), `tz` | distance, time, arrival time, both ends' glance lines, corridor stations (along and off the line, category, wind), the worst of them, nearest lightning near the line, fronts crossing it, the destination's TAF category and TEMPO at arrival, minutes from sunset | none: the bulk table, the flash store, `/fronts`, the ends' cached reports and TAF | 5 min per pair and speed | the Route card and screen |
 | `GET /stations/nearest` | `lat`, `lon` | station, name, distance | bulk table, AWC box, built-in table | 10 min per 0.2° | My location, the watch alone, onboarding |
 | `GET /healthz` | `strict` | status, problems, cycle counts | none | none | Docker, monitors |
 | `POST /diagnostics` | header `X-Barry-Kind` | 202 | none | 30 a minute, 1 MiB | MetricKit reports |
@@ -1076,7 +1112,7 @@ without blocking the response.
 - Unhealthy (503, autoheal restarts): a loop exited or stalled (refresh
   1800 s, lightning 600 s). Degraded (200, or 503 with `strict`): the
   lightning feed or the bulk table is stale.
-- Tests: `backend/tests`, 304 tests; `test_property` reads the app's own
+- Tests: `backend/tests`, 327 tests; `test_property` reads the app's own
   OpenAPI document.
 
 ## Settings keys
@@ -1103,6 +1139,9 @@ each device (the watch keeps its own copies).
 | `runwayWindsMode` | auto | always, auto, compass | Settings |
 | `boundaryLayerReference` | agl | agl, msl; main page only | Settings |
 | `forecastCardStyle` | chart | summary, changes, hourly, chart | Settings |
+| `route.from`, `route.to` | "" | the route's two IDs; empty means no route | the hero menu, a Fields line, the planner, the Route card |
+| `route.recent` | "" | comma list of `FROM>TO`, newest first, five kept | RouteSettings |
+| `cruiseSpeedKt` | 100 | 60 to 200 in 20s; timing for the route | Settings › Cards and screens |
 | `forecastCard.hidden` | "" | comma list of wind, temp | the chart-style forecast card |
 | `chartWindow` | hours6 | hours6, hours48 | the trend chart |
 | `heroWordsExpanded` | true | | the hero |
@@ -1207,3 +1246,5 @@ caching failures; `/stations/search` accepting one character.
   defects the read found were fixed the same day; see Known defects. The
   hand-made thinning pass started the same evening with the hero and the
   radar card (docs/REVIEW.md).
+- 2026-09-24, later: the Fields card, the advisories layer and the route
+  (card, screen, planner, `/route`) from docs/ROUTES.md.

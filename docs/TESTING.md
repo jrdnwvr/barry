@@ -87,6 +87,7 @@ Radar screen, each layer alone and stacked.
 | Pan then pan back: tiles from cache, ring prefetched | | | yes | pop-in is a feel |
 | Layer migration: Pressure users keep isobars | | done once | | |
 | Recentre button, full screen push and pop | | eyeball | | |
+| Wind at altitude: rail from the surface to the Aloft ceiling, streaks redraw at the level, note says the height | backend levels tested; UI test taps the top stop and back | checked at 18k | | /radar/field/levels, one call per region per half hour |
 | Every layer toggled, a pan, a zoom out and in, back to the dashboard, wind still on | UI test (BarryUITests) | | | launches with -uitest: onboarded, KLUK, layers off |
 
 Aloft (clouds and winds aloft), from the conditions card.

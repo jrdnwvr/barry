@@ -30,6 +30,30 @@ struct WindArrow: Equatable {
     let fromDeg: Double
 }
 
+/// A stop on the radar's altitude rail: the surface, or a pressure level
+/// with the height it sits near.
+struct WindAltitude: Identifiable, Equatable {
+    let hPa: Int          // 0 = the surface
+    let ft: Int
+    let short: String
+    /// The speed that reads as full strength on the streak ramp here. Winds
+    /// aloft run far faster than at the ground; one scale would draw every
+    /// streak at 18,000 ft solid black.
+    let rampKmh: Double
+    var id: Int { hPa }
+
+    static let all: [WindAltitude] = [
+        WindAltitude(hPa: 0, ft: 0, short: "SFC", rampKmh: 35),
+        WindAltitude(hPa: 925, ft: 2_500, short: "2.5k", rampKmh: 50),
+        WindAltitude(hPa: 850, ft: 5_000, short: "5k", rampKmh: 65),
+        WindAltitude(hPa: 700, ft: 10_000, short: "10k", rampKmh: 85),
+        WindAltitude(hPa: 600, ft: 14_000, short: "14k", rampKmh: 105),
+        WindAltitude(hPa: 500, ft: 18_000, short: "18k", rampKmh: 130),
+    ]
+
+    static func stop(_ hPa: Int) -> WindAltitude { all.first { $0.hPa == hPa } ?? all[0] }
+}
+
 @MainActor
 final class RadarModel: ObservableObject {
     @Published var frames: [RadarFrame] = []
@@ -43,6 +67,27 @@ final class RadarModel: ObservableObject {
     @Published var windArrows: [WindArrow] = []
     /// The whole wind grid, calm points included — the flow layer's field.
     @Published var windField: [WindArrow] = []
+
+    /// The altitude the wind layer shows: 0 is the surface, otherwise a
+    /// pressure level from `WindAltitude.all`. Not remembered between opens:
+    /// the map always starts at the ground.
+    @Published var windLevel = 0 {
+        didSet {
+            guard windLevel != oldValue else { return }
+            applyLevel()
+            if windLevel != 0, let r = lastRegion { Task { await fetchLevels(region: r) } }
+        }
+    }
+    /// The wind grid at `windLevel` when it is not the surface.
+    @Published private(set) var levelField: [WindArrow] = []
+    private var levels: FieldLevelsResponse?
+    private var levelsFetchedFor: MKCoordinateRegion?
+
+    /// What the wind layer draws: the surface grid or the chosen level's.
+    var shownWindField: [WindArrow] { windLevel == 0 ? windField : levelField }
+    var shownWindArrows: [WindArrow] {
+        windLevel == 0 ? windArrows : levelField.filter { $0.speedKmh >= Self.minArrowKmh }
+    }
     /// Reporting stations with their latest wind (barb / speed layer).
     @Published var stationObs: [StationObs] = []
     private var stationTask: Task<Void, Never>?
@@ -284,6 +329,7 @@ final class RadarModel: ObservableObject {
                 try? await Task.sleep(nanoseconds: 700_000_000)
                 guard !Task.isCancelled else { return }
                 await fetchField(region: region)
+                if windLevel != 0 { await fetchLevels(region: region) }
             }
         }
     }
@@ -307,5 +353,28 @@ final class RadarModel: ObservableObject {
         windField = all
         windArrows = all.filter { $0.speedKmh >= Self.minArrowKmh }
         windSampled = true
+    }
+
+    /// Winds at every altitude stop for the region, fetched only once the
+    /// rail leaves the surface. Every level comes in one call, so moving
+    /// between stops redraws from what is already here.
+    func fetchLevels(region: MKCoordinateRegion) async {
+        if Self.nearEnough(region, to: levelsFetchedFor), levels != nil { applyLevel(); return }
+        guard let resp = try? await BarryAPI().fieldLevels(
+            lat: region.center.latitude, lon: region.center.longitude,
+            latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta)
+        else { return }
+        levels = resp
+        levelsFetchedFor = region
+        applyLevel()
+    }
+
+    private func applyLevel() {
+        guard windLevel != 0, let levels else { levelField = []; return }
+        levelField = levels.points.compactMap { p in
+            p.levels.first { $0.hPa == windLevel }.map {
+                WindArrow(lat: p.lat, lon: p.lon, speedKmh: $0.windKmh, fromDeg: $0.windDeg)
+            }
+        }
     }
 }

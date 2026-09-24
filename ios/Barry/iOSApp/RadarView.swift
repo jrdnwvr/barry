@@ -328,9 +328,10 @@ struct RadarPanel: View {
                      index: model.index,
                      radarVisible: showRadar,
                      center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
-                     windArrows: model.windArrows,
+                     windArrows: model.shownWindArrows,
                      showWind: showWind && windStyle == "arrows",
-                     windFlow: (showWind && windStyle == "flow") ? model.windField : nil,
+                     windFlow: (showWind && windStyle == "flow") ? model.shownWindField : nil,
+                     windRampKmh: WindAltitude.stop(model.windLevel).rampKmh,
                      embedded: embedded,
                      animating: active,
                      frontState: wantsFronts ? model.frontState : nil,
@@ -367,9 +368,12 @@ struct RadarPanel: View {
 
                 Spacer(minLength: 0)
 
-                HStack {
+                HStack(alignment: .bottom) {
                     Spacer()
-                    recenterButton
+                    VStack(spacing: 10) {
+                        if showWind { altitudeRail }
+                        recenterButton
+                    }
                 }
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
@@ -378,6 +382,74 @@ struct RadarPanel: View {
                     .padding(.horizontal, 12)
                     .padding(.bottom, 10)
             }
+        }
+    }
+
+    // MARK: - Altitude rail
+
+    @AppStorage(AloftLayer.ceilingKey, store: AppConfig.sharedDefaults)
+    private var aloftCeilingFt: Int = 18000
+
+    /// The stops, up to the Aloft ceiling set in Settings.
+    private var altitudeStops: [WindAltitude] {
+        WindAltitude.all.filter { $0.ft <= max(5_000, aloftCeilingFt) }
+    }
+
+    private static let railRowH: CGFloat = 30
+
+    /// Which altitude the wind layer shows. Tap a stop or drag along the
+    /// rail; the highest stop is at the top, like the sky.
+    private var altitudeRail: some View {
+        let stops = Array(altitudeStops.reversed())
+        return VStack(spacing: 0) {
+            Image(systemName: "wind")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(height: 20)
+            VStack(spacing: 0) {
+                ForEach(stops) { s in
+                    let on = s.hPa == model.windLevel
+                    Text(s.short)
+                        .font(.caption2.weight(on ? .bold : .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(on ? Color.white : Color.primary)
+                        .frame(width: 44, height: Self.railRowH)
+                        .background(on ? Color.accentColor : Color.clear, in: Capsule())
+                }
+            }
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0).onChanged { g in
+                let i = Int(g.location.y / Self.railRowH)
+                let pick = stops[max(0, min(stops.count - 1, i))]
+                if pick.hPa != model.windLevel { model.windLevel = pick.hPa }
+            })
+        }
+        .padding(4)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .sensoryFeedback(.selection, trigger: model.windLevel)
+        .onChange(of: aloftCeilingFt) { _, _ in
+            if !altitudeStops.contains(where: { $0.hPa == model.windLevel }) { model.windLevel = 0 }
+        }
+        .accessibilityElement()
+        .accessibilityIdentifier("radar.altitude")
+        .accessibilityLabel("Wind altitude")
+        .accessibilityValue(model.windLevel == 0 ? "Surface" : "About \(WindAltitude.stop(model.windLevel).ft.formatted()) feet")
+        .accessibilityAdjustableAction { dir in
+            let all = altitudeStops
+            guard let i = all.firstIndex(where: { $0.hPa == model.windLevel }) else { return }
+            let j = dir == .increment ? min(all.count - 1, i + 1) : max(0, i - 1)
+            model.windLevel = all[j].hPa
+        }
+    }
+
+    /// Above the surface, say so: the other layers are still ground level.
+    @ViewBuilder private var altitudeNote: some View {
+        if showWind, model.windLevel != 0 {
+            Text("Wind at about \(WindAltitude.stop(model.windLevel).ft.formatted()) ft. Other layers stay at the surface.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("radar.altitudeNote")
         }
     }
 
@@ -533,6 +605,7 @@ struct RadarPanel: View {
         if showRadar {
             radarControls
         }
+        altitudeNote
         windCalmNote
         stormsNote
     }
@@ -560,7 +633,7 @@ struct RadarPanel: View {
 
     /// A toggled-on layer that draws nothing must say why, or it reads as broken.
     @ViewBuilder private var windCalmNote: some View {
-        if showWind, model.windSampled, model.windArrows.isEmpty {
+        if showWind, model.windLevel == 0, model.windSampled, model.windArrows.isEmpty {
             Text("Wind under 3 kt across the map.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)

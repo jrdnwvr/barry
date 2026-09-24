@@ -406,6 +406,25 @@ struct FieldGridResponse: Codable, Hashable {
     let cachedAt: Date
 }
 
+/// Model wind at one pressure level (km/h, direction it blows from).
+struct LevelWind: Codable, Hashable {
+    let hPa: Int
+    let windKmh: Double
+    let windDeg: Double
+}
+
+struct FieldLevelPoint: Codable, Hashable {
+    let lat: Double
+    let lon: Double
+    var levels: [LevelWind] = []
+}
+
+/// The radar's wind grid at every altitude stop.
+struct FieldLevelsResponse: Codable, Hashable {
+    let points: [FieldLevelPoint]
+    let cachedAt: Date
+}
+
 // MARK: - Track record
 
 /// Barry's scorecard at this station: trend calls that matched what the

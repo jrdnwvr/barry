@@ -120,6 +120,19 @@ struct BarryAPI {
         return try await get(comps?.url)
     }
 
+    /// The same grid at each altitude stop, for the radar's altitude rail.
+    func fieldLevels(lat: Double, lon: Double, latSpan: Double, lonSpan: Double) async throws -> FieldLevelsResponse {
+        var comps = URLComponents(url: baseURL.appendingPathComponent("radar/field/levels"),
+                                  resolvingAgainstBaseURL: false)
+        comps?.queryItems = [
+            URLQueryItem(name: "lat", value: String(lat)),
+            URLQueryItem(name: "lon", value: String(lon)),
+            URLQueryItem(name: "latSpan", value: String(latSpan)),
+            URLQueryItem(name: "lonSpan", value: String(lonSpan)),
+        ]
+        return try await get(comps?.url)
+    }
+
     /// GOES lightning-mapper flashes over the last 15 minutes around a
     /// point, binned, from the server's memory (it polls NOAA, not the phone).
     func lightning(lat: Double, lon: Double) async throws -> LightningResponse {

@@ -220,6 +220,18 @@ METAR's ceiling drawn separately from the model's layers, a ceiling menu
 It opens from the conditions card's Clouds row and its last row. The
 design handoff it follows came from the user's Design canvas.
 
+## Wind at altitude (added 2026-09-24)
+
+The full-screen radar has an altitude rail on the right while Wind is on:
+SFC, 2.5k, 5k, 10k, 14k, 18k (capped by the Aloft ceiling setting). Off
+the surface, the app asks `/radar/field/levels` once per region for the
+map grid's wind at 925/850/700/600/500 hPa (ten variables, so Open-Meteo
+counts it as one call per point) and redraws the streaks from it; moving
+between stops needs no new request. `WindAltitude` in RadarModel holds the
+stops and each one's streak ramp (35 km/h at the surface up to 130 at
+18k). Other layers stay at the surface and the note under the timeline
+says so. The level is not remembered between opens.
+
 ## Tests and checks (added 2026-09-22)
 
 - Backend: `cd backend && .venv/bin/pytest -q` (294 tests; Hypothesis

@@ -69,7 +69,9 @@ final class WindFlowView: UIView {
     /// 20 km/h -> 38 px/s on screen. Trail length is speed times the trail's
     /// duration, so this is also what stops a 3 kt breeze from drawing a
     /// twelve pixel smudge nobody can see.
-    private let pxPerKmh: CGFloat = 1.9
+    /// Screen speed per km/h. Eased down as the ramp rises for winds aloft,
+    /// so a 130 km/h jet reads as fast without tearing across the map.
+    private var pxPerKmh: CGFloat { 1.9 * sqrt(35 / max(35, rampKmh)) }
     private let minLife = 90, maxLife = 180    // frames at 30 fps
     private let fps = 30
     private let lineWidth: CGFloat = 1.6
@@ -77,7 +79,8 @@ final class WindFlowView: UIView {
     /// 19 kt: a brisk day, not a gale. The old 45 put an ordinary 5 to 10 kt
     /// breeze so far down the ramp that it drew in the map's own background
     /// tone at barely any opacity, which read as the layer being broken.
-    private let fastKmh: CGFloat = 35
+    var rampKmh: CGFloat = 35
+    private var fastKmh: CGFloat { rampKmh }
 
     private struct Particle {
         var trail: [MKMapPoint]   // on the ground, oldest first

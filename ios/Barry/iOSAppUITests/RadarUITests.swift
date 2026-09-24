@@ -81,6 +81,15 @@ final class RadarUITests: XCTestCase {
         map.pinch(withScale: 4.0, velocity: 2)       // and back in
         sleep(2)
 
+        // The altitude rail: up to the top stop and the note says so, back to the surface.
+        let rail = app.otherElements["radar.altitude"].firstMatch
+        XCTAssertTrue(rail.waitForExistence(timeout: 5), "no altitude rail with wind on\n\(app.debugDescription)")
+        rail.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)).tap()
+        XCTAssertTrue(app.staticTexts["radar.altitudeNote"].firstMatch.waitForExistence(timeout: 5), "no note above the surface")
+        XCTAssertNotEqual(rail.value as? String, "Surface")
+        rail.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)).tap()
+        XCTAssertEqual(rail.value as? String, "Surface")
+
         for name in layers where name != "Wind" {
             tapChip(app, name)
         }

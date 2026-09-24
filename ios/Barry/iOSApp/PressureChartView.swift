@@ -721,8 +721,6 @@ struct PressureChartView: View {
                 .foregroundStyle(.tertiary)
                 .accessibilityLabel("Clear selection")
             }
-        } else {
-            slopeLegend
         }
     }
 
@@ -769,28 +767,6 @@ struct PressureChartView: View {
 
     /// Compact key for the line coloring: a blue ramp where deeper blue = a faster
     /// change (steeper rise or fall). Doubles as the tap-to-read hint.
-    private var slopeLegend: some View {
-        HStack(spacing: 10) {
-            legendSwatch(colors: [TendencyClass.blueRamp(0.0), TendencyClass.blueRamp(1.0)],
-                         label: "deeper = faster change")
-            if !visiblePhone.isEmpty {
-                legendSwatch(colors: [.orange, .orange], label: "local")
-            }
-            Spacer()
-            Text("tap or drag to read")
-                .font(.caption2).foregroundStyle(.tertiary)
-        }
-    }
-
-    private func legendSwatch(colors: [Color], label: String) -> some View {
-        HStack(spacing: 4) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing))
-                .frame(width: 22, height: 5)
-            Text(label).font(.caption2).foregroundStyle(.secondary)
-        }
-    }
-
     private func valueString(_ v: Double) -> String {
         String(format: unit == .hPa ? "%.1f" : "%.2f", v) + " " + unit.label
     }

@@ -28,7 +28,6 @@ struct FieldConditionsCard: View {
     private var blOffset: Int { blMSL ? (conditions.fieldElevationFt ?? 0) : 0 }
     private var blSuffix: String { blMSL ? " MSL" : " AGL" }
 
-    @State private var showRideInfo = false
 
     /// The ride sentence: which kind of bumps, how high, and when it changes.
     /// Falls back to the static explainer on an old backend.
@@ -170,7 +169,7 @@ struct FieldConditionsCard: View {
             return c < nowCover ? ("Clearing to \(Int(c))% around \(when)", true)
                                 : ("Thickening to \(Int(c))% by \(when)", false)
         }
-        return ("Cover holds near \(Int(nowCover))% through the next 12 h", nowCover < 50)
+        return nil   // holding steady is not worth a line
     }
 
     /// Where the boundary layer is headed over the next hours: the top of the
@@ -235,195 +234,165 @@ struct FieldConditionsCard: View {
         }
     }
 
+    /// Groups separated by space, not dividers; inside a group, the title
+    /// row and at most one grey line under it (thinned 2026-09-24: the
+    /// separate Aloft row, the dividers, the ride info button and the
+    /// boundary layer's own trend row went; the Clouds row opens Aloft).
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             if hasDA {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    PerformanceAltitudeIcon()
-                        .frame(height: 13)
-                        .foregroundStyle(.blue)
-                    Text("Density altitude")
-                        .font(.subheadline.weight(.medium))
-                    Spacer()
-                    if let da = conditions.densityAltitudeFt {
-                        Text(ft(da))
-                            .font(.subheadline.weight(.semibold))
-                            .monospacedDigit()
-                    } else if let p = peak {
-                        Text("~\(ft(p.ft)) later")
-                            .font(.subheadline.weight(.semibold))
-                            .monospacedDigit()
-                    }
-                }
-                HStack(alignment: .top) {
-                    if let elev = conditions.fieldElevationFt {
-                        Text("Field \(ft(elev))" + humidityNote)
-                    } else if conditions.densityAltitudeFt == nil {
-                        Text(combined.pressure.current.temp == nil
-                             ? "No temperature in this station's report"
-                             : "No field elevation on file for this station")
-                    }
-                    Spacer(minLength: 8)
-                    if let line = peakLine {
-                        trendLabel(line.text, rising: line.rising)
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            if hasClouds {
-                if hasDA { Divider() }
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: cur.ceilingFt != nil ? "cloud.fill" : "cloud")
-                        .font(.subheadline)
-                        .foregroundStyle(.blue)
-                    Text("Clouds")
-                        .font(.subheadline.weight(.medium))
-                    if let cat = cur.fltCat {
-                        Text(cat)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(FlightCategory.color(cat))
-                    }
-                    Spacer()
-                    Text(cloudValue)
-                        .font(.subheadline.weight(.semibold))
-                        .monospacedDigit()
-                    if onAloft != nil {
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-                .contentShape(Rectangle())
-                .onTapGesture { onAloft?() }
-                .accessibilityAddTraits(onAloft != nil ? .isButton : [])
-                .accessibilityIdentifier("conditions.clouds")
-                HStack {
-                    if let layers = cloudLayersText {
-                        Text(layers)
-                            .monospacedDigit()
-                    } else if cur.ceilingFt != nil {
-                        Text("Ceiling")
-                    }
-                    Spacer(minLength: 8)
-                    if let t = cloudTrend {
-                        HStack(alignment: .firstTextBaseline, spacing: 3) {
-                            Image(systemName: t.clearing ? "sun.max" : "cloud.fill")
-                                .font(.caption2.weight(.semibold))
-                            Text(t.text)
-                                .multilineTextAlignment(.trailing)
-                                .fixedSize(horizontal: false, vertical: true)
+                group {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        PerformanceAltitudeIcon()
+                            .frame(height: 13)
+                            .foregroundStyle(.blue)
+                        Text("Density altitude")
+                            .font(.subheadline.weight(.medium))
+                        Spacer()
+                        if let da = conditions.densityAltitudeFt {
+                            Text(ft(da))
+                                .font(.subheadline.weight(.semibold))
+                                .monospacedDigit()
+                        } else if let p = peak {
+                            Text("~\(ft(p.ft)) later")
+                                .font(.subheadline.weight(.semibold))
+                                .monospacedDigit()
                         }
                     }
+                    HStack(alignment: .top) {
+                        if let elev = conditions.fieldElevationFt {
+                            Text("Field \(ft(elev))" + humidityNote)
+                        } else if conditions.densityAltitudeFt == nil {
+                            Text(combined.pressure.current.temp == nil
+                                 ? "No temperature in this station's report"
+                                 : "No field elevation on file for this station")
+                        }
+                        Spacer(minLength: 8)
+                        if let line = peakLine {
+                            trendLabel(line.text, rising: line.rising)
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            }
+
+            if hasClouds || onAloft != nil {
+                group {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Image(systemName: cur.ceilingFt != nil ? "cloud.fill" : "cloud")
+                            .font(.subheadline)
+                            .foregroundStyle(.blue)
+                        Text("Clouds")
+                            .font(.subheadline.weight(.medium))
+                        if let cat = cur.fltCat {
+                            Text(cat)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(FlightCategory.color(cat))
+                        }
+                        Spacer()
+                        Text(cloudValue)
+                            .font(.subheadline.weight(.semibold))
+                            .monospacedDigit()
+                        if onAloft != nil {
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { onAloft?() }
+                    .accessibilityAddTraits(onAloft != nil ? .isButton : [])
+                    .accessibilityHint(onAloft != nil ? "Opens clouds and winds aloft" : "")
+                    .accessibilityIdentifier("conditions.clouds")
+                    if cloudLayersText != nil || cloudTrend != nil {
+                        HStack {
+                            if let layers = cloudLayersText {
+                                Text(layers).monospacedDigit()
+                            }
+                            Spacer(minLength: 8)
+                            if let t = cloudTrend {
+                                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                                    Image(systemName: t.clearing ? "sun.max" : "cloud.fill")
+                                        .font(.caption2.weight(.semibold))
+                                    Text(t.text)
+                                        .multilineTextAlignment(.trailing)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                }
             }
 
             if let bl = conditions.boundaryLayerFt {
-                if hasDA || hasClouds { Divider() }
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    AirLayersIcon()
-                        .frame(height: 12)
-                        .foregroundStyle(.blue)
-                    Text("Boundary layer top")
-                        .font(.subheadline.weight(.medium))
-                    Spacer()
-                    // MSL chosen but no elevation to add: say so rather
-                    // than quietly showing AGL.
-                    Text(ft(bl + blOffset) + blSuffix
-                         + (blReference == "msl" && !blMSL ? " (no field elevation)" : ""))
-                        .font(.subheadline.weight(.semibold))
-                        .monospacedDigit()
-                }
-                // The trend on its own line, then the ride sentence at full
-                // width: sharing a row squeezed the sentence into a column.
-                if let line = blLine {
-                    trendLabel(line.text, rising: line.rising)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(rideText)
-                        .foregroundStyle(rideColor)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if conditions.ride != nil {
-                        Button {
-                            withAnimation(.snappy(duration: 0.2)) { showRideInfo.toggle() }
-                        } label: {
-                            Image(systemName: "info.circle")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("How the ride estimate is made")
+                group {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        AirLayersIcon()
+                            .frame(height: 12)
+                            .foregroundStyle(.blue)
+                        Text("Boundary layer top")
+                            .font(.subheadline.weight(.medium))
+                        Spacer()
+                        // MSL chosen but no elevation to add: say so rather
+                        // than quietly showing AGL.
+                        Text(ft(bl + blOffset) + blSuffix
+                             + (blReference == "msl" && !blMSL ? " (no field elevation)" : ""))
+                            .font(.subheadline.weight(.semibold))
+                            .monospacedDigit()
                     }
-                    Spacer(minLength: 0)
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                if showRideInfo {
-                    Text("Based on available meteorological data. For advisement only, not a replacement for PIREPs.")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                    // The ride, then where the top is headed, as one line.
+                    (Text(rideText).foregroundColor(rideColor)
+                     + Text(blLine.map { " \($0.text)." } ?? "").foregroundColor(.secondary))
+                        .font(.caption)
                         .fixedSize(horizontal: false, vertical: true)
-                        .transition(.opacity)
                 }
             }
 
             if let st = conditions.storm {
-                if hasDA || hasClouds || conditions.boundaryLayerFt != nil { Divider() }
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: st.risk == "observed" ? "bolt.fill" : "cloud.bolt.fill")
-                        .font(.subheadline)
-                        .foregroundStyle(stormColor(st))
-                    Text(stormLine(st))
-                        .font(.subheadline.weight(.medium))
+                group {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Image(systemName: st.risk == "observed" ? "bolt.fill" : "cloud.bolt.fill")
+                            .font(.subheadline)
+                            .foregroundStyle(stormColor(st))
+                        Text(stormLine(st))
+                            .font(.subheadline.weight(.medium))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text(stormDetail(st))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Text(stormDetail(st))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
 
             if let fog = conditions.fog {
-                if hasDA || hasClouds || conditions.boundaryLayerFt != nil || conditions.storm != nil { Divider() }
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: "cloud.fog.fill")
-                        .font(.subheadline)
-                        .foregroundStyle(fog.risk == "likely" ? .orange : .secondary)
-                    Text(fogLine(fog))
-                        .font(.subheadline.weight(.medium))
+                group {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Image(systemName: "cloud.fog.fill")
+                            .font(.subheadline)
+                            .foregroundStyle(fog.risk == "likely" ? .orange : .secondary)
+                        Text(fogLine(fog))
+                            .font(.subheadline.weight(.medium))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text(fog.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Text(fog.detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if let onAloft {
-                Divider()
-                Button(action: onAloft) {
-                    HStack(spacing: 8) {
-                        Text("Clouds and winds aloft")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.blue)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("conditions.aloft")
             }
         }
         .padding(12)
         .background(Color(.secondarySystemBackground),
                     in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    /// A title row and its one grey line, held close together.
+    private func group<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 3) { content() }
     }
 
     private func fogLine(_ fog: FogOut) -> String {

@@ -165,13 +165,6 @@ struct StripCard: View {
                     .foregroundStyle(.green)
                 Text("Here")
                     .font(.subheadline.weight(.medium))
-                if enabled {
-                    Text("est.")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(Color(.tertiarySystemFill), in: Capsule())
-                }
                 Spacer()
                 if enabled {
                     Button { showInfo = true } label: {
@@ -242,7 +235,7 @@ struct StripCard: View {
                     }
                     .padding()
                 }
-                .navigationTitle("Estimated, advisory only")
+                .navigationTitle("About the estimate")
                 .navigationBarTitleDisplayMode(.inline)
             }
             .presentationDetents([.medium])

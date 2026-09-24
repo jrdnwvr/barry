@@ -201,8 +201,8 @@ Hand-made pass:
 - [x] Settings: no footers under pickers, the five one-picker sections folded into one, one Backcountry switch, the Live Activity switch in Alerts only.
 - [x] Home screen page, now "Cards": no card descriptions, no maker's-note footer.
 - [ ] Forecast card styles: cull to two after the Pilots group has used them (Jordan's call, waits on tester feedback).
-- [ ] Cards: the Data sources card as a footer line, not a card; drop the chart legend line; the Conditions card a third shorter.
-- [ ] Copy: drop "Estimated, advisory only." and "For advisement only, not a replacement for PIREPs."; keep the 91.121 sentence in the info sheet.
+- [x] Cards: the Data sources card as a footer line, not a card; drop the chart legend line; the Conditions card a third shorter.
+- [x] Copy: drop "Estimated, advisory only." and "For advisement only, not a replacement for PIREPs."; keep the 91.121 sentence in the info sheet.
 
 Customisation:
 - [ ] Onboarding asks "What will you use Barry for?"; Pilot, Soaring, Drone, Marine, Everyday and Weather presets as bundles of existing keys, editable after.

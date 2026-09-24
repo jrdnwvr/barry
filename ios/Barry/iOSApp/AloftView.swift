@@ -307,6 +307,8 @@ struct AloftScreen: View {
                             }
                         }
                         .lineLimit(1)
+                        .padding(.horizontal, 2)
+                        .background(Color(.secondarySystemGroupedBackground))
                         .frame(width: 94, alignment: .trailing)
                     } else {
                         Color.clear.frame(width: 94)
@@ -321,6 +323,8 @@ struct AloftScreen: View {
                             Text(" kt").font(.system(size: 12)).foregroundStyle(.secondary)
                         }
                         .lineLimit(1)
+                        .padding(.horizontal, 2)
+                        .background(Color(.secondarySystemGroupedBackground))
                         .frame(width: 80, alignment: .trailing)
                     } else {
                         Color.clear.frame(width: 114)

@@ -206,7 +206,7 @@ hidden). A card shows only when it is not hidden and has something to say.
 | 7 | `wind` | Wind | yes | the METAR has wind |
 | 8 | `radar` | Radar | yes | phone layout, station has coordinates |
 | 9 | `sensor` | Sensor vs station | yes | sensor on and My location |
-| 10 | `sources` | Data sources | yes, cannot hide | always |
+| 10 | `sources` | (the page footer) | not a card since 2026-09-24 | always, at the foot of the page |
 
 ### settings.cards
 - Seen: Settings › Cards: three presets (Pilot, Weather, Everything), then
@@ -232,8 +232,10 @@ hidden). A card shows only when it is not hidden and has something to say.
   a feature pin (trough, ridge, front edge, past trough); tap to read a
   point; drag to select a range with snapping handles; preset chips
   (Around the trough, Last 3 h, Since midnight, Next 6 h); a floating
-  analysis card ("A trough passed", net, swing, steepest); a legend; a
-  caveat line when the forecast is stale or missing.
+  analysis card ("A trough passed", net, swing, steepest); a caveat line
+  ("Dashed line is forecast.", orange when the forecast is stale or
+  missing). The legend row ("deeper = faster change · tap or drag to
+  read") went in the 2026-09-24 thinning.
 - Lives: `PressureChartView.swift`; `Shared/RangeAnalysis.swift`;
   `ForecastCaveatView.swift`.
 - Data: `pressure.series`, `forecast.hourly`, `reading.feature`,
@@ -275,19 +277,24 @@ hidden). A card shows only when it is not hidden and has something to say.
 - For: everyone.
 
 ### card.conditions
-- Seen: density altitude with the field elevation and a humidity note, and
-  a trend; clouds with the category, the layer list, a 12 h trend, and a
-  tap to Aloft; the boundary layer top (AGL or MSL) with a trend; the ride
-  sentence ("Bumpy below 4,200 ft, strong thermals"); storms (at the
-  field, in the area, likely, possible) with distance, motion and timing;
-  fog (likely, possible, overnight); the "Clouds and winds aloft" row.
+- Seen: groups separated by space, each a title row and at most one grey
+  line: density altitude with the field elevation, a humidity note and a
+  trend; clouds with the category and a chevron (the way into Aloft), the
+  layer list and a 12 h trend when the cover changes by 40 points; the
+  boundary layer top (AGL or MSL) with the ride sentence ("Bumpy below
+  4,200 ft, strong thermals.") and where the top is headed on the same
+  line; storms (at the field, in the area, likely, possible) with
+  distance, motion and timing; fog (likely, possible, overnight).
+  Thinned 2026-09-24: no dividers, no separate "Clouds and winds aloft"
+  row, no ride info button, no "Cover holds near 60%" line.
 - Lives: `FieldConditionsView.swift`.
 - Data: `/combined.conditions`, `current.clouds`, `forecast.hourly`.
 - Settings: `boundaryLayerReference` agl.
-- Tests: the Aloft UI test taps the row; nothing tests the logic.
+- Tests: the Aloft UI test taps the Clouds row (`conditions.clouds`);
+  nothing tests the logic.
 - Rules: the card exists only with density altitude, boundary layer, fog,
-  storm or cloud content. The ride note says "for
-  advisement only, not a replacement for PIREPs".
+  storm or cloud content. The Clouds row always shows while there is a
+  way into Aloft, "No report" when the station says nothing about the sky.
 - For: P S D.
 
 ### card.strip (Here, off-field) and Backcountry
@@ -295,7 +302,9 @@ hidden). A card shows only when it is not hidden and has something to say.
   difference and age. With Backcountry on: an estimated altimeter setting
   with a ± and a "rough" flag, the sources line (sensor, station, model),
   "Set 30.02, panel should read about 1,240 ft", density altitude and
-  model wind, and an info sheet with the 14 CFR 91.121 disclaimer.
+  model wind, and an info sheet ("About the estimate") with each source's
+  value and the 14 CFR 91.121 disclaimer. The "est." capsule beside the
+  title went on 2026-09-24; the altimeter line keeps its own "est.".
 - Lives: `Backcountry.swift` › `StripCard`, `StripEstimate`.
 - Data: the phone sensor (calibrated, under 2 h old), `current.altim`, the
   model's sea-level pressure adjusted by the station's offset, GPS or fused
@@ -335,13 +344,15 @@ hidden). A card shows only when it is not hidden and has something to say.
   the 48 h phone history.
 - For: E B W.
 
-### card.sources
-- Seen: the station and its source, "Forecast · Open-Meteo.com (CC-BY
-  4.0)", the map's credit line ("Radar · RainViewer, NOAA NEXRAD ·
-  lightning NOAA GOES · fronts NWS WPC"), and the update time.
-- Lives: `ContentView.swift` › `DataSourceFootnote`.
-- Rules: it carries the forecast data's required credit, so like the chart
-  it can move but not hide.
+### home.footer (was card.sources)
+- Seen: at the foot of the page, the Barry mark and under it one quiet
+  line: "KLUK aviationweather.gov · forecast Open-Meteo.com (CC BY 4.0) ·
+  radar RainViewer, NOAA NEXRAD · lightning NOAA GOES · fronts NWS WPC".
+- Lives: `ContentView.glanceCards` footer, `DataSourceFootnote`.
+- Rules: it carries the forecast data's required credit and RainViewer's,
+  so it is not a card and cannot be hidden or moved. The `.sources` case
+  stays in `HomeCard` so stored layouts still decode; it draws nothing and
+  the Cards editor leaves it out. The "Updated" time went with the card.
 
 ## Sensors
 
@@ -702,8 +713,8 @@ stored keys, but each has its own model, so they fetch separately.
 For: P S D. The column of clouds, temperatures and winds above the field.
 
 ### aloft.entry
-- Seen: opens from the conditions card's Clouds row and its last row,
-  "Clouds and winds aloft", and the `-uitest-aloft` launch argument.
+- Seen: opens from the conditions card's Clouds row and the
+  `-uitest-aloft` launch argument.
 - Lives: `ContentView.aloftScreen` › `AloftView.swift` › `AloftScreen`.
 - Data: `/aloft?lat&lon`: 25 hourly columns, levels 1000 to 400 hPa in feet
   and knots, cloud layers, freezing level, boundary layer.
@@ -735,7 +746,8 @@ For: P S D. The column of clouds, temperatures and winds above the field.
 ### aloft.layer.temp and aloft.layer.wind
 - Seen: temperature over dew point per level the way a METAR writes them
   ("14/9", the dew point quieter), in the temperature unit; barbs with
-  "230° / 25 kt".
+  "230° / 25 kt". The numbers sit on a knockout, so the boundary layer
+  and freezing lines pass behind them instead of through them.
 - Lives: `AloftBarbView`, `WindBarb.marks` in `AloftMath.swift`.
 - Tests: `AloftTests` barb marks and formats.
 

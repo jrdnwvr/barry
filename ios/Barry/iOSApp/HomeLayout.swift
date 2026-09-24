@@ -39,7 +39,8 @@ enum HomeCard: String, CaseIterable, Codable, Identifiable {
     }
 
     /// The chart is the app; it can move but not hide. The sources line
-    /// carries the forecast data's required credit, so it stays too.
+    /// carries the forecast data's required credit, so it stays too; it is
+    /// drawn at the foot of the page and left out of the editor.
     var canHide: Bool { self != .chart && self != .sources }
 }
 
@@ -141,7 +142,7 @@ struct HomeLayoutView: View {
             }
 
             Section {
-                ForEach(store.layout.order) { card in
+                ForEach(store.layout.order.filter { $0 != .sources }) { card in
                     Toggle(card.title, isOn: Binding(
                         get: { store.isVisible(card) },
                         set: { store.setHidden(card, !$0) }))

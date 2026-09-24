@@ -218,18 +218,23 @@ struct ContentView: View {
             }
         }
 
-        // The app's name lives at the foot of the page, where the title
-        // bar used to say it.
-        HStack(spacing: 6) {
-            Image("BarryMark")
-                .resizable()
-                .renderingMode(.template)
-                .frame(width: 20, height: 20)
-                .foregroundStyle(Color(red: 0.42, green: 0.32, blue: 0.75))
-            Text("Barry")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+        // The foot of the page: the app's name where the title bar used to
+        // say it, and the sources credit in one quiet line under it. The
+        // credit is not a card any more, so it cannot be hidden or moved.
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image("BarryMark")
+                    .resizable()
+                    .renderingMode(.template)
+                    .frame(width: 20, height: 20)
+                    .foregroundStyle(Color(red: 0.42, green: 0.32, blue: 0.75))
+                Text("Barry")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            DataSourceFootnote(combined: combined)
         }
+        .padding(.top, 8)
     }
 
     /// One card of the home list. The iPad dashboard draws the chart and
@@ -303,7 +308,9 @@ struct ContentView: View {
                 SensorStationRow(combined: combined, now: store.now, unit: unit, barometer: barometer)
             }
         case .sources:
-            DataSourceFootnote(combined: combined)
+            // Kept in the list so stored layouts still decode; drawn at the
+            // foot of the page instead.
+            EmptyView()
         }
     }
 
@@ -610,20 +617,21 @@ private struct MetarStrip: View {
 
 private struct DataSourceFootnote: View {
     let combined: CombinedResponse
+    /// One line, wrapped as needed. CC BY 4.0 requires visible credit for the
+    /// forecast data and RainViewer asks for its name somewhere visible.
+    private var text: String {
+        var parts = ["\(combined.pressure.station) \(combined.pressure.source)"]
+        if combined.sources?.forecast != nil { parts.append("forecast Open-Meteo.com (CC BY 4.0)") }
+        parts.append("radar RainViewer, NOAA NEXRAD")
+        parts.append("lightning NOAA GOES")
+        parts.append("fronts NWS WPC")
+        return parts.joined(separator: " · ")
+    }
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("\(combined.pressure.name ?? combined.pressure.station) · \(combined.pressure.source)")
-            // CC-BY 4.0 requires visible credit for the forecast data, and
-            // RainViewer asks for its name somewhere visible. This card
-            // cannot be hidden, so the map's credit line moved here.
-            if combined.sources?.forecast != nil {
-                Text("Forecast · Open-Meteo.com (CC-BY 4.0)")
-            }
-            Text("Radar · RainViewer, NOAA NEXRAD · lightning NOAA GOES · fronts NWS WPC")
-            Text("Updated \(combined.pressure.cachedAt.formatted(date: .omitted, time: .shortened))")
-        }
-        .font(.caption2)
-        .foregroundStyle(.tertiary)
+        Text(text)
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 

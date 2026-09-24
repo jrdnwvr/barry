@@ -127,7 +127,7 @@ final class RadarUITests: XCTestCase {
         app.launchArguments += ["-uitest"]
         app.launch()
 
-        let cta = app.buttons["conditions.aloft"].firstMatch
+        let cta = app.descendants(matching: .any)["conditions.clouds"].firstMatch
         var swipes = 0
         while !(cta.exists && cta.isHittable) && swipes < 10 {
             app.swipeUp()

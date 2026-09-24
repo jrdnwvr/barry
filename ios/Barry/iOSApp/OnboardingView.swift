@@ -53,11 +53,17 @@ struct OnboardingView: View {
 
     @State private var page = 0
 
-    private enum Page { case idea, whereAmI, units, sensor, alerts }
+    private enum Page { case idea, use, whereAmI, units, sensor, alerts }
     private var hasBarometer: Bool { CMAltimeter.isRelativeAltitudeAvailable() }
     private var pages: [Page] {
-        hasBarometer ? [.idea, .whereAmI, .units, .sensor, .alerts] : [.idea, .whereAmI, .units, .alerts]
+        hasBarometer ? [.idea, .use, .whereAmI, .units, .sensor, .alerts] : [.idea, .use, .whereAmI, .units, .alerts]
     }
+
+    /// What Barry is for, chosen on the second page; the where page's
+    /// question follows it.
+    @AppStorage(Audience.key, store: AppConfig.sharedDefaults)
+    private var audienceRaw: String = ""
+    private var audience: Audience? { Audience(rawValue: audienceRaw) }
 
     private var unit: PressureUnit { PressureUnit(rawValue: unitRaw) ?? .inHg }
 
@@ -84,6 +90,7 @@ struct OnboardingView: View {
     @ViewBuilder private func pageView(_ p: Page) -> some View {
         switch p {
         case .idea: ideaPage
+        case .use: usePage
         case .whereAmI: wherePage
         case .units: unitsPage
         case .sensor: sensorPage
@@ -98,7 +105,7 @@ struct OnboardingView: View {
         let d = AppConfig.sharedDefaults
         let us = Locale.current.measurementSystem == .us
         if d.object(forKey: "pressureUnit") == nil { unitRaw = (us ? PressureUnit.inHg : .hPa).rawValue }
-        if d.object(forKey: "windUnit") == nil { windUnitRaw = WindUnit.knots.rawValue }
+        if d.object(forKey: "windUnit") == nil { windUnitRaw = (audience?.windUnit ?? .knots).rawValue }
         if d.object(forKey: TemperatureUnit.key) == nil {
             tempUnitRaw = (us ? TemperatureUnit.fahrenheit : .celsius).rawValue
         }
@@ -130,12 +137,61 @@ struct OnboardingView: View {
         }
     }
 
+    /// One tap: the choice sets the cards, the wind unit, the radar's
+    /// layers and the rest, then moves on. Skipping it leaves the defaults.
+    private var usePage: some View {
+        pageLayout {
+            Text("What will you use Barry for?")
+                .font(.title2.weight(.semibold))
+                .multilineTextAlignment(.center)
+            VStack(spacing: 8) {
+                ForEach(Audience.allCases) { a in
+                    Button {
+                        a.apply()
+                        advance()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: a.icon)
+                                .font(.body)
+                                .foregroundStyle(.blue)
+                                .frame(width: 24)
+                            Text(a.label)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            if audience == a {
+                                Image(systemName: "checkmark")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.blue)
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .frame(height: 46)
+                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("onboarding.use.\(a.rawValue)")
+                }
+            }
+        } buttons: {
+            EmptyView()
+        }
+    }
+
+    private var whereTitle: String {
+        switch audience {
+        case .pilot, .soaring, .drone, .none: return "Where are you flying?"
+        case .marine: return "Where are you on the water?"
+        case .everyday, .weather: return "Where should Barry watch?"
+        }
+    }
+
     private var wherePage: some View {
         pageLayout {
             Image(systemName: "location")
                 .font(.system(size: 30))
                 .foregroundStyle(.blue)
-            Text("Where are you flying?")
+            Text(whereTitle)
                 .font(.title2.weight(.semibold))
                 .multilineTextAlignment(.center)
             Text("Barry reads the nearest reporting airport. Use your location, or pick an airport.")
@@ -361,9 +417,6 @@ struct OnboardingView: View {
                           "The trend as a Live Activity while a change is under way.",
                           isOn: $liveActivityEnabled)
             }
-            Text("Checked in the background, as often as iOS allows.")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
         } buttons: {
             if wantPressure || wantStorms {
                 primaryButton("Turn on") {

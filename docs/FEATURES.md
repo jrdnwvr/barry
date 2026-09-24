@@ -209,13 +209,36 @@ hidden). A card shows only when it is not hidden and has something to say.
 | 10 | `sources` | (the page footer) | not a card since 2026-09-24 | always, at the foot of the page |
 
 ### settings.cards
-- Seen: Settings › Cards: three presets (Pilot, Weather, Everything), then
-  one row per card with its title, a switch and a drag handle. No card
-  descriptions, no footer, no Live Activity switch (that lives in Settings
-  › Alerts); thinned 2026-09-24.
-- Presets: Pilot hides sensor and TAF; Weather hides wind, Here and TAF;
-  Everything shows all.
+- Seen: Settings › Cards: one row per card with its title, a switch and a
+  drag handle. No presets (the "Set up for" choice replaced them), no card
+  descriptions, no footer, no Live Activity switch; thinned 2026-09-24.
 - Tests: none.
+
+### settings.audience (Set up for)
+- Seen: the first row in Settings, "Set up for": Flying, Soaring, Drones,
+  On the water, Everyday, Weather watching. Onboarding asks the same thing
+  on its second page, "What will you use Barry for?", as six rows with an
+  icon each. Choosing one writes a bundle of existing settings; everything
+  stays editable afterwards.
+- Lives: `HomeLayout.swift` › `Audience` (`layout`, `windUnit`,
+  `runwayWinds`, `aloftCeilingFt`, `alertLevel`, `radarLayers`, `apply`).
+- Settings: `audience` (unset until chosen; Settings shows Flying).
+- The bundles:
+
+| | Cards shown, in order | Wind | Runway winds | Aloft ceiling | Alert on | Radar opens with |
+|---|---|---|---|---|---|---|
+| Flying | lightning, chart, conditions, wind, Here, forecast, radar | knots | auto | 18,000 | fast | radar, fronts, station barbs, lightning |
+| Soaring | lightning, chart, conditions, forecast, radar, wind, Here | knots | auto | 12,000 | fast | radar, wind, lightning |
+| Drones | lightning, wind, forecast, chart, radar, conditions | knots | compass | 6,000 | fast | radar, wind, lightning |
+| On the water | lightning, chart, wind, forecast, radar | knots | compass | 6,000 | fast | radar, isobars, wind, fronts, lightning |
+| Everyday | lightning, chart, forecast, radar, sensor | mph in the US, else km/h | compass | 12,000 | moderate | radar, lightning |
+| Weather watching | lightning, chart, radar, forecast, conditions, sensor | mph in the US, else km/h | compass | 12,000 | fast | radar, isobars, troughs, fronts, lightning |
+
+- Rules: the sources footer and the chart always show. The pressure,
+  temperature and alert switches are not touched; onboarding's own pages
+  and Settings set those.
+- Tests: `AudienceTests` (every layout has every card once; the bundles'
+  key choices).
 
 ### card.lightning
 - Seen: a tinted card: "Lightning 12 mi to the west" (or "at the field"
@@ -409,7 +432,7 @@ hidden). A card shows only when it is not hidden and has something to say.
 
 ### settings.screen
 - Seen: one short list, no footers (thinned 2026-09-24): a first group with
-  Live phone sensor, Cards and Backcountry; Alerts (pressure changes with
+  Set up for, Live phone sensor, Cards and Backcountry; Alerts (pressure changes with
   an "Alert on" picker under it while on, storms, each with a one-line
   subtitle; "Quiet hours" while either is on; the permission warning when
   denied; Send a test alert; Lock screen); Units (three segmented
@@ -474,15 +497,21 @@ Lives: `OnboardingView.swift`. Paged; Skip on every page finishes with
 defaults and nothing turned on.
 
 1. `onboarding.idea`: "It's the change, not the number", a sample verdict.
-2. `onboarding.where`: "Where are you flying?" Use my location (one fix,
-   `/stations/nearest`) or Pick an airport (search). The location prompt
-   fires here, never cold on the dashboard.
-3. `onboarding.units`: pressure, wind and temperature pickers, seeded by
-   region: inHg and °F in the US, hPa and °C elsewhere, knots everywhere.
-4. `onboarding.sensor`: only on devices with a barometer; "Turn on local
+2. `onboarding.use`: "What will you use Barry for?", six rows
+   (`onboarding.use.<audience>`); a tap applies that bundle
+   (`settings.audience`) and moves on.
+3. `onboarding.where`: "Where are you flying?" (or "on the water", or
+   "Where should Barry watch?" for everyday and weather). Use my location
+   (one fix, `/stations/nearest`) or Pick an airport (search). The
+   location prompt fires here, never cold on the dashboard.
+4. `onboarding.units`: pressure, wind and temperature pickers, seeded by
+   region (inHg and °F in the US, hPa and °C elsewhere) and wind by the
+   audience (knots when none was chosen).
+5. `onboarding.sensor`: only on devices with a barometer; "Turn on local
    readings" or "Not right now".
-5. `onboarding.alerts`: pressure changes, storms, lock screen; "Turn on"
-   asks for permission.
+6. `onboarding.alerts`: pressure changes, storms, lock screen; "Turn on"
+   asks for permission. The "Checked in the background" caption went on
+   2026-09-24.
 
 Tests: none.
 
@@ -980,6 +1009,7 @@ each device (the watch keeps its own copies).
 | Key | Default | Options and notes | Set from |
 |---|---|---|---|
 | `hasOnboarded` | false | | launch, onboarding |
+| `audience` | unset | pilot, soaring, drone, marine, everyday, weather; writes a bundle of the keys below | onboarding, Settings › Set up for |
 | `pressureUnit` | inHg | hPa, inHg; onboarding seeds hPa outside the US | Settings, onboarding, watch Settings (its own copy) |
 | `windUnit` | mph | kmh, mph, knots; onboarding seeds knots; barbs and Aloft are always knots | Settings, onboarding |
 | `temperatureUnit` | celsius | celsius, fahrenheit; onboarding seeds °F in the US | Settings, onboarding |

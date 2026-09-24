@@ -57,15 +57,6 @@ struct HomeLayout: Codable, Equatable {
     /// A fresh install: everything, minus the cards that start hidden.
     static let initial = HomeLayout(order: HomeCard.allCases, hidden: offByDefault)
 
-    /// A pilot's day: the field first, the phone sensor out of the way.
-    static let pilot = HomeLayout(
-        order: [.lightning, .chart, .taf, .conditions, .wind, .strip, .rainWind, .radar, .sensor, .sources],
-        hidden: [.sensor, .taf])
-
-    /// Weather first: the map and the sky, no runway talk.
-    static let weather = HomeLayout(
-        order: [.lightning, .chart, .radar, .rainWind, .conditions, .sensor, .taf, .wind, .strip, .sources],
-        hidden: [.wind, .strip, .taf])
 
     func isVisible(_ card: HomeCard) -> Bool { !hidden.contains(card) || !card.canHide }
 
@@ -81,6 +72,149 @@ struct HomeLayout: Codable, Equatable {
             if Self.offByDefault.contains(c) { hidden.insert(c) }
         }
         return HomeLayout(order: order, hidden: hidden.filter { $0.canHide })
+    }
+}
+
+// MARK: - What Barry is set up for
+
+/// Who Barry is set up for: a bundle of settings that already exist (the
+/// cards and their order, wind unit, runway winds, the radar's layers, the
+/// Aloft ceiling, how big a pressure change alerts). Choosing one writes
+/// them; everything stays editable afterwards, and nothing new is stored
+/// beyond the choice itself (review 2026-09-24).
+enum Audience: String, CaseIterable, Identifiable {
+    case pilot, soaring, drone, marine, everyday, weather
+    static let key = "audience"
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .pilot: return "Flying"
+        case .soaring: return "Soaring and free flight"
+        case .drone: return "Drones"
+        case .marine: return "On the water"
+        case .everyday: return "Everyday, and feeling the weather"
+        case .weather: return "Weather watching"
+        }
+    }
+
+    var shortLabel: String {
+        switch self {
+        case .pilot: return "Flying"
+        case .soaring: return "Soaring"
+        case .drone: return "Drones"
+        case .marine: return "On the water"
+        case .everyday: return "Everyday"
+        case .weather: return "Weather watching"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .pilot: return "airplane"
+        case .soaring: return "wind"
+        case .drone: return "paperplane"
+        case .marine: return "sailboat"
+        case .everyday: return "house"
+        case .weather: return "cloud.sun"
+        }
+    }
+
+    static var stored: Audience? {
+        Audience(rawValue: AppConfig.sharedDefaults.string(forKey: key) ?? "")
+    }
+
+    var layout: HomeLayout {
+        switch self {
+        case .pilot:
+            // The field first, the phone sensor out of the way.
+            return HomeLayout(order: [.lightning, .chart, .taf, .conditions, .wind, .strip, .rainWind, .radar, .sensor, .sources],
+                              hidden: [.sensor, .taf])
+        case .soaring:
+            // Conditions (the ride, the cloud base) right under the trend.
+            return HomeLayout(order: [.lightning, .chart, .conditions, .rainWind, .radar, .wind, .strip, .taf, .sensor, .sources],
+                              hidden: [.taf, .sensor])
+        case .drone:
+            // Wind first; no runways, no approach-plate talk.
+            return HomeLayout(order: [.lightning, .wind, .rainWind, .chart, .radar, .conditions, .strip, .taf, .sensor, .sources],
+                              hidden: [.taf, .sensor, .strip])
+        case .marine:
+            return HomeLayout(order: [.lightning, .chart, .wind, .rainWind, .radar, .conditions, .strip, .taf, .sensor, .sources],
+                              hidden: [.taf, .conditions, .strip])
+        case .everyday:
+            // The trend and the forecast; the aviation cards hidden.
+            return HomeLayout(order: [.lightning, .chart, .rainWind, .radar, .sensor, .conditions, .wind, .taf, .strip, .sources],
+                              hidden: [.conditions, .wind, .taf, .strip])
+        case .weather:
+            // The map and the sky, no runway talk.
+            return HomeLayout(order: [.lightning, .chart, .radar, .rainWind, .conditions, .sensor, .taf, .wind, .strip, .sources],
+                              hidden: [.wind, .strip, .taf])
+        }
+    }
+
+    /// Knots where the wind is a working number; the region's everyday
+    /// unit otherwise.
+    var windUnit: WindUnit {
+        switch self {
+        case .pilot, .soaring, .drone, .marine: return .knots
+        case .everyday, .weather: return Locale.current.measurementSystem == .us ? .mph : .kmh
+        }
+    }
+
+    var runwayWinds: RunwayWindsMode { self == .pilot || self == .soaring ? .auto : .compass }
+
+    var aloftCeilingFt: Int {
+        switch self {
+        case .pilot: return 18_000
+        case .soaring: return 12_000
+        case .drone, .marine: return 6_000
+        case .everyday, .weather: return 12_000
+        }
+    }
+
+    var alertLevel: StormAlerter.Level { self == .everyday ? .moderate : .fast }
+
+    /// The radar layers that open by default.
+    struct RadarLayers: Equatable {
+        var radar = true, isobars = false, troughs = false, wind = false, fronts = false
+        var stations = "off", lightning = true
+    }
+
+    var radarLayers: RadarLayers {
+        switch self {
+        case .pilot: return RadarLayers(fronts: true, stations: "barbs")
+        case .soaring, .drone: return RadarLayers(wind: true)
+        case .marine: return RadarLayers(isobars: true, wind: true, fronts: true)
+        case .everyday: return RadarLayers()
+        case .weather: return RadarLayers(isobars: true, troughs: true, fronts: true)
+        }
+    }
+
+    /// Write the bundle. The layout goes through the store when there is one
+    /// on screen, so the page follows at once.
+    @MainActor
+    func apply(store: HomeLayoutStore? = nil) {
+        let d = AppConfig.sharedDefaults
+        d.set(rawValue, forKey: Self.key)
+        d.set(windUnit.rawValue, forKey: "windUnit")
+        d.set(runwayWinds.rawValue, forKey: RunwayWindsMode.key)
+        d.set(aloftCeilingFt, forKey: AloftLayer.ceilingKey)
+        d.set(alertLevel.rawValue, forKey: StormAlerter.levelKey)
+        let r = radarLayers
+        d.set(r.radar, forKey: "radarShowRadar")
+        d.set("off", forKey: "radarField")
+        d.set(r.isobars, forKey: "radarIsobars")
+        d.set(r.troughs, forKey: "radarTroughs")
+        d.set(r.wind, forKey: "radarWindArrows")
+        d.set(r.fronts, forKey: "radarFronts")
+        d.set(r.stations, forKey: "radarStations")
+        if r.stations != "off" { d.set(r.stations, forKey: "radarStationStyleLast") }
+        d.set(r.lightning, forKey: "radarStorms")
+        if let store {
+            store.apply(layout)
+        } else if let data = try? JSONEncoder().encode(layout.normalized()) {
+            d.set(data, forKey: HomeLayoutStore.key)
+        }
     }
 }
 
@@ -129,19 +263,6 @@ struct HomeLayoutView: View {
     var body: some View {
         List {
             Section {
-                HStack(spacing: 8) {
-                    presetButton("Pilot", .pilot)
-                    presetButton("Weather", .weather)
-                    presetButton("Everything", .everything)
-                }
-                .buttonStyle(.bordered)
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
-            } header: {
-                Text("Presets")
-            }
-
-            Section {
                 ForEach(store.layout.order.filter { $0 != .sources }) { card in
                     Toggle(card.title, isOn: Binding(
                         get: { store.isVisible(card) },
@@ -157,11 +278,5 @@ struct HomeLayoutView: View {
         .navigationBarTitleDisplayMode(.inline)
         // Nothing to delete, so the grips can stay out all the time.
         .environment(\.editMode, .constant(.active))
-    }
-
-    private func presetButton(_ title: String, _ preset: HomeLayout) -> some View {
-        Button(title) { withAnimation { store.apply(preset) } }
-            .frame(maxWidth: .infinity)
-            .tint(store.layout == preset.normalized() ? .accentColor : .secondary)
     }
 }

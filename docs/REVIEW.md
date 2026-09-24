@@ -205,7 +205,7 @@ Hand-made pass:
 - [x] Copy: drop "Estimated, advisory only." and "For advisement only, not a replacement for PIREPs."; keep the 91.121 sentence in the info sheet.
 
 Customisation:
-- [ ] Onboarding asks "What will you use Barry for?"; Pilot, Soaring, Drone, Marine, Everyday and Weather presets as bundles of existing keys, editable after.
+- [x] Onboarding asks "What will you use Barry for?"; Pilot, Soaring, Drone, Marine, Everyday and Weather presets as bundles of existing keys, editable after ("Set up for" in Settings).
 - [ ] A gear on each card for its own two or three options; Settings shrinks to units, alerts, locations and the sensor.
 - [x] Alert thresholds and quiet hours: "Alert on" fast, moderate or small changes; quiet hours deliver silently.
 

@@ -14,6 +14,9 @@ import UserNotifications
 struct SettingsView: View {
     @EnvironmentObject var store: PressureStore
     @EnvironmentObject var savedLocations: SavedLocationsStore
+    @EnvironmentObject var homeLayout: HomeLayoutStore
+    @AppStorage(Audience.key, store: AppConfig.sharedDefaults)
+    private var audienceRaw: String = ""
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage("pressureUnit", store: AppConfig.sharedDefaults)
@@ -66,6 +69,15 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
+                    // Changing it rewrites the cards, wind unit, radar
+                    // layers and the rest to suit; all still editable.
+                    Picker("Set up for", selection: Binding(
+                        get: { Audience(rawValue: audienceRaw) ?? .pilot },
+                        set: { $0.apply(store: homeLayout) })) {
+                        ForEach(Audience.allCases) { a in
+                            Text(a.shortLabel).tag(a)
+                        }
+                    }
                     Toggle("Live phone sensor", isOn: $phoneBarometerEnabled)
                     NavigationLink("Cards") { HomeLayoutView() }
                     Toggle("Backcountry", isOn: $backcountryEnabled)

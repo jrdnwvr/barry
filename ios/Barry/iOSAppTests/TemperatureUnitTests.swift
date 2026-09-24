@@ -58,3 +58,22 @@ struct CloudBaseTests {
         #expect(CloudBase.aglFt(tempC: nil, dewC: 5) == nil)
     }
 }
+
+struct AudienceTests {
+    @Test func everyLayoutHasEveryCardOnce() {
+        for a in Audience.allCases {
+            let l = a.layout.normalized()
+            #expect(Set(l.order) == Set(HomeCard.allCases), "\(a)")
+            #expect(l.order.count == HomeCard.allCases.count, "\(a)")
+            #expect(l.isVisible(.chart) && l.isVisible(.sources), "\(a)")
+        }
+    }
+
+    @Test func theBundlesSuitTheirPeople() {
+        #expect(Audience.pilot.runwayWinds == .auto && Audience.pilot.windUnit == .knots)
+        #expect(Audience.drone.runwayWinds == .compass && Audience.drone.radarLayers.wind)
+        #expect(!Audience.everyday.layout.isVisible(.taf) && !Audience.everyday.layout.isVisible(.wind))
+        #expect(Audience.everyday.alertLevel == .moderate && Audience.pilot.alertLevel == .fast)
+        #expect(Audience.marine.radarLayers.isobars && Audience.marine.windUnit == .knots)
+    }
+}

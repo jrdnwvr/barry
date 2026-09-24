@@ -876,3 +876,31 @@ enum CloudBase {
         return Int((ft / 100).rounded()) * 100
     }
 }
+
+// MARK: - Fields at a glance (/glance)
+
+struct GlanceItem: Codable, Hashable {
+    let station: String
+    var name: String?
+    var fltCat: String?
+    var windKt: Double?
+    var windDir: Double?
+    var gustKt: Double?
+    var altim: Double?
+    var slp: Double?
+    var delta3h: Double?
+    var cls: TendencyClass?
+    var verdict: String = ""
+    var obsTime: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case station, name, fltCat, windKt, windDir, gustKt, altim, slp, delta3h
+        case cls = "class"
+        case verdict, obsTime
+    }
+}
+
+struct GlanceResponse: Codable, Hashable {
+    var items: [GlanceItem] = []
+    let cachedAt: Date
+}

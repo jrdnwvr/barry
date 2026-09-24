@@ -1,0 +1,23 @@
+{
+  "/Users/jordanweaver/barry/ios/Barry/Shared/CombinedStore.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/CombinedStore.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/CombinedStore.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/CombinedStore.dia",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/CombinedStore.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/CombinedStore.swiftdeps"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/Shared/FlightCategory.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/FlightCategory.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/FlightCategory.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/FlightCategory.dia",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/FlightCategory.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/FlightCategory.swiftdeps"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/WatchApp/BarryWatchApp.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/BarryWatchApp.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/BarryWatchApp.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/BarryWatchApp.dia",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/BarryWatchApp.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/BarryWatchApp.swiftdeps"
+  }
+}

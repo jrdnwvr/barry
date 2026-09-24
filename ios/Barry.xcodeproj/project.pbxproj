@@ -28,6 +28,7 @@
 		161F54967F58CB6AF2EAE650 /* WindUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E3203C0CBC7B1D5F0A57759 /* WindUnit.swift */; };
 		17B2F3F6A33ED2C6DB766640 /* ForecastCaveatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031482E889A2274CBD689E88 /* ForecastCaveatView.swift */; };
 		20AD2A1B5CC1C7738EAEF8F5 /* StormAlerter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E569F3B3B9FAB65C07970B1A /* StormAlerter.swift */; };
+		22A7600022D22A39FD198199 /* FieldsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ED260902ADE48C188706FA8 /* FieldsCard.swift */; };
 		25F2CA5D0A085C6A963656C0 /* TendencyProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A24A6845ECB66698D61771D /* TendencyProvider.swift */; };
 		26D196BA1D0C9CD075B59F31 /* WindFlow.metal in Sources */ = {isa = PBXBuildFile; fileRef = 9C9E7A347455A6781BAB196E /* WindFlow.metal */; };
 		270E209661CB57713C9B71F5 /* BarometerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA32F779F49D1C628F2BC52E /* BarometerEngine.swift */; };
@@ -316,6 +317,7 @@
 		7C00F07F019E06DA06E95BD0 /* BarometerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarometerTests.swift; sourceTree = "<group>"; };
 		7CB1EFCBAEC1FFFB0EF24917 /* BackgroundRefresh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundRefresh.swift; sourceTree = "<group>"; };
 		7E7AD448DB8DDD1CE1C73553 /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
+		7ED260902ADE48C188706FA8 /* FieldsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldsCard.swift; sourceTree = "<group>"; };
 		82E8C122995032DFD8C5C5EC /* PhoneSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSync.swift; sourceTree = "<group>"; };
 		830E6CE85533F8C3169A8E97 /* BarryPhoneWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryPhoneWidget.swift; sourceTree = "<group>"; };
 		85C6CB170A65E1A614F64BB1 /* RunwayMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayMath.swift; sourceTree = "<group>"; };
@@ -558,6 +560,7 @@
 				4EB1F388C1A5FE3D18F1D62E /* ContentView.swift */,
 				34C2B97E09DCD235BF42063C /* Diagnostics.swift */,
 				52B4C35AC0CE61C4C1CCE6D5 /* FieldConditionsView.swift */,
+				7ED260902ADE48C188706FA8 /* FieldsCard.swift */,
 				68F0E9DED173121E56E48C0B /* ForecastCards.swift */,
 				031482E889A2274CBD689E88 /* ForecastCaveatView.swift */,
 				35839C2045A30D70938041B6 /* FrontsOverlay.swift */,
@@ -944,6 +947,7 @@
 				E1DA0A2BA6D5DAE408366B62 /* ContentView.swift in Sources */,
 				FBC05BDAC2F9A55BFB1380E2 /* Diagnostics.swift in Sources */,
 				1499AE344651937BC57A3E81 /* FieldConditionsView.swift in Sources */,
+				22A7600022D22A39FD198199 /* FieldsCard.swift in Sources */,
 				EAD163F4794C18F66265455E /* FlightCategory.swift in Sources */,
 				BF6E49201E9E4A6A26A9C857 /* ForecastCards.swift in Sources */,
 				17B2F3F6A33ED2C6DB766640 /* ForecastCaveatView.swift in Sources */,

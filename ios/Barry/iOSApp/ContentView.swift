@@ -357,6 +357,18 @@ struct ContentView: View {
             if localSensorActive {
                 SensorStationRow(combined: combined, now: store.now, unit: unit, barometer: barometer)
             }
+        case .fields:
+            // Only with two or more airports saved: one line each, tap to
+            // switch.
+            let airports: [FieldsCard.Field] = savedLocations.locations.compactMap { loc in
+                if case .airport(let icao) = loc.kind { return FieldsCard.Field(id: loc.id, icao: icao) }
+                return nil
+            }
+            if airports.count >= 2 {
+                FieldsCard(fields: airports, selectedID: savedLocations.selectedID, unit: unit,
+                           reloadToken: combined.pressure.cachedAt,
+                           onSelect: { savedLocations.selectedID = $0 })
+            }
         case .sources:
             // Kept in the list so stored layouts still decode; drawn at the
             // foot of the page instead.

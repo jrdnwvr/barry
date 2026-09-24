@@ -1,0 +1,23 @@
+{
+  "/Users/jordanweaver/barry/ios/Barry/Shared/CombinedStore.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryComplication.build/Objects-normal/arm64/CombinedStore.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryComplication.build/Objects-normal/arm64/CombinedStore.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryComplication.build/Objects-normal/arm64/CombinedStore.dia",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryComplication.build/Objects-normal/arm64/CombinedStore.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryComplication.build/Objects-normal/arm64/CombinedStore.swiftdeps"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/WatchComplication/BarryComplication.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryComplication.build/Objects-normal/arm64/BarryComplication.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryComplication.build/Objects-normal/arm64/BarryComplication.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryComplication.build/Objects-normal/arm64/BarryComplication.dia",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryComplication.build/Objects-normal/arm64/BarryComplication.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryComplication.build/Objects-normal/arm64/BarryComplication.swiftdeps"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/WatchComplication/ComplicationDial.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryComplication.build/Objects-normal/arm64/ComplicationDial.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryComplication.build/Objects-normal/arm64/ComplicationDial.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryComplication.build/Objects-normal/arm64/ComplicationDial.dia",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryComplication.build/Objects-normal/arm64/ComplicationDial.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryComplication.build/Objects-normal/arm64/ComplicationDial.swiftdeps"
+  }
+}

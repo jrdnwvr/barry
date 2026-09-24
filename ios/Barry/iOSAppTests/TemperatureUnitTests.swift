@@ -119,3 +119,20 @@ struct BuoyDecodeTests {
         #expect(!r.stations[1].isBuoy && r.stations[1].kind == nil)
     }
 }
+
+struct FieldsCardTests {
+    @Test func theLineTakesTheVerdictsFirstSentence() {
+        #expect(FieldsCard.firstSentence("Pressure bottoming out. Front passing now.") == "Pressure bottoming out")
+        #expect(FieldsCard.firstSentence("Holding steady.") == "Holding steady")
+    }
+
+    @Test func aGlanceDecodes() throws {
+        let json = """
+        {"items":[{"station":"KLUK","fltCat":"MVFR","windKt":9,"windDir":50,"altim":1024.7,
+          "delta3h":-1.1,"class":"falling","verdict":"Pressure falling. Rain likely around 5 PM."}],
+         "cachedAt":"2026-09-24T21:10:00Z"}
+        """
+        let r = try BarryAPI.decoder.decode(GlanceResponse.self, from: Data(json.utf8))
+        #expect(r.items.first?.cls == .falling && r.items.first?.fltCat == "MVFR")
+    }
+}

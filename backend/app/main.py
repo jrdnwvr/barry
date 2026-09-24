@@ -27,7 +27,7 @@ from . import diagnostics, logs, metrics, stations
 from .guards import RateGate, is_private
 from .scheduler import Scheduler
 from .cache import CachedFailure
-from .guards import InvalidStation, IPLimiter, RateLimited, client_key
+from .guards import InvalidStation, IPLimiter, RateLimited, check_station, client_key
 from .service import PressureService
 
 logs.configure()
@@ -429,6 +429,20 @@ async def search_stations(q: str = Query(..., min_length=2, max_length=40),
                           limit: int = Query(15, ge=1, le=50)):
     """Station search by ICAO id prefix or name, METAR-issuing sites only."""
     return {"results": await get_service().search_stations(q, limit=limit)}
+
+
+@app.get("/glance")
+async def glance(
+    stations: str = Query(..., min_length=3, max_length=60),
+    tz: Optional[int] = Query(None, ge=-840, le=840),
+):
+    """The saved fields at a glance: one compact line each, from the same
+    cached reports as /combined. Up to eight comma-separated ids."""
+    ids = [s.strip() for s in stations.split(",") if s.strip()]
+    for sid in ids:
+        check_station(sid)
+    resp = await get_service().get_glance([s.upper() for s in ids], tz_minutes=tz)
+    return resp.model_dump(mode="json", by_alias=True)
 
 
 @app.get("/stations/nearest")

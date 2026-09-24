@@ -1,0 +1,23 @@
+{
+  "/Users/jordanweaver/barry/ios/Barry/Shared/PressureActivity.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/PressureActivity.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/PressureActivity.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/PressureActivity.dia",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/PressureActivity.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/PressureActivity.swiftdeps"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/Shared/PressureHistory.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/PressureHistory.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/PressureHistory.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/PressureHistory.dia",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/PressureHistory.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/PressureHistory.swiftdeps"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/Shared/PressureStore.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/PressureStore.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/PressureStore.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/PressureStore.dia",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/PressureStore.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/x86_64/PressureStore.swiftdeps"
+  }
+}

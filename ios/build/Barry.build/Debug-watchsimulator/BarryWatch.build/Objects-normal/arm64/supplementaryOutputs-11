@@ -1,0 +1,23 @@
+{
+  "/Users/jordanweaver/barry/ios/Barry/Shared/LocationManager.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/LocationManager.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/LocationManager.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/LocationManager.dia",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/LocationManager.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/LocationManager.swiftdeps"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/Shared/Models.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/Models.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/Models.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/Models.dia",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/Models.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/Models.swiftdeps"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/WatchApp/PhoneSync.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PhoneSync.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PhoneSync.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PhoneSync.dia",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PhoneSync.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/PhoneSync.swiftdeps"
+  }
+}

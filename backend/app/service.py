@@ -29,6 +29,8 @@ from . import stations
 from .cache import CachedFailure, StationRegistry, TTLCache
 from .interpreter import Sample, interpret
 from .models import (
+    GlanceItem,
+    GlanceResponse,
     FieldLevelsResponse,
     AloftResponse,
     FieldGridResponse,
@@ -1015,6 +1017,38 @@ class PressureService:
         return FrontsResponse(frames=frames, cachedAt=_now())
 
     # ---- combined (primary client endpoint) ---------------------------------
+
+    GLANCE_MAX = 8
+
+    async def get_glance(self, station_ids: List[str], tz_minutes: Optional[int] = None) -> GlanceResponse:
+        """Each saved field in one line, from the same cached reports and the
+        same interpreter as /combined, minus the forecast. Saved fields are
+        watched stations, so the scheduler already keeps them fresh; a field
+        that cannot be read is left out rather than failing the others."""
+        items: List[GlanceItem] = []
+        for sid in station_ids[: self.GLANCE_MAX]:
+            try:
+                pressure = await self.get_pressure(sid)
+            except Exception:
+                continue
+            if not pressure.series:
+                continue
+            interp, local_offset = _run_interpreter(pressure, None)
+            if tz_minutes is not None:
+                local_offset = tz_minutes / 60.0
+            cls = pressure.tendency.cls if pressure.tendency else None
+            cur = pressure.current
+            kt = lambda kmh: round(kmh / 1.852, 1) if kmh is not None else None
+            items.append(GlanceItem(
+                station=pressure.station, name=pressure.name, fltCat=cur.fltCat,
+                windKt=kt(cur.windspeed), windDir=cur.winddir, gustKt=kt(cur.windgust),
+                altim=cur.altim, slp=cur.slp,
+                delta3h=pressure.tendency.delta3h if pressure.tendency else None,
+                cls=cls,
+                verdict=build_verdict(cls, None, reading=interp, local_hour_offset=local_offset),
+                obsTime=pressure.series[-1].t if pressure.series else None,
+            ))
+        return GlanceResponse(items=items, cachedAt=_now())
 
     async def get_combined(
         self,

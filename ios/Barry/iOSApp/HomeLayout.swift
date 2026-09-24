@@ -12,6 +12,7 @@ import SwiftUI
 enum HomeCard: String, CaseIterable, Codable, Identifiable {
     case lightning
     case chart
+    case fields
     case taf
     case rainWind
     case conditions
@@ -27,6 +28,7 @@ enum HomeCard: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .lightning:  return "Lightning nearby"
         case .chart:      return "Trend chart"
+        case .fields:     return "Fields"
         case .taf:        return "TAF timeline"
         case .rainWind:   return "Forecast"
         case .conditions: return "Conditions"
@@ -132,27 +134,27 @@ enum Audience: String, CaseIterable, Identifiable {
         switch self {
         case .pilot:
             // The field first, the phone sensor out of the way.
-            return HomeLayout(order: [.lightning, .chart, .taf, .conditions, .wind, .strip, .rainWind, .radar, .sensor, .sources],
+            return HomeLayout(order: [.lightning, .chart, .fields, .taf, .conditions, .wind, .strip, .rainWind, .radar, .sensor, .sources],
                               hidden: [.sensor, .taf])
         case .soaring:
             // Conditions (the ride, the cloud base) right under the trend.
-            return HomeLayout(order: [.lightning, .chart, .conditions, .rainWind, .radar, .wind, .strip, .taf, .sensor, .sources],
+            return HomeLayout(order: [.lightning, .chart, .conditions, .fields, .rainWind, .radar, .wind, .strip, .taf, .sensor, .sources],
                               hidden: [.taf, .sensor])
         case .drone:
             // Wind first; no runways, no approach-plate talk.
-            return HomeLayout(order: [.lightning, .wind, .rainWind, .chart, .radar, .conditions, .strip, .taf, .sensor, .sources],
-                              hidden: [.taf, .sensor, .strip])
+            return HomeLayout(order: [.lightning, .wind, .rainWind, .chart, .radar, .conditions, .strip, .fields, .taf, .sensor, .sources],
+                              hidden: [.taf, .sensor, .strip, .fields])
         case .marine:
-            return HomeLayout(order: [.lightning, .chart, .wind, .rainWind, .radar, .conditions, .strip, .taf, .sensor, .sources],
-                              hidden: [.taf, .conditions, .strip])
+            return HomeLayout(order: [.lightning, .chart, .wind, .rainWind, .radar, .conditions, .strip, .fields, .taf, .sensor, .sources],
+                              hidden: [.taf, .conditions, .strip, .fields])
         case .everyday:
             // The trend and the forecast; the aviation cards hidden.
-            return HomeLayout(order: [.lightning, .chart, .rainWind, .radar, .sensor, .conditions, .wind, .taf, .strip, .sources],
-                              hidden: [.conditions, .wind, .taf, .strip])
+            return HomeLayout(order: [.lightning, .chart, .rainWind, .radar, .sensor, .conditions, .wind, .fields, .taf, .strip, .sources],
+                              hidden: [.conditions, .wind, .taf, .strip, .fields])
         case .weather:
             // The map and the sky, no runway talk.
-            return HomeLayout(order: [.lightning, .chart, .radar, .rainWind, .conditions, .sensor, .taf, .wind, .strip, .sources],
-                              hidden: [.wind, .strip, .taf])
+            return HomeLayout(order: [.lightning, .chart, .radar, .rainWind, .conditions, .sensor, .fields, .taf, .wind, .strip, .sources],
+                              hidden: [.wind, .strip, .taf, .fields])
         }
     }
 

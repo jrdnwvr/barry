@@ -95,6 +95,15 @@ struct BarryAPI {
     /// `half` is the box half-width in degrees of latitude. The server thins
     /// to a fixed ceiling whatever the box, so a wide one spreads the same
     /// number of stations further rather than returning more of them.
+    /// The saved fields, one compact line each (the Fields card).
+    func glance(stations: String, tzMinutes: Int? = nil) async throws -> GlanceResponse {
+        var comps = URLComponents(url: baseURL.appendingPathComponent("glance"),
+                                  resolvingAgainstBaseURL: false)
+        comps?.queryItems = [URLQueryItem(name: "stations", value: stations)]
+        if let tzMinutes { comps?.queryItems?.append(URLQueryItem(name: "tz", value: String(tzMinutes))) }
+        return try await get(comps?.url)
+    }
+
     func metars(lat: Double, lon: Double, half: Double? = nil, buoys: Bool = false) async throws -> StationsResponse {
         var comps = URLComponents(url: baseURL.appendingPathComponent("metars"),
                                   resolvingAgainstBaseURL: false)

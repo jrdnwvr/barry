@@ -615,6 +615,31 @@ class Sources(BaseModel):
     forecast: Optional[str] = None
 
 
+class GlanceItem(BaseModel):
+    """One saved field on one line: category, wind, altimeter, trend, and the
+    verdict from its own pressure (no forecast), for the Fields card."""
+
+    station: str
+    name: Optional[str] = None
+    fltCat: Optional[str] = None
+    windKt: Optional[float] = None
+    windDir: Optional[float] = None
+    gustKt: Optional[float] = None
+    altim: Optional[float] = None        # hPa
+    slp: Optional[float] = None          # hPa
+    delta3h: Optional[float] = None      # hPa
+    cls: Optional[str] = Field(default=None, alias="class")
+    verdict: str = ""
+    obsTime: Optional[datetime] = None
+
+    model_config = {"populate_by_name": True}
+
+
+class GlanceResponse(BaseModel):
+    items: List[GlanceItem] = Field(default_factory=list)
+    cachedAt: datetime
+
+
 class CombinedResponse(BaseModel):
     """Primary client endpoint — the full -24h / +24h picture in one call."""
 

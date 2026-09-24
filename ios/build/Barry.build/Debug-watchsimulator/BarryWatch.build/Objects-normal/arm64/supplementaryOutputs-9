@@ -1,0 +1,23 @@
+{
+  "/Users/jordanweaver/barry/ios/Barry/Shared/AppConfig.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/AppConfig.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/AppConfig.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/AppConfig.dia",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/AppConfig.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/AppConfig.swiftdeps"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/Shared/BarometerEngine.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarometerEngine.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarometerEngine.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarometerEngine.dia",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarometerEngine.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarometerEngine.swiftdeps"
+  },
+  "/Users/jordanweaver/barry/ios/Barry/Shared/BarryAPI.swift" : {
+    "const-values" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryAPI.swiftconstvalues",
+    "dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryAPI.d",
+    "diagnostics" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryAPI.dia",
+    "object" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryAPI.o",
+    "swift-dependencies" : "/Users/jordanweaver/barry/ios/build/Barry.build/Debug-watchsimulator/BarryWatch.build/Objects-normal/arm64/BarryAPI.swiftdeps"
+  }
+}

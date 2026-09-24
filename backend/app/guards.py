@@ -61,6 +61,44 @@ class RateGate:
             raise RateLimited()
 
 
+class OMBudget:
+    """Open-Meteo's own accounting, so the free tier is never exceeded.
+
+    Open-Meteo counts a call per location in a multi-point request, and
+    more than one for a request with more than ten variables (fifteen
+    variables is 1.5 calls). Its free tier allows 600 a minute and 10,000 a
+    day. This keeps a minute bucket and a day counter in those same
+    weighted units, below both limits, and fails fast past either, so a
+    caller can serve its last good copy instead (NOAA plan, phase 0).
+    The day is UTC."""
+
+    def __init__(self, per_minute: float = 500, per_day: float = 9000, *,
+                 clock=time.monotonic, wall=time.time) -> None:
+        self.minute = RateGate(per_minute, clock=clock)
+        self.per_day = float(per_day)
+        self._wall = wall
+        self._day = self._today()
+        self.used_today = 0.0
+
+    def _today(self) -> int:
+        return int(self._wall() // 86400)
+
+    def take(self, n: float = 1.0) -> bool:
+        day = self._today()
+        if day != self._day:
+            self._day, self.used_today = day, 0.0
+        if self.used_today + n > self.per_day:
+            return False
+        if not self.minute.take(n):
+            return False
+        self.used_today += n
+        return True
+
+    def require(self, n: float = 1.0) -> None:
+        if not self.take(n):
+            raise RateLimited()
+
+
 class IPLimiter:
     """One token bucket per client address, bounded in number so a scan of
     addresses cannot grow memory. `per_minute` of 0 disables the limiter."""

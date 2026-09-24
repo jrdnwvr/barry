@@ -119,6 +119,16 @@ def parse_surface_pressure_series(data: dict):
     return times, sp
 
 
+def call_weight(n_vars: int, days: int = 1, locations: int = 1) -> float:
+    """What Open-Meteo counts a request as: one call per location, times
+    variables over ten, times days over fourteen (their pricing FAQ and
+    calculator, checked 2026-09-24)."""
+    return locations * max(1.0, n_vars / 10) * max(1.0, days / 14)
+
+
+FORECAST_WEIGHT = call_weight(len(HOURLY_FIELDS) + len(DAILY_FIELDS), days=2)
+
+
 async def fetch_forecast(
     lat: float,
     lon: float,
@@ -208,6 +218,9 @@ ALOFT_HOURLY = ([f"{v}_{p}hPa" for p in ALOFT_LEVELS for v in ALOFT_VARS]
 CLOUD_LAYER_PCT = 30       # a level counts as cloud from scattered; the app shades dense from 70
 ICING_MIN_C, ICING_MAX_C = -20.0, 0.0
 FT_PER_M = 3.28084
+
+
+ALOFT_WEIGHT = call_weight(len(ALOFT_HOURLY), days=2)
 
 
 async def fetch_aloft(lat: float, lon: float, client: httpx.AsyncClient, *, forecast_days: int = 2) -> dict:
@@ -335,6 +348,14 @@ def parse_field_levels(data, now: datetime) -> List[FieldLevelPoint]:
         if levels:
             out.append(FieldLevelPoint(lat=it["latitude"], lon=it["longitude"], levels=levels))
     return out
+
+
+def field_levels_weight(points: int) -> float:
+    return call_weight(2 * len(FIELD_LEVELS), locations=points)
+
+
+def field_grid_weight(points: int) -> float:
+    return call_weight(4, locations=points)   # 2 current + 2 hourly
 
 
 async def fetch_field_levels(lats, lons, client: httpx.AsyncClient, *, now: datetime) -> List[FieldLevelPoint]:

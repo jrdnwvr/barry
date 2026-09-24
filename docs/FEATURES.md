@@ -208,6 +208,21 @@ hidden). A card shows only when it is not hidden and has something to say.
 | 9 | `sensor` | Sensor vs station | yes | sensor on and My location |
 | 10 | `sources` | (the page footer) | not a card since 2026-09-24 | always, at the foot of the page |
 
+### home.cardMenu
+- Seen: a long press on a card opens its menu: the card's own options,
+  then "Hide card". Wind: Runway, Auto, Compass only. Forecast: Summary,
+  Changes, Hourly, Chart. Conditions: boundary layer above ground or sea
+  level. Here: "Backcountry estimates" (only after the one-time disclaimer
+  has been accepted in Settings). Lightning, TAF and Sensor have Hide card
+  alone. No gear or other chrome on the cards.
+- Lives: `ContentView.cardMenu`; `HomeCard.hasMenu`.
+- Settings: the same keys as Settings › Cards and screens, which keeps its
+  rows so the options stay findable.
+- Rules: the chart (drag to select) and the radar map (pan and pinch)
+  have no menu, so their gestures keep working; the sources line is not a
+  card. A hidden card comes back from Settings › Cards.
+- Tests: none; UI tests do not long-press.
+
 ### settings.cards
 - Seen: Settings › Cards: one row per card with its title, a switch and a
   drag handle. No presets (the "Set up for" choice replaced them), no card
@@ -960,7 +975,7 @@ when there is no file). The app nudges WidgetKit after every load.
 
 Every client call goes through `Shared/BarryAPI.swift`. Per-client limit 60
 requests a minute (`BARRY_RATE_PER_MIN`), 429 with Retry-After 30. Upstream
-budgets: 30 AWC calls a minute, 100 Open-Meteo calls a minute; spent budgets
+budgets: 30 AWC calls a minute, Open-Meteo in its own weighted units (a call per location, more for over ten variables): 500 a minute and 9,000 a UTC day (`OMBudget`, `barry_openmeteo_calls_today` on /metrics); spent budgets
 answer 503 with Retry-After 30. A remembered upstream failure answers 503
 with Retry-After 60. Every response carries `X-Request-Id`.
 
@@ -977,8 +992,8 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 | `GET /lightning` | `lat`, `lon`, `half` | 0.02° cells, clusters, window 1200 s, coverage | GLM store | 60 s; centre 0.2°, half 0.5° | the radar lightning layer |
 | `GET /radar/frames` | none | host and frames | RainViewer | 2 min | the radar |
 | `GET /aloft` | `lat`, `lon` | 25 hourly columns, `stale` | Open-Meteo pressure levels | 1 h per 0.1° cell; last good 12 h | Aloft |
-| `GET /radar/field` | `lat`, `lon`, spans | 35 points of wind, boundary layer, CAPE | Open-Meteo multi-point | 10 min; centre 0.05°, spans 0.5° | the radar wind layer |
-| `GET /radar/field/levels` | same | 35 points at five levels | Open-Meteo multi-point | 30 min, same rounding | the altitude rail |
+| `GET /radar/field` | `lat`, `lon`, spans | 35 points of wind, boundary layer, CAPE | Open-Meteo multi-point (35 weighted calls) | until five past the next hour, at least 10 min; centre 0.05°, spans 0.5°; last good copy for 6 h when the budget is spent or the model fails | the radar wind layer |
+| `GET /radar/field/levels` | same | 35 points at five levels | Open-Meteo multi-point (35 weighted calls) | same hold and last good copy as `/radar/field` | the altitude rail |
 | `GET /stations/search` | `q`, `limit` | id and name matches, METAR stations only | AWC directory | directory 24 h | Settings, onboarding |
 | `GET /stations/nearest` | `lat`, `lon` | station, name, distance | bulk table, AWC box, built-in table | 10 min per 0.2° | My location, the watch alone, onboarding |
 | `GET /healthz` | `strict` | status, problems, cycle counts | none | none | Docker, monitors |

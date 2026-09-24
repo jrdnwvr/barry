@@ -16,7 +16,7 @@ from typing import Dict, List, Optional
 import httpx
 
 from . import conditions as conditions_mod
-from .guards import RateGate, check_station
+from .guards import OMBudget, RateGate, RateLimited, check_station
 from . import explain
 from . import flashes as flashes_mod
 from . import lightning as lightning_mod
@@ -79,7 +79,19 @@ BULK_TTL = 12 * 60.0      # AWC's whole-world METAR cache: one 250 KB pull serve
                           # refreshes it; the TTL is only the net under a missed cycle.
 SLICE_TTL = 2 * 60.0      # a box of stations cut from the bulk table (cheap)
 GRID_TTL = 5 * 60.0       # a contour grid built from it (seconds of CPU)
-FIELD_TTL = 10 * 60.0     # radar wind/BL grid: model updates hourly; one call per region cell
+FIELD_TTL = 10 * 60.0     # the shortest a model grid is held (see _until_model_hour)
+GRID_STALE_MAX = 6 * 3600.0   # how long a grid's last good copy stands in when the budget is spent
+
+
+def _until_model_hour(_value=None) -> float:
+    """Seconds until five past the next hour, and never under FIELD_TTL:
+    the model behind the radar's wind grids updates hourly, so fetching
+    again inside the hour spends calls for the same numbers."""
+    now = _now()
+    nxt = now.replace(minute=5, second=0, microsecond=0)
+    if nxt <= now:
+        nxt += timedelta(hours=1)
+    return max(FIELD_TTL, (nxt - now).total_seconds())
 FRAMES_TTL = 2 * 60.0     # RainViewer adds a frame every 10 min; 2 min keeps the newest near-live
 STATION_INFO_TTL = 24 * 3600.0  # AWC station directory: names change about never
 TAF_TTL = 30 * 60.0       # TAFs issue every 6 h with amendments; 30 min is plenty
@@ -178,7 +190,9 @@ class PressureService:
         # Client-driven upstream budgets. AWC allows 100/min per IP and the
         # scheduler shares that IP, so clients get well under half of it.
         self.awc_gate = RateGate(per_minute=30)
-        self.om_gate = RateGate(per_minute=100)
+        # Weighted the way Open-Meteo counts (a call per location, more
+        # for many variables), per minute and per UTC day.
+        self.om_gate = OMBudget(per_minute=500, per_day=9000)
         # (fetch time, {station: (obsTime, slp, altim, lat, lon)}), oldest first.
         # Restored from disk when a data dir is configured, so a restart
         # doesn't cost the front watch its 7.5 h warm-up.
@@ -307,7 +321,7 @@ class PressureService:
                 source="unavailable",
                 cachedAt=_now(),
             )
-        self.om_gate.require()
+        self.om_gate.require(om.FORECAST_WEIGHT)
         raw = await om.fetch_forecast(
             info["lat"], info["lon"], self._client, forecast_days=1, past_days=1
         )
@@ -351,7 +365,7 @@ class PressureService:
                 return cached
 
         try:
-            self.om_gate.require()
+            self.om_gate.require(om.FORECAST_WEIGHT)
             raw = await om.fetch_forecast(lat, lon, self._client, forecast_days=2)
         except Exception:
             # Stale-if-error: the upstream is down — re-serve the last good
@@ -801,17 +815,27 @@ class PressureService:
         def q_span(v):
             return round(v * 2) / 2 if v >= 1 else round(v, 1)
         q_lat_span, q_lon_span = q_span(lat_span), q_span(lon_span)
+        key = f"field:{q_lat}:{q_lon}:{q_lat_span}:{q_lon_span}"
+
         async def _pull() -> FieldGridResponse:
             lats, lons = self._field_points(q_lat, q_lon, q_lat_span, q_lon_span)
             now = _now()
-            self.om_gate.require()
+            self.om_gate.require(om.field_grid_weight(len(lats)))
             points = await om.fetch_field_grid(lats, lons, self._client, now=now)
-            return FieldGridResponse(points=points, cachedAt=now)
+            resp = FieldGridResponse(points=points, cachedAt=now)
+            await self.cache.set(f"{key}:lastgood", resp, ttl=GRID_STALE_MAX)
+            return resp
 
-        # A failure is remembered for a minute, like the levels grid, so a
-        # down model is probed once per window rather than on every pan.
-        return await self.cache.fetch(f"field:{q_lat}:{q_lon}:{q_lat_span}:{q_lon_span}", _pull,
-                                      ttl=FIELD_TTL, negative_ttl=60.0)
+        # Held until just past the next model hour: the model does not
+        # change in between. A failure (or a spent budget) is remembered for
+        # a minute and the last good grid is served meanwhile.
+        try:
+            return await self.cache.fetch(key, _pull, ttl=_until_model_hour, negative_ttl=60.0)
+        except (RateLimited, CachedFailure, LookupError, httpx.HTTPError):
+            last = await self.cache.get(f"{key}:lastgood")
+            if last is None:
+                raise
+            return last
 
     # ---- Aloft: the column at a point -----------------------------------------
 
@@ -825,7 +849,7 @@ class PressureService:
         last_good_key = f"{key}:lastgood"
 
         async def _pull() -> AloftResponse:
-            self.om_gate.require()
+            self.om_gate.require(om.ALOFT_WEIGHT)
             raw = await om.fetch_aloft(lat, lon, self._client, forecast_days=2)
             hours = om.parse_aloft(raw, now=_now())
             if not hours:
@@ -873,17 +897,26 @@ class PressureService:
             return round(v * 2) / 2 if v >= 1 else round(v, 1)
         q_lat_span, q_lon_span = q_span(lat_span), q_span(lon_span)
 
+        key = f"fieldlv:{q_lat}:{q_lon}:{q_lat_span}:{q_lon_span}"
+
         async def _pull() -> FieldLevelsResponse:
             lats, lons = self._field_points(q_lat, q_lon, q_lat_span, q_lon_span)
             now = _now()
-            self.om_gate.require()
+            self.om_gate.require(om.field_levels_weight(len(lats)))
             points = await om.fetch_field_levels(lats, lons, self._client, now=now)
             if not points:
                 raise LookupError("no winds aloft")
-            return FieldLevelsResponse(points=points, cachedAt=now)
+            resp = FieldLevelsResponse(points=points, cachedAt=now)
+            await self.cache.set(f"{key}:lastgood", resp, ttl=GRID_STALE_MAX)
+            return resp
 
-        return await self.cache.fetch(f"fieldlv:{q_lat}:{q_lon}:{q_lat_span}:{q_lon_span}", _pull,
-                                      ttl=FIELD_LEVELS_TTL, negative_ttl=60.0)
+        try:
+            return await self.cache.fetch(key, _pull, ttl=_until_model_hour, negative_ttl=60.0)
+        except (RateLimited, CachedFailure, LookupError, httpx.HTTPError):
+            last = await self.cache.get(f"{key}:lastgood")
+            if last is None:
+                raise
+            return last
 
     # ---- GOES GLM lightning ---------------------------------------------------
 

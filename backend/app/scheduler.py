@@ -87,6 +87,7 @@ class Scheduler:
         finally:
             metrics.gauge("barry_scheduler_cycle_seconds", time.monotonic() - t0)
             metrics.gauge("barry_glm_flashes", len(self._service.flashes))
+            metrics.gauge("barry_openmeteo_calls_today", getattr(self._service.om_gate, "used_today", 0.0))
 
     async def _refresh_once(self) -> int:
         # Warm the whole-world METAR table and the station directory so no

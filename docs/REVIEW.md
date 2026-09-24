@@ -206,7 +206,7 @@ Hand-made pass:
 
 Customisation:
 - [x] Onboarding asks "What will you use Barry for?"; Pilot, Soaring, Drone, Marine, Everyday and Weather presets as bundles of existing keys, editable after ("Set up for" in Settings).
-- [ ] A gear on each card for its own two or three options; Settings shrinks to units, alerts, locations and the sensor.
+- [x] Each card's own options in a long-press menu with "Hide card" (no gear, so no new chrome). Settings keeps its "Cards and screens" rows for now so the options stay findable; dropping them is Jordan's call once testers find the menus.
 - [x] Alert thresholds and quiet hours: "Alert on" fast, moderate or small changes; quiet hours deliver silently.
 
 Audiences, smallest useful change each:
@@ -218,7 +218,7 @@ Audiences, smallest useful change each:
 - [ ] Marine: buoys as stations, once the station layer takes a non-airport source.
 
 Direction:
-- [ ] Data independence, docs/NOAA.md phase by phase.
+- [ ] Data independence, docs/NOAA.md phase by phase. Phase 0 done (weighted Open-Meteo budget, grids held for the model hour, last good grids). Phase 1 waits on Jordan: bridge first, or straight to NOAA (NOAA.md section 6).
 - [ ] The second field and the route (docs/ROUTES.md), then the AWC advisories layer.
 - [ ] Height contours (NOAA phase 2).
 

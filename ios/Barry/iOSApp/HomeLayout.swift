@@ -42,6 +42,10 @@ enum HomeCard: String, CaseIterable, Codable, Identifiable {
     /// carries the forecast data's required credit, so it stays too; it is
     /// drawn at the foot of the page and left out of the editor.
     var canHide: Bool { self != .chart && self != .sources }
+
+    /// Cards with a long-press menu. The chart and the radar map have press
+    /// gestures of their own; the sources line is not a card.
+    var hasMenu: Bool { canHide && self != .radar }
 }
 
 struct HomeLayout: Codable, Equatable {

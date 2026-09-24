@@ -269,6 +269,15 @@ would pull from S3 per day, from the field sizes measured above.
 
 ### Phase 0. Guard the free tier
 
+Done 2026-09-24. `OMBudget` in `guards.py` counts Open-Meteo calls the way
+Open-Meteo does (`call_weight` in `sources/openmeteo.py`), 500 a minute and
+9,000 a UTC day; the grids are held until five past the next hour and
+serve their last good copy for up to six hours past the budget; the day's
+count is `barry_openmeteo_calls_today` on /metrics. The half-degree lattice
+for map regions was left out: the hourly hold removed most of the repeat
+cost, and the lattice changes what a pan shows. Revisit if the day count
+climbs.
+
 Small. A day's protection for the app that exists today, in case phase 1
 slips.
 

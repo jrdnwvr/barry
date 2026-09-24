@@ -19,6 +19,15 @@ struct ContentView: View {
     @AppStorage("chartWindow", store: AppConfig.sharedDefaults)
     private var chartWindowRaw: String = ChartWindow.hours6.rawValue
     @Environment(\.scenePhase) private var scenePhase
+    // A card's own options, in its long-press menu (cardMenu).
+    @AppStorage(RunwayWindsMode.key, store: AppConfig.sharedDefaults)
+    private var runwayWindsRaw: String = RunwayWindsMode.auto.rawValue
+    @AppStorage(ForecastCardStyle.key, store: AppConfig.sharedDefaults)
+    private var forecastStyleRaw: String = ForecastCardStyle.fallback.rawValue
+    @AppStorage(FieldConditionsCard.blReferenceKey, store: AppConfig.sharedDefaults)
+    private var blReference: String = "agl"
+    @AppStorage(Backcountry.acknowledgedKey, store: AppConfig.sharedDefaults)
+    private var backcountryAcknowledged: Bool = false
     @AppStorage(Backcountry.enabledKey, store: AppConfig.sharedDefaults)
     private var backcountryEnabled: Bool = false
     @Environment(\.horizontalSizeClass) private var hSizeClass
@@ -214,7 +223,12 @@ struct ContentView: View {
         // still decides whether it has anything to say.
         ForEach(homeLayout.layout.order) { card in
             if homeLayout.isVisible(card) {
-                homeCard(card, combined, layout: layout)
+                if card.hasMenu {
+                    homeCard(card, combined, layout: layout)
+                        .contextMenu { cardMenu(card) }
+                } else {
+                    homeCard(card, combined, layout: layout)
+                }
             }
         }
 
@@ -235,6 +249,42 @@ struct ContentView: View {
             DataSourceFootnote(combined: combined)
         }
         .padding(.top, 8)
+    }
+
+    /// A card's long-press menu: its own two or three options, then a way
+    /// to hide it. No gear on the card; the options are where the card is,
+    /// and Settings › Cards brings a hidden card back.
+    @ViewBuilder
+    private func cardMenu(_ card: HomeCard) -> some View {
+        switch card {
+        case .wind:
+            Picker("Runway winds", selection: $runwayWindsRaw) {
+                ForEach(RunwayWindsMode.allCases) { m in Text(m.label).tag(m.rawValue) }
+            }
+            .pickerStyle(.inline)
+        case .rainWind:
+            Picker("Style", selection: $forecastStyleRaw) {
+                ForEach(ForecastCardStyle.allCases) { st in Text(st.label).tag(st.rawValue) }
+            }
+            .pickerStyle(.inline)
+        case .conditions:
+            Picker("Boundary layer", selection: $blReference) {
+                Text("Above ground").tag("agl")
+                Text("Above sea level").tag("msl")
+            }
+            .pickerStyle(.inline)
+        case .strip:
+            // The first turn-on shows a disclaimer, which lives in Settings;
+            // after that the switch can live here too.
+            if backcountryAcknowledged {
+                Toggle("Backcountry estimates", isOn: $backcountryEnabled)
+            }
+        default:
+            EmptyView()
+        }
+        Button("Hide card", systemImage: "eye.slash") {
+            withAnimation { homeLayout.setHidden(card, true) }
+        }
     }
 
     /// One card of the home list. The iPad dashboard draws the chart and

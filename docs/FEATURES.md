@@ -777,6 +777,29 @@ stored keys, but each has its own model, so they fetch separately.
   is off screen.
 - For: P M E W.
 
+### radar.layer.advisories
+- Seen: chip "Advisories" (off by default). SIGMET areas drawn solid and
+  G-AIRMET areas dashed, outlined in their hazard's colour (convective red,
+  IFR purple, mountain obscuration pink, turbulence brown, icing blue,
+  surface wind orange) with a short label at the middle ("Conv", "IFR",
+  "Turb", "Ice"); pilot reports of turbulence (waves) and icing
+  (snowflake) from the last two hours, grey for smooth, yellow light,
+  orange moderate, red severe. Tap a label or a report for a sheet: the
+  name, heights ("5,000 ft to FL220"), valid time and the bulletin, or the
+  report in words ("Light to moderate turbulence", altitude, aircraft,
+  age) over the raw PIREP.
+- Lives: `iOSApp/AdvisoriesOverlay.swift` (`AdvisoryPolygon`,
+  `AdvisoryLabelView`, `PirepView`, `AdvisoryDetailSheet`, `AdvisoryInk`);
+  `RadarModel.fetchAdvisories`; `RadarMapView.syncAdvisories`.
+- Data: `/advisories?lat&lon&half` (half follows the map span, 3 to 30°).
+- Settings: `radarAdvisories` false.
+- Rules: report symbols draw in an image view of their own; MapKit
+  recoloured an annotation view's own image and they came out black.
+  Freezing-level lines from the G-AIRMETs are left out.
+- Tests: `AdvisoryTests`; backend `test_advisories.py` on real feeds saved
+  as fixtures.
+- For: P S.
+
 ### radar.sheet.key
 - Seen: a key listing only the layers that are on, plus sources.
 - Lives: `RadarSheets.swift` › `RadarKeySheet`.
@@ -1021,6 +1044,7 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 | `GET /fronts` | none | WPC analysis plus 12 to 48 h progs | IEM AFOS (CODSUS, CODSRP) | 30 min, one entry | the radar |
 | `GET /radar/hrrr` | none | run time | IEM tile probe | 10 min | nobody (parked) |
 | `GET /metars` | `lat`, `lon`, `half`, `buoys` | stations with wind, category, visibility, ceiling, altimeter, lightning, raw; with `buoys=1` also NDBC buoys and coastal stations (`kind` "buoy", waves, water temperature, pressure and its 3 h change) | bulk table (AWC box fallback); NDBC `latest_obs.txt` | 2 min; centre 0.2°, half 0.5°; 350 stations plus up to 120 buoys nearest first; NDBC once per 10 min for everyone, failures remembered 60 s and never block the stations | the radar station layer |
+| `GET /advisories` | `lat`, `lon`, `half` | SIGMET and G-AIRMET areas (kind, hazard, label, base and top, valid times, outline, bulletin) and PIREPs of turbulence and icing (position, time, altitude, aircraft, intensities, raw) that touch the box | AWC `airsigmet`, `gairmet` (current hour), `pirep` (lower 48, 2 h) | each feed 10 min for everyone, failures 60 s; a failed feed is left out | the radar Advisories layer |
 | `GET /radar/pressure` | `lat`, `lon`, spans | isobars, isallobars, grids, extrema | bulk table and history, no upstream | 5 min; centre 0.1°, spans 0.5°; two builds at a time | the radar pressure layers |
 | `GET /lightning` | `lat`, `lon`, `half` | 0.02° cells, clusters, window 1200 s, coverage | GLM store | 60 s; centre 0.2°, half 0.5° | the radar lightning layer |
 | `GET /radar/frames` | none | host and frames | RainViewer | 2 min | the radar |
@@ -1098,6 +1122,7 @@ each device (the watch keeps its own copies).
 | `radarFrontLines`, `radarFrontPips`, `radarFrontWeak`, `radarFrontCenters` | true | | radar More sheet |
 | `radarStations` | off | off, barbs, speeds | radar |
 | `radarStationStyleLast` | barbs | style restored when the chip turns on | radar More sheet |
+| `radarAdvisories` | false | SIGMETs, G-AIRMETs and PIREPs on the radar | radar chip |
 | `radarBuoys` | false | buoys and coastal stations in the station layer | radar Map options, the water set and preset |
 | `radarStorms` | true | Lightning chip | radar |
 | `radarAutoplay` | true | play the last hour, or hold on the latest | Settings › Radar |

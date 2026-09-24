@@ -31,6 +31,13 @@ enum AdvisoryInk {
         return .systemGray
     }
 
+    /// A PIREP intensity in words: "LGT-MOD" is "light to moderate".
+    static func words(_ code: String) -> String {
+        let names = ["TRC": "trace", "LGT": "light", "MOD": "moderate", "SEV": "severe",
+                     "EXTM": "extreme", "HVY": "heavy", "NEG": "none"]
+        return code.split(separator: "-").map { names[String($0)] ?? $0.lowercased() }.joined(separator: " to ")
+    }
+
     /// "SFC to 12,000 ft", "Up to FL430", "" when the bulletin gives none.
     static func heights(_ a: AdvisoryArea) -> String {
         let ft = { (v: Int) -> String in v >= 18_000 ? "FL\(v / 100)" : (v == 0 ? "SFC" : "\(v.formatted()) ft") }
@@ -113,9 +120,17 @@ final class AdvisoryLabelView: MKAnnotationView {
 }
 
 /// A turbulence or icing report: a small symbol in the intensity's colour.
+/// Drawn in an image view of its own, like the lightning markers: MapKit
+/// recolours an annotation view's own `image`, and these came out black.
 final class PirepView: MKAnnotationView {
+    private let symbol = UIImageView()
+
     override init(annotation: MKAnnotation?, reuseIdentifier: String?) {
         super.init(annotation: annotation, reuseIdentifier: reuseIdentifier)
+        bounds = CGRect(x: 0, y: 0, width: 20, height: 20)
+        symbol.frame = bounds
+        symbol.contentMode = .scaleAspectFit
+        addSubview(symbol)
         collisionMode = .circle
         displayPriority = .defaultLow
         canShowCallout = false
@@ -127,8 +142,8 @@ final class PirepView: MKAnnotationView {
         let p = a.pirep!
         let icing = p.icing != nil && (p.turbulence == nil || p.turbulence == "NEG")
         let level = icing ? p.icing : p.turbulence
-        let cfg = UIImage.SymbolConfiguration(pointSize: 12, weight: .bold)
-        image = UIImage(systemName: icing ? "snowflake" : "water.waves", withConfiguration: cfg)?
+        let cfg = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
+        symbol.image = UIImage(systemName: icing ? "snowflake" : "water.waves", withConfiguration: cfg)?
             .withTintColor(AdvisoryInk.intensity(level), renderingMode: .alwaysOriginal)
         alpha = level == "NEG" ? 0.6 : 1
     }
@@ -173,13 +188,13 @@ struct AdvisoryDetailSheet: View {
             }
         }
         .padding(20)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func pirepTitle(_ p: PirepOut) -> String {
         var parts: [String] = []
-        if let t = p.turbulence { parts.append(t == "NEG" ? "Smooth" : "\(t.lowercased()) turbulence") }
-        if let i = p.icing { parts.append(i == "NEG" ? "no ice" : "\(i.lowercased()) icing") }
+        if let t = p.turbulence { parts.append(t == "NEG" ? "smooth" : "\(AdvisoryInk.words(t)) turbulence") }
+        if let i = p.icing { parts.append(i == "NEG" ? "no ice" : "\(AdvisoryInk.words(i)) icing") }
         let s = parts.joined(separator: ", ")
         return (p.urgent ? "Urgent: " : "") + s.prefix(1).uppercased() + s.dropFirst()
     }

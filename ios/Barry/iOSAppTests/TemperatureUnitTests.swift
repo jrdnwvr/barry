@@ -166,5 +166,6 @@ struct AdvisoryTests {
         #expect(AdvisoryInk.intensity("LGT-MOD") == .systemOrange)
         #expect(AdvisoryInk.intensity("SEV") == .systemRed)
         #expect(AdvisoryInk.intensity("NEG") == .systemGray)
+        #expect(AdvisoryInk.words("LGT-MOD") == "light to moderate" && AdvisoryInk.words("SEV") == "severe")
     }
 }

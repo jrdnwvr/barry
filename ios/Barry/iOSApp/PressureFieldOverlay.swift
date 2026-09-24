@@ -19,6 +19,9 @@ struct PressureFieldState: Equatable {
     var shade: PressureShade = .off
     /// Lighter when the radar is under it.
     var shadeOpacity: Double = 0.38
+    /// Labels in the unit the rest of the app uses; the lines stay at
+    /// whole hPa, which is where the analysis draws them.
+    var unit: PressureUnit = .inHg
     var version = 0
 }
 
@@ -47,7 +50,7 @@ final class PressureFieldRenderer: MKOverlayRenderer {
             for line in field.isobars {
                 // Indigo, not gray: gray reads as a road on Apple's map.
                 drawLine(line, color: UIColor.systemIndigo.withAlphaComponent(0.85), width: 1.6 * scale,
-                         dash: nil, label: String(Int(line.level)), unit: "hPa",
+                         dash: nil, label: Self.levelText(line.level, st.unit), unit: st.unit.label,
                          scale: scale, visible: visible, in: ctx)
             }
         }
@@ -61,13 +64,13 @@ final class PressureFieldRenderer: MKOverlayRenderer {
                 let mag = min(6, abs(line.level))
                 drawLine(line, color: ink, width: (1.1 + 0.15 * mag) * scale,
                          dash: falling ? [7 * scale, 5 * scale] : nil,
-                         label: String(format: "%.0f", line.level), scale: scale,
+                         label: Self.changeText(line.level, st.unit), scale: scale,
                          visible: visible, in: ctx)
             }
             for e in field.tendencyExtrema {
                 let p = point(for: MKMapPoint(CLLocationCoordinate2D(latitude: e.lat, longitude: e.lon)))
                 guard visible.contains(MKMapPoint(CLLocationCoordinate2D(latitude: e.lat, longitude: e.lon))) else { continue }
-                drawExtremum(e, at: p, color: ink, scale: scale, in: ctx)
+                drawExtremum(e, at: p, color: ink, unit: st.unit, scale: scale, in: ctx)
             }
         }
     }
@@ -80,11 +83,22 @@ final class PressureFieldRenderer: MKOverlayRenderer {
             : UIColor(red: 0.62, green: 0.42, blue: 0.02, alpha: 0.95) }
     }
 
-    private func drawExtremum(_ e: FieldExtremum, at p: CGPoint, color: UIColor, scale: CGFloat, in ctx: CGContext) {
+    /// "1012" or "29.88": an isobar's level in the chosen unit.
+    static func levelText(_ hPa: Double, _ unit: PressureUnit) -> String {
+        unit == .hPa ? String(Int(hPa.rounded())) : String(format: "%.2f", unit.convert(hPa))
+    }
+
+    /// "-2" or "-0.06": a change line's 3 h change in the chosen unit.
+    static func changeText(_ hPa: Double, _ unit: PressureUnit) -> String {
+        unit == .hPa ? String(format: "%.0f", hPa) : String(format: "%.2f", unit.convertDelta(hPa))
+    }
+
+    private func drawExtremum(_ e: FieldExtremum, at p: CGPoint, color: UIColor, unit: PressureUnit,
+                              scale: CGFloat, in ctx: CGContext) {
         let letterFont = UIFont.systemFont(ofSize: 15 * scale, weight: .black)
         let valueFont = UIFont.systemFont(ofSize: 9 * scale, weight: .bold)
         let letter = e.kind as NSString
-        let value = String(format: "%.0f", abs(e.value)) as NSString
+        let value = Self.changeText(abs(e.value), unit) as NSString
         let la: [NSAttributedString.Key: Any] = [.font: letterFont, .foregroundColor: color]
         let va: [NSAttributedString.Key: Any] = [.font: valueFont, .foregroundColor: color]
         let ls = letter.size(withAttributes: la), vs = value.size(withAttributes: va)

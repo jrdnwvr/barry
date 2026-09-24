@@ -22,6 +22,9 @@ struct RadarKeySheet: View {
     let storms: Bool
     let pressureStations: Int
     var lightningCoverage: Bool? = nil
+    @AppStorage("pressureUnit", store: AppConfig.sharedDefaults)
+    private var pressureUnitRaw: String = PressureUnit.inHg.rawValue
+    private var inHg: Bool { pressureUnitRaw == PressureUnit.inHg.rawValue }
 
     var body: some View {
         ScrollView {
@@ -145,12 +148,12 @@ struct RadarKeySheet: View {
                 ramp([Color(red: 0.9, green: 0.35, blue: 0.15), Color(red: 0.9, green: 0.35, blue: 0.15).opacity(0.15),
                       Color(red: 0.15, green: 0.43, blue: 0.9).opacity(0.15), Color(red: 0.15, green: 0.43, blue: 0.9)],
                      low: "falling", high: "rising")
-                Text("3 h pressure change at each station, gridded. Solid rising, dashed falling, one line per hPa. H and L mark the strongest.")
+                Text("3 h pressure change at each station, gridded. Solid rising, dashed falling, one line per \(inHg ? "0.03 inHg" : "hPa"). H and L mark the strongest.")
             }
         }
         if isobars {
             section("Isobars", icon: "circle.dashed") {
-                Text("Equal sea-level pressure, every 4 hPa or 2 on a flat day. Tighter spacing means more wind, and it runs along them rather than across.")
+                Text("Equal sea-level pressure, every \(inHg ? "0.12 inHg, or 0.06" : "4 hPa, or 2") on a flat day. Tighter spacing means more wind, and it runs along them rather than across.")
             }
         }
     }

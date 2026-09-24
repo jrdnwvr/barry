@@ -177,6 +177,10 @@ struct AloftScreen: View {
             header
             GeometryReader { geo in
                 plot(size: geo.size)
+                    // Scrubbing the hour glides the column to the next one:
+                    // the boundary layer, cloud bands, freezing level and
+                    // level rows move together instead of jumping.
+                    .animation(.easeInOut(duration: 0.35), value: hourIndex)
             }
             .clipped()
         }

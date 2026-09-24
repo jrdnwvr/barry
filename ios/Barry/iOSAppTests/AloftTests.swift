@@ -50,3 +50,14 @@ struct AloftTests {
         #expect(AloftFormat.feet(12000) == "12,000")
     }
 }
+
+struct PressureLabelTests {
+    @Test func isobarAndChangeLabelsFollowTheUnit() {
+        #expect(PressureFieldRenderer.levelText(1012, .hPa) == "1012")
+        #expect(PressureFieldRenderer.levelText(1012, .inHg) == "29.88")
+        #expect(PressureFieldRenderer.levelText(1016, .inHg) == "30.00")
+        #expect(PressureFieldRenderer.changeText(-2, .hPa) == "-2")
+        #expect(PressureFieldRenderer.changeText(-2, .inHg) == "-0.06")
+        #expect(PressureFieldRenderer.changeText(3, .inHg) == "0.09")
+    }
+}

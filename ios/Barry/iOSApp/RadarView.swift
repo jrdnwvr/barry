@@ -146,6 +146,9 @@ struct RadarPanel: View {
     /// Anything that needs the gridded pressure field behind it.
     private var wantsPressure: Bool { field != .off || showIsobars }
 
+    @AppStorage("pressureUnit", store: AppConfig.sharedDefaults)
+    private var pressureUnitRaw: String = PressureUnit.inHg.rawValue
+
     private var pressureState: PressureFieldState? {
         guard wantsPressure else { return nil }
         // Lighter shading over the radar so the rain still reads through it.
@@ -161,6 +164,7 @@ struct RadarPanel: View {
                                   showIsobars: showIsobars,
                                   showIsallobars: field == .change,
                                   shade: shade, shadeOpacity: opacity,
+                                  unit: PressureUnit(rawValue: pressureUnitRaw) ?? .inHg,
                                   version: model.pressureVersion)
     }
 

@@ -438,22 +438,35 @@ struct ConfirmationOverlayView: View {
     }
 
     /// The tapped hour in words: every series that is on, in its unit.
+    /// The tapped hour in full: rain chance, wind with its gust and the
+    /// direction it comes from, temperature, and the sky, each in the
+    /// app's units. Two lines so none of it is squeezed.
     private func readout(_ sel: Selection) -> some View {
         let h = hours.first { $0.t == sel.date }
         var parts: [String] = []
-        if isShown(.precip), let p = h?.precip_prob { parts.append("\(Int(p))%") }
+        if isShown(.precip), let p = h?.precip_prob { parts.append("\(Int(p))% rain") }
         if isShown(.wind), let w = h?.windspeed {
             var s = "\(windUnit.format(w))"
             if let g = h?.windgust, g > w + 5.5 { s += " G\(windUnit.format(g))" }
-            parts.append(s + " \(windUnit.label)")
+            s += " \(windUnit.label)"
+            if let d = h?.winddir, w >= 3.7 { s += " from \(String(format: "%03d", Int(d.rounded()) % 360))°" }
+            parts.append(s)
         }
         if isShown(.temp), let t = h?.temperature { parts.append(tempUnit.format(t)) }
-        return HStack(spacing: 8) {
-            Text(sel.date, format: .dateTime.weekday(.abbreviated).hour().minute())
-                .font(.caption).foregroundStyle(.secondary)
-            Text(parts.joined(separator: " · "))
-                .font(.caption.weight(.semibold)).monospacedDigit()
-            Text("forecast").font(.caption2).foregroundStyle(.secondary)
+        if let sky = ShortTermForecast.sky(h?.cloudcover) { parts.append(sky) }
+        return HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(sel.date, format: .dateTime.weekday(.abbreviated).hour().minute())
+                    Text("forecast").font(.caption2)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                Text(parts.joined(separator: " · "))
+                    .font(.caption.weight(.semibold))
+                    .monospacedDigit()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Spacer()
             Button { selection = nil } label: { Image(systemName: "xmark.circle.fill") }
                 .buttonStyle(.plain)

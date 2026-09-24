@@ -105,3 +105,17 @@ struct DroneWindTests {
         #expect(DroneWind.line(hours: [hour(0, nil, now: now)], now: now) == nil)
     }
 }
+
+struct BuoyDecodeTests {
+    @Test func aBuoyDecodesWithItsOwnFields() throws {
+        let json = """
+        {"stations":[{"id":"44013","lat":42.346,"lon":-70.651,"kind":"buoy","windKt":17.5,"windDir":30,
+          "slp":1028.9,"presTend":-1.2,"waveFt":3.9,"wavePeriodS":6,"waterTempC":16.5,"fltCatDerived":false},
+          {"id":"KBOS","lat":42.36,"lon":-71.0,"windKt":12,"fltCat":"VFR","fltCatDerived":false}],
+         "cachedAt":"2026-09-24T21:10:00Z"}
+        """
+        let r = try BarryAPI.decoder.decode(StationsResponse.self, from: Data(json.utf8))
+        #expect(r.stations[0].isBuoy && r.stations[0].waveFt == 3.9 && r.stations[0].presTend == -1.2)
+        #expect(!r.stations[1].isBuoy && r.stations[1].kind == nil)
+    }
+}

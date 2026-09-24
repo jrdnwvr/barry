@@ -549,9 +549,13 @@ struct HourlyForecastCard: View {
             VStack(spacing: 3) {
                 ZStack(alignment: .bottom) {
                     Color.clear.frame(width: 12, height: 26)
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(ForecastPalette.rain.opacity(h.rain >= 30 ? 0.9 : 0.45))
-                        .frame(width: 12, height: max(2, 26 * CGFloat(h.rain) / 100))
+                    // Same rule as the chart: nothing at 0%, a pale stub for a
+                    // slight chance, the true height from 10%.
+                    if h.rain > 0 {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(ForecastPalette.rain.opacity(h.rain < 10 ? 0.3 : (h.rain >= 30 ? 0.9 : 0.5)))
+                            .frame(width: 12, height: max(3, 26 * CGFloat(h.rain) / 100))
+                    }
                 }
                 Text("\(h.rain)%")
                     .font(.system(size: 10))

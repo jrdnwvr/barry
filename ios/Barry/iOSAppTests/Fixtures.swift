@@ -52,13 +52,22 @@ enum Fixtures {
         }
     }
 
-    /// The KLUK payload with the front night as its forecast.
-    static func combinedFrontNight() throws -> CombinedResponse {
+    /// The KLUK payload with the front night as its forecast; `dry` takes
+    /// every drop of rain out of it.
+    static func combinedFrontNight(dry: Bool = false) throws -> CombinedResponse {
         var obj = try #require(try JSONSerialization.jsonObject(with: data("combined_kluk")) as? [String: Any])
         var forecast = try #require(obj["forecast"] as? [String: Any])
         let enc = JSONEncoder()
         enc.dateEncodingStrategy = .iso8601
-        forecast["hourly"] = try JSONSerialization.jsonObject(with: enc.encode(frontForecast()))
+        var hours = frontForecast()
+        if dry {
+            hours = hours.map { h in
+                ForecastHour(t: h.t, pressure_msl: h.pressure_msl, windspeed: h.windspeed, winddir: h.winddir,
+                             windgust: h.windgust, precip_prob: 0, temperature: h.temperature, dewpoint: h.dewpoint,
+                             cloudcover: h.cloudcover, weather_code: 3)
+            }
+        }
+        forecast["hourly"] = try JSONSerialization.jsonObject(with: enc.encode(hours))
         obj["forecast"] = forecast
         return try BarryAPI.decoder.decode(CombinedResponse.self, from: JSONSerialization.data(withJSONObject: obj))
     }

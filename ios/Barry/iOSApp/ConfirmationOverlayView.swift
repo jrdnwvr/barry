@@ -221,6 +221,9 @@ struct ConfirmationOverlayView: View {
         }
     }
 
+    /// The rain key only explains bars; a dry window has none.
+    private var showsRainKey: Bool { isShown(.precip) && precipValues.contains { $0.v > 0 } }
+
     private var legend: some View {
         let gusts = windValues.compactMap(\.g)
         let gustText: String = {
@@ -236,7 +239,7 @@ struct ConfirmationOverlayView: View {
             HStack(spacing: 14) { legendItems(gustText, tempText) }
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 14) {
-                    if isShown(.precip) { legendItem(.precip, "Precip probability") }
+                    if showsRainKey { legendItem(.precip, "Precip probability") }
                     if isShown(.wind) { legendItem(.wind, "Wind\(gustText)") }
                 }
                 if isShown(.temp) { legendItem(.temp, "Temperature\(tempText)") }
@@ -247,7 +250,7 @@ struct ConfirmationOverlayView: View {
     }
 
     @ViewBuilder private func legendItems(_ gustText: String, _ tempText: String) -> some View {
-        if isShown(.precip) { legendItem(.precip, "Precip probability") }
+        if showsRainKey { legendItem(.precip, "Precip probability") }
         if isShown(.wind) { legendItem(.wind, "Wind\(gustText)") }
         if isShown(.temp) { legendItem(.temp, "Temperature\(tempText)") }
     }
@@ -298,9 +301,15 @@ struct ConfirmationOverlayView: View {
 
             if isShown(.precip) {
                 ForEach(precipValues) { p in
-                    BarMark(x: .value("Time", p.t, unit: .hour), y: .value("Precip", max(0.04, norm(.precip, p.v))), width: .ratio(0.42))
-                        .foregroundStyle(Series.precip.color.opacity(0.85))
-                        .cornerRadius(3)
+                    // No bar at 0%: an empty hour reads as dry. A slight
+                    // chance keeps a small pale stub so it is not mistaken
+                    // for nothing; from 10% the bar is its true height.
+                    if p.v > 0 {
+                        BarMark(x: .value("Time", p.t, unit: .hour),
+                                y: .value("Precip", max(0.04, norm(.precip, p.v))), width: .ratio(0.42))
+                            .foregroundStyle(Series.precip.color.opacity(p.v < 10 ? 0.35 : 0.85))
+                            .cornerRadius(3)
+                    }
                 }
             }
 

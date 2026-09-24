@@ -76,6 +76,19 @@ struct CardRenderTests {
         }
     }
 
+    /// A dry night: no bars, no rain key on the chart, empty rain rows on the strip.
+    @Test func aDryNightDrawsNoRain() throws {
+        let combined = try Fixtures.combinedFrontNight(dry: true)
+        for (name, view) in [("chart", AnyView(ConfirmationOverlayView(combined: combined, now: Fixtures.fixtureNow))),
+                             ("hourly", AnyView(HourlyForecastCard(combined: combined, now: Fixtures.fixtureNow, scrolls: false)))] {
+            let r = ImageRenderer(content: view.padding(12).background(Color(.systemBackground))
+                .frame(width: 390).fixedSize(horizontal: false, vertical: true))
+            r.scale = 3
+            let img = try #require(r.uiImage)
+            try img.pngData()?.write(to: FileManager.default.temporaryDirectory.appendingPathComponent("dry-\(name).png"))
+        }
+    }
+
     @Test func tafRunwayAndHeroCardsRenderAtEveryPhoneWidth() throws {
         let combined = try Fixtures.combinedKLUK()
         let now = Fixtures.fixtureNow

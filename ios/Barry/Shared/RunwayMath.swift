@@ -20,14 +20,6 @@ enum RunwayWindsMode: String, CaseIterable, Identifiable {
         }
     }
 
-    var footer: String {
-        switch self {
-        case .always:  return "Runway components whenever the station has runway data."
-        case .auto:    return "Runway components at a selected airport or within 3 NM of one. Wind rose elsewhere."
-        case .compass: return "Wind on the compass rose only."
-        }
-    }
-
     /// Whether runway components apply, given where the user is.
     func usesRunways(atAirport: Bool) -> Bool {
         switch self {

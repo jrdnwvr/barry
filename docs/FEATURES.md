@@ -208,10 +208,11 @@ hidden). A card shows only when it is not hidden and has something to say.
 | 9 | `sensor` | Sensor vs station | yes | sensor on and My location |
 | 10 | `sources` | Data sources | yes, cannot hide | always |
 
-### settings.homeScreen.layout
-- Seen: Settings › Home screen: three presets (Pilot, Weather, Everything),
-  one row per card with a switch and a drag handle, and the Live Activity
-  toggle. "A card still only appears when it has something to show."
+### settings.cards
+- Seen: Settings › Cards: three presets (Pilot, Weather, Everything), then
+  one row per card with its title, a switch and a drag handle. No card
+  descriptions, no footer, no Live Activity switch (that lives in Settings
+  › Alerts); thinned 2026-09-24.
 - Presets: Pilot hides sensor and TAF; Weather hides wind, Here and TAF;
   Everything shows all.
 - Tests: none.
@@ -299,8 +300,12 @@ hidden). A card shows only when it is not hidden and has something to say.
 - Data: the phone sensor (calibrated, under 2 h old), `current.altim`, the
   model's sea-level pressure adjusted by the station's offset, GPS or fused
   altitude.
-- Settings: `backcountryEnabled` false (one-time disclaimer),
-  `backcountryUsePhoneSensor` true, `backcountryUseWatchSensor` true.
+- Settings: `backcountryEnabled` false (one-time disclaimer). One switch
+  since 2026-09-24: the estimates use the phone sensor whenever the live
+  phone sensor is on, and the phone asks the watch to turn its barometer
+  on with Backcountry (the watch's own switch still wins). The old
+  "Use phone sensor" and "Use watch sensor" switches and their keys are
+  retired.
 - Rules: never shown at an airport. Sensor wins, then station. Rough means
   the sources disagree by more than 1.7 hPa or the station is over 50 NM
   away. Density altitude uses the FAA rule of thumb.
@@ -385,6 +390,18 @@ hidden). A card shows only when it is not hidden and has something to say.
   altimeter headline, the home barb on the map, the Auto runway mode and
   hides the Here card. Legacy keys are migrated once.
 - Tests: none.
+
+### settings.screen
+- Seen: one short list, no footers (thinned 2026-09-24): a first group with
+  Live phone sensor, Cards and Backcountry; Alerts (pressure changes and
+  storms each with a one-line subtitle, the permission warning when
+  denied, Send a test alert, Lock screen); Units (three segmented
+  pickers); "Cards and screens" with one row each for the Wind card, the
+  Forecast card, how the Radar opens, the Aloft ceiling and the Boundary
+  layer reference, the value on the right; Locations.
+- Lives: `SettingsView.swift`.
+- Rules: the per-mode footers (`RunwayWindsMode.footer`,
+  `ForecastCardStyle.footer`) were deleted with the footers they fed.
 
 ### settings.locations.addAirport and settings.locations.addPlace
 - Seen: live search from two characters via `/stations/search`; Add checks
@@ -694,8 +711,9 @@ For: P S D. The column of clouds, temperatures and winds above the field.
   decoded. With no conditions block the ground is 0 ft MSL.
 
 ### aloft.navbar and aloft.menu.ceiling
-- Seen: custom bar with Back, "Aloft", station and name, and a ceiling menu
-  (6,000 / 12,000 / 18,000 / 24,000 ft).
+- Seen: custom bar with Back, "Aloft", station and name, a Layers button
+  (`aloft.layers`) and a ceiling menu (6,000 / 12,000 / 18,000 /
+  24,000 ft). No header row over the column since 2026-09-24.
 - Settings: `aloftCeilingFt` 18000, shared with Settings › Aloft and the
   radar rail's cap.
 
@@ -707,15 +725,17 @@ For: P S D. The column of clouds, temperatures and winds above the field.
 
 ### aloft.layer.clouds, aloft.metarCeiling, aloft.layer.icing
 - Seen: model cloud bands (dense fill at 70% cover) with cover, top and base;
-  the METAR ceiling as a separate line with a pill like "BKN045 · METAR";
-  the freezing level as a dotted rule with "0°C · 8,500 ft"; ICING tags on
-  cloud between 0 and −20 °C.
+  the METAR ceiling as a separate line labelled "BKN045 reported"; the
+  freezing level as a dotted rule labelled "0°C · 8,500 ft"; the word
+  "icing" on cloud between 0 and −20 °C. Labels are plain words in the
+  line's colour (`AloftLabel`), not pills.
 - Rules: the METAR ceiling does not move with the scrubber. A band's base
   label hides within 22 pt of the METAR line.
 
 ### aloft.layer.temp and aloft.layer.wind
-- Seen: temperature and dew point per level in the temperature unit; barbs
-  with "230° / 25 kt".
+- Seen: temperature over dew point per level the way a METAR writes them
+  ("14/9", the dew point quieter), in the temperature unit; barbs with
+  "230° / 25 kt".
 - Lives: `AloftBarbView`, `WindBarb.marks` in `AloftMath.swift`.
 - Tests: `AloftTests` barb marks and formats.
 
@@ -730,20 +750,24 @@ For: P S D. The column of clouds, temperatures and winds above the field.
   wind, cloud and an icing sentence.
 
 ### aloft.chips
-- Seen: Clouds, Wind, Temp, Icing, Layer chips and a More menu ("Show every
-  layer", "Clouds only").
+- Seen: behind the Layers button in the bar: Clouds, Wind, Temp, Icing,
+  Layer chips and a More menu ("Show every layer", "Clouds only"). Whether
+  the row is open is not remembered.
 - Settings: `aloftLayers` "clouds,wind,temp,icing".
 
 ### aloft.scrubber and aloft.animation
 - Seen: a slider over the hours ("Now · 3:00 PM", "+N h · time"), haptic
-  per hour, and the plot glides between hours over 0.35 s.
+  per hour, and the plot glides between hours over 0.35 s. The fixed
+  "+24 h" end label went in the 2026-09-24 thinning.
 - Tests: the UI test opens Aloft, toggles each chip, scrubs, picks a
   ceiling and comes back.
 - Rules: that test leaves `aloftCeilingFt` at 12000 in the simulator, and
   it runs before the radar test, so the rail then stops at 10k.
 
-### aloft.footer
-- Seen: "Levels Open-Meteo · ceiling AWC · elevation OurAirports".
+### aloft.credit
+- Seen: nothing on the screen since 2026-09-24. Open-Meteo's credit is on
+  the Data sources card, which cannot be hidden. The surface band reads
+  "KLUK · 483 ft" and "27011KT · 20°/15°" without a "METAR" prefix.
 
 ## Watch app
 
@@ -865,8 +889,8 @@ when there is no file). The app nudges WidgetKit after every load.
   own interpreter, never `/front`), or Follow (six hours, from the hero).
 - Lives: `Shared/PressureActivity.swift`, `iOSApp/LiveActivityManager.swift`,
   `PhoneWidget/PressureActivityWidget.swift`.
-- Settings: `liveActivityEnabled` false, switchable in Settings › Alerts,
-  the home layout editor, and onboarding. `liveActivity.followUntil`.
+- Settings: `liveActivityEnabled` false, switchable in Settings › Alerts
+  and onboarding. `liveActivity.followUntil`.
 - Rules: starts only in the foreground, no push; stale after 2 h; ends 15
   min after the event clears, or when the event changes kind (a new one
   starts at the next foreground sync); after 90 min without an update it
@@ -939,7 +963,7 @@ each device (the watch keeps its own copies).
 | `stormAlertsEnabled` | false | the historical single switch | Settings, onboarding |
 | `alerts.migrated.v2` | false | migration guard | StormAlerter |
 | `alert.latch.*` | unset | cooldown dates for the four alert kinds | StormAlerter |
-| `liveActivityEnabled` | false | | Settings › Alerts, Home screen page, onboarding |
+| `liveActivityEnabled` | false | | Settings › Alerts, onboarding |
 | `liveActivity.followUntil` | unset | now + 6 h | the hero menu |
 | `runwayWindsMode` | auto | always, auto, compass | Settings |
 | `boundaryLayerReference` | agl | agl, msl; main page only | Settings |
@@ -950,8 +974,7 @@ each device (the watch keeps its own copies).
 | `homeLayout.v1` | `HomeLayout.initial` | JSON order and hidden | Home screen page |
 | `backcountryEnabled` | false | one-time disclaimer; also sent to the watch | Settings |
 | `backcountryAcknowledged` | false | | the disclaimer sheet |
-| `backcountryUsePhoneSensor` | true | | Settings |
-| `backcountryUseWatchSensor` | true | sent to the watch as `watchBarometerEnabled` | Settings |
+| `backcountryUsePhoneSensor`, `backcountryUseWatchSensor` | retired | removed 2026-09-24; Backcountry is one switch, sent to the watch as `watchBarometerEnabled` | |
 | `backcountryRangeNM` | unused | defined, never read | |
 | `radarShowRadar` | true | Radar chip | radar |
 | `radarField` | off | off, pressure, change | radar |

@@ -146,9 +146,15 @@ final class RadarUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter().wait(for: [loaded], timeout: 30), .completed, "the column never loaded: \(time.label)")
         XCTAssertTrue(time.label.hasPrefix("Now"), time.label)
 
+        // The layer chips sit behind the Layers button. A tap that lands
+        // while the push is still settling can be eaten; one more try.
+        let layersButton = app.buttons["aloft.layers"].firstMatch
+        XCTAssertTrue(layersButton.waitForExistence(timeout: 5), "no Layers button")
+        layersButton.tap()
+        if !app.buttons["aloft.layer.clouds"].firstMatch.waitForExistence(timeout: 3) { layersButton.tap() }
         for name in ["clouds", "wind", "temp", "icing", "layer"] {
             let chip = app.buttons["aloft.layer.\(name)"].firstMatch
-            XCTAssertTrue(chip.waitForExistence(timeout: 5), name)
+            XCTAssertTrue(chip.waitForExistence(timeout: 5), "\(name)\n\(app.debugDescription)")
             let was = chip.isSelected
             chip.tap()
             XCTAssertNotEqual(chip.isSelected, was, "\(name) did not toggle")

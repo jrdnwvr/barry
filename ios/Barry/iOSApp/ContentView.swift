@@ -21,8 +21,6 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(Backcountry.enabledKey, store: AppConfig.sharedDefaults)
     private var backcountryEnabled: Bool = false
-    @AppStorage(Backcountry.useWatchSensorKey, store: AppConfig.sharedDefaults)
-    private var backcountryUseWatch: Bool = true
     @Environment(\.horizontalSizeClass) private var hSizeClass
     @State private var showSettings = false
     @State private var showRadarFullScreen = false
@@ -96,7 +94,6 @@ struct ContentView: View {
                 guard let c else { return }
                 Task { await LiveActivityManager.shared.sync(c, atAirport: isAtAirport(c), foreground: true) }
             }
-            .onChange(of: backcountryUseWatch) { _, _ in syncWatch() }
             // Keep the reading live while the app is open. Keyed on scenePhase so the
             // loop only runs while frontmost — it stops the moment the app is dimmed
             // away / backgrounded, so the screen still sleeps normally and no work
@@ -496,7 +493,7 @@ struct ContentView: View {
     private func syncWatch() {
         WatchSync.shared.send(station: store.station, airportSelected: store.airportSelected,
                               physical: savedLocations.selected.isPhysical,
-                              backcountry: backcountryEnabled, watchSensor: backcountryEnabled && backcountryUseWatch)
+                              backcountry: backcountryEnabled, watchSensor: backcountryEnabled)
     }
 
     /// The Aloft column for the loaded station; nothing until the station

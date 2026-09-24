@@ -38,10 +38,6 @@ struct SettingsView: View {
     private var backcountryEnabled: Bool = false
     @AppStorage(Backcountry.acknowledgedKey, store: AppConfig.sharedDefaults)
     private var backcountryAcknowledged: Bool = false
-    @AppStorage(Backcountry.usePhoneSensorKey, store: AppConfig.sharedDefaults)
-    private var backcountryUsePhone: Bool = true
-    @AppStorage(Backcountry.useWatchSensorKey, store: AppConfig.sharedDefaults)
-    private var backcountryUseWatch: Bool = true
     @State private var showBackcountryAck = false
     @AppStorage(LiveActivityManager.enabledKey, store: AppConfig.sharedDefaults)
     private var liveActivityEnabled: Bool = false
@@ -67,33 +63,8 @@ struct SettingsView: View {
             Form {
                 Section {
                     Toggle("Live phone sensor", isOn: $phoneBarometerEnabled)
-                    Text("Live readings between station reports, calibrated against the station.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } header: {
-                    Text("Phone barometer")
-                }
-
-                Section {
-                    NavigationLink("Cards and lock screen") { HomeLayoutView() }
-                    Text("Choose which cards show, in what order, and whether a change shows on the lock screen.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } header: {
-                    Text("Home screen")
-                }
-
-                Section {
+                    NavigationLink("Cards") { HomeLayoutView() }
                     Toggle("Backcountry", isOn: $backcountryEnabled)
-                    if backcountryEnabled {
-                        Toggle("Use phone sensor", isOn: $backcountryUsePhone)
-                        Toggle("Use watch sensor", isOn: $backcountryUseWatch)
-                    }
-                    Text("Away from a reporting field, adds an estimated altimeter setting and strip conditions below the station's report. Estimates never replace it.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } header: {
-                    Text("Backcountry")
                 }
 
                 Section {
@@ -133,8 +104,6 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("Alerts")
-                } footer: {
-                    Text("Checked in the background, as often as iOS allows.")
                 }
                 .onChange(of: stormAlertsEnabled) { _, on in
                     if on { Task { notifDenied = !(await StormAlerter.requestAuthorization()) } }
@@ -167,71 +136,33 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
 
-                Section {
-                    Picker("Runway winds", selection: $runwayWindsRaw) {
+                // One row per choice, the value on the right. Five sections
+                // with a footer each restating the options were the tell of
+                // a generated settings screen (thinned 2026-09-24).
+                Section("Cards and screens") {
+                    Picker("Wind card", selection: $runwayWindsRaw) {
                         ForEach(RunwayWindsMode.allCases) { m in
                             Text(m.label).tag(m.rawValue)
                         }
                     }
-                    .pickerStyle(.segmented)
-                } header: {
-                    Text("Wind card")
-                } footer: {
-                    Text(RunwayWindsMode(rawValue: runwayWindsRaw)?.footer ?? "")
-                }
-
-                Section {
                     Picker("Forecast card", selection: $forecastStyleRaw) {
                         ForEach(ForecastCardStyle.allCases) { s in
                             Text(s.label).tag(s.rawValue)
                         }
                     }
-                    .pickerStyle(.segmented)
-                } header: {
-                    Text("Forecast card")
-                } footer: {
-                    Text((ForecastCardStyle(rawValue: forecastStyleRaw) ?? .fallback).footer)
-                }
-
-                Section {
-                    Picker("When the radar opens", selection: $radarAutoplay) {
-                        Text("Play the last hour").tag(true)
-                        Text("Hold on the latest").tag(false)
+                    Picker("Radar opens", selection: $radarAutoplay) {
+                        Text("Playing the last hour").tag(true)
+                        Text("On the latest frame").tag(false)
                     }
-                    .pickerStyle(.segmented)
-                } header: {
-                    Text("Radar")
-                } footer: {
-                    Text(radarAutoplay
-                         ? "Loops on open. Tap pause to hold a frame."
-                         : "Opens on the newest frame. Tap play to loop.")
-                }
-
-                Section {
-                    Picker("Ceiling", selection: $aloftCeilingFt) {
+                    Picker("Aloft ceiling", selection: $aloftCeilingFt) {
                         ForEach(AloftScale.ceilings, id: \.self) { ft in
-                            Text("\(ft / 1000)k").tag(ft)
+                            Text("\(ft.formatted()) ft").tag(ft)
                         }
                     }
-                    .pickerStyle(.segmented)
-                } header: {
-                    Text("Aloft")
-                } footer: {
-                    Text("How high the clouds and winds column goes.")
-                }
-
-                Section {
-                    Picker("Boundary layer height", selection: $blReference) {
+                    Picker("Boundary layer", selection: $blReference) {
                         Text("Above ground").tag("agl")
                         Text("Above sea level").tag("msl")
                     }
-                    .pickerStyle(.segmented)
-                } header: {
-                    Text("Boundary layer")
-                } footer: {
-                    Text(blReference == "msl"
-                         ? "Altitude, field elevation included."
-                         : "Height above the field.")
                 }
 
                 Section {
@@ -321,10 +252,6 @@ struct SettingsView: View {
                     if let err = geocodeError {
                         Text(err).font(.caption).foregroundStyle(.red)
                     }
-
-                    Text("Tap to switch, swipe to remove. My location stays pinned.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 } header: {
                     Text("Locations")
                 }

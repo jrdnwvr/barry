@@ -77,6 +77,9 @@ struct AloftScreen: View {
     private var tempUnit: TemperatureUnit { TemperatureUnit(rawValue: tempUnitRaw) ?? .celsius }
     @State private var hourOffset: Double = 0
     @State private var picked: AloftLevel?
+    /// The layer chips sit behind a button, as on the radar; the layers
+    /// themselves are remembered, whether the row is open is not.
+    @State private var showLayers = false
 
     private var layers: Set<AloftLayer> {
         Set(layersRaw.split(separator: ",").compactMap { AloftLayer(rawValue: String($0)) })
@@ -97,15 +100,12 @@ struct AloftScreen: View {
             navBar
             card
                 .padding(.horizontal, 12)
-            toggles
+            if showLayers {
+                toggles
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
             scrubber
-            Text("Levels Open-Meteo · ceiling AWC · elevation OurAirports")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.top, 6)
-                .padding(.bottom, 6)
+                .padding(.bottom, 8)
         }
         .background(Color(.systemGroupedBackground))
         .toolbar(.hidden, for: .navigationBar)
@@ -140,6 +140,19 @@ struct AloftScreen: View {
                     .truncationMode(.tail)
             }
             .frame(maxWidth: .infinity)
+            Button {
+                withAnimation(.snappy(duration: 0.2)) { showLayers.toggle() }
+            } label: {
+                Image(systemName: "square.3.layers.3d")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(showLayers ? AloftColors.tint : Color(.label).opacity(0.8))
+                    .frame(width: 36, height: 34)
+                    .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+                    .overlay(Capsule().strokeBorder(Color(.separator).opacity(0.5), lineWidth: 0.5))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(showLayers ? "Hide layers" : "Layers")
+            .accessibilityIdentifier("aloft.layers")
             Menu {
                 ForEach(AloftScale.ceilings, id: \.self) { ft in
                     Button { ceilingFt = ft } label: {
@@ -174,7 +187,6 @@ struct AloftScreen: View {
 
     private var card: some View {
         VStack(spacing: 0) {
-            header
             GeometryReader { geo in
                 plot(size: geo.size)
                     // Scrubbing the hour glides the column to the next one:
@@ -199,24 +211,9 @@ struct AloftScreen: View {
         }
     }
 
-    private var header: some View {
-        AloftGrid(widths: columnWidths) {
-            Text("MSL")
-            Text("CLOUDS")
-            Text("TEMP").frame(maxWidth: .infinity, alignment: .trailing)
-            Text("DEW").frame(maxWidth: .infinity, alignment: .trailing)
-            Text("")
-            Text("WIND").frame(maxWidth: .infinity, alignment: .trailing)
-        }
-        .font(.system(size: 11, weight: .semibold))
-        .tracking(0.5)
-        .foregroundStyle(.secondary)
-        .padding(.bottom, 10)
-    }
-
-    /// 36 | flexible | 50 | 40 | 30 | 80, four points between.
-    private var columnWidths: [CGFloat?] { [36, nil, 50, 40, 30, 80] }
-
+    /// No header row (thinned 2026-09-24): the ticks are heights, the bands
+    /// are cloud, the temperature and dew point read as a METAR group, and
+    /// the barb says wind. Columns: 36 | flexible | 94 | 30 | 80.
     private func plot(size: CGSize) -> some View {
         let W = size.width, H = size.height
         let fixed: CGFloat = 36 + 50 + 40 + 30 + 80 + 5 * 4
@@ -267,7 +264,7 @@ struct AloftScreen: View {
                 let yy = y(groundFt + cig)
                 Rectangle().fill(Color(.label)).frame(width: cloudsW, height: 2)
                     .position(x: cloudsX + cloudsW / 2, y: yy)
-                AloftPill(text: "\(cur.ceilingCover ?? "CIG")\(String(format: "%03d", cig / 100)) · METAR", color: Color(.label))
+                AloftLabel(text: "\(cur.ceilingCover ?? "CIG")\(String(format: "%03d", cig / 100)) reported", color: Color(.label))
                     .offset(x: cloudsX, y: yy + 4)
             }
 
@@ -277,7 +274,7 @@ struct AloftScreen: View {
                 AloftRule(style: .dotted, color: AloftColors.tint)
                     .frame(width: W - cloudsX, height: 1.5)
                     .position(x: cloudsX + (W - cloudsX) / 2, y: yy)
-                AloftPill(text: "\(tempUnit.formatWithUnit(0)) · \(AloftFormat.feet(frz)) ft", color: AloftColors.tint)
+                AloftLabel(text: "\(tempUnit.formatWithUnit(0)) · \(AloftFormat.feet(frz)) ft", color: AloftColors.tint)
                     .offset(x: cloudsX, y: yy + 4)
             }
 
@@ -287,7 +284,7 @@ struct AloftScreen: View {
                 AloftRule(style: .dashed, color: AloftColors.boundary)
                     .frame(width: W - cloudsX, height: 1.5)
                     .position(x: cloudsX + (W - cloudsX) / 2, y: yy)
-                AloftPill(text: "Boundary layer · \(AloftFormat.feet(bl)) AGL", color: AloftColors.boundary)
+                AloftLabel(text: "Boundary layer · \(AloftFormat.feet(bl)) AGL", color: AloftColors.boundary)
                     .offset(x: cloudsX, y: yy - 18)
             }
 
@@ -298,13 +295,19 @@ struct AloftScreen: View {
                     Color.clear.frame(width: 36)
                     Color.clear.frame(width: cloudsW)
                     if layers.contains(.temp) {
-                        Text(tempUnit.format(lv.tempC))
-                            .fontWeight(.semibold)
-                            .foregroundStyle(lv.tempC < 0 ? AloftColors.tint : Color(.label))
-                            .frame(width: 50, alignment: .trailing)
-                        Text(lv.dewC.map(tempUnit.format) ?? "")
-                            .foregroundStyle(.secondary)
-                            .frame(width: 40, alignment: .trailing)
+                        // Temperature over dew point the way a METAR writes
+                        // them ("14/9"), the dew point quieter.
+                        HStack(spacing: 0) {
+                            Text(tempUnit.format(lv.tempC))
+                                .fontWeight(.semibold)
+                                .foregroundStyle(lv.tempC < 0 ? AloftColors.tint : Color(.label))
+                            if let d = lv.dewC {
+                                Text("/").foregroundStyle(.secondary)
+                                Text(tempUnit.format(d)).foregroundStyle(.secondary)
+                            }
+                        }
+                        .lineLimit(1)
+                        .frame(width: 94, alignment: .trailing)
                     } else {
                         Color.clear.frame(width: 94)
                     }
@@ -360,7 +363,7 @@ struct AloftScreen: View {
         if let t = cur.temp, let d = cur.dewpoint {
             parts.append("\(tempUnit.format(t))/\(tempUnit.format(d))")
         }
-        return parts.isEmpty ? "METAR" : "METAR " + parts.joined(separator: " · ")
+        return parts.joined(separator: " · ")
     }
 
     // MARK: Toggles and scrubber
@@ -418,7 +421,6 @@ struct AloftScreen: View {
             Slider(value: $hourOffset, in: 0...Double(max(1, model.hours.count - 1)), step: 1)
                 .tint(AloftColors.tint)
                 .accessibilityLabel("Forecast hour")
-            Text("+24 h").font(.footnote).foregroundStyle(.secondary)
         }
         .padding(.horizontal, 16)
         .padding(.top, 10)
@@ -426,30 +428,6 @@ struct AloftScreen: View {
 }
 
 // MARK: - Pieces
-
-/// The column grid the header shares with the rows.
-struct AloftGrid<Content: View>: View {
-    let widths: [CGFloat?]
-    @ViewBuilder let content: Content
-    var body: some View {
-        HStack(spacing: 4) {
-            _VariadicView.Tree(AloftGridLayout(widths: widths)) { content }
-        }
-    }
-}
-
-struct AloftGridLayout: _VariadicView_MultiViewRoot {
-    let widths: [CGFloat?]
-    @ViewBuilder func body(children: _VariadicView.Children) -> some View {
-        ForEach(Array(children.enumerated()), id: \.offset) { i, child in
-            if let w = widths.indices.contains(i) ? widths[i] : nil {
-                child.frame(width: w, alignment: .leading)
-            } else {
-                child.frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-    }
-}
 
 struct AloftCloudBand: View {
     let cloud: AloftCloud
@@ -465,13 +443,9 @@ struct AloftCloudBand: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Color(.label))
                 if showIcing && cloud.icing {
-                    Text("ICING")
-                        .font(.system(size: 10, weight: .bold))
-                        .tracking(0.4)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(AloftColors.tint, in: RoundedRectangle(cornerRadius: 5))
+                    Text("icing")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AloftColors.tint)
                 }
             }
             .padding(EdgeInsets(top: 5, leading: 7, bottom: 5, trailing: 7))
@@ -489,15 +463,17 @@ struct AloftCloudBand: View {
     }
 }
 
-struct AloftPill: View {
+/// A word beside a line, in the line's colour. Plain text: the pills it
+/// replaced were the tell of a generated screen.
+struct AloftLabel: View {
     let text: String
     let color: Color
     var body: some View {
         Text(text)
             .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(color)
-            .padding(.horizontal, 3)
-            .background(Color(.secondarySystemGroupedBackground).opacity(0.9), in: RoundedRectangle(cornerRadius: 3))
+            .padding(.horizontal, 2)
+            .background(Color(.secondarySystemGroupedBackground).opacity(0.85))
             .fixedSize()
     }
 }

@@ -27,14 +27,6 @@ enum ForecastCardStyle: String, CaseIterable, Identifiable {
         }
     }
 
-    var footer: String {
-        switch self {
-        case .summary: return "What changes in a sentence, over bands for rain, wind, temperature and sky."
-        case .changes: return "Only the moments something changes, in order."
-        case .hourly: return "Every hour for the next day, side by side."
-        case .chart: return "Rain, wind and temperature on one chart."
-        }
-    }
 }
 
 struct ShortTermForecastCard: View {

@@ -17,8 +17,6 @@ import SwiftUI
 enum Backcountry {
     static let enabledKey = "backcountryEnabled"
     static let acknowledgedKey = "backcountryAcknowledged"
-    static let usePhoneSensorKey = "backcountryUsePhoneSensor"
-    static let useWatchSensorKey = "backcountryUseWatchSensor"
     static let rangeKey = "backcountryRangeNM"
 
     static let disclaimer = "Estimates come from the nearest station, the forecast model, and this device's sensor. They are not a reported altimeter setting and do not satisfy 14 CFR 91.121. Use a reported setting from a station within 100 NM when one exists; otherwise set field elevation before takeoff. Never for an instrument approach."
@@ -147,13 +145,11 @@ struct StripCard: View {
 
     @AppStorage(Backcountry.enabledKey, store: AppConfig.sharedDefaults)
     private var enabled: Bool = false
-    @AppStorage(Backcountry.usePhoneSensorKey, store: AppConfig.sharedDefaults)
-    private var usePhoneSensor: Bool = true
     @State private var altitude: (meters: Double, accuracy: Double)?
     @State private var showInfo = false
 
     private var estimate: StripEstimate {
-        let sensor = (enabled && sensorEnabled && usePhoneSensor && barometer.isCalibrated)
+        let sensor = (enabled && sensorEnabled && barometer.isCalibrated)
             ? barometer.lastLocalReading : nil
         return StripEstimate.make(combined: combined, now: now, here: here,
                                   hereAltitudeM: physical ? altitude?.meters : nil,

@@ -38,21 +38,6 @@ enum HomeCard: String, CaseIterable, Codable, Identifiable {
         }
     }
 
-    var detail: String {
-        switch self {
-        case .lightning:  return "Strikes within 100 miles, when there are any."
-        case .chart:      return "The pressure curve. Always shown."
-        case .taf:        return "Flight category by the hour for the next 24 h, with sunset and sunrise."
-        case .rainWind:   return "The next hours, in the style chosen in Settings."
-        case .conditions: return "Density altitude, clouds, boundary layer, storms, fog."
-        case .strip:      return "Nearest station and estimates away from a reporting field."
-        case .wind:       return "Wind on the compass, runway components at an airport."
-        case .radar:      return "The map."
-        case .sensor:     return "The phone barometer against the station."
-        case .sources:    return "Where the numbers came from. Always shown."
-        }
-    }
-
     /// The chart is the app; it can move but not hide. The sources line
     /// carries the forecast data's required credit, so it stays too.
     var canHide: Bool { self != .chart && self != .sources }
@@ -139,8 +124,6 @@ final class HomeLayoutStore: ObservableObject {
 
 struct HomeLayoutView: View {
     @EnvironmentObject var store: HomeLayoutStore
-    @AppStorage(LiveActivityManager.enabledKey, store: AppConfig.sharedDefaults)
-    private var liveActivityEnabled: Bool = false
 
     var body: some View {
         List {
@@ -159,38 +142,17 @@ struct HomeLayoutView: View {
 
             Section {
                 ForEach(store.layout.order) { card in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(card.title)
-                            Text(card.detail)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Toggle("", isOn: Binding(
-                            get: { store.isVisible(card) },
-                            set: { store.setHidden(card, !$0) }))
-                        .labelsHidden()
-                        .disabled(!card.canHide)
-                    }
+                    Toggle(card.title, isOn: Binding(
+                        get: { store.isVisible(card) },
+                        set: { store.setHidden(card, !$0) }))
+                    .disabled(!card.canHide)
                 }
                 .onMove { store.move(from: $0, to: $1) }
             } header: {
                 Text("Cards")
-            } footer: {
-                Text("Drag to reorder. A card still only appears when it has something to show.")
-            }
-
-            Section {
-                Toggle("Live Activity", isOn: $liveActivityEnabled)
-                Text("While pressure is changing fast, a front is passing, or lightning is close: the trend on the lock screen and in the Dynamic Island.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } header: {
-                Text("Lock screen")
             }
         }
-        .navigationTitle("Home screen")
+        .navigationTitle("Cards")
         .navigationBarTitleDisplayMode(.inline)
         // Nothing to delete, so the grips can stay out all the time.
         .environment(\.editMode, .constant(.active))

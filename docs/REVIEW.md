@@ -190,6 +190,43 @@ you keep on, and which did you turn off first. A screenshot of their
 Home screen page is the whole answer. If that is not enough, count card
 visibility on the phone and show it only to the user, never uploaded.
 
+### Todo from this review
+
+Checked off as each lands; the registry entry changes in the same commit.
+
+Hand-made pass:
+- [x] Hero: number, badge, one source line, verdict, one line of reasoning (090771a).
+- [x] Radar card: chips behind a Layers button, one note line, credit moved to the key and the sources card (090771a).
+- [x] Aloft: no header row, temperature and dew point as one METAR-style group, plain labels instead of pills, chips behind a Layers button, no sources footer, no "+24 h".
+- [x] Settings: no footers under pickers, the five one-picker sections folded into one, one Backcountry switch, the Live Activity switch in Alerts only.
+- [x] Home screen page, now "Cards": no card descriptions, no maker's-note footer.
+- [ ] Forecast card styles: cull to two after the Pilots group has used them (Jordan's call, waits on tester feedback).
+- [ ] Cards: the Data sources card as a footer line, not a card; drop the chart legend line; the Conditions card a third shorter.
+- [ ] Copy: drop "Estimated, advisory only." and "For advisement only, not a replacement for PIREPs."; keep the 91.121 sentence in the info sheet.
+
+Customisation:
+- [ ] Onboarding asks "What will you use Barry for?"; Pilot, Soaring, Drone, Marine, Everyday and Weather presets as bundles of existing keys, editable after.
+- [ ] A gear on each card for its own two or three options; Settings shrinks to units, alerts, locations and the sensor.
+- [ ] Alert thresholds and quiet hours.
+
+Audiences, smallest useful change each:
+- [ ] Soaring: a cloud base line on Conditions from the spread.
+- [ ] Drone: a "flyable now, next N hours" line on the Wind card from the 80 m wind.
+- [ ] Everyday: a threshold slider on the pressure alert.
+- [ ] Weather watchers: radar layer presets (ROADMAP G6).
+- [ ] Backcountry: cache the last reading on the watch too; "as of" everywhere when offline.
+- [ ] Marine: buoys as stations, once the station layer takes a non-airport source.
+
+Direction:
+- [ ] Data independence, docs/NOAA.md phase by phase.
+- [ ] The second field and the route (docs/ROUTES.md), then the AWC advisories layer.
+- [ ] Height contours (NOAA phase 2).
+
+Measuring:
+- [ ] Ask the Pilots group for a screenshot of their Home screen page: which cards stay on.
+
+Fix first: all eight fixed 2026-09-24 (2b4a0d2).
+
 ### How this review was made
 
 Three sweeps read every Swift and Python source and wrote

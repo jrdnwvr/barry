@@ -368,6 +368,11 @@ alerter's decisions matches the public API's.
 Small, and independent of the bridge decision. The first piece needs no
 GRIB library.
 
+LAMP done 2026-09-24: `sources/lamp.py`, `sources/nomads.py`, a LAMP loop
+in the scheduler, `/combined.lamp`, the TAF card's stand-in at fields
+with no TAF, and the route's arrival. The 15 minute runs, the extended
+hours and the lightning probability wording are not used yet.
+
 - **LAMP first.** Pull the hourly bulletin at :35 (and the extended one
   for hours 26 to 38), parse the fixed columns into a table keyed by
   station, hold the newest two runs. Serve it inside the payloads that

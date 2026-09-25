@@ -42,4 +42,27 @@ struct TafTimelineTests {
         combined.taf = nil
         #expect(TafTimeline(combined: combined, now: Fixtures.fixtureNow) == nil)
     }
+
+    /// No TAF, but LAMP: the strip comes from LAMP's hours and the sentence
+    /// says where it came from.
+    @Test func lampStandsInWhereNoTafIsIssued() throws {
+        var combined = try Fixtures.combinedKLUK()
+        combined.taf = nil
+        let now = Fixtures.fixtureNow
+        let top = Calendar.current.dateInterval(of: .hour, for: now)!.start
+        let cats = (0..<25).map { i in i < 3 ? "MVFR" : (i < 8 ? "IFR" : "VFR") }
+        combined.lamp = LampOut(station: "KLUK", runTime: top.addingTimeInterval(-1800),
+                                hours: cats.enumerated().map { i, c in
+                                    LampHour(t: top.addingTimeInterval(Double(i) * 3600), fltCat: c) })
+        let tl = try #require(TafTimeline(combined: combined, now: now))
+        #expect(tl.source == .lamp && tl.overlays.isEmpty)
+        #expect(tl.hours.count == 24 && tl.hours[0].base == "MVFR" && tl.hours[3].base == "IFR" && tl.hours[8].base == "VFR")
+        #expect(tl.sentence.hasPrefix("LAMP: MVFR until ") && tl.sentence.contains(", then IFR"))
+        #expect(tl.shortSentence.hasPrefix("LAMP MVFR until "))
+        // A TAF, when there is one, still wins.
+        let withTaf = try Fixtures.combinedKLUK()
+        var both = withTaf
+        both.lamp = combined.lamp
+        #expect(TafTimeline(combined: both, now: now)?.source == .taf)
+    }
 }

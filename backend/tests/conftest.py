@@ -401,6 +401,25 @@ def sample_ndbc_latest(now):
     return "\n".join(lines) + "\n"
 
 
+def sample_lamp(run):
+    """The real 2130 UTC 2026-09-24 LAMP bulletin for four stations, with
+    its run time and hour row moved to `run` so the hours lie ahead."""
+    import re
+    path = os.path.join(os.path.dirname(__file__), "fixtures", "lamp_lav.txt")
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read()
+    text = re.sub(r"\d{1,2}/\d{1,2}/\d{4}  \d{4} UTC", f"{run.month}/{run.day}/{run.year}  {run:%H%M} UTC", text)
+    hours = "".join(f" {(run.hour + 1 + i) % 24:02d}" for i in range(25))
+    return re.sub(r"(?m)^ UTC .*$", " UTC " + hours, text)
+
+
+@pytest.fixture(autouse=True)
+def _nomads_unspaced(monkeypatch):
+    """NOMADS spacing is ten seconds in production; tests fetch at once."""
+    monkeypatch.setenv("BARRY_NOMADS_SPACING", "0")
+    yield
+
+
 class FakeUpstream:
     """Records calls and serves canned AWC / Open-Meteo responses."""
 
@@ -455,6 +474,21 @@ class FakeUpstream:
                    else [(39.30, -84.65, 1.0), (44.0, -120.0, 2.0)])   # East also sees the West's side; split drops dupes
             return httpx.Response(200, content=sample_glm_file(start, pts),
                                   headers={"content-type": "application/x-netcdf"})
+        if "nomads.ncep.noaa.gov" in url:
+            # NOMADS: the LAMP bulletin for whatever run is asked for,
+            # unless that run is listed as not landed yet.
+            import re
+            self.nomads_calls = getattr(self, "nomads_calls", [])
+            self.nomads_calls.append(url)
+            if getattr(self, "nomads_fail", False):
+                return httpx.Response(503, text="down")
+            m = re.search(r"lmp\.(\d{8})/lmp\.t(\d{4})z\.lavtxt\.ascii$", url)
+            if not m:
+                return httpx.Response(404, text="not found")
+            run = datetime.strptime(m.group(1) + m.group(2), "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+            if run in getattr(self, "lamp_missing", ()):
+                return httpx.Response(404, text="not found")
+            return httpx.Response(200, text=sample_lamp(run))
         if "afos/retrieve.py" in url:
             # WPC coded front bulletins (text). Trimmed from real 2026-09-14
             # products so the parser is tested against the genuine format.

@@ -203,7 +203,7 @@ hidden). A card shows only when it is not hidden and has something to say.
 | 2 | `chart` | Trend chart | yes, cannot hide | phone layout |
 | 2a | `fields` | Fields | yes | two or more airports saved |
 | 2b | `route` | Route | yes | a route is set |
-| 3 | `taf` | TAF timeline | no | the station has a TAF |
+| 3 | `taf` | TAF timeline | no | the station has a TAF, or LAMP guidance |
 | 4 | `rainWind` | Forecast | yes | phone layout, 2 or more hours |
 | 5 | `conditions` | Conditions | yes | density altitude, boundary layer, fog or storm present |
 | 6 | `strip` | Here (off-field) | yes | not at an airport |
@@ -300,8 +300,9 @@ hidden). A card shows only when it is not hidden and has something to say.
 - Rules: a route never changes the selected field; the hero and chart
   stay on it. Still air only, no alternate, one leg. The corridor is 15
   NM each side of the line; lightning counts within 30 NM. Arrival
-  category comes from the destination's TAF at that hour, else its
-  current report ("MVFR now"). The screen's map is a plain map, not the
+  category comes from the destination's TAF at that hour, else LAMP's
+  nearest hour (the screen's footnote then says "KI69 has no TAF;
+  arrival by LAMP"), else its current report ("MVFR now"). The screen's map is a plain map, not the
   radar.
 - Tests: `RouteWordsTests`; backend `test_route.py`.
 - For: P S.
@@ -341,9 +342,15 @@ hidden). A card shows only when it is not hidden and has something to say.
 - Seen: one sentence ("VFR until 2 AM, then MVFR, LIFR by 4 AM") over a
   24 h strip of category runs, night shaded, TEMPO and PROB hatched,
   sunrise and sunset marked, a bust noted first when the METAR disagrees.
+  At a field with no TAF the strip comes from LAMP, hour by hour, with no
+  hatching, and the sentence begins "LAMP:" ("Now MVFR. LAMP: ..." for a
+  bust). The TAF widget does the same.
 - Lives: `TafTimelineCard.swift`; `Shared/TafTimeline.swift`, `TafStrip.swift`.
-- Data: `/combined.taf`, `forecast.sun`, `current.fltCat`.
-- Tests: `TafTimelineTests`, `CardRenderTests`.
+- Data: `/combined.taf`, else `/combined.lamp`; `forecast.sun`, `current.fltCat`.
+- Rules: a TAF always wins over LAMP. LAMP ceiling and visibility are
+  bands, so its categories are the bands' categories.
+- Tests: `TafTimelineTests` (including `lampStandsInWhereNoTafIsIssued`),
+  `CardRenderTests`; backend `test_lamp.py`.
 - For: P.
 
 ### card.rainWind (the forecast card)
@@ -1036,7 +1043,7 @@ when there is no file). The app nudges WidgetKit after every load.
 | `widget.trend.lock.rectangular` | lock rectangular | glyph, class, pressure and change |
 | `widget.trend.small` | Pressure Trend, small | glyph, station, pressure, change, verdict |
 | `widget.trend.medium` | Pressure Trend with the curve, medium | the small row plus a 12 h sparkline and a lightning line when strikes are within 100 mi |
-| `widget.taf.medium` | TAF, medium | the TAF sentence over the 24 h category strip |
+| `widget.taf.medium` | TAF, medium | the TAF sentence over the 24 h category strip; LAMP where no TAF is issued |
 | `widget.taf.lock.rectangular` / `.inline` | TAF, lock | station and the sentence |
 | `widget.field.small` / `.medium` | Field, small and medium | category, wind, altimeter, ceiling, visibility, density altitude, age; medium adds temperature, dew point, elevation, sea level |
 | `widget.runway.small` | Runway Winds, small | the runway dial for the best runway, following `runwayWindsMode` |
@@ -1072,7 +1079,7 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 
 | Route | Parameters | Returns | Upstream | Cache and rounding | Used by |
 |---|---|---|---|---|---|
-| `GET /combined` | `station`, `lat`, `lon`, `tz` | pressure (series, current, tendency), forecast, reading (trend, feature, confidence, explanation), conditions, runways, taf, lightningNearby, verdict | AWC METAR (Open-Meteo surface pressure as fallback), Open-Meteo forecast, AWC TAF, OurAirports runways, GLM flashes, bulk METAR lightning | pressure 12 min per station; forecast 30 min per 0.1° cell; TAF 30 min | the phone and watch (`PressureStore`), complications, widgets, the airport check in Settings |
+| `GET /combined` | `station`, `lat`, `lon`, `tz` | pressure (series, current, tendency), forecast, reading (trend, feature, confidence, explanation), conditions, runways, taf, lamp (LAMP guidance from this hour, when the site has it), lightningNearby, verdict | AWC METAR (Open-Meteo surface pressure as fallback), Open-Meteo forecast, AWC TAF, LAMP from NOMADS, OurAirports runways, GLM flashes, bulk METAR lightning | pressure 12 min per station; forecast 30 min per 0.1° cell; TAF 30 min | the phone and watch (`PressureStore`), complications, widgets, the airport check in Settings |
 | `GET /pressure/{station}` | `hours` | pressure only | as above | one key per station, whole day | nobody now |
 | `GET /forecast` | `lat`, `lon` | hourly, sun, `stale` | Open-Meteo, 2 days | 30 min per 0.1° cell; last good re-served 12 h when upstream fails | inside `/combined` |
 | `GET /front` | `station`, `lat`, `lon` | status, headline, bearing, eta, nearestFront | bulk METAR history (7.5 h) or an AWC box, forecast, `/fronts` | 15 min per station and 0.1° | the phone's front banner only |
@@ -1088,7 +1095,7 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 | `GET /radar/field/levels` | same | 35 points at five levels | Open-Meteo multi-point (35 weighted calls) | same hold and last good copy as `/radar/field` | the altitude rail |
 | `GET /stations/search` | `q`, `limit` | id and name matches, METAR stations only | AWC directory | directory 24 h | Settings, onboarding |
 | `GET /glance` | `stations` (comma list, up to 8), `tz` | one line per field: category, wind, altimeter, sea-level pressure, 3 h change and class, the verdict without forecast, observation time | the same cached reports as `/combined` (saved fields are watched stations) | none of its own; a field that cannot be read is left out | the Fields card |
-| `GET /route` | `from`, `to`, `speedKt` (40 to 400, default 100), `tz` | distance, time, arrival time, both ends' glance lines, corridor stations (along and off the line, category, wind), the worst of them, nearest lightning near the line, fronts crossing it, the destination's TAF category and TEMPO at arrival, minutes from sunset | none: the bulk table, the flash store, `/fronts`, the ends' cached reports and TAF | 5 min per pair and speed | the Route card and screen |
+| `GET /route` | `from`, `to`, `speedKt` (40 to 400, default 100), `tz` | distance, time, arrival time, both ends' glance lines, corridor stations (along and off the line, category, wind), the worst of them, nearest lightning near the line, fronts crossing it, the destination's category at arrival and where it came from (`arriveSource` taf or lamp), TEMPO at arrival, minutes from sunset | none: the bulk table, the flash store, `/fronts`, the ends' cached reports, TAF and LAMP | 5 min per pair and speed | the Route card and screen |
 | `GET /stations/nearest` | `lat`, `lon` | station, name, distance | bulk table, AWC box, built-in table | 10 min per 0.2° | My location, the watch alone, onboarding |
 | `GET /healthz` | `strict` | status, problems, cycle counts | none | none | Docker, monitors |
 | `POST /diagnostics` | header `X-Barry-Kind` | 202 | none | 30 a minute, 1 MiB | MetricKit reports |
@@ -1109,10 +1116,17 @@ without blocking the response.
   call).
 - Lightning loop every 60 s: GOES-19 east of 106 W and GOES-18 west of it,
   20 minutes kept. `BARRY_GLM=0` disables.
+- LAMP loop every 300 s: when a new hourly run (HH:30, looked for eight
+  minutes after) is not held, one 4.4 MB bulletin from NOMADS for every
+  site, parsed in a thread (2,313 stations, 0.4 s). On a cold start a run
+  not landed yet falls back an hour. Guidance over six hours old is not
+  served. `BARRY_LAMP=0` disables. Every NOMADS request goes through
+  `sources/nomads.py`, 10 s apart (`BARRY_NOMADS_SPACING`).
 - Unhealthy (503, autoheal restarts): a loop exited or stalled (refresh
-  1800 s, lightning 600 s). Degraded (200, or 503 with `strict`): the
-  lightning feed or the bulk table is stale.
-- Tests: `backend/tests`, 327 tests; `test_property` reads the app's own
+  1800 s, lightning 600 s, LAMP 3600 s). Degraded (200, or 503 with
+  `strict`): the lightning feed or the bulk table is stale, or no LAMP
+  run for three hours.
+- Tests: `backend/tests`, 348 tests; `test_property` reads the app's own
   OpenAPI document.
 
 ## Settings keys
@@ -1247,4 +1261,5 @@ caching failures; `/stations/search` accepting one character.
   hand-made thinning pass started the same evening with the hero and the
   radar card (docs/REVIEW.md).
 - 2026-09-24, later: the Fields card, the advisories layer and the route
-  (card, screen, planner, `/route`) from docs/ROUTES.md.
+  (card, screen, planner, `/route`) from docs/ROUTES.md. LAMP from NOMADS
+  behind the TAF card and the route's arrival (NOAA.md phase 1a).

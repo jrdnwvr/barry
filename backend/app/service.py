@@ -37,6 +37,7 @@ from .models import (
     RouteStation,
     GlanceItem,
     GlanceResponse,
+    LampOut,
     FieldLevelsResponse,
     AloftResponse,
     FieldGridResponse,
@@ -63,6 +64,7 @@ from .sources import aviationweather as awc
 from .sources import glm
 from .sources import advisories as adv
 from .sources import iem
+from .sources import lamp as lamp_src
 from .sources import ndbc
 from .sources import openmeteo as om
 from .sources import rainviewer as rv
@@ -224,6 +226,11 @@ class PressureService:
         # sweep of distinct map centres from taking every core and, through
         # the GIL, the event loop with it; the rest wait their turn.
         self._grid_sem = asyncio.Semaphore(2)
+        # LAMP station guidance (sources/lamp.py): the newest hourly run for
+        # every site, fed by the scheduler's LAMP loop.
+        self.lamp_table: Dict[str, LampOut] = {}
+        self.lamp_run: Optional[datetime] = None
+        self.lamp_ok_at: Optional[datetime] = None
 
     # ---- pressure (observed) -------------------------------------------------
 
@@ -818,6 +825,40 @@ class PressureService:
         await self.cache.set(cache_key, taf or False, ttl=TAF_TTL)
         return taf
 
+    # ---- LAMP (NOMADS) --------------------------------------------------------
+
+    LAMP_MAX_AGE = timedelta(hours=6)
+
+    async def poll_lamp(self) -> int:
+        """Pull the newest hourly LAMP run when there is one we don't hold.
+        Returns the number of stations read, 0 when nothing was new."""
+        run = lamp_src.run_for(_now())
+        if self.lamp_run is not None and run <= self.lamp_run:
+            return 0
+        try:
+            table = await lamp_src.fetch(self._client, run)
+        except httpx.HTTPStatusError as exc:
+            # Late this hour. On a cold start, the hour before will do.
+            if exc.response.status_code != 404 or self.lamp_run is not None:
+                raise
+            run -= timedelta(hours=1)
+            table = await lamp_src.fetch(self._client, run)
+        if not table:
+            raise ValueError("empty LAMP bulletin")
+        self.lamp_table, self.lamp_run, self.lamp_ok_at = table, run, _now()
+        return len(table)
+
+    def get_lamp(self, station: str) -> Optional[LampOut]:
+        """The station's guidance from the current hour on, or None when the
+        site has none or the run held is over six hours old."""
+        st = self.lamp_table.get(station.upper())
+        now = _now()
+        if st is None or now - st.runTime > self.LAMP_MAX_AGE:
+            return None
+        start = now.replace(minute=0, second=0, microsecond=0)
+        hours = [h for h in st.hours if h.t >= start]
+        return LampOut(station=st.station, runTime=st.runTime, hours=hours) if hours else None
+
     # ---- Radar frames (RainViewer) -------------------------------------------
 
     async def get_radar_frames(self) -> RadarFramesResponse:
@@ -1173,23 +1214,34 @@ class PressureService:
             taf = await self.get_taf(dest_p.station)
         except Exception:
             taf = None
+        source = None
         if taf is not None and taf.periods:
             has_taf = True
             prevailing, temporary = route_mod.taf_at(taf.periods, arrive)
             if prevailing is not None:
                 arrive_cat, arrive_wkt, arrive_wdir = prevailing.fltCat, prevailing.windKt, prevailing.windDir
+                source = "taf"
             worse = [p for p in temporary if p.fltCat and arrive_cat
                      and route_mod.CATEGORY_RANK.get(p.fltCat, 9) < route_mod.CATEGORY_RANK.get(arrive_cat, 9)]
             if worse:
                 p = min(worse, key=lambda q: route_mod.CATEGORY_RANK.get(q.fltCat, 9))
                 tempo = f"{p.change} {p.fltCat}"
 
+        # No TAF, or none covering the arrival: LAMP's hour nearest it.
+        if arrive_cat is None:
+            lamp = self.get_lamp(dest_p.station)
+            if lamp is not None:
+                h = min(lamp.hours, key=lambda h: abs((h.t - arrive).total_seconds()))
+                if abs((h.t - arrive).total_seconds()) <= 90 * 60 and h.fltCat:
+                    arrive_cat, arrive_wkt, arrive_wdir = h.fltCat, h.windKt, h.windDir
+                    source = "lamp"
+
         resp = RouteResponse(
             dep=self._glance_item(dep_p, tz_minutes), dest=self._glance_item(dest_p, tz_minutes),
             depLat=a[0], depLon=a[1], destLat=b[0], destLon=b[1],
             distanceNm=round(dist, 1), speedKt=speed_kt, eteMin=ete, arriveAt=arrive,
             arriveCat=arrive_cat, arriveWindKt=arrive_wkt, arriveWindDir=arrive_wdir,
-            arriveTempo=tempo, hasTaf=has_taf,
+            arriveTempo=tempo, hasTaf=has_taf, arriveSource=source,
             sunsetMin=route_mod.minutes_from_sunset(b[0], b[1], arrive),
             corridorNm=self.ROUTE_CORRIDOR_NM, corridor=corridor, worst=worst_st,
             lightning=near, fronts=crossings, cachedAt=now)
@@ -1305,6 +1357,7 @@ class PressureService:
             conditions=conditions,
             runways=runways.for_station(pressure.station),
             taf=taf,
+            lamp=self.get_lamp(pressure.station),
             trackRecord=track_out,
             lightningNearby=nearby,
             sources=sources,

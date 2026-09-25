@@ -478,6 +478,34 @@ struct TafOut: Codable, Hashable {
     var periods: [TafPeriod] = []
 }
 
+/// One hour of MDL's LAMP station guidance. Ceiling and visibility are
+/// bands; `cigFt` and `visSM` are the band's representative value.
+struct LampHour: Codable, Hashable {
+    let t: Date
+    var fltCat: String?
+    var cigCat: Int?
+    var cigFt: Int?
+    var visCat: Int?
+    var visSM: Double?
+    var windDir: Double?
+    var windKt: Double?
+    var gustKt: Double?
+    var tempC: Double?
+    var dewC: Double?
+    var pop1: Int?
+    var ltg1: Int?
+    var cloud: String?
+    var obv: String?
+}
+
+/// LAMP for a station: the hourly run and the hours from now on. The TAF
+/// card's stand-in at fields that issue no TAF.
+struct LampOut: Codable, Hashable {
+    let station: String
+    let runTime: Date
+    var hours: [LampHour] = []
+}
+
 // MARK: - Station search
 
 struct StationSearchResult: Codable, Hashable, Identifiable {
@@ -746,6 +774,7 @@ struct CombinedResponse: Codable, Hashable {
     var conditions: ConditionsOut?
     var runways: [Runway]?   // optional: absent on old backends
     var taf: TafOut?         // optional: none issued, or an old backend
+    var lamp: LampOut?       // optional: no LAMP site, or an old backend
     var trackRecord: TrackRecordOut?
     var lightningNearby: LightningNearby?   // optional: absent on old backends
     let sources: Sources?
@@ -981,6 +1010,7 @@ struct RouteResponse: Codable, Hashable {
     var arriveWindDir: Double?
     var arriveTempo: String?
     var hasTaf: Bool = false
+    var arriveSource: String?    // "taf" or "lamp"
     var sunsetMin: Int?
     var corridorNm: Double = 15
     var corridor: [RouteStation] = []

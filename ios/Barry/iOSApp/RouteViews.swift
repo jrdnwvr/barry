@@ -204,7 +204,7 @@ struct RouteScreen: View {
                     row(r.dest.station, "\(Int(r.distanceNm.rounded())) NM", r.arriveCat ?? r.dest.fltCat,
                         RouteWords.wind(r.dest.windKt, r.dest.windDir, r.dest.gustKt))
                 } footer: {
-                    Text("\(Int(r.distanceNm.rounded())) NM at \(speedKt) kt in still air, arriving \(r.arriveAt.formatted(date: .omitted, time: .shortened)). Stations within \(Int(r.corridorNm)) NM of a straight line; not an airway.")
+                    Text("\(Int(r.distanceNm.rounded())) NM at \(speedKt) kt in still air, arriving \(r.arriveAt.formatted(date: .omitted, time: .shortened)). Stations within \(Int(r.corridorNm)) NM of a straight line; not an airway.\(r.arriveSource == "lamp" ? " \(r.dest.station) has no TAF; arrival by LAMP." : "")")
                 }
                 Section {
                     Button("Reverse") { RouteSettings.set(from: to, to: from); dismiss() }

@@ -5,7 +5,9 @@
 //  (the TAF's own line, FM and BECMG groups), TEMPO and PROB windows kept
 //  apart as chances over the base, night from the sun times, and the one
 //  sentence that names every change in order. The app's TAF card and the
-//  widget draw the same model.
+//  widget draw the same model. Where a field issues no TAF, the same strip
+//  is drawn from MDL's LAMP guidance, hour by hour, and the sentence says
+//  so ("LAMP: ...").
 
 import Foundation
 
@@ -25,6 +27,9 @@ struct TafTimeline {
         var id: Date { from }
     }
 
+    enum Source { case taf, lamp }
+
+    let source: Source
     let start: Date
     let end: Date
     let now: Date
@@ -42,7 +47,9 @@ struct TafTimeline {
     var isEmpty: Bool { hours.isEmpty }
 
     init?(combined: CombinedResponse, now: Date) {
-        guard let taf = combined.taf, !taf.periods.isEmpty else { return nil }
+        let taf = combined.taf.flatMap { $0.periods.isEmpty ? nil : $0 }
+        let lamp = combined.lamp.flatMap { $0.hours.isEmpty ? nil : $0 }
+        guard taf != nil || lamp != nil else { return nil }
         self.now = now
         let cal = Calendar.current
         // The hour now is in, from its top. Setting the minute to zero
@@ -53,26 +60,45 @@ struct TafTimeline {
         let end = start.addingTimeInterval(24 * 3600)
         self.start = start
         self.end = end
-        self.issueTime = taf.issueTime
 
-        let base = taf.periods.filter { $0.change == nil || $0.change == "FM" || $0.change == "BECMG" }
-        let overlays = taf.periods.filter { $0.change == "TEMPO" || ($0.change ?? "").hasPrefix("PROB") }
         var hours: [Hour] = []
-        var t = start
-        while t < end {
-            let past = taf.validTo.map { t >= $0 } ?? false
-            let b = past ? nil : base.last { $0.timeFrom <= t }?.fltCat
-            let o = past ? nil : overlays.first { $0.timeFrom <= t && t < $0.timeTo }?.fltCat
-            hours.append(Hour(t: t, base: b, tempo: o != b ? o : nil))
-            t = t.addingTimeInterval(3600)
+        if let taf {
+            self.source = .taf
+            self.issueTime = taf.issueTime
+            let base = taf.periods.filter { $0.change == nil || $0.change == "FM" || $0.change == "BECMG" }
+            let overlays = taf.periods.filter { $0.change == "TEMPO" || ($0.change ?? "").hasPrefix("PROB") }
+            var t = start
+            while t < end {
+                let past = taf.validTo.map { t >= $0 } ?? false
+                let b = past ? nil : base.last { $0.timeFrom <= t }?.fltCat
+                let o = past ? nil : overlays.first { $0.timeFrom <= t && t < $0.timeTo }?.fltCat
+                hours.append(Hour(t: t, base: b, tempo: o != b ? o : nil))
+                t = t.addingTimeInterval(3600)
+            }
+            self.overlays = overlays.compactMap { p in
+                guard let cat = p.fltCat, p.timeTo > start, p.timeFrom < end else { return nil }
+                return Overlay(from: max(p.timeFrom, start), to: min(p.timeTo, end),
+                               category: cat, isProb: (p.change ?? "").hasPrefix("PROB"))
+            }
+            self.tafEnds = taf.validTo.flatMap { $0 < end ? $0 : nil }
+        } else {
+            // LAMP is valid at the hour; each strip hour takes the nearest
+            // LAMP hour within 45 minutes and is blank past the last one.
+            let lamp = lamp!
+            self.source = .lamp
+            self.issueTime = lamp.runTime
+            var t = start
+            while t < end {
+                let near = lamp.hours.min { abs($0.t.timeIntervalSince(t)) < abs($1.t.timeIntervalSince(t)) }
+                let b = near.flatMap { abs($0.t.timeIntervalSince(t)) <= 45 * 60 ? $0.fltCat : nil }
+                hours.append(Hour(t: t, base: b, tempo: nil))
+                t = t.addingTimeInterval(3600)
+            }
+            self.overlays = []
+            let last = lamp.hours.last!.t.addingTimeInterval(1800)
+            self.tafEnds = last < end ? last : nil
         }
         self.hours = hours
-
-        self.overlays = overlays.compactMap { p in
-            guard let cat = p.fltCat, p.timeTo > start, p.timeFrom < end else { return nil }
-            return Overlay(from: max(p.timeFrom, start), to: min(p.timeTo, end),
-                           category: cat, isProb: (p.change ?? "").hasPrefix("PROB"))
-        }
 
         let sun = combined.forecast?.sun
         let sets = (sun?.sunset ?? []).sorted()
@@ -90,7 +116,6 @@ struct TafTimeline {
             nights.append((s, min(r, end)))
         }
         self.nights = nights
-        self.tafEnds = taf.validTo.flatMap { $0 < end ? $0 : nil }
 
         if let obs = combined.pressure.current.fltCat, let first = hours.first?.base, obs != first {
             self.observedMismatch = obs
@@ -116,7 +141,9 @@ struct TafTimeline {
     /// Every change in the window, in order, so the worst hour is never
     /// hidden behind the first change. A bust leads: "Now MVFR. TAF: ...".
     var sentence: String {
-        guard let first = hours.first?.base else { return "No category in the TAF." }
+        guard let first = hours.first?.base else {
+            return source == .taf ? "No category in the TAF." : "No category in LAMP."
+        }
         let clock: (Date) -> String = { $0.formatted(date: .omitted, time: .shortened) }
         var changes: [(String, Date)] = [(first, hours[0].t)]
         for h in hours { if let b = h.base, b != changes.last!.0 { changes.append((b, h.t)) } }
@@ -136,17 +163,19 @@ struct TafTimeline {
             let last = hours.last { $0.tempo == cat }?.t ?? tempo.t
             s += ". Chance of \(cat) \(clock(tempo.t)) to \(clock(last.addingTimeInterval(3600)))"
         }
-        if let obs = observedMismatch { return "Now \(obs). TAF: \(s)." }
-        return s + "."
+        let name = source == .taf ? "TAF" : "LAMP"
+        if let obs = observedMismatch { return "Now \(obs). \(name): \(s)." }
+        return source == .lamp ? "LAMP: \(s)." : s + "."
     }
 
     /// The short form for a lock screen line: "VFR until 2 AM, then MVFR".
     var shortSentence: String {
-        guard let first = hours.first?.base else { return "No TAF category" }
+        guard let first = hours.first?.base else { return source == .taf ? "No TAF category" : "No LAMP category" }
+        let lead = source == .lamp ? "LAMP " : ""
         let clock: (Date) -> String = { $0.formatted(date: .omitted, time: .shortened) }
         if let change = hours.first(where: { $0.base != nil && $0.base != first }), let next = change.base {
-            return "\(first) until \(clock(change.t)), then \(next)"
+            return "\(lead)\(first) until \(clock(change.t)), then \(next)"
         }
-        return "\(first) all day"
+        return "\(lead)\(first) all day"
     }
 }

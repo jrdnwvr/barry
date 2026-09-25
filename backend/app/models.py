@@ -387,6 +387,37 @@ class TafOut(BaseModel):
     periods: List[TafPeriod] = Field(default_factory=list)
 
 
+class LampHour(BaseModel):
+    """One hour of LAMP station guidance (sources/lamp.py). Ceiling and
+    visibility are categories; cigFt and visSM are the band's representative
+    value, never a forecast to the foot. pop1 and ltg1 are percent chances
+    in the hour ending at `t`."""
+
+    t: datetime
+    fltCat: Optional[str] = None
+    cigCat: Optional[int] = None
+    cigFt: Optional[int] = None          # None: above 12,000 ft or no ceiling
+    visCat: Optional[int] = None
+    visSM: Optional[float] = None
+    windDir: Optional[float] = None      # degrees true; None when calm
+    windKt: Optional[float] = None
+    gustKt: Optional[float] = None
+    tempC: Optional[float] = None
+    dewC: Optional[float] = None
+    pop1: Optional[int] = None
+    ltg1: Optional[int] = None
+    cloud: Optional[str] = None          # CL FW SC BK OV
+    obv: Optional[str] = None            # BR FG HZ BL: what restricts visibility
+
+
+class LampOut(BaseModel):
+    """MDL's LAMP guidance for a station: the hourly run, hours ahead."""
+
+    station: str
+    runTime: datetime
+    hours: List[LampHour] = Field(default_factory=list)
+
+
 class TrackRecordOut(BaseModel):
     """Barry's own scorecard at this station: trend calls that matched what
     the pressure then did, over the last `days`. Absent until there are
@@ -723,6 +754,7 @@ class RouteResponse(BaseModel):
     arriveWindDir: Optional[float] = None
     arriveTempo: Optional[str] = None    # "TEMPO IFR" when a temporary group covers arrival
     hasTaf: bool = False
+    arriveSource: Optional[str] = None   # "taf" or "lamp", whichever gave arriveCat
     sunsetMin: Optional[int] = None      # arrival minus sunset at the destination
     corridorNm: float = 15.0
     corridor: List[RouteStation] = Field(default_factory=list)
@@ -741,6 +773,9 @@ class CombinedResponse(BaseModel):
     conditions: Optional[ConditionsOut] = None
     runways: List[Runway] = Field(default_factory=list)
     taf: Optional[TafOut] = None
+    # LAMP guidance for the station, the next 25 hours; the TAF card's
+    # stand-in where no TAF is issued.
+    lamp: Optional[LampOut] = None
     trackRecord: Optional[TrackRecordOut] = None
     lightningNearby: Optional[LightningNearby] = None
     sources: Optional[Sources] = None

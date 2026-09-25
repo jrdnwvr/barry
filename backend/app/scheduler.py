@@ -42,6 +42,9 @@ class Scheduler:
         self.last_request_count = 0
         self.glm_cycles = 0
         self.glm_enabled = os.environ.get("BARRY_GLM", "1") != "0"
+        self._lamp_task: Optional[asyncio.Task] = None
+        self.lamp_enabled = os.environ.get("BARRY_LAMP", "1") != "0"
+        self.last_lamp_at: Optional[datetime] = None
         # For the health check: when each loop last finished an attempt,
         # whatever the outcome. A loop that stops finishing is stuck.
         self.started_at: Optional[datetime] = None
@@ -50,6 +53,8 @@ class Scheduler:
 
     STALL_CYCLES = 3        # missed cycles before the refresh loop counts as stuck
     GLM_STALL_S = 600.0     # ten minutes without a poll finishing, or without data
+    LAMP_STALL_S = 3600.0   # an hour without the LAMP loop finishing a pass
+    LAMP_STALE_S = 3 * 3600.0   # three hours without a new LAMP run
 
     def problems(self, now: datetime) -> tuple[List[str], List[str]]:
         """Two lists for /healthz. The first is about the process: a loop
@@ -75,6 +80,13 @@ class Scheduler:
                 dead.append("lightning loop stalled")
             if age(self._service.flashes.last_fetch) > self.GLM_STALL_S:
                 stale.append("lightning feed stale")
+        if self.lamp_enabled:
+            if self._lamp_task is None or self._lamp_task.done():
+                dead.append("lamp loop exited")
+            elif age(self.last_lamp_at) > self.LAMP_STALL_S:
+                dead.append("lamp loop stalled")
+            if age(self._service.lamp_ok_at) > self.LAMP_STALE_S:
+                stale.append("lamp guidance stale")
         if age(self._service.bulk_ok_at) > 2 * self._interval + 60.0:
             stale.append("bulk metar table missing")
         return dead, stale
@@ -194,6 +206,25 @@ class Scheduler:
             except asyncio.TimeoutError:
                 pass
 
+    # LAMP runs hourly at :30 and lands about six minutes later. A pass
+    # every five minutes finds it within five and costs nothing between
+    # runs: the pass returns without a request when the run is held.
+    LAMP_INTERVAL = 300.0
+
+    async def _run_lamp(self) -> None:
+        while not self._stop.is_set():
+            try:
+                n = await self._service.poll_lamp()
+                if n:
+                    metrics.gauge("barry_lamp_stations", n)
+            except Exception as exc:
+                log.warning("scheduler: lamp poll failed: %s", exc)
+            self.last_lamp_at = _now()
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=self.LAMP_INTERVAL)
+            except asyncio.TimeoutError:
+                pass
+
     def start(self) -> None:
         self.started_at = _now()
         if self._task is None:
@@ -203,6 +234,8 @@ class Scheduler:
         if self._glm_task is None and self.glm_enabled:
             self._glm_task = asyncio.create_task(self._run_glm())
             log.info("scheduler: glm poll started, interval=%.0fs", self.GLM_INTERVAL)
+        if self._lamp_task is None and self.lamp_enabled:
+            self._lamp_task = asyncio.create_task(self._run_lamp())
 
     async def stop(self) -> None:
         self._stop.set()
@@ -212,3 +245,6 @@ class Scheduler:
         if self._glm_task is not None:
             await self._glm_task
             self._glm_task = None
+        if self._lamp_task is not None:
+            await self._lamp_task
+            self._lamp_task = None

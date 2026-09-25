@@ -327,8 +327,8 @@ struct ContentView: View {
             // The focused trend: window toggle + chart + the honest caveat.
             if layout == .phone { trendSection(combined) }
         case .taf:
-            // The forecaster's product as a strip; only when the station has a TAF.
-            if let taf = combined.taf, !taf.periods.isEmpty {
+            // The forecaster's product as a strip; LAMP where no TAF is issued.
+            if !(combined.taf?.periods.isEmpty ?? true) || !(combined.lamp?.hours.isEmpty ?? true) {
                 TafTimelineCard(combined: combined, now: store.now)
             }
         case .rainWind:

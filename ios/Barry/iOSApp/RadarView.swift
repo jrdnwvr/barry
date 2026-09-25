@@ -157,7 +157,8 @@ struct RadarPanel: View {
     private var pressureUnitRaw: String = PressureUnit.inHg.rawValue
 
     private var pressureState: PressureFieldState? {
-        let heights = showWind && model.windLevel != 0 ? model.heights : nil
+        let aloft = showWind && model.windLevel != 0
+        let heights = aloft ? model.heights : nil
         guard wantsPressure || heights != nil else { return nil }
         // Lighter shading over the radar so the rain still reads through it.
         let opacity = showRadar ? 0.30 : 0.42
@@ -174,6 +175,7 @@ struct RadarPanel: View {
                                   shade: shade, shadeOpacity: opacity,
                                   unit: PressureUnit(rawValue: pressureUnitRaw) ?? .inHg,
                                   heights: heights,
+                                  aloft: aloft,
                                   version: model.pressureVersion)
     }
 

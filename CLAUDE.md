@@ -237,9 +237,10 @@ carries a rain line (`rainstart.py`, `conditions.rain`) traced back
 along the radar's motion; its calls are scored on the same route. Every
 answer a fallback gives instead of the NOAA feeds is logged with why and
 where at `/fallbacks` (`fallbacks.py`), the measure for taking the
-fallback code out. The Cloudflare rate rule on the hostname (about 20 requests per 10 s) must
-exempt `/radar/`: a zoomed-out map's tile burst trips it and the map
-goes blank for its Retry-After (the app no longer caches those pages). Container memory limit 3 GB.
+fallback code out. The Cloudflare rate rule on the hostname (20 requests
+per 10 s per IP) exempts `/radar/` since 2026-09-25: a zoomed-out map's
+tile burst tripped it and the radar went blank or failed to load for its
+Retry-After. Keep any new edge rule off `/radar/`. Container memory limit 3 GB.
 On Tower the state volume is mounted from `/mnt/cache/...` directly
 (`BARRY_STATE_DIR` in `backend/.env`): through `/mnt/user` the FUSE layer
 stalled model reads for seconds while a run was written. Feeds whose

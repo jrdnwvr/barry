@@ -464,16 +464,27 @@ final class RadarModel: ObservableObject {
 
     /// Height lines for the rail's level; enrichment, so a failure (off the
     /// HRRR grid, or before the server holds a cycle) just leaves none.
-    func fetchHeights(region: MKCoordinateRegion) async {
+    func fetchHeights(region: MKCoordinateRegion, retried: Bool = false) async {
         let level = windLevel
         guard level != 0 else { heights = nil; return }
         if let h = heights, h.hPa == level, Self.nearEnough(region, to: heightsFetchedFor) { return }
-        let resp = try? await BarryAPI().heights(
-            lat: region.center.latitude, lon: region.center.longitude,
-            latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta, hPa: level)
+        let resp: HeightsResponse
+        do {
+            resp = try await BarryAPI().heights(
+                lat: region.center.latitude, lon: region.center.longitude,
+                latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta, hPa: level)
+        } catch {
+            // Keep the lines already drawn for this level (a zoom that
+            // failed used to clear them, and the surface isobars came back
+            // under the altitude note) and try once more after a block.
+            if !retried {
+                retryLater(for: region) { [weak self] in await self?.fetchHeights(region: region, retried: true) }
+            }
+            return
+        }
         guard level == windLevel else { return }
         heights = resp
-        heightsFetchedFor = resp == nil ? nil : region
+        heightsFetchedFor = region
         pressureVersion += 1
     }
 

@@ -25,10 +25,14 @@ struct PressureFieldState: Equatable {
     /// Height lines at the altitude rail's level. While they show, the
     /// surface isobars step aside: two sets of lines read as one mess.
     var heights: HeightsResponse?
+    /// The rail is above the surface. Surface isobars never draw then, even
+    /// while the height lines for a new view are still on their way: under a
+    /// "5,000 ft" note they would read as the pressure up there.
+    var aloft = false
     var version = 0
 
     var drawsAnything: Bool {
-        heights != nil || (field != nil && (showIsobars || showIsallobars || shade != .off))
+        heights != nil || (field != nil && ((showIsobars && !aloft) || showIsallobars || shade != .off))
     }
 }
 
@@ -62,7 +66,7 @@ final class PressureFieldRenderer: MKOverlayRenderer {
         if st.shade != .off, let grid = (st.shade == .pressure ? field.pressureGrid : field.tendencyGrid) {
             drawShade(grid, kind: st.shade, version: st.version, opacity: st.shadeOpacity, in: ctx)
         }
-        if st.showIsobars && st.heights == nil {
+        if st.showIsobars && st.heights == nil && !st.aloft {
             for line in field.isobars {
                 // Indigo, not gray: gray reads as a road on Apple's map.
                 drawLine(line, color: UIColor.systemIndigo.withAlphaComponent(0.85), width: 1.6 * scale,

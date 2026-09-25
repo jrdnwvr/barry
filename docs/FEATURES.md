@@ -773,7 +773,11 @@ stored keys, but each has its own model, so they fetch separately.
   Tap or drag. Full screen only, while Wind is on. Off the surface the
   map also draws that level's height contours from HRRR, solid near-black
   lines (near-white in dark mode) labelled in decameters ("318"), and the
-  surface isobars step aside. The note line (`radar.altitudeNote`) says
+  surface isobars step aside, and stay aside for as long as the rail is
+  off the surface, even while a new view's height lines load or fail (a
+  failed fetch keeps the old lines and is tried again after a rate-limit
+  block; until 2026-09-25 it cleared them and the surface isobars came
+  back under the altitude note). The note line (`radar.altitudeNote`) says
   "Wind and 700 mb heights at about 10,000 ft. Other layers stay at the
   surface." ("Wind at about ..." where there are no heights).
 - Lives: `RadarView.swift` › `altitudeRail`; `RadarModel.swift` ›

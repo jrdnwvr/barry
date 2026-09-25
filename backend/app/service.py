@@ -254,6 +254,9 @@ class PressureService:
         # loop; BARRY_MRMS=0 keeps the timeline on RainViewer.
         self.radar = RadarStore.from_env()
         self.mrms_enabled = os.environ.get("BARRY_MRMS", "1") != "0"
+        # Pulled either way; served by default only when this says "mrms".
+        # /radar/frames?source=mrms asks for Barry's frames regardless.
+        self.radar_default = os.environ.get("BARRY_RADAR_SOURCE", "mrms")
         self.radar_ok_at: Optional[datetime] = None
         self.public_url = os.environ.get("BARRY_PUBLIC_URL", "https://barry.wide-stack.com").rstrip("/")
 
@@ -1035,11 +1038,12 @@ class PressureService:
             frames=[RadarFrameOut(time=t, path=f"/radar/tiles/{t}") for t in times],
             cachedAt=_now())
 
-    async def get_radar_frames(self) -> RadarFramesResponse:
-        """The radar timeline: Barry's own MRMS frames when two hours of them
-        are held and fresh; otherwise RainViewer's last 7 observed frames and
-        up to 3 nowcast, from one call every two minutes for every user."""
-        if self.mrms_enabled:
+    async def get_radar_frames(self, source: Optional[str] = None) -> RadarFramesResponse:
+        """The radar timeline: Barry's own MRMS frames when an hour of them
+        is held and fresh (and they are the default, or asked for);
+        otherwise RainViewer's last 7 observed frames and up to 3 nowcast,
+        from one call every two minutes for every user."""
+        if self.mrms_enabled and (source or self.radar_default) == "mrms":
             own = self._mrms_frames()
             if own is not None:
                 return own

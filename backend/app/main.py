@@ -364,11 +364,11 @@ async def get_lightning(
 
 
 @app.get("/radar/frames")
-async def radar_frames():
-    """RainViewer's frame list, trimmed to what the timeline shows and shared
-    across users (one upstream call per two minutes)."""
+async def radar_frames(source: Optional[str] = Query(None, pattern="^(mrms|rainviewer)$")):
+    """The radar timeline: Barry's MRMS frames or RainViewer's, trimmed to
+    what the timeline shows and shared across users. `source` asks for one."""
     try:
-        resp = await get_service().get_radar_frames()
+        resp = await get_service().get_radar_frames(source)
     except Exception as exc:
         log.warning("radar frames unavailable: %s: %s", type(exc).__name__, exc)
         raise HTTPException(status_code=503, detail="radar frames unavailable")

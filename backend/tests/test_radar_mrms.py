@@ -113,3 +113,12 @@ def test_png_writer_round_trips():
     img[1, 2] = [10, 20, 30, 255]
     assert (read_png(radar.png_rgba(img)) == img).all()
     assert radar.pool(np.array([[0, 5], [7, 1]], dtype=np.uint8)).tolist() == [[7]]
+
+
+@pytest.mark.asyncio
+async def test_rainviewer_by_default_when_configured_and_mrms_on_request(client, upstream, mrms_on, monkeypatch):
+    monkeypatch.setenv("BARRY_RADAR_SOURCE", "rainviewer")
+    s = PressureService(client)
+    await s.poll_radar()
+    assert (await s.get_radar_frames()).host == "https://tilecache.rainviewer.com"
+    assert (await s.get_radar_frames("mrms")).host == "https://barry.wide-stack.com"

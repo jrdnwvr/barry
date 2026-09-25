@@ -1,8 +1,8 @@
 #!/bin/sh
-# Xcode Cloud runs this after cloning, before the archive. Xcode 26 and
-# later ship the Metal compiler as a separate download and the cloud image
-# comes without it, so WindFlow.metal failed with "CompileMetalFile" on
-# build 87 (2026-09-25). Fetch it first; the same command is what a fresh
-# Mac needs (CLAUDE.md).
-set -e
-xcodebuild -downloadComponent MetalToolchain
+# Xcode Cloud runs this after cloning. Nothing in the app needs the Metal
+# compiler any more (the wind shader is compiled on the device, see
+# WindFlowView.swift), so this only makes sure the image's Metal toolchain
+# is present for anything that might come later, and never fails the
+# build: on 2026-09-25 the image answered "already imported" with exit 70.
+xcodebuild -downloadComponent MetalToolchain || true
+exit 0

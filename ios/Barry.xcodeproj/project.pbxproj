@@ -32,7 +32,6 @@
 		22A7600022D22A39FD198199 /* FieldsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ED260902ADE48C188706FA8 /* FieldsCard.swift */; };
 		25F2CA5D0A085C6A963656C0 /* TendencyProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A24A6845ECB66698D61771D /* TendencyProvider.swift */; };
 		25FB215186C614D348386230 /* combined_noaa.json in Resources */ = {isa = PBXBuildFile; fileRef = 62A5B0C1E166F856B20660DC /* combined_noaa.json */; };
-		26D196BA1D0C9CD075B59F31 /* WindFlow.metal in Sources */ = {isa = PBXBuildFile; fileRef = 9C9E7A347455A6781BAB196E /* WindFlow.metal */; };
 		270E209661CB57713C9B71F5 /* BarometerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA32F779F49D1C628F2BC52E /* BarometerEngine.swift */; };
 		2AD8EC369D496BFBE30DFC88 /* RainLineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28FD6CF786038D6B942CA43E /* RainLineTests.swift */; };
 		2BF26B141D9A63C4291EF0DF /* TafStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D63A9351C0871620CA4A195 /* TafStrip.swift */; };
@@ -344,7 +343,6 @@
 		95423D24AF145867D59E1434 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		9639018DA53DA80272AC71E9 /* Barry.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Barry.entitlements; sourceTree = "<group>"; };
 		9B661E997E72021B37CCFFD4 /* UITestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestSupport.swift; sourceTree = "<group>"; };
-		9C9E7A347455A6781BAB196E /* WindFlow.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = WindFlow.metal; sourceTree = "<group>"; };
 		9ED4E8ACC4DA64C6E1076B59 /* TemperatureUnitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemperatureUnitTests.swift; sourceTree = "<group>"; };
 		A376D4EE445D8849427A861E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A59F4AD2D2CF0AC8FB31B534 /* ConfirmationOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmationOverlayView.swift; sourceTree = "<group>"; };
@@ -612,7 +610,6 @@
 				CBA1D35A89B06FE9E7708D10 /* TafTimelineCard.swift */,
 				9B661E997E72021B37CCFFD4 /* UITestSupport.swift */,
 				CFA4A69E8BBEEF268407FC68 /* WatchSync.swift */,
-				9C9E7A347455A6781BAB196E /* WindFlow.metal */,
 				39AF53020220091BA0FC5C07 /* WindFlowView.swift */,
 			);
 			path = iOSApp;
@@ -1021,7 +1018,6 @@
 				50F708BB96C5BBFE917DE01A /* TendencyProvider.swift in Sources */,
 				D6FF8AA397153E989437EDAB /* UITestSupport.swift in Sources */,
 				0F0411FE134D2DF658D00A67 /* WatchSync.swift in Sources */,
-				26D196BA1D0C9CD075B59F31 /* WindFlow.metal in Sources */,
 				56C21F3EA69EB17912672252 /* WindFlowView.swift in Sources */,
 				0C6CE77FC97065E5CF6D21D1 /* WindUnit.swift in Sources */,
 			);

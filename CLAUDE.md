@@ -117,9 +117,12 @@ cd ~/barry/backend && .venv/bin/pytest -q     # run backend tests (36, no networ
 - **Backend runs ONE worker/instance** — the cache, registry, and scheduler are
   in-process. Scaling out needs Redis first (see `cache.py`).
 - **Tendency thresholds live in two files** (Python + Swift) by design — change both.
-- **Metal toolchain is a separate download** under Xcode 27:
-  `xcodebuild -downloadComponent MetalToolchain` (~840 MB). Without it
-  `WindFlow.metal` fails to compile and the whole app build fails.
+- **No Metal toolchain is needed to build.** The wind shader is a string
+  in `WindFlowView.swift`, compiled on the device the first time a flow
+  view is made (since 2026-09-25: Xcode Cloud's Xcode 27 image could not
+  run the Metal compiler, builds 87 and 88, though it compiled locally with
+  the toolchain from `xcodebuild -downloadComponent MetalToolchain`).
+  `WindFlow.metal` is left out of the target by project.yml.
 - **Xcode project is generated** by XcodeGen from `ios/project.yml`; it's gitignored.
   After editing `project.yml` or adding/renaming source files, re-run `xcodegen generate`.
 - **Set your signing Team** per target in Signing & Capabilities (free Apple ID is
@@ -179,7 +182,7 @@ and return to 0.02 once it settles; both tile caches are sized in bytes
 frames overflowed; `URLCache.shared` is 200 MB on disk because RainViewer
 sends a two-day max-age; and `prefetchRing` warms one ring of tiles around
 the viewport for the current frame after each region change. The wind
-streaks (`WindFlowView` + `WindFlow.metal`) simulate on the CPU but render
+streaks (`WindFlowView`, shaders compiled on the device) simulate on the CPU but render
 in Metal: every trail segment becomes a quad in one buffer,
 one draw call. Measured on the full-screen radar in the simulator, that took
 the app from 46% CPU to 21%. Boundary-layer top lives on the main page (density altitude

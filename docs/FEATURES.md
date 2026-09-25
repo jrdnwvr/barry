@@ -748,7 +748,8 @@ stored keys, but each has its own model, so they fetch separately.
 ### radar.layer.wind
 - Seen: grey streaks drifting with the wind (Flow) or arrows (Arrows).
   Chip "Wind".
-- Lives: `WindFlowView.swift` + `WindFlow.metal`; `RadarMapView.syncArrows`.
+- Lives: `WindFlowView.swift` (the Metal shaders are a string in it,
+  compiled on the device); `RadarMapView.syncArrows`.
 - Data: `/radar/field`: 11 by 8 points per region from the server's HRRR
   store, or 7 by 5 from Open-Meteo off the HRRR grid (`source` says
   which); boundary layer and CAPE present but unused on the map.

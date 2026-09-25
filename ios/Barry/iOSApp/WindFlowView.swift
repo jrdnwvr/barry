@@ -142,6 +142,57 @@ final class WindFlowView: UIView {
 
     required init?(coder: NSCoder) { fatalError("unused") }
 
+    // The shaders, compiled on the device the first time a flow view is
+    // made (a few milliseconds) rather than by Xcode: Xcode Cloud's Xcode
+    // 27 image could not run the Metal compiler (builds 87 and 88,
+    // 2026-09-25), and nothing else in the app needs it. Every trail
+    // segment arrives as a pre-expanded quad in view points with its own
+    // colour, so the vertex stage only maps points into clip space.
+    private static let shaderSource = """
+    #include <metal_stdlib>
+    using namespace metal;
+
+    struct VertexIn {
+        float2 position [[attribute(0)]];
+        float4 color    [[attribute(1)]];
+    };
+
+    struct VertexOut {
+        float4 position [[position]];
+        float4 color;
+    };
+
+    vertex VertexOut wind_vertex(VertexIn in [[stage_in]],
+                                 constant float2 &viewport [[buffer(1)]]) {
+        VertexOut out;
+        // View points, origin top left, into clip space.
+        out.position = float4(in.position.x / viewport.x * 2.0 - 1.0,
+                              1.0 - in.position.y / viewport.y * 2.0,
+                              0.0, 1.0);
+        out.color = in.color;
+        return out;
+    }
+
+    fragment float4 wind_fragment(VertexOut in [[stage_in]]) {
+        // Straight alpha in, premultiplied out: the layer composites over the map.
+        return float4(in.color.rgb * in.color.a, in.color.a);
+    }
+    """
+
+    private static var compiled: MTLLibrary?
+
+    private static func library(for device: MTLDevice) -> MTLLibrary? {
+        if let lib = compiled { return lib }
+        do {
+            let lib = try device.makeLibrary(source: shaderSource, options: nil)
+            compiled = lib
+            return lib
+        } catch {
+            NSLog("WindFlowView: the shaders did not compile: %@", "\(error)")
+            return nil
+        }
+    }
+
     private func setUpMetal() {
         guard let device = MTLCreateSystemDefaultDevice() else { return }
         metalLayer.device = device
@@ -150,7 +201,7 @@ final class WindFlowView: UIView {
         metalLayer.framebufferOnly = true
         queue = device.makeCommandQueue()
 
-        guard let library = device.makeDefaultLibrary(),
+        guard let library = Self.library(for: device),
               let vertexFn = library.makeFunction(name: "wind_vertex"),
               let fragmentFn = library.makeFunction(name: "wind_fragment") else { return }
 

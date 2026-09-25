@@ -30,7 +30,11 @@ targets:
     type: application
     platform: iOS
     sources:
-      - Barry/iOSApp
+      # WindFlow.metal is kept for reference only: the shaders are compiled
+      # on the device from the string in WindFlowView.swift.
+      - path: Barry/iOSApp
+        excludes:
+          - WindFlow.metal
       - Barry/Shared
     settings:
       base:

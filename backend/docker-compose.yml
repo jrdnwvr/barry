@@ -17,7 +17,10 @@ services:
     image: barry-backend:latest
     container_name: barry-backend
     restart: unless-stopped
-    mem_limit: 768m
+    # 3 GB: an HRRR cycle is decoded an hour's fields at a time (about
+    # 700 MB at the peak); the fields then live on disk under state/model
+    # and come back through the page cache.
+    mem_limit: 3g
     labels:
       - "autoheal=true"       # restarted by the autoheal service when unhealthy
     logging:

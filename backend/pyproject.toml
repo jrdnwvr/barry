@@ -10,6 +10,9 @@ dependencies = [
     "pydantic>=2.6",
     "h5py>=3.10",
     "numpy>=1.26",
+    # GRIB2 for the NOAA model feeds (HRRR, NBM, GTG, CIP). The wheel
+    # bundles libeccodes with JPEG2000 and PNG support; nothing from apt.
+    "eccodes>=2.40",
 ]
 
 [project.optional-dependencies]

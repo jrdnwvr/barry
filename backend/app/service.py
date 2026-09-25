@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import os
 
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
@@ -18,6 +19,8 @@ import httpx
 from . import conditions as conditions_mod
 from .guards import OMBudget, RateGate, RateLimited, check_station
 from . import explain
+from . import modelfields
+from .modelstore import ModelStore
 from . import flashes as flashes_mod
 from . import lightning as lightning_mod
 from . import persist
@@ -37,6 +40,7 @@ from .models import (
     RouteStation,
     GlanceItem,
     GlanceResponse,
+    HeightsResponse,
     LampOut,
     FieldLevelsResponse,
     AloftResponse,
@@ -63,6 +67,7 @@ from .models import (
 from .sources import aviationweather as awc
 from .sources import glm
 from .sources import advisories as adv
+from .sources import hrrr as hrrr_src
 from .sources import iem
 from .sources import lamp as lamp_src
 from .sources import ndbc
@@ -231,6 +236,12 @@ class PressureService:
         self.lamp_table: Dict[str, LampOut] = {}
         self.lamp_run: Optional[datetime] = None
         self.lamp_ok_at: Optional[datetime] = None
+        # Decoded model fields on disk (modelstore.py): HRRR today, fed by
+        # the scheduler's model loop. BARRY_HRRR=0 keeps every map layer on
+        # Open-Meteo.
+        self.models = ModelStore.from_env()
+        self.hrrr_enabled = os.environ.get("BARRY_HRRR", "1") != "0"
+        self.hrrr_ok_at: Optional[datetime] = None
 
     # ---- pressure (observed) -------------------------------------------------
 
@@ -825,6 +836,61 @@ class PressureService:
         await self.cache.set(cache_key, taf or False, ttl=TAF_TTL)
         return taf
 
+    # ---- HRRR (AWS, NOMADS fallback) -------------------------------------------
+
+    async def poll_hrrr(self) -> int:
+        """Pull the newest HRRR cycle not held yet into the model store.
+        Returns the number of fields written, 0 when nothing was new."""
+        pick = await hrrr_src.choose(self._client, _now(), self.models.cycles(hrrr_src.FEED))
+        if pick is None:
+            return 0
+        cycle, source = pick
+        written = 0
+        for fhr in hrrr_src.FHRS:
+            msgs = await hrrr_src.fetch_hour(self._client, cycle, fhr, source=source)
+            await asyncio.to_thread(hrrr_src.rotate_winds, msgs)
+            meta = hrrr_src.grid_meta(next(iter(msgs.values())))
+            for name, m in msgs.items():
+                await asyncio.to_thread(self.models.put, hrrr_src.FEED, cycle, fhr, name, m.values, meta)
+                written += 1
+            del msgs
+        self.models.mark_complete(hrrr_src.FEED, cycle)
+        self.models.purge(hrrr_src.FEED, keep=2)
+        self.hrrr_ok_at = _now()
+        log.info("hrrr: %s from %s, %d fields", cycle.strftime("%Y%m%d%H"), source, written)
+        return written
+
+    def hrrr_run(self) -> Optional[datetime]:
+        cycles = self.models.cycles(hrrr_src.FEED)
+        return cycles[0] if cycles else None
+
+    async def get_heights(self, lat: float, lon: float, lat_span: float, lon_span: float,
+                          hpa: int) -> HeightsResponse:
+        """Height contours at a pressure level for a map region, from the
+        HRRR store. LookupError when the store has nothing for it."""
+        if not self.hrrr_enabled:
+            raise LookupError("hrrr off")
+        lat_span = max(0.5, min(30.0, lat_span))
+        lon_span = max(0.5, min(60.0, lon_span))
+        q_lat, q_lon = round(lat * 10) / 10, round(lon * 10) / 10
+        def q_span(v):
+            return round(v * 2) / 2 if v >= 1 else round(v, 1)
+        q_lat_span, q_lon_span = q_span(lat_span), q_span(lon_span)
+        run = self.hrrr_run()
+        key = f"heights:{hpa}:{q_lat}:{q_lon}:{q_lat_span}:{q_lon_span}:{run}"
+
+        async def _build() -> HeightsResponse:
+            now = _now()
+            async with self._grid_sem:
+                got = await asyncio.to_thread(modelfields.heights, self.models, hpa, q_lat, q_lon,
+                                              q_lat_span, q_lon_span, now)
+            if got is None:
+                raise LookupError("no heights for this region")
+            lines, step, cycle, fhr = got
+            return HeightsResponse(hPa=hpa, intervalM=step, lines=lines, run=cycle,
+                                   validTime=cycle + timedelta(hours=fhr), cachedAt=now)
+        return await self.cache.fetch(key, _build, ttl=_until_model_hour, negative_ttl=60.0)
+
     # ---- LAMP (NOMADS) --------------------------------------------------------
 
     LAMP_MAX_AGE = timedelta(hours=6)
@@ -906,6 +972,8 @@ class PressureService:
     # ---- Radar model field (wind + boundary layer) ------------------------
 
     FIELD_COLS, FIELD_ROWS, FIELD_INSET = 7, 5, 0.12
+    # From the store a point costs nothing, so the map gets more of them.
+    HRRR_COLS, HRRR_ROWS = 11, 8
 
     async def get_field_grid(self, lat: float, lon: float,
                              lat_span: float, lon_span: float) -> FieldGridResponse:
@@ -924,12 +992,20 @@ class PressureService:
         q_lat_span, q_lon_span = q_span(lat_span), q_span(lon_span)
         key = f"field:{q_lat}:{q_lon}:{q_lat_span}:{q_lon_span}"
 
+        if self.hrrr_enabled:
+            lats, lons = self._field_points(q_lat, q_lon, q_lat_span, q_lon_span,
+                                            self.HRRR_COLS, self.HRRR_ROWS)
+            now = _now()
+            points = await asyncio.to_thread(modelfields.field_points, self.models, lats, lons, now)
+            if points:
+                return FieldGridResponse(points=points, source="hrrr", cachedAt=now)
+
         async def _pull() -> FieldGridResponse:
             lats, lons = self._field_points(q_lat, q_lon, q_lat_span, q_lon_span)
             now = _now()
             self.om_gate.require(om.field_grid_weight(len(lats)))
             points = await om.fetch_field_grid(lats, lons, self._client, now=now)
-            resp = FieldGridResponse(points=points, cachedAt=now)
+            resp = FieldGridResponse(points=points, source="open-meteo", cachedAt=now)
             await self.cache.set(f"{key}:lastgood", resp, ttl=GRID_STALE_MAX)
             return resp
 
@@ -980,9 +1056,11 @@ class PressureService:
                 raise
             return last.model_copy(update={"hours": ahead, "stale": True})
 
-    def _field_points(self, q_lat: float, q_lon: float, q_lat_span: float, q_lon_span: float):
-        """The 7x5 sample grid for a quantized map region."""
-        cols, rows, inset = self.FIELD_COLS, self.FIELD_ROWS, self.FIELD_INSET
+    def _field_points(self, q_lat: float, q_lon: float, q_lat_span: float, q_lon_span: float,
+                      cols: Optional[int] = None, rows: Optional[int] = None):
+        """The sample grid for a quantized map region: 7x5 from Open-Meteo,
+        denser from the HRRR store."""
+        cols, rows, inset = cols or self.FIELD_COLS, rows or self.FIELD_ROWS, self.FIELD_INSET
         h = q_lat_span * (1 - 2 * inset)
         w = q_lon_span * (1 - 2 * inset)
         lat0, lon0 = q_lat - h / 2, q_lon - w / 2
@@ -1006,6 +1084,14 @@ class PressureService:
 
         key = f"fieldlv:{q_lat}:{q_lon}:{q_lat_span}:{q_lon_span}"
 
+        if self.hrrr_enabled:
+            lats, lons = self._field_points(q_lat, q_lon, q_lat_span, q_lon_span,
+                                            self.HRRR_COLS, self.HRRR_ROWS)
+            now = _now()
+            points = await asyncio.to_thread(modelfields.level_points, self.models, lats, lons, now)
+            if points:
+                return FieldLevelsResponse(points=points, source="hrrr", cachedAt=now)
+
         async def _pull() -> FieldLevelsResponse:
             lats, lons = self._field_points(q_lat, q_lon, q_lat_span, q_lon_span)
             now = _now()
@@ -1013,7 +1099,7 @@ class PressureService:
             points = await om.fetch_field_levels(lats, lons, self._client, now=now)
             if not points:
                 raise LookupError("no winds aloft")
-            resp = FieldLevelsResponse(points=points, cachedAt=now)
+            resp = FieldLevelsResponse(points=points, source="open-meteo", cachedAt=now)
             await self.cache.set(f"{key}:lastgood", resp, ttl=GRID_STALE_MAX)
             return resp
 

@@ -407,6 +407,27 @@ async def radar_field_levels(
     return resp.model_dump(mode="json", by_alias=True)
 
 
+@app.get("/radar/heights")
+async def radar_heights(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    latSpan: float = Query(..., gt=0, le=180),
+    lonSpan: float = Query(..., gt=0, le=360),
+    hPa: int = Query(..., ge=500, le=925),
+):
+    """Contours of geopotential height at one of the altitude rail's levels
+    (925, 850, 700, 600, 500 hPa) for a map region, from the HRRR store.
+    503 outside the HRRR domain or before the first cycle is held."""
+    if hPa not in (925, 850, 700, 600, 500):
+        raise HTTPException(status_code=422, detail="hPa must be 925, 850, 700, 600 or 500")
+    try:
+        resp = await get_service().get_heights(lat, lon, latSpan, lonSpan, hPa)
+    except Exception as exc:
+        log.warning("heights unavailable: %s: %s", type(exc).__name__, exc)
+        raise HTTPException(status_code=503, detail="heights unavailable")
+    return resp.model_dump(mode="json", by_alias=True)
+
+
 @app.get("/radar/field")
 async def radar_field(
     lat: float = Query(..., ge=-90, le=90),

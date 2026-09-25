@@ -290,6 +290,7 @@ class FieldPoint(BaseModel):
 
 class FieldGridResponse(BaseModel):
     points: List[FieldPoint] = Field(default_factory=list)
+    source: Optional[str] = None        # "hrrr" or "open-meteo"
     cachedAt: datetime
 
 
@@ -308,9 +309,11 @@ class FieldLevelPoint(BaseModel):
 
 class FieldLevelsResponse(BaseModel):
     """The map's wind grid at every altitude stop, for the radar's altitude
-    slider: the same 35 points as /radar/field, the current hour."""
+    slider: the same points as /radar/field, the current hour."""
     points: List[FieldLevelPoint] = Field(default_factory=list)
+    source: Optional[str] = None
     cachedAt: datetime
+
 
 
 # ---- Aloft: the vertical column at a point ---------------------------------
@@ -434,6 +437,18 @@ class ContourLine(BaseModel):
 
     level: float
     points: List[List[float]]
+
+
+class HeightsResponse(BaseModel):
+    """Contours of geopotential height at one pressure level for a map
+    region, from HRRR: `level` on each line is metres; the app labels them
+    in decameters the way charts do."""
+    hPa: int
+    intervalM: int
+    lines: List[ContourLine] = Field(default_factory=list)
+    run: datetime
+    validTime: datetime
+    cachedAt: datetime
 
 
 class GridOut(BaseModel):

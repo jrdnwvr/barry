@@ -415,9 +415,18 @@ def sample_lamp(run):
 
 @pytest.fixture(autouse=True)
 def _nomads_unspaced(monkeypatch):
-    """NOMADS spacing is ten seconds in production; tests fetch at once."""
+    """NOMADS spacing is ten seconds in production; tests fetch at once.
+    HRRR is off unless a test turns it on, so the map layers the older
+    tests check still come from Open-Meteo."""
     monkeypatch.setenv("BARRY_NOMADS_SPACING", "0")
+    monkeypatch.setenv("BARRY_HRRR", "0")
     yield
+
+
+def _hrrr_fixture(kind):
+    path = os.path.join(os.path.dirname(__file__), "fixtures", f"hrrr_{kind}.grib2")
+    with open(path, "rb") as fh:
+        return fh.read()
 
 
 class FakeUpstream:
@@ -456,6 +465,34 @@ class FakeUpstream:
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         url = str(request.url)
+        if "noaa-hrrr-bdp-pds" in url or "/hrrr/prod/" in url:
+            # HRRR on the AWS bucket or NOMADS: the small fixture grid for
+            # any cycle and hour, byte ranges honoured. hrrr_aws and
+            # hrrr_nomads, when set, are the cycles each one has.
+            import re
+            self.hrrr_calls = getattr(self, "hrrr_calls", [])
+            where = "nomads" if "nomads" in url else "aws"
+            self.hrrr_calls.append((where, request.method, url.rsplit("/", 1)[-1], request.headers.get("range")))
+            if getattr(self, "hrrr_fail", False):
+                return httpx.Response(503, text="down")
+            m = re.search(r"hrrr\.(\d{8})/conus/hrrr\.t(\d{2})z\.wrf(sfc|prs)f(\d{2})\.grib2(\.idx)?$", url)
+            if not m:
+                return httpx.Response(404)
+            cycle = datetime.strptime(m.group(1) + m.group(2), "%Y%m%d%H").replace(tzinfo=timezone.utc)
+            have = getattr(self, "hrrr_nomads" if where == "nomads" else "hrrr_aws", None)
+            if have is not None and cycle not in have:
+                return httpx.Response(404, text="NoSuchKey")
+            kind = m.group(3)
+            if m.group(5):
+                with open(os.path.join(os.path.dirname(__file__), "fixtures", f"hrrr_{kind}.grib2.idx")) as fh:
+                    return httpx.Response(200, text=fh.read())
+            data = _hrrr_fixture(kind)
+            rng = request.headers.get("range")
+            if rng and request.method == "GET":
+                a, b = rng.split("=", 1)[1].split("-")
+                start, end = int(a), (int(b) if b else len(data) - 1)
+                return httpx.Response(206, content=data[start:end + 1])
+            return httpx.Response(200, content=data)
         if "s3.amazonaws.com" in url:
             # NOAA's public GOES buckets: a listing per hour, then the files.
             if getattr(self, "s3_fail", False):

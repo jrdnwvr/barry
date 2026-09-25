@@ -45,6 +45,9 @@ class Scheduler:
         self._lamp_task: Optional[asyncio.Task] = None
         self.lamp_enabled = os.environ.get("BARRY_LAMP", "1") != "0"
         self.last_lamp_at: Optional[datetime] = None
+        self._model_task: Optional[asyncio.Task] = None
+        self.models_enabled = bool(getattr(service, "hrrr_enabled", False))
+        self.last_model_at: Optional[datetime] = None
         # For the health check: when each loop last finished an attempt,
         # whatever the outcome. A loop that stops finishing is stuck.
         self.started_at: Optional[datetime] = None
@@ -55,6 +58,8 @@ class Scheduler:
     GLM_STALL_S = 600.0     # ten minutes without a poll finishing, or without data
     LAMP_STALL_S = 3600.0   # an hour without the LAMP loop finishing a pass
     LAMP_STALE_S = 3 * 3600.0   # three hours without a new LAMP run
+    MODEL_STALL_S = 3600.0  # an hour without the model loop finishing a pass
+    MODEL_STALE_S = 3 * 3600.0  # three hours without a new HRRR cycle
 
     def problems(self, now: datetime) -> tuple[List[str], List[str]]:
         """Two lists for /healthz. The first is about the process: a loop
@@ -87,6 +92,13 @@ class Scheduler:
                 dead.append("lamp loop stalled")
             if age(self._service.lamp_ok_at) > self.LAMP_STALE_S:
                 stale.append("lamp guidance stale")
+        if self.models_enabled:
+            if self._model_task is None or self._model_task.done():
+                dead.append("model loop exited")
+            elif age(self.last_model_at) > self.MODEL_STALL_S:
+                dead.append("model loop stalled")
+            if age(self._service.hrrr_ok_at) > self.MODEL_STALE_S:
+                stale.append("hrrr fields stale")
         if age(self._service.bulk_ok_at) > 2 * self._interval + 60.0:
             stale.append("bulk metar table missing")
         return dead, stale
@@ -225,6 +237,25 @@ class Scheduler:
             except asyncio.TimeoutError:
                 pass
 
+    # HRRR cycles land hourly, about 55 minutes after their time. A pass
+    # every five minutes asks the bucket for one index file and returns
+    # when the newest cycle is held; a new cycle takes a minute to pull.
+    MODEL_INTERVAL = 300.0
+
+    async def _run_models(self) -> None:
+        while not self._stop.is_set():
+            try:
+                n = await self._service.poll_hrrr()
+                if n:
+                    metrics.inc("barry_hrrr_cycles_total")
+            except Exception as exc:
+                log.warning("scheduler: hrrr poll failed: %s: %s", type(exc).__name__, exc)
+            self.last_model_at = _now()
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=self.MODEL_INTERVAL)
+            except asyncio.TimeoutError:
+                pass
+
     def start(self) -> None:
         self.started_at = _now()
         if self._task is None:
@@ -236,6 +267,8 @@ class Scheduler:
             log.info("scheduler: glm poll started, interval=%.0fs", self.GLM_INTERVAL)
         if self._lamp_task is None and self.lamp_enabled:
             self._lamp_task = asyncio.create_task(self._run_lamp())
+        if self._model_task is None and self.models_enabled:
+            self._model_task = asyncio.create_task(self._run_models())
 
     async def stop(self) -> None:
         self._stop.set()
@@ -248,3 +281,6 @@ class Scheduler:
         if self._lamp_task is not None:
             await self._lamp_task
             self._lamp_task = None
+        if self._model_task is not None:
+            await self._model_task
+            self._model_task = None

@@ -1,0 +1,188 @@
+"""HRRR from the bucket: index files, the Lambert grid, the pull into the
+model store, and the map layers served from it."""
+import os
+from datetime import datetime, timedelta, timezone
+
+import numpy as np
+import pytest
+
+from app import grib
+from app.modelstore import ModelStore
+from app.scheduler import Scheduler
+from app.service import PressureService
+from app.sources import hrrr
+
+FIX = os.path.join(os.path.dirname(__file__), "fixtures")
+NOW = datetime(2026, 9, 25, 3, 10, tzinfo=timezone.utc)      # expected cycle 02z
+CYCLE = datetime(2026, 9, 25, 2, tzinfo=timezone.utc)
+# The middle of the Ohio valley grid, and a box around it.
+LAT, LON = 38.4, -84.4
+
+
+def _centre(points):
+    return min(points, key=lambda p: (p.lat - LAT) ** 2 + (p.lon - LON) ** 2)
+
+
+@pytest.fixture
+def hrrr_on(monkeypatch):
+    monkeypatch.setenv("BARRY_HRRR", "1")
+    monkeypatch.setattr("app.service._now", lambda: NOW)
+
+
+def test_index_ranges_and_merging():
+    with open(os.path.join(FIX, "hrrr_sfc.grib2.idx")) as fh:
+        entries = grib.parse_idx(fh.read())
+    assert [e.name for e in entries][:3] == ["TMP", "UGRD", "VGRD"]
+    r = grib.byte_ranges(entries, [("UGRD", "10 m above ground"), ("MSLMA", "mean sea level")])
+    assert r[("UGRD", "10 m above ground")] == (entries[1].offset, entries[2].offset - 1)
+    r = grib.byte_ranges(entries, [("PRES", "surface")])
+    assert r[("PRES", "surface")][1] is None                   # the last message runs to the end
+    merged = grib.merge_ranges([(0, 9), (10, 19), (40, 49), (50, None)])
+    assert merged == [(0, 19), (40, None)]
+    assert grib.merge_ranges([(0, 9), (15, 19)], gap=10) == [(0, 19)]
+
+
+def test_the_hrrr_grid_round_trips_and_starts_where_ncep_says():
+    g = grib.LambertGrid(1799, 1059, 21.138123, 237.280472, 262.5, 38.5, 38.5, 3000, 3000)
+    i, j = g.ij(21.138123, 237.280472 - 360)
+    assert abs(i) < 1e-6 and abs(j) < 1e-6
+    lat, lon = g.latlon(1798, 1058)
+    assert abs(lat - 47.8423) < 1e-3 and abs(lon - -60.9178) < 1e-3   # HRRR's last point
+    i, j = g.ij(39.1, -84.42)
+    lat, lon = g.latlon(i, j)
+    assert abs(lat - 39.1) < 1e-9 and abs(lon - -84.42) < 1e-9
+    # Grid north is east of true north east of LoV, west of it to the west.
+    assert g.rotation(-80.0) > 0 > g.rotation(-110.0)
+
+
+def test_split_messages_follows_the_length_fields():
+    with open(os.path.join(FIX, "hrrr_prs.grib2"), "rb") as fh:
+        data = fh.read()
+    assert len(grib.split_messages(data)) == 16
+
+
+@pytest.mark.asyncio
+async def test_a_cycle_is_pulled_by_range_and_the_winds_come_out_earth_relative(client, upstream, hrrr_on):
+    s = PressureService(client)
+    n = await s.poll_hrrr()
+    assert n == len(hrrr.FIELDS) * len(hrrr.FHRS)
+    assert s.models.cycles("hrrr") == [CYCLE]
+    gets = [c for c in upstream.hrrr_calls if c[1] == "GET" and not c[2].endswith(".idx")]
+    # Per hour: the surface fields sit together after the unwanted first
+    # message (one request), the pressure ones likewise.
+    assert all(c[0] == "aws" and c[3] for c in gets) and len(gets) == 2 * len(hrrr.FHRS)
+    resp = await s.get_field_grid(LAT, LON, 3.0, 5.0)
+    assert resp.source == "hrrr" and len(resp.points) == s.HRRR_COLS * s.HRRR_ROWS
+    p = _centre(resp.points)
+    assert abs(p.windDeg - 270) <= 1 and abs(p.windKmh - 36.0) < 0.5
+    assert p.blM == 900 and p.capeJkg == 500
+    # Held: the next pass asks for one index and pulls nothing.
+    before = len(upstream.hrrr_calls)
+    assert await s.poll_hrrr() == 0
+    assert all(c[1] == "HEAD" for c in upstream.hrrr_calls[before:])
+
+
+@pytest.mark.asyncio
+async def test_winds_aloft_from_the_store(client, upstream, hrrr_on):
+    s = PressureService(client)
+    await s.poll_hrrr()
+    resp = await s.get_field_levels(LAT, LON, 3.0, 5.0)
+    assert resp.source == "hrrr"
+    lv = {l.hPa: l for l in _centre(resp.points).levels}
+    assert set(lv) == {925, 850, 700, 600, 500}
+    assert abs(lv[850].windDeg - 250) <= 1 and abs(lv[850].windKmh - 54.0) < 0.5
+    assert abs(lv[500].windKmh - 108.0) < 0.5
+    # West of 86 W the ground stands above 850 hPa: those levels are left out there.
+    west = [p for p in resp.points if p.lon < -86.1]
+    assert west and all({l.hPa for l in p.levels} == {700, 600, 500} for p in west)
+
+
+@pytest.mark.asyncio
+async def test_height_contours_run_east_and_west_at_chart_intervals(client, upstream, hrrr_on):
+    s = PressureService(client)
+    await s.poll_hrrr()
+    h = await s.get_heights(LAT, LON, 2.0, 4.0, 850)
+    assert h.intervalM == 30 and h.lines and h.run == CYCLE
+    assert h.validTime == CYCLE + timedelta(hours=1)
+    for line in h.lines:
+        assert line.level % 30 == 0
+        lats = [p[0] for p in line.points]
+        assert max(lats) - min(lats) < 0.1                     # heights vary with latitude only
+        # 1,500 m at 38.5 N, 60 m less per degree north.
+        assert abs(np.mean(lats) - (38.5 + (1500 - line.level) / 60)) < 0.05
+    assert (await s.get_heights(LAT, LON, 2.0, 4.0, 500)).intervalM == 60
+    # No 850 hPa contours over the high ground in the west.
+    assert all(pt[1] > -86.2 for line in h.lines for pt in line.points)
+
+
+@pytest.mark.asyncio
+async def test_off_the_grid_the_map_falls_back_to_open_meteo(client, upstream, hrrr_on):
+    s = PressureService(client)
+    await s.poll_hrrr()
+    resp = await s.get_field_grid(45.0, -120.0, 3.0, 5.0)       # outside the fixture grid
+    assert resp.source == "open-meteo"
+    with pytest.raises(LookupError):
+        await s.get_heights(45.0, -120.0, 2.0, 4.0, 850)
+
+
+@pytest.mark.asyncio
+async def test_a_late_bucket_sends_the_pull_to_nomads_as_whole_files(client, upstream, hrrr_on, monkeypatch):
+    late = CYCLE + timedelta(minutes=hrrr.EXPECTED_AFTER_MIN + hrrr.LATE_MIN + 5)
+    monkeypatch.setattr("app.service._now", lambda: late)
+    upstream.hrrr_aws = {CYCLE - timedelta(hours=1)}
+    upstream.hrrr_nomads = {CYCLE}
+    s = PressureService(client)
+    assert await s.poll_hrrr() > 0
+    assert s.models.cycles("hrrr") == [CYCLE]
+    gets = [c for c in upstream.hrrr_calls if c[1] == "GET" and not c[2].endswith(".idx")]
+    assert gets and all(c[0] == "nomads" and c[3] is None for c in gets)
+
+
+@pytest.mark.asyncio
+async def test_not_late_yet_means_the_older_cycle_from_the_bucket(client, upstream, hrrr_on, monkeypatch):
+    # Expected at 58 minutes, only late at 68: at 62 the bucket gets the benefit.
+    monkeypatch.setattr("app.service._now", lambda: CYCLE + timedelta(minutes=62))
+    upstream.hrrr_aws = {CYCLE - timedelta(hours=1)}
+    upstream.hrrr_nomads = {CYCLE}
+    s = PressureService(client)
+    await s.poll_hrrr()
+    assert s.models.cycles("hrrr") == [CYCLE - timedelta(hours=1)]
+    assert not any(c[0] == "nomads" for c in upstream.hrrr_calls)
+
+
+@pytest.mark.asyncio
+async def test_the_store_survives_a_restart_and_keeps_two_cycles(client, upstream, hrrr_on, tmp_path, monkeypatch):
+    monkeypatch.setenv("BARRY_DATA_DIR", str(tmp_path))
+    s = PressureService(client)
+    await s.poll_hrrr()
+    for k in (1, 2):
+        later = NOW + timedelta(hours=k)
+        monkeypatch.setattr("app.service._now", lambda later=later: later)
+        await s.poll_hrrr()
+    assert s.models.cycles("hrrr") == [CYCLE + timedelta(hours=2), CYCLE + timedelta(hours=1)]
+    assert sorted(p.name for p in (tmp_path / "model" / "hrrr").iterdir()) == ["2026092503", "2026092504"]
+    again = ModelStore(tmp_path / "model")
+    assert again.cycles("hrrr") == s.models.cycles("hrrr")
+    arr = again.load("hrrr", CYCLE + timedelta(hours=2), 1, "hpbl")
+    assert arr is not None and float(arr[5, 5]) == 900.0
+
+
+@pytest.mark.asyncio
+async def test_the_model_loop_runs_and_health_notices_a_quiet_feed(client, upstream, hrrr_on, monkeypatch):
+    import asyncio
+    monkeypatch.setenv("BARRY_GLM", "0")
+    monkeypatch.setenv("BARRY_LAMP", "0")
+    s = PressureService(client)
+    sched = Scheduler(s, interval_seconds=600)
+    sched.start()
+    try:
+        for _ in range(200):
+            if s.hrrr_ok_at is not None:
+                break
+            await asyncio.sleep(0.01)
+        assert s.hrrr_ok_at is not None
+        assert "hrrr fields stale" not in sched.problems(NOW)[1]
+        assert "hrrr fields stale" in sched.problems(NOW + timedelta(hours=4))[1]
+    finally:
+        await sched.stop()
+    assert "model loop exited" in sched.problems(NOW)[0]

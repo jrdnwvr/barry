@@ -31,14 +31,19 @@ log = logging.getLogger("barry.modelstore")
 
 
 def _cycle_name(cycle: datetime) -> str:
-    return cycle.strftime("%Y%m%d%H")
+    """YYYYMMDDHH, with the minutes added for products that run every
+    quarter hour (the turbulence nowcast)."""
+    return cycle.strftime("%Y%m%d%H%M" if cycle.minute else "%Y%m%d%H")
 
 
 def _parse_cycle(name: str) -> Optional[datetime]:
-    try:
-        return datetime.strptime(name, "%Y%m%d%H").replace(tzinfo=timezone.utc)
-    except ValueError:
-        return None
+    for fmt in ("%Y%m%d%H", "%Y%m%d%H%M"):
+        try:
+            if len(name) == len(datetime(2000, 1, 1).strftime(fmt)):
+                return datetime.strptime(name, fmt).replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    return None
 
 
 class ModelStore:
@@ -120,13 +125,15 @@ class ModelStore:
         """Keep the newest `keep` complete cycles, and any incomplete cycle
         newer than them (it is being written)."""
         with self._lock:
-            cycles = sorted((c for f, c in self._manifests if f == feed), reverse=True)
+            cycles = sorted((c for f, c in self._manifests if f == feed),
+                            key=lambda c: _parse_cycle(c) or datetime.min.replace(tzinfo=timezone.utc),
+                            reverse=True)
             complete = [c for c in cycles if self._manifests[(feed, c)].get("complete")]
             if len(complete) <= keep:
                 return
-            cutoff = complete[keep - 1]
+            cutoff = _parse_cycle(complete[keep - 1])
             for c in cycles:
-                if c < cutoff:
+                if (_parse_cycle(c) or cutoff) < cutoff:
                     self._manifests.pop((feed, c), None)
                     for k in [k for k in self._mem if k[0] == feed and k[1] == c]:
                         self._mem.pop(k, None)

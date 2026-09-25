@@ -227,3 +227,37 @@ async def test_the_model_loop_runs_and_health_notices_a_quiet_feed(client, upstr
     finally:
         await sched.stop()
     assert "model loop exited" in sched.problems(NOW)[0]
+
+
+@pytest.mark.asyncio
+async def test_turbulence_and_icing_now_come_with_the_column(client, upstream, hrrr_on):
+    from app.sources import hazards
+    upstream.clock = lambda: NOW
+    s = PressureService(client)
+    assert await s.poll_hazards() == 11 + 60
+    assert s.models.cycles("gtg") == [datetime(2026, 9, 25, 3, 0, tzinfo=timezone.utc)]
+    assert s.models.cycles("cip") == [datetime(2026, 9, 25, 2, tzinfo=timezone.utc)]
+    assert await s.poll_hazards() == 0                          # held
+    a = await s.get_aloft(LAT, LON)                             # Open-Meteo's column, NOAA's hazards
+    assert a.source == "open-meteo" and a.turbulence and a.icing
+    edr = {l.ft: l.edr for l in a.turbulence.levels}
+    assert edr[5100] == 0.3 and edr[6100] == 0.3 and edr[3100] == 0.05
+    ice = {l.ft: l for l in a.icing.levels}
+    assert ice[7500].severity == 3 and ice[7500].prob == 0.6 and ice[7500].sld == 0.2
+    assert ice[5000].severity == 0
+    # High ground in the west: nothing below it.
+    w = await s.get_aloft(LAT, -87.3)
+    assert min(l.ft for l in w.turbulence.levels) > 1600 * 3.28
+    assert hazards.ft_name("edr", 30) == "edr_100" and hazards.ft_name("icp", 152.4) == "icp_500"
+
+
+@pytest.mark.asyncio
+async def test_old_hazards_are_not_served(client, upstream, hrrr_on, monkeypatch):
+    s = PressureService(client)
+    await s.poll_hazards()
+    monkeypatch.setattr("app.service._now", lambda: NOW + timedelta(hours=3))
+    upstream.clock = lambda: NOW + timedelta(hours=3)
+    upstream.hazards_missing = {"gtg", "cip"}
+    await s.poll_hazards()
+    a = await s.get_aloft(LAT, LON)
+    assert a.turbulence is None and a.icing is None

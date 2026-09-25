@@ -18,7 +18,8 @@ import numpy as np
 from . import grib
 from . import pressure_field
 from .modelstore import ModelStore
-from .models import (AloftHour, AloftLevel, AloftSurface, ContourLine, FieldLevelPoint,
+from .models import (AloftHour, AloftIceLevel, AloftIcing, AloftLevel, AloftSurface,
+                     AloftTurbLevel, AloftTurbulence, ContourLine, FieldLevelPoint,
                      FieldPoint, LevelWind)
 
 FEED = "hrrr"
@@ -287,3 +288,62 @@ def column_key(store: ModelStore) -> str:
         c = store.cycles(feed)
         parts.append(c[0].strftime("%Y%m%d%H") if c else "-")
     return ":".join(parts)
+
+
+# ---- turbulence and icing now -------------------------------------------------
+
+HAZARD_TOP_FT = 30000
+HAZARD_MAX_AGE = timedelta(minutes=90)
+
+
+def _levels(store: ModelStore, feed: str, prefix: str, valid: datetime) -> List[int]:
+    names = store.hours(feed, valid).get(0, [])
+    out = []
+    for n in names:
+        if n.startswith(prefix + "_"):
+            try:
+                out.append(int(n.split("_", 1)[1]))
+            except ValueError:
+                continue
+    return sorted(out)
+
+
+def hazards(store: ModelStore, lat: float, lon: float, now: datetime
+            ) -> Tuple[Optional[AloftTurbulence], Optional[AloftIcing]]:
+    la, lo = np.array([lat]), np.array([lon])
+    turb = ice = None
+    runs = store.cycles("gtg")
+    if runs and now - runs[0] <= HAZARD_MAX_AGE:
+        t = runs[0]
+        g = grid(store, "gtg", t)
+        levels = []
+        for ft in _levels(store, "gtg", "edr", t):
+            if ft > HAZARD_TOP_FT:
+                continue
+            arr = store.load("gtg", t, 0, f"edr_{ft}")
+            v = float(g.sample(arr, la, lo)[0]) if arr is not None and g is not None else float("nan")
+            if math.isfinite(v):
+                levels.append(AloftTurbLevel(ft=ft, edr=round(max(0.0, v), 3)))
+        if levels:
+            turb = AloftTurbulence(t=t, levels=levels)
+    runs = store.cycles("cip")
+    if runs and now - runs[0] <= HAZARD_MAX_AGE:
+        t = runs[0]
+        g = grid(store, "cip", t)
+        levels = []
+        for ft in _levels(store, "cip", "icp", t):
+            if ft > HAZARD_TOP_FT or g is None:
+                continue
+            vals = {}
+            for pre in ("icp", "ics", "sld"):
+                arr = store.load("cip", t, 0, f"{pre}_{ft}")
+                vals[pre] = float(g.sample(arr, la, lo)[0]) if arr is not None else float("nan")
+            if not math.isfinite(vals["icp"]):
+                continue
+            levels.append(AloftIceLevel(
+                ft=ft, prob=round(max(0.0, vals["icp"]), 2),
+                severity=int(round(vals["ics"])) if math.isfinite(vals["ics"]) else 0,
+                sld=round(vals["sld"], 2) if math.isfinite(vals["sld"]) else None))
+        if levels:
+            ice = AloftIcing(t=t, levels=levels)
+    return turb, ice

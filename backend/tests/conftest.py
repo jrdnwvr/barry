@@ -226,11 +226,11 @@ def metar_cache_row(sid, lat, lon, *, spd=7, d="270", cat="VFR"):
             f',,,,,,CLR,,,,,,,,{cat},,,,,,,,,,,,METAR,100')
 
 
-def sample_aloft(request):
+def sample_aloft(request, now=None):
     """Open-Meteo's pressure-level shape for two hours from the current UTC
     hour: a cloud deck at 925-850 hPa (80 %), thin cloud at 600 hPa (40 %)
     below freezing, winds veering and strengthening with height."""
-    start = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    start = (now or datetime.now(timezone.utc)).replace(minute=0, second=0, microsecond=0)
     times = [(start + timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M") for i in range(3)]
     levels = {1000: 110, 975: 330, 950: 560, 925: 790, 900: 1000, 850: 1470, 800: 1960, 700: 3040, 600: 4300, 500: 5700, 400: 7300}
     hourly = {"time": times}
@@ -522,6 +522,12 @@ class FakeUpstream:
             self.nomads_calls.append(url)
             if getattr(self, "nomads_fail", False):
                 return httpx.Response(503, text="down")
+            if "gtgn/prod/" in url or "cip/para/" in url:
+                kind = "gtg" if "gtgn" in url else "cip"
+                if kind in getattr(self, "hazards_missing", ()):
+                    return httpx.Response(404, text="not found")
+                with open(os.path.join(os.path.dirname(__file__), "fixtures", f"{kind}.grib2"), "rb") as fh:
+                    return httpx.Response(200, content=fh.read())
             m = re.search(r"lmp\.(\d{8})/lmp\.t(\d{4})z\.lavtxt\.ascii$", url)
             if not m:
                 return httpx.Response(404, text="not found")
@@ -626,7 +632,7 @@ class FakeUpstream:
                 return httpx.Response(200, json=sample_field_levels(request))
             if "hPa" in request.url.params.get("hourly", ""):
                 self.aloft_calls = getattr(self, "aloft_calls", 0) + 1
-                return httpx.Response(200, json=sample_aloft(request))
+                return httpx.Response(200, json=sample_aloft(request, self.clock()))
             if "," in request.url.params.get("latitude", ""):
                 return httpx.Response(200, json=sample_field_grid(request))
             return httpx.Response(200, json=sample_forecast(trough=self.om_trough))

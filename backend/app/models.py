@@ -355,9 +355,37 @@ class AloftHour(BaseModel):
     blAglFt: Optional[int] = None
 
 
+class AloftTurbLevel(BaseModel):
+    ft: int
+    edr: float                           # eddy dissipation rate, m^(2/3)/s
+
+
+class AloftTurbulence(BaseModel):
+    """GTG's nowcast at the point: every 1,000 ft above the ground."""
+    t: datetime
+    levels: List[AloftTurbLevel] = Field(default_factory=list)
+
+
+class AloftIceLevel(BaseModel):
+    ft: int
+    prob: float                          # 0 to 1
+    severity: int                        # 0 none, 1 trace, 2 light, 3 moderate, 4 heavy
+    sld: Optional[float] = None          # supercooled large drop potential, 0 to 1
+
+
+class AloftIcing(BaseModel):
+    """CIP's current icing at the point: every 500 ft above the ground."""
+    t: datetime
+    levels: List[AloftIceLevel] = Field(default_factory=list)
+
+
 class AloftResponse(BaseModel):
     hours: List[AloftHour] = Field(default_factory=list)
     source: str = "open-meteo"
+    # What is there now, from NOAA's analyses rather than the model's
+    # forecast; absent when a product is not held.
+    turbulence: Optional[AloftTurbulence] = None
+    icing: Optional[AloftIcing] = None
     cachedAt: datetime
     # The model did not answer and this is the last good column, trimmed to
     # the hours still ahead. Clients may say so.

@@ -67,6 +67,7 @@ from .models import (
 from .sources import aviationweather as awc
 from .sources import glm
 from .sources import advisories as adv
+from .sources import hazards as hazards_src
 from .sources import hrrr as hrrr_src
 from .sources import iem
 from .sources import lamp as lamp_src
@@ -863,6 +864,32 @@ class PressureService:
             raise errors[0]
         return written
 
+    async def poll_hazards(self) -> int:
+        """The newest GTG turbulence and CIP icing runs from NOMADS, each
+        when not held. Fields written; a product failing leaves the other."""
+        written = 0
+        for p in hazards_src.PRODUCTS:
+            try:
+                n = await hazards_src.poll(self._client, self.models, p, _now())
+                if n:
+                    log.info("hazards: %s %d fields", p.feed, n)
+                written += n
+            except Exception as exc:
+                log.warning("hazards: %s failed: %s: %s", p.feed, type(exc).__name__, exc)
+        return written
+
+    async def _with_hazards(self, resp: AloftResponse, lat: float, lon: float) -> AloftResponse:
+        if not self.hrrr_enabled:
+            return resp
+        try:
+            turb, ice = await asyncio.to_thread(modelfields.hazards, self.models, lat, lon, _now())
+        except Exception as exc:
+            log.warning("hazards at a point failed: %s", exc)
+            return resp
+        if turb is None and ice is None:
+            return resp
+        return resp.model_copy(update={"turbulence": turb, "icing": ice})
+
     def hrrr_run(self) -> Optional[datetime]:
         cycles = self.models.cycles(hrrr_src.FEED)
         return cycles[0] if cycles else None
@@ -1026,6 +1053,12 @@ class PressureService:
     # ---- Aloft: the column at a point -----------------------------------------
 
     async def get_aloft(self, lat: float, lon: float) -> AloftResponse:
+        """The column (below) with what is there now: GTG turbulence and CIP
+        icing at the point, read fresh on every request."""
+        resp = await self._aloft_column(lat, lon)
+        return await self._with_hazards(resp, lat, lon)
+
+    async def _aloft_column(self, lat: float, lon: float) -> AloftResponse:
         """Clouds, temperatures and wind by pressure level for the next day
         at a point, keyed by the same tenth-degree cell as the forecast.
         From the HRRR column feeds on Tower where they cover the point;

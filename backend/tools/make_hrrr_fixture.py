@@ -39,8 +39,18 @@ OUT = os.path.join(os.path.dirname(__file__), "..", "tests", "fixtures")
 STD_HGT = {925: 760, 850: 1500, 700: 3050, 600: 4350, 500: 5750}
 
 
-def message(values: np.ndarray) -> bytes:
+def message(values: np.ndarray, param=None, height_m=None) -> bytes:
     h = eccodes.codes_grib_new_from_samples("GRIB2")
+    if param is not None:
+        d, c, n = param
+        eccodes.codes_set(h, "discipline", d)
+        eccodes.codes_set(h, "parameterCategory", c)
+        eccodes.codes_set(h, "parameterNumber", n)
+    if height_m is not None:
+        # Specific altitude above mean sea level, as GTG and CIP give it.
+        eccodes.codes_set(h, "typeOfFirstFixedSurface", 102)
+        eccodes.codes_set(h, "scaleFactorOfFirstFixedSurface", 0)
+        eccodes.codes_set(h, "scaledValueOfFirstFixedSurface", int(height_m))
     eccodes.codes_set(h, "gridDefinitionTemplateNumber", 30)
     for k, v in [("shapeOfTheEarth", 6), ("Nx", NX), ("Ny", NY),
                  ("latitudeOfFirstGridPointInDegrees", 37.0), ("longitudeOfFirstGridPointInDegrees", 272.0),
@@ -49,7 +59,11 @@ def message(values: np.ndarray) -> bytes:
                  ("resolutionAndComponentFlags", 8), ("iScansNegatively", 0), ("jScansPositively", 1),
                  ("packingType", "grid_simple"), ("bitsPerValue", 24)]:
         eccodes.codes_set(h, k, v)
-    eccodes.codes_set_values(h, values.astype(float).ravel())
+    vals = values.astype(float).ravel()
+    if (vals == 9999.0).any():
+        eccodes.codes_set(h, "bitmapPresent", 1)
+        eccodes.codes_set(h, "missingValue", 9999.0)
+    eccodes.codes_set_values(h, vals)
     msg = eccodes.codes_get_message(h)
     eccodes.codes_release(h)
     return msg
@@ -110,6 +124,32 @@ def main():
         with open(os.path.join(OUT, name + ".grib2.idx"), "w") as fh:
             fh.write("\n".join(idx) + "\n")
         print(name, len(data), "bytes,", len(fields), "messages")
+
+    # GTG: turbulence every 1,000 ft to 10,100; 0.3 (moderate) from 5,100
+    # to 6,100 ft, 0.05 (smooth) elsewhere; nothing below the ground in the
+    # high west third.
+    data = b""
+    for k in range(11):
+        m = 30 + 304.8 * k
+        ft = m * 3.28084
+        v = np.full_like(lat, 0.3 if 5000 <= ft <= 6200 else 0.05)
+        v = np.where(high & (m < 1600), 9999.0, v)
+        data += message(v, (0, 19, 30), m)
+    with open(os.path.join(OUT, "gtg.grib2"), "wb") as fh:
+        fh.write(data)
+    # CIP: every 500 ft to 10,000; moderate icing, 60 percent, some large
+    # drops, from 7,000 to 8,000 ft; none elsewhere.
+    data = b""
+    for k in range(20):
+        m = 152.4 * (k + 1)
+        ft = m * 3.28084
+        ice = 7000 <= ft <= 8000
+        data += message(np.full_like(lat, 0.6 if ice else 0.0), (0, 19, 233), m)
+        data += message(np.full_like(lat, 3.0 if ice else 0.0), (0, 19, 37), m)
+        data += message(np.full_like(lat, 0.2 if ice else 0.0), (0, 19, 217), m)
+    with open(os.path.join(OUT, "cip.grib2"), "wb") as fh:
+        fh.write(data)
+    print("gtg and cip written")
 
 
 if __name__ == "__main__":

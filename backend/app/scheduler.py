@@ -250,6 +250,10 @@ class Scheduler:
                     metrics.inc("barry_hrrr_cycles_total")
             except Exception as exc:
                 log.warning("scheduler: hrrr poll failed: %s: %s", type(exc).__name__, exc)
+            try:
+                await self._service.poll_hazards()
+            except Exception as exc:
+                log.warning("scheduler: hazards poll failed: %s: %s", type(exc).__name__, exc)
             self.last_model_at = _now()
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=self.MODEL_INTERVAL)

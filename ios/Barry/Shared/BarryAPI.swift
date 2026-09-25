@@ -168,6 +168,21 @@ struct BarryAPI {
         return try await get(comps?.url)
     }
 
+    /// Height contours at one of the altitude rail's pressure levels for a
+    /// map region, from the server's HRRR store.
+    func heights(lat: Double, lon: Double, latSpan: Double, lonSpan: Double, hPa: Int) async throws -> HeightsResponse {
+        var comps = URLComponents(url: baseURL.appendingPathComponent("radar/heights"),
+                                  resolvingAgainstBaseURL: false)
+        comps?.queryItems = [
+            URLQueryItem(name: "lat", value: String(lat)),
+            URLQueryItem(name: "lon", value: String(lon)),
+            URLQueryItem(name: "latSpan", value: String(latSpan)),
+            URLQueryItem(name: "lonSpan", value: String(lonSpan)),
+            URLQueryItem(name: "hPa", value: String(hPa)),
+        ]
+        return try await get(comps?.url)
+    }
+
     /// GOES lightning-mapper flashes over the last 20 minutes around a
     /// point, binned, from the server's memory (it polls NOAA, not the phone).
     func lightning(lat: Double, lon: Double) async throws -> LightningResponse {

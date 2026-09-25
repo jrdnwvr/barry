@@ -545,6 +545,17 @@ struct FieldExtremum: Codable, Hashable {
     let value: Double
 }
 
+/// Contours of geopotential height at one pressure level for a map region,
+/// from HRRR. `level` on each line is metres; the map labels decameters.
+struct HeightsResponse: Codable, Hashable {
+    let hPa: Int
+    let intervalM: Int
+    var lines: [ContourLine] = []
+    let run: Date
+    let validTime: Date
+    let cachedAt: Date
+}
+
 struct PressureFieldResponse: Codable, Hashable {
     var isobars: [ContourLine] = []
     var isallobars: [ContourLine] = []

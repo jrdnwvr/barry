@@ -724,8 +724,9 @@ stored keys, but each has its own model, so they fetch separately.
 - Seen: grey streaks drifting with the wind (Flow) or arrows (Arrows).
   Chip "Wind".
 - Lives: `WindFlowView.swift` + `WindFlow.metal`; `RadarMapView.syncArrows`.
-- Data: `/radar/field` (7 by 5 points per region; boundary layer and CAPE
-  fields present but unused on the map).
+- Data: `/radar/field`: 11 by 8 points per region from the server's HRRR
+  store, or 7 by 5 from Open-Meteo off the HRRR grid (`source` says
+  which); boundary layer and CAPE present but unused on the map.
 - Settings: `radarWindArrows` true (the Wind chip; historical name),
   `radarWindStyle` "flow" or "arrows".
 - Rules: particles scale with view area (70 to 240), 30 fps cap, CPU
@@ -738,12 +739,18 @@ stored keys, but each has its own model, so they fetch separately.
 
 ### radar.rail.altitude
 - Seen: a vertical rail, highest stop on top: SFC, 2.5k, 5k, 10k, 14k, 18k.
-  Tap or drag. Full screen only, while Wind is on. The note line
-  (`radar.altitudeNote`) says "Wind at about N ft. Other layers stay at the
-  surface."
-- Lives: `RadarView.swift` › `altitudeRail`; `RadarModel.swift` › `WindAltitude`.
+  Tap or drag. Full screen only, while Wind is on. Off the surface the
+  map also draws that level's height contours from HRRR, solid near-black
+  lines (near-white in dark mode) labelled in decameters ("318"), and the
+  surface isobars step aside. The note line (`radar.altitudeNote`) says
+  "Wind and 700 mb heights at about 10,000 ft. Other layers stay at the
+  surface." ("Wind at about ..." where there are no heights).
+- Lives: `RadarView.swift` › `altitudeRail`; `RadarModel.swift` ›
+  `WindAltitude`, `fetchHeights`; `PressureFieldOverlay.swift` (the lines).
 - Data: `/radar/field/levels` once per region, all levels in one call
-  (925, 850, 700, 600, 500 hPa).
+  (925, 850, 700, 600, 500 hPa); `/radar/heights` per level and region.
+  Levels that lie underground (surface pressure under the level's) are left
+  out of both, so 850 hPa draws nothing over the Rockies.
 - Settings: capped by `aloftCeilingFt` (stops up to `max(5000, ceiling)`).
 - Rules: the streak ramp changes per stop (35 km/h at the surface to 130 at
   18k). The level is not remembered between opens. Other layers stay at the
@@ -1091,8 +1098,9 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 | `GET /lightning` | `lat`, `lon`, `half` | 0.02° cells, clusters, window 1200 s, coverage | GLM store | 60 s; centre 0.2°, half 0.5° | the radar lightning layer |
 | `GET /radar/frames` | none | host and frames | RainViewer | 2 min | the radar |
 | `GET /aloft` | `lat`, `lon` | 25 hourly columns, `stale` | Open-Meteo pressure levels | 1 h per 0.1° cell; last good 12 h | Aloft |
-| `GET /radar/field` | `lat`, `lon`, spans | 35 points of wind, boundary layer, CAPE | Open-Meteo multi-point (35 weighted calls) | until five past the next hour, at least 10 min; centre 0.05°, spans 0.5°; last good copy for 6 h when the budget is spent or the model fails | the radar wind layer |
-| `GET /radar/field/levels` | same | 35 points at five levels | Open-Meteo multi-point (35 weighted calls) | same hold and last good copy as `/radar/field` | the altitude rail |
+| `GET /radar/field` | `lat`, `lon`, spans | wind, boundary layer and CAPE at 88 points (HRRR) or 35 (Open-Meteo), and `source` | the HRRR store; Open-Meteo multi-point (35 weighted calls) off the HRRR grid or before a cycle is held | HRRR: none needed; Open-Meteo: until five past the next hour, at least 10 min; centre 0.05°, spans 0.5°; last good copy for 6 h | the radar wind layer |
+| `GET /radar/field/levels` | same | the same points at five levels, underground levels left out, and `source` | as `/radar/field` | as `/radar/field` | the altitude rail |
+| `GET /radar/heights` | `lat`, `lon`, spans, `hPa` (925, 850, 700, 600, 500) | height contours in metres, 30 m apart at 700 hPa and below and 60 m above, with the run and valid time | the HRRR store only; 503 off its grid | until five past the next hour, per level, region and run | the altitude rail |
 | `GET /stations/search` | `q`, `limit` | id and name matches, METAR stations only | AWC directory | directory 24 h | Settings, onboarding |
 | `GET /glance` | `stations` (comma list, up to 8), `tz` | one line per field: category, wind, altimeter, sea-level pressure, 3 h change and class, the verdict without forecast, observation time | the same cached reports as `/combined` (saved fields are watched stations) | none of its own; a field that cannot be read is left out | the Fields card |
 | `GET /route` | `from`, `to`, `speedKt` (40 to 400, default 100), `tz` | distance, time, arrival time, both ends' glance lines, corridor stations (along and off the line, category, wind), the worst of them, nearest lightning near the line, fronts crossing it, the destination's category at arrival and where it came from (`arriveSource` taf or lamp), TEMPO at arrival, minutes from sunset | none: the bulk table, the flash store, `/fronts`, the ends' cached reports, TAF and LAMP | 5 min per pair and speed | the Route card and screen |
@@ -1116,6 +1124,13 @@ without blocking the response.
   call).
 - Lightning loop every 60 s: GOES-19 east of 106 W and GOES-18 west of it,
   20 minutes kept. `BARRY_GLM=0` disables.
+- Model loop every 300 s: when the newest HRRR cycle (expected 58 min
+  after its hour) is not held, the analysis and the next two hours of the
+  fields in `sources/hrrr.py` by byte range from AWS, or whole files from
+  NOMADS when the bucket is 10 minutes late and NOMADS has it. Winds turned
+  earth-relative, fields written to `state/model/hrrr/<cycle>/` as float32,
+  two cycles kept (about 1 GB). A cycle takes 5 s and peaks near 700 MB.
+  `BARRY_HRRR=0` disables and every map layer stays on Open-Meteo.
 - LAMP loop every 300 s: when a new hourly run (HH:30, looked for eight
   minutes after) is not held, one 4.4 MB bulletin from NOMADS for every
   site, parsed in a thread (2,313 stations, 0.4 s). On a cold start a run
@@ -1123,10 +1138,10 @@ without blocking the response.
   served. `BARRY_LAMP=0` disables. Every NOMADS request goes through
   `sources/nomads.py`, 10 s apart (`BARRY_NOMADS_SPACING`).
 - Unhealthy (503, autoheal restarts): a loop exited or stalled (refresh
-  1800 s, lightning 600 s, LAMP 3600 s). Degraded (200, or 503 with
-  `strict`): the lightning feed or the bulk table is stale, or no LAMP
-  run for three hours.
-- Tests: `backend/tests`, 348 tests; `test_property` reads the app's own
+  1800 s, lightning 600 s, LAMP and model 3600 s). Degraded (200, or 503
+  with `strict`): the lightning feed or the bulk table is stale, or no LAMP
+  run or HRRR cycle for three hours.
+- Tests: `backend/tests`, 359 tests; `test_property` reads the app's own
   OpenAPI document.
 
 ## Settings keys
@@ -1262,4 +1277,6 @@ caching failures; `/stations/search` accepting one character.
   radar card (docs/REVIEW.md).
 - 2026-09-24, later: the Fields card, the advisories layer and the route
   (card, screen, planner, `/route`) from docs/ROUTES.md. LAMP from NOMADS
-  behind the TAF card and the route's arrival (NOAA.md phase 1a).
+  behind the TAF card and the route's arrival (NOAA.md phase 1a). HRRR
+  on Tower behind the radar's wind grid, the rail's winds and new height
+  contours (phase 2).

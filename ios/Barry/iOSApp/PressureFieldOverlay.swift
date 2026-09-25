@@ -22,7 +22,14 @@ struct PressureFieldState: Equatable {
     /// Labels in the unit the rest of the app uses; the lines stay at
     /// whole hPa, which is where the analysis draws them.
     var unit: PressureUnit = .inHg
+    /// Height lines at the altitude rail's level. While they show, the
+    /// surface isobars step aside: two sets of lines read as one mess.
+    var heights: HeightsResponse?
     var version = 0
+
+    var drawsAnything: Bool {
+        heights != nil || (field != nil && (showIsobars || showIsallobars || shade != .off))
+    }
 }
 
 final class PressureFieldOverlay: NSObject, MKOverlay {
@@ -38,15 +45,24 @@ final class PressureFieldRenderer: MKOverlayRenderer {
     private var shadeKey = ""
 
     override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in ctx: CGContext) {
-        guard let overlay = overlay as? PressureFieldOverlay, let field = overlay.state.field else { return }
+        guard let overlay = overlay as? PressureFieldOverlay else { return }
         let st = overlay.state
         let scale = 1 / zoomScale
         let visible = mapRect.insetBy(dx: -60 * scale, dy: -60 * scale)
 
+        if let heights = st.heights {
+            // Chart practice: solid lines, labelled in decameters.
+            for line in heights.lines {
+                drawLine(line, color: Self.heightInk, width: 1.5 * scale, dash: nil,
+                         label: String(Int((line.level / 10).rounded())), scale: scale,
+                         visible: visible, in: ctx)
+            }
+        }
+        guard let field = st.field else { return }
         if st.shade != .off, let grid = (st.shade == .pressure ? field.pressureGrid : field.tendencyGrid) {
             drawShade(grid, kind: st.shade, version: st.version, opacity: st.shadeOpacity, in: ctx)
         }
-        if st.showIsobars {
+        if st.showIsobars && st.heights == nil {
             for line in field.isobars {
                 // Indigo, not gray: gray reads as a road on Apple's map.
                 drawLine(line, color: UIColor.systemIndigo.withAlphaComponent(0.85), width: 1.6 * scale,
@@ -73,6 +89,14 @@ final class PressureFieldRenderer: MKOverlayRenderer {
                 drawExtremum(e, at: p, color: ink, unit: st.unit, scale: scale, in: ctx)
             }
         }
+    }
+
+    /// Near black on the light map and near white on dark, like the lines
+    /// on a printed upper-air chart.
+    private static var heightInk: UIColor {
+        UIColor { tc in tc.userInterfaceStyle == .dark
+            ? UIColor(white: 0.92, alpha: 0.85)
+            : UIColor(white: 0.12, alpha: 0.8) }
     }
 
     /// Amber on the light map, a warmer yellow on dark: readable over the

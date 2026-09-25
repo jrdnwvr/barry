@@ -75,9 +75,17 @@ final class RadarModel: ObservableObject {
         didSet {
             guard windLevel != oldValue else { return }
             applyLevel()
-            if windLevel != 0, let r = lastRegion { Task { await fetchLevels(region: r) } }
+            heights = nil
+            if windLevel != 0, let r = lastRegion {
+                Task { await fetchLevels(region: r) }
+                Task { await fetchHeights(region: r) }
+            }
         }
     }
+    /// Height contours at `windLevel`, drawn by the pressure renderer while
+    /// the rail is off the surface. Nil at the surface or outside HRRR.
+    @Published private(set) var heights: HeightsResponse?
+    private var heightsFetchedFor: MKCoordinateRegion?
     /// The wind grid at `windLevel` when it is not the surface.
     @Published private(set) var levelField: [WindArrow] = []
     private var levels: FieldLevelsResponse?
@@ -362,7 +370,10 @@ final class RadarModel: ObservableObject {
                 try? await Task.sleep(nanoseconds: 700_000_000)
                 guard !Task.isCancelled else { return }
                 await fetchField(region: region)
-                if windLevel != 0 { await fetchLevels(region: region) }
+                if windLevel != 0 {
+                    await fetchLevels(region: region)
+                    await fetchHeights(region: region)
+                }
             }
         }
     }
@@ -400,6 +411,21 @@ final class RadarModel: ObservableObject {
         levels = resp
         levelsFetchedFor = region
         applyLevel()
+    }
+
+    /// Height lines for the rail's level; enrichment, so a failure (off the
+    /// HRRR grid, or before the server holds a cycle) just leaves none.
+    func fetchHeights(region: MKCoordinateRegion) async {
+        let level = windLevel
+        guard level != 0 else { heights = nil; return }
+        if let h = heights, h.hPa == level, Self.nearEnough(region, to: heightsFetchedFor) { return }
+        let resp = try? await BarryAPI().heights(
+            lat: region.center.latitude, lon: region.center.longitude,
+            latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta, hPa: level)
+        guard level == windLevel else { return }
+        heights = resp
+        heightsFetchedFor = resp == nil ? nil : region
+        pressureVersion += 1
     }
 
     private func applyLevel() {

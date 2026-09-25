@@ -401,6 +401,18 @@ fetches in the logs shows no NOMADS error beyond a timeout.
 
 Medium. The foundation of the NOAA path and the first new feature.
 
+Done 2026-09-25: `grib.py` (index, ranges, eccodes decode, the Lambert
+grid, checked against eccodes' own coordinates to 2e-6 degrees),
+`modelstore.py`, `sources/hrrr.py` (AWS by range, NOMADS whole files when
+the bucket is late), `modelfields.py`, the model loop, `/radar/field` and
+`/radar/field/levels` from the store at 88 points, and `/radar/heights`
+drawn on the rail. Measured on Tower: 66 fields a cycle in about 5 s,
+480 MB a cycle on disk, the container at 516 MB after the pull. Kept
+the decode in Python (the heavy parts are eccodes and numpy); the
+container's limit went to 3 GB. Not done: HRRR's sea-level pressure as a
+second isobar source, and the map fields beyond wind (the fields are
+there to add).
+
 - Build the ingest, grid and store described above, pulling from each
   hourly HRRR cycle the analysis and the next two hours (f00 to f02) of:
   10 m wind, gust, boundary layer height, CAPE, CIN, sea-level pressure,

@@ -157,7 +157,8 @@ struct RadarPanel: View {
     private var pressureUnitRaw: String = PressureUnit.inHg.rawValue
 
     private var pressureState: PressureFieldState? {
-        guard wantsPressure else { return nil }
+        let heights = showWind && model.windLevel != 0 ? model.heights : nil
+        guard wantsPressure || heights != nil else { return nil }
         // Lighter shading over the radar so the rain still reads through it.
         let opacity = showRadar ? 0.30 : 0.42
         let shade: PressureShade
@@ -172,6 +173,7 @@ struct RadarPanel: View {
                                   showIsallobars: field == .change,
                                   shade: shade, shadeOpacity: opacity,
                                   unit: PressureUnit(rawValue: pressureUnitRaw) ?? .inHg,
+                                  heights: heights,
                                   version: model.pressureVersion)
     }
 
@@ -638,7 +640,9 @@ struct RadarPanel: View {
     /// map with the wind layer on (it would read as broken). In that order.
     private var noteText: (text: String, id: String)? {
         if showWind, model.windLevel != 0 {
-            return ("Wind at about \(WindAltitude.stop(model.windLevel).ft.formatted()) ft. Other layers stay at the surface.",
+            let stop = WindAltitude.stop(model.windLevel)
+            let what = model.heights != nil ? "Wind and \(stop.hPa) mb heights" : "Wind"
+            return ("\(what) at about \(stop.ft.formatted()) ft. Other layers stay at the surface.",
                     "radar.altitudeNote")
         }
         if showStorms, let r = model.lightning.response, !r.coverage {

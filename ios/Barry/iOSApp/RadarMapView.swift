@@ -259,8 +259,7 @@ struct RadarMapView: UIViewRepresentable {
         func syncPressure(_ state: PressureFieldState?, on map: MKMapView) {
             guard state != shownPressure else { return }
             shownPressure = state
-            guard let state, state.field != nil,
-                  state.showIsobars || state.showIsallobars || state.shade != .off else {
+            guard let state, state.drawsAnything else {
                 if let o = pressureOverlay { map.removeOverlay(o); pressureOverlay = nil }
                 return
             }

@@ -33,10 +33,9 @@ services:
       # Small persisted state (bulk-snapshot history for the front watch), so
       # a redeploy doesn't cost a 7.5 h warm-up. Lives next to the compose file.
       - BARRY_DATA_DIR=/var/lib/barry
-      # Barry's own MRMS frames are pulled but RainViewer's are served until
-      # the app draws Barry's (they arrived but drew blank, 2026-09-25);
-      # /radar/frames?source=mrms serves Barry's for testing.
-      - BARRY_RADAR_SOURCE=rainviewer
+      # rainviewer here serves RainViewer's frames instead of Barry's MRMS
+      # ones (still pulled; /radar/frames?source=mrms asks for them).
+      - BARRY_RADAR_SOURCE=mrms
     volumes:
       - ./state:/var/lib/barry
     # Optional: also expose on the LAN (e.g. for testing from the server itself).

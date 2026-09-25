@@ -55,13 +55,19 @@ def ub(dbz):
 async def test_frames_every_ten_minutes_for_two_hours(client, upstream, mrms_on):
     s = PressureService(client)
     assert await s.poll_radar() == 13
-    times = s.radar.times()
+    times = s.radar.observed()
     assert len(times) == 13 and all(b - a == 600 for a, b in zip(times, times[1:]))
     assert times[-1] == int(datetime(2026, 9, 25, 3, 0, tzinfo=timezone.utc).timestamp())
     assert await s.poll_radar() == 0                             # held
     f = await s.get_radar_frames()
-    assert f.host == "https://barry.wide-stack.com" and len(f.frames) == 7
-    assert f.frames[-1].path == f"/radar/tiles/{times[-1]}" and not any(x.nowcast for x in f.frames)
+    assert f.host == "https://barry.wide-stack.com" and len(f.frames) == 10
+    past = [x for x in f.frames if not x.nowcast]
+    cast = [x for x in f.frames if x.nowcast]
+    assert len(past) == 7 and past[-1].path == f"/radar/tiles/{times[-1]}"
+    # The next half hour: valid times ten minutes apart, URLs naming the run.
+    assert [x.time for x in cast] == [times[-1] + 600 * k for k in (1, 2, 3)]
+    assert [x.path for x in cast] == [f"/radar/tiles/{times[-1] + k}" for k in (1, 2, 3)]
+    assert s.radar.tile(times[-1] + 2, 7, 34, 49) is not None
 
 
 @pytest.mark.asyncio
@@ -70,7 +76,7 @@ async def test_a_tile_draws_the_storm_in_universal_blue(client, upstream, mrms_o
     s = PressureService(client)
     await s.poll_radar()
     app.state.service = s
-    t = s.radar.times()[-1]
+    t = s.radar.observed()[-1]
     x, y, px, py = tile_of(39.1, -84.5, 7)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
         r = await c.get(f"/radar/tiles/{t}/512/7/{x}/{y}/2/0_1.png")
@@ -91,7 +97,7 @@ async def test_a_tile_draws_the_storm_in_universal_blue(client, upstream, mrms_o
 async def test_a_one_pixel_storm_survives_a_continental_view(client, upstream, mrms_on):
     s = PressureService(client)
     await s.poll_radar()
-    t = s.radar.times()[-1]
+    t = s.radar.observed()[-1]
     x, y, px, py = tile_of(39.9, -84.2, 4)
     img = read_png(s.radar.tile(t, 4, x, y))
     # The 60 dBZ pixel is smaller than a pixel at zoom 4; the pooled copy keeps it.
@@ -123,3 +129,34 @@ async def test_rainviewer_by_default_when_configured_and_mrms_on_request(client,
     await s.poll_radar()
     assert (await s.get_radar_frames()).host == "https://tilecache.rainviewer.com"
     assert (await s.get_radar_frames("mrms")).host == "https://barry.wide-stack.com"
+
+
+
+@pytest.mark.asyncio
+async def test_a_newer_frame_replaces_the_nowcast(client, upstream, mrms_on, monkeypatch):
+    s = PressureService(client)
+    await s.poll_radar()
+    base = s.radar.observed()[-1]
+    assert s.radar.casts(base) == [base + 1, base + 2, base + 3]
+    later = NOW + timedelta(minutes=10)
+    monkeypatch.setattr("app.service._now", lambda: later)
+    upstream.clock = lambda: later
+    await s.poll_radar()
+    new = s.radar.observed()[-1]
+    assert new == base + 600 and s.radar.casts(new) == [new + 1, new + 2, new + 3]
+    assert not s.radar.casts(base) and len(s.radar.observed()) == 13
+
+
+def test_motion_follows_a_moving_storm():
+    rng = np.random.default_rng(1)
+    tex = (rng.random((200, 300)) * 60 + 110).astype(np.uint8)
+    prev = np.zeros((1200, 1600), np.uint8)
+    cur = np.zeros((1200, 1600), np.uint8)
+    prev[400:600, 500:800] = tex
+    cur[408:608, 516:816] = tex                      # 8 down, 16 across in ten minutes
+    vy, vx, _ = radar.motion(radar.pooled(prev, 2), radar.pooled(cur, 2))
+    by, bx = 500 // 4 // radar.BLOCK, 650 // 4 // radar.BLOCK
+    assert (vy[by, bx], vx[by, bx]) == (2.0, 4.0)
+    nxt = radar.advect(cur, vy, vx, 1)
+    ys, xs = np.nonzero(nxt)
+    assert (ys.min(), xs.min()) == (416, 532)

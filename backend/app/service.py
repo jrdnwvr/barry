@@ -15,12 +15,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 import httpx
+import numpy as np
 
 from . import conditions as conditions_mod
 from .guards import OMBudget, RateGate, RateLimited, check_station
 from . import explain
 from . import modelfields
 from .modelstore import ModelStore
+from . import radar as radar_mod
 from .radar import RadarStore
 from . import flashes as flashes_mod
 from . import lightning as lightning_mod
@@ -1025,18 +1027,47 @@ class PressureService:
             got += 1
         oldest = min(wanted) if wanted else now - timedelta(hours=mrms.KEEP_H)
         self.radar.purge(int(oldest.timestamp()))
+        try:
+            await self._nowcast()
+        except Exception as exc:
+            log.warning("radar nowcast failed: %s: %s", type(exc).__name__, exc)
         if self.radar.times():
             self.radar_ok_at = datetime.fromtimestamp(self.radar.times()[-1], tz=timezone.utc)
         return got
 
+    async def _nowcast(self) -> int:
+        """The next half hour from the newest frame: motion from it and the
+        one ten minutes before (radar.motion), the newest frame carried 10,
+        20 and 30 minutes forward. Made once per newest frame; older
+        nowcasts are dropped. Returns frames made."""
+        obs = self.radar.observed()
+        if len(obs) < 2 or obs[-1] - obs[-2] != self.radar.STEP_S or self.radar.casts(obs[-1]):
+            return 0
+        t0, tp = obs[-1], obs[-2]
+        prev2, cur2 = self.radar.level(tp, radar_mod.MOTION_LEVEL), self.radar.level(t0, radar_mod.MOTION_LEVEL)
+        cur0 = self.radar.level(t0, 0)
+        grid = self.radar.grid
+        if prev2 is None or cur2 is None or cur0 is None or grid is None:
+            return 0
+        vy, vx, _ = await asyncio.to_thread(radar_mod.motion, np.asarray(prev2), np.asarray(cur2))
+        for k in (1, 2, 3):
+            frame = await asyncio.to_thread(radar_mod.advect, np.asarray(cur0), vy, vx, float(k))
+            await asyncio.to_thread(self.radar.put, t0 + k, frame, grid)
+        self.radar.drop_casts_before(t0)
+        return 3
+
     def _mrms_frames(self) -> Optional[RadarFramesResponse]:
-        times = self.radar.times()[-self.RADAR_FRAMES:]
+        obs = self.radar.observed()
+        times = obs[-self.RADAR_FRAMES:]
         if len(times) < 4 or _now().timestamp() - times[-1] > self.RADAR_STALE_S:
             return None
-        return RadarFramesResponse(
-            host=self.public_url,
-            frames=[RadarFrameOut(time=t, path=f"/radar/tiles/{t}") for t in times],
-            cachedAt=_now())
+        frames = [RadarFrameOut(time=t, path=f"/radar/tiles/{t}") for t in times]
+        # The next half hour, marked as forecast, the way RainViewer's
+        # nowcast frames were.
+        base = times[-1]
+        frames += [RadarFrameOut(time=base + (key - base) * self.radar.STEP_S, path=f"/radar/tiles/{key}",
+                                 nowcast=True) for key in self.radar.casts(base)]
+        return RadarFramesResponse(host=self.public_url, frames=frames, cachedAt=_now())
 
     async def get_radar_frames(self, source: Optional[str] = None) -> RadarFramesResponse:
         """The radar timeline: Barry's own MRMS frames when an hour of them

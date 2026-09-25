@@ -126,6 +126,41 @@ class RadarStore:
     def times(self) -> List[int]:
         return sorted(self._frames)
 
+    # Nowcast frames are stored under their base frame's time plus 1, 2 or
+    # 3 (seconds), which no ten-minute mark can be: the tile URL then names
+    # the run that made them, so a newer nowcast for the same valid time
+    # never reuses a URL Cloudflare already holds.
+    STEP_S = 600
+
+    def observed(self) -> List[int]:
+        return [t for t in self.times() if t % self.STEP_S == 0]
+
+    def casts(self, base: int) -> List[int]:
+        return [base + k for k in (1, 2, 3) if (base + k) in self._frames]
+
+    def drop_casts_before(self, base: int) -> None:
+        with self._lock:
+            old = [t for t in self._frames if t % self.STEP_S and t - t % self.STEP_S < base]
+        if old:
+            self._drop(old)
+
+    def _drop(self, keys) -> None:
+        with self._lock:
+            for t in keys:
+                self._frames.pop(t, None)
+                if self.root is not None:
+                    for i in range(LEVELS):
+                        try:
+                            (self.root / f"{t}.l{i}.npy").unlink()
+                        except OSError:
+                            pass
+            for k in [k for k in self._tiles if k[0] in set(keys)]:
+                self._tile_bytes -= len(self._tiles.pop(k))
+
+    def level(self, t: int, i: int) -> Optional[np.ndarray]:
+        f = self._frames.get(t)
+        return f[i] if f is not None else None
+
     def has(self, t: int) -> bool:
         return t in self._frames
 
@@ -145,17 +180,7 @@ class RadarStore:
             self._frames[t] = levels
 
     def purge(self, before: int) -> None:
-        with self._lock:
-            for t in [t for t in self._frames if t < before]:
-                self._frames.pop(t, None)
-                if self.root is not None:
-                    for i in range(LEVELS):
-                        try:
-                            (self.root / f"{t}.l{i}.npy").unlink()
-                        except OSError:
-                            pass
-            for k in [k for k in self._tiles if k[0] < before]:
-                self._tile_bytes -= len(self._tiles.pop(k))
+        self._drop([t for t in list(self._frames) if t < before])
 
     def tile(self, t: int, z: int, x: int, y: int, size: int = 512) -> Optional[bytes]:
         """The PNG for one tile of one frame, None when the frame is not held."""
@@ -217,3 +242,110 @@ def render(levels: List[np.ndarray], grid: dict, z: int, x: int, y: int, size: i
     if not codes.any():
         return empty_png(size)
     return png_rgba(LUT[codes])
+
+
+# ---- the next half hour ----------------------------------------------------------
+
+# Motion is found on the copy pooled twice (0.04 degree): blocks of 12
+# points (about 50 km), shifts of up to 5 points (20 km) between frames ten
+# minutes apart, so up to about 130 km/h. Blocks with little echo take the
+# motion of their neighbours; with none near, the echo stays put.
+MOTION_LEVEL = 2
+BLOCK = 12
+SEARCH = 5
+ECHO_CODE = int((15 + 32) * 2)        # 15 dBZ: below it, not worth tracking
+SMOOTH_PASSES = 3
+
+
+def _box(a: np.ndarray, r: int = 2) -> np.ndarray:
+    """Sum over a (2r+1)^2 neighbourhood, edges padded with zeros."""
+    p = np.pad(a, r)
+    c = p.cumsum(0).cumsum(1)
+    c = np.pad(c, ((1, 0), (1, 0)))
+    n = 2 * r + 1
+    return c[n:, n:] - c[:-n, n:] - c[n:, :-n] + c[:-n, :-n]
+
+
+def motion(prev: np.ndarray, cur: np.ndarray):
+    """Per-block displacement (rows, cols, in pooled points per step) that
+    carries `prev` onto `cur`, by the smallest sum of absolute differences,
+    then filled and smoothed. Returns (vy, vx, has_echo) on the block grid."""
+    a = np.where(prev >= ECHO_CODE, prev, 0).astype(np.int16)
+    b = np.where(cur >= ECHO_CODE, cur, 0).astype(np.int16)
+    h, w = b.shape
+    nby, nbx = h // BLOCK, w // BLOCK
+    a, b = a[:nby * BLOCK, :nbx * BLOCK], b[:nby * BLOCK, :nbx * BLOCK]
+    best = np.full((nby, nbx), np.iinfo(np.int64).max, dtype=np.int64)
+    vy = np.zeros((nby, nbx), dtype=np.float32)
+    vx = np.zeros((nby, nbx), dtype=np.float32)
+    zero_cost = None
+    for dy in range(-SEARCH, SEARCH + 1):
+        for dx in range(-SEARCH, SEARCH + 1):
+            shifted = np.zeros_like(a)
+            ys, yd = (slice(0, a.shape[0] - dy), slice(dy, None)) if dy >= 0 else (slice(-dy, None), slice(0, a.shape[0] + dy))
+            xs, xd = (slice(0, a.shape[1] - dx), slice(dx, None)) if dx >= 0 else (slice(-dx, None), slice(0, a.shape[1] + dx))
+            shifted[yd, xd] = a[ys, xs]
+            cost = np.abs(b - shifted).reshape(nby, BLOCK, nbx, BLOCK).sum(axis=(1, 3), dtype=np.int64)
+            if dy == 0 and dx == 0:
+                zero_cost = cost
+            better = cost < best
+            best[better] = cost[better]
+            vy[better], vx[better] = dy, dx
+    echo = (b >= ECHO_CODE).reshape(nby, BLOCK, nbx, BLOCK).sum(axis=(1, 3))
+    # A block counts when it has echo and moving it helps.
+    ok = (echo >= BLOCK * BLOCK // 8) & (best < zero_cost)
+    wgt = ok.astype(np.float32)
+    ny, nx = vy * wgt, vx * wgt
+    for _ in range(SMOOTH_PASSES):
+        s = _box(wgt)
+        sy, sx = _box(ny), _box(nx)
+        filled = s > 0
+        ny = np.where(filled, sy / np.maximum(s, 1e-6), 0.0).astype(np.float32)
+        nx = np.where(filled, sx / np.maximum(s, 1e-6), 0.0).astype(np.float32)
+        wgt = np.where(filled, 1.0, 0.0).astype(np.float32)
+    return ny, nx, echo > 0
+
+
+def advect(cur: np.ndarray, vy: np.ndarray, vx: np.ndarray, steps: float, chunk: int = 400) -> np.ndarray:
+    """`cur` (full resolution) carried `steps` motion steps forward: each
+    point takes the value from where the motion says it came from. The
+    block-grid motion is spread bilinearly over the full grid, a band of
+    rows at a time so memory stays small."""
+    h, w = cur.shape
+    scale = BLOCK * 2 ** MOTION_LEVEL                 # full-resolution points per block
+    per = 2 ** MOTION_LEVEL                           # full-resolution points per pooled point
+    nby, nbx = vy.shape
+    out = np.zeros_like(cur)
+    cols = np.arange(w)
+    fx = np.clip((cols + 0.5) / scale - 0.5, 0, nbx - 1)
+    x0 = np.floor(fx).astype(int)
+    x1 = np.minimum(x0 + 1, nbx - 1)
+    tx = (fx - x0).astype(np.float32)
+    for r0 in range(0, h, chunk):
+        rows = np.arange(r0, min(h, r0 + chunk))
+        fy = np.clip((rows + 0.5) / scale - 0.5, 0, nby - 1)
+        y0 = np.floor(fy).astype(int)
+        y1 = np.minimum(y0 + 1, nby - 1)
+        ty = (fy - y0).astype(np.float32)[:, None]
+
+        def bil(v):
+            top = v[y0][:, x0] * (1 - tx) + v[y0][:, x1] * tx
+            bot = v[y1][:, x0] * (1 - tx) + v[y1][:, x1] * tx
+            return top * (1 - ty) + bot * ty
+
+        dy = bil(vy) * per * steps
+        dx = bil(vx) * per * steps
+        src_r = np.rint(rows[:, None] - dy).astype(np.int64)
+        src_c = np.rint(cols[None, :] - dx).astype(np.int64)
+        inside = (src_r >= 0) & (src_r < h) & (src_c >= 0) & (src_c < w)
+        band = np.zeros((len(rows), w), dtype=cur.dtype)
+        band[inside] = cur[src_r[inside], src_c[inside]]
+        out[r0:r0 + len(rows)] = band
+    return out
+
+
+def pooled(codes: np.ndarray, level: int) -> np.ndarray:
+    a = codes
+    for _ in range(level):
+        a = pool(a)
+    return a

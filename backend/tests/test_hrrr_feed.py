@@ -304,3 +304,31 @@ def test_weather_codes_from_probabilities():
     assert weather_code(10, 70, 0, 800, 90) == 80 and weather_code(10, 70, 0, 50, 90) == 61
     assert weather_code(None, None, 0.5, 0, 90) == 61 and weather_code(None, None, 0.0, 0, 90) == 3
     assert [weather_code(0, 0, 0, 0, c) for c in (10, 30, 60, 95)] == [0, 1, 2, 3]
+
+
+@pytest.mark.asyncio
+async def test_rrfs_is_pulled_beside_hrrr_and_both_are_scored_against_the_metars(client, upstream, hrrr_on):
+    from app import modelscore
+    from app.models import StationObs
+    s = PressureService(client)
+    await s.poll_hrrr()
+    assert s.models.cycles("rrfs-sfc") == [datetime(2026, 9, 25, 0, tzinfo=timezone.utc)]
+    assert sorted(s.models.hours("rrfs-sfc", datetime(2026, 9, 25, 0, tzinfo=timezone.utc))) == [1, 2, 3, 4, 5, 6]
+    valid = datetime(2026, 9, 25, 3, tzinfo=timezone.utc)
+    rng = np.random.default_rng(0)
+    table = []
+    for k in range(150):
+        la, lo = 37.5 + rng.random() * 2.5, -86.0 + rng.random() * 4.5
+        # Stations read 1 hPa above the fixture's sea-level pressure, and the
+        # fixture's westerly at 10 m/s.
+        table.append(StationObs(id=f"K{k:03d}", lat=la, lon=lo, obsTime=valid + timedelta(minutes=-7),
+                                slp=1016.0 - 2.0 * (la - 38.5) + 1.0, windKt=19.44, windDir=270.0))
+    rec = modelscore.score_hour(s.models, table, valid)
+    assert rec["reports"] == 150 and rec["hrrr"]["lead"] == 1 and rec["rrfs"]["lead"] == 3
+    for m in ("hrrr", "rrfs"):
+        assert abs(rec[m]["slpBias"] + 1.0) < 0.05 and rec[m]["slpMaeUnbiased"] < 0.05
+        assert rec[m]["windMaeKt"] < 0.2 and rec[m]["dirMaeDeg"] < 1.0
+    day = modelscore.daily([rec])[0]
+    assert day["day"] == "2026-09-25" and day["hours"] == 1 and abs(day["rrfs"]["slpBias"] + 1.0) < 0.05
+    # Too few reports near the hour: nothing to say.
+    assert modelscore.score_hour(s.models, table[:20], valid) is None

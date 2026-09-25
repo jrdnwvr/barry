@@ -73,6 +73,8 @@ from .sources import glm
 from .sources import advisories as adv
 from .sources import hazards as hazards_src
 from .sources import hrrr as hrrr_src
+from .sources import rrfs as rrfs_src
+from . import modelscore
 from .sources import iem
 from .sources import mrms
 from .sources import nbm as nbm_src
@@ -878,7 +880,7 @@ class PressureService:
         does not stop the others."""
         written = 0
         errors = []
-        for spec in hrrr_src.FEEDS:
+        for spec in hrrr_src.FEEDS + (rrfs_src.SFC,):
             try:
                 pick = await hrrr_src.choose(self._client, _now(), self.models.cycles(spec.name), spec)
                 if pick is None:
@@ -905,6 +907,10 @@ class PressureService:
         except Exception as exc:
             errors.append(exc)
             log.warning("nbm: failed: %s: %s", type(exc).__name__, exc)
+        try:
+            await self._score_models()
+        except Exception as exc:
+            log.warning("model scores failed: %s: %s", type(exc).__name__, exc)
         # After a restart the store is on disk but nothing is open yet.
         for name in [spec.name for spec in hrrr_src.FEEDS] + [nbm_src.FEED]:
             for cycle in self.models.cycles(name)[:1]:
@@ -940,6 +946,29 @@ class PressureService:
         if turb is None and ice is None:
             return resp
         return resp.model_copy(update={"turbulence": turb, "icing": ice})
+
+    async def _score_models(self) -> Optional[dict]:
+        """Score the hour nearest the newest METARs, once (modelscore.py)."""
+        table = await self.metar_bulk() or []
+        times = sorted(s.obsTime for s in table if s.obsTime is not None)
+        if not times:
+            return None
+        newest = times[len(times) * 9 // 10]               # most reports are at or before this
+        valid = (newest + timedelta(minutes=30)).replace(minute=0, second=0, microsecond=0)
+        records = persist.load("model_scores") or []
+        if any(r.get("t") == valid.isoformat() for r in records):
+            return None
+        rec = await asyncio.to_thread(modelscore.score_hour, self.models, table, valid)
+        if rec is None:
+            return None
+        records = modelscore.prune(records + [rec], _now())
+        persist.save("model_scores", records)
+        self._score_cache = records
+        return rec
+
+    def model_scores(self, days: int = 14) -> List[dict]:
+        records = getattr(self, "_score_cache", None) or persist.load("model_scores") or []
+        return modelscore.daily(records, days)
 
     def hrrr_run(self) -> Optional[datetime]:
         cycles = self.models.cycles(hrrr_src.FEED)

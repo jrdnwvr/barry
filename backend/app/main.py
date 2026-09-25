@@ -407,6 +407,15 @@ async def lightning_next_tile(t: int, size: int, z: int, x: int, y: int):
                     headers={"Cache-Control": "public, max-age=604800, immutable"})
 
 
+@app.get("/models/scores")
+async def model_scores(days: int = Query(14, ge=1, le=60)):
+    """How HRRR and RRFS did at the METAR stations, by UTC day, newest
+    first: the evidence for switching to RRFS. Daily means of each hour's
+    sea-level pressure error (raw, bias, and with the hour's bias taken
+    out) and 10 m wind speed and direction error."""
+    return {"days": get_service().model_scores(days)}
+
+
 @app.get("/aloft")
 async def get_aloft(
     lat: float = Query(..., ge=-90, le=90),

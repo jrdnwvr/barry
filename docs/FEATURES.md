@@ -1156,6 +1156,7 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 | `GET /radar/field` | `lat`, `lon`, spans | wind, boundary layer and CAPE at 88 points (HRRR) or 35 (Open-Meteo), and `source` | the HRRR store; Open-Meteo multi-point (35 weighted calls) off the HRRR grid or before a cycle is held | HRRR: none needed; Open-Meteo: until five past the next hour, at least 10 min; centre 0.05°, spans 0.5°; last good copy for 6 h | the radar wind layer |
 | `GET /radar/field/levels` | same | the same points at five levels, underground levels left out, and `source` | as `/radar/field` | as `/radar/field` | the altitude rail |
 | `GET /radar/heights` | `lat`, `lon`, spans, `hPa` (925, 850, 700, 600, 500) | height contours in metres, 30 m apart at 700 hPa and below and 60 m above, with the run and valid time | the HRRR store only; 503 off its grid | until five past the next hour, per level, region and run | the altitude rail |
+| `GET /models/scores` | `days` (1 to 60, default 14) | per UTC day, newest first: hours scored, and for HRRR and RRFS the mean sea-level pressure error (raw, bias, and with each hour's bias taken out), 10 m wind speed error in knots, direction error where the wind is 8 kt or more, and the lead | none: the model store and the bulk METAR table, scored once an hour (`modelscore.py`), kept 60 days in `state/model_scores` | none | Jordan, for the RRFS switch |
 | `GET /stations/search` | `q`, `limit` | id and name matches, METAR stations only | AWC directory | directory 24 h | Settings, onboarding |
 | `GET /glance` | `stations` (comma list, up to 8), `tz` | one line per field: category, wind, altimeter, sea-level pressure, 3 h change and class, the verdict without forecast, observation time | the same cached reports as `/combined` (saved fields are watched stations) | none of its own; a field that cannot be read is left out | the Fields card |
 | `GET /route` | `from`, `to`, `speedKt` (40 to 400, default 100), `tz` | distance, time, arrival time, both ends' glance lines, corridor stations (along and off the line, category, wind), the worst of them, nearest lightning near the line, fronts crossing it, the destination's category at arrival and where it came from (`arriveSource` taf or lamp), TEMPO at arrival, minutes from sunset | none: the bulk table, the flash store, `/fronts`, the ends' cached reports, TAF and LAMP | 5 min per pair and speed | the Route card and screen |
@@ -1211,6 +1212,11 @@ without blocking the response.
   the NOAA pressure curve is shifted to meet the station's latest reading
   (`pressureOffset`; HRRR reduces to sea level its own way, and Open-Meteo
   at KLUK serves the same HRRR numbers without the shift).
+- And RRFS beside HRRR (`sources/rrfs.py`): sea-level pressure and 10 m
+  wind for hours 1 to 6 of the 00, 06, 12 and 18 UTC cycles, about two
+  hours after each, served to nobody. Each pass then scores the hour
+  nearest the newest METARs for both models at every station reporting
+  within 15 minutes of it (`/models/scores`).
 - LAMP loop every 300 s: when a new hourly run (HH:30, looked for eight
   minutes after) is not held, one 4.4 MB bulletin from NOMADS for every
   site, parsed in a thread (2,313 stations, 0.4 s). On a cold start a run

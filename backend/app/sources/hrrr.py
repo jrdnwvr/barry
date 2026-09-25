@@ -103,6 +103,16 @@ class FeedSpec:
     dtype: str = "float32"
     nomads: bool = False            # whole files from NOMADS when the bucket is late
     keep: int = 2
+    # Where the files are and when an hour is normally there; HRRR's unless
+    # set (RRFS names its files its own way and lands later).
+    url: Optional[Callable[[datetime, int, str], str]] = None
+    arrival: Optional[Callable[[int], float]] = None
+
+    def url_for(self, cycle: datetime, fhr: int, kind: str) -> str:
+        return (self.url or aws_url)(cycle, fhr, kind)
+
+    def arrival_for(self, fhr: int) -> float:
+        return (self.arrival or arrival_min)(fhr)
 
 
 # The last hour the day-long column feed takes from a 48-hour cycle: six
@@ -192,7 +202,7 @@ LATE_MIN = 10
 
 def ready_after_min(spec: FeedSpec, cycle: datetime) -> Optional[float]:
     hrs = spec.hours(cycle)
-    return arrival_min(max(hrs)) + READY_MARGIN_MIN if hrs else None
+    return spec.arrival_for(max(hrs)) + READY_MARGIN_MIN if hrs else None
 
 
 def expected_cycle(now: datetime, spec: FeedSpec = MAP) -> Optional[datetime]:
@@ -220,12 +230,12 @@ async def _exists(client: httpx.AsyncClient, url: str) -> bool:
 
 
 async def aws_has(client: httpx.AsyncClient, cycle: datetime, fields: Sequence[Field] = FIELDS,
-                  fhrs: Sequence[int] = FHRS) -> bool:
+                  fhrs: Sequence[int] = FHRS, url_fn=None) -> bool:
     """Every file the cycle needs has its index on the bucket (the index
     is written after the file)."""
     last = max(fhrs)
     for k in kinds(fields):
-        if not await _exists(client, aws_url(cycle, last, k) + ".idx"):
+        if not await _exists(client, (url_fn or aws_url)(cycle, last, k) + ".idx"):
             return False
     return True
 
@@ -256,7 +266,7 @@ async def choose(client: httpx.AsyncClient, now: datetime, held: Iterable[dateti
         if hrs:
             if cycle in held:
                 return None
-            if await aws_has(client, cycle, spec.fields, hrs):
+            if await aws_has(client, cycle, spec.fields, hrs, spec.url_for):
                 return cycle, "aws"
             after = ready_after_min(spec, cycle) or 0
             late = (now - cycle).total_seconds() / 60 > after + LATE_MIN
@@ -277,7 +287,7 @@ async def _get(client: httpx.AsyncClient, url: str, rng: Optional[Tuple[int, Opt
 
 
 async def fetch_raw(client: httpx.AsyncClient, cycle: datetime, fhr: int,
-                    fields: Sequence[Field], source: str = "aws") -> Dict[str, bytes]:
+                    fields: Sequence[Field], source: str = "aws", url_fn=None) -> Dict[str, bytes]:
     """Each field's GRIB message bytes for one forecast hour, by Barry's name."""
     out: Dict[str, bytes] = {}
     for k in kinds(fields):
@@ -287,7 +297,7 @@ async def fetch_raw(client: httpx.AsyncClient, cycle: datetime, fhr: int,
             idx = (await nomads.get(client, url + ".idx")).text
             whole = (await nomads.get(client, url, timeout=300.0)).content
         else:
-            url = aws_url(cycle, fhr, k)
+            url = (url_fn or aws_url)(cycle, fhr, k)
             idx = (await _get(client, url + ".idx")).decode("utf-8", "replace")
             whole = None
         entries = grib.parse_idx(idx)
@@ -413,7 +423,7 @@ async def pull(client: httpx.AsyncClient, store, spec: FeedSpec, cycle: datetime
     written; marks the cycle complete and purges old ones."""
     written = 0
     for fhr in spec.hours(cycle):
-        raw = await fetch_raw(client, cycle, fhr, spec.fields, source)
+        raw = await fetch_raw(client, cycle, fhr, spec.fields, source, spec.url_for)
         written += await asyncio.to_thread(_process_hour, raw, spec, cycle, fhr, store)
     store.mark_complete(spec.name, cycle)
     store.purge(spec.name, keep=spec.keep)

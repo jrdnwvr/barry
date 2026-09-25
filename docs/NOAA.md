@@ -593,6 +593,15 @@ Done when: the loop's future frames come from Barry, and a month of
 
 Small for the swap, larger for the products.
 
+Started 2026-09-25: RRFS is pulled beside HRRR (surface pressure and wind,
+hours 1 to 6 of the long cycles; its CONUS files carry no pressure levels,
+and they land about two hours after their time against HRRR's 53
+minutes), and both are scored against the METARs every hour at
+`/models/scores`. The switch waits on those numbers through the winter.
+Not done: the RainViewer and Open-Meteo code paths stay as fallbacks
+(RainViewer when Barry's radar frames are stale, Open-Meteo off the HRRR
+grid); removing them is a decision for after a clean month.
+
 - Add the RRFS field table on the same grid and run it beside HRRR through
   the winter, comparing the two at the METAR sites the app already tracks.
   Switch when it is at least as good; HRRR has no retirement date yet.

@@ -571,6 +571,24 @@ class FakeUpstream:
                 a, b = rng.split("=", 1)[1].split("-")
                 return httpx.Response(206, content=data[int(a): (int(b) + 1) if b else len(data)])
             return httpx.Response(200, content=data)
+        if "noaa-rrfs-ops-pds" in url:
+            # RRFS: the HRRR surface fixture, with its sea-level pressure
+            # under RRFS's name, for any cycle and hour.
+            import re
+            self.rrfs_calls = getattr(self, "rrfs_calls", 0) + 1
+            if getattr(self, "rrfs_fail", False):
+                return httpx.Response(503, text="down")
+            if not re.search(r"rrfs\.t\d{2}z\.2dfld\.3km\.f\d{3}\.conus\.grib2(\.idx)?$", url):
+                return httpx.Response(404)
+            if url.endswith(".idx"):
+                with open(os.path.join(os.path.dirname(__file__), "fixtures", "hrrr_sfc.grib2.idx")) as fh:
+                    return httpx.Response(200, text=fh.read().replace(":MSLMA:", ":MSLET:"))
+            data = _hrrr_fixture("sfc")
+            rng = request.headers.get("range")
+            if rng and request.method == "GET":
+                a, b = rng.split("=", 1)[1].split("-")
+                return httpx.Response(206, content=data[int(a): (int(b) + 1) if b else len(data)])
+            return httpx.Response(200, content=data)
         if "noaa-hrrr-bdp-pds" in url or "/hrrr/prod/" in url:
             # HRRR on the AWS bucket or NOMADS: the small fixture grid for
             # any cycle and hour, byte ranges honoured. hrrr_aws and

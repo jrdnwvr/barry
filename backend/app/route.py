@@ -105,9 +105,18 @@ def _from_julian(j: float) -> datetime:
     return datetime.fromtimestamp((j - 2440587.5) * 86400.0, tz=timezone.utc)
 
 
+def sunrise(lat: float, lon: float, day: datetime) -> Optional[datetime]:
+    """Sunrise on the UTC day of `day`, the same way as `sunset`."""
+    return _sun(lat, lon, day, rising=True)
+
+
 def sunset(lat: float, lon: float, day: datetime) -> Optional[datetime]:
     """Sunset on the UTC day of `day` (the sunrise equation, to a minute or
     two); None in polar day or night."""
+    return _sun(lat, lon, day, rising=False)
+
+
+def _sun(lat: float, lon: float, day: datetime, rising: bool) -> Optional[datetime]:
     noon = datetime(day.year, day.month, day.day, 12, tzinfo=timezone.utc)
     n = round(_julian(noon) - 2451545.0 + 0.0008)
     j_star = n - lon / 360.0
@@ -120,7 +129,8 @@ def sunset(lat: float, lon: float, day: datetime) -> Optional[datetime]:
     cos_w = (math.sin(_rad(-0.833)) - math.sin(_rad(lat)) * math.sin(decl)) / (math.cos(_rad(lat)) * math.cos(decl))
     if not -1 <= cos_w <= 1:
         return None
-    return _from_julian(j_transit + math.degrees(math.acos(cos_w)) / 360.0)
+    half = math.degrees(math.acos(cos_w)) / 360.0
+    return _from_julian(j_transit - half if rising else j_transit + half)
 
 
 def minutes_from_sunset(lat: float, lon: float, t: datetime) -> Optional[int]:

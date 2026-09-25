@@ -20,7 +20,7 @@ from . import pressure_field
 from .modelstore import ModelStore
 from .models import (AloftHour, AloftIceLevel, AloftIcing, AloftLevel, AloftSurface,
                      AloftTurbLevel, AloftTurbulence, ContourLine, FieldLevelPoint,
-                     FieldPoint, LevelWind)
+                     FieldPoint, ForecastHour, LevelWind, SunTimes)
 
 FEED = "hrrr"
 LEVELS = (925, 850, 700, 600, 500)
@@ -347,3 +347,162 @@ def hazards(store: ModelStore, lat: float, lon: float, now: datetime
         if levels:
             ice = AloftIcing(t=t, levels=levels)
     return turb, ice
+
+
+# ---- the point forecast -------------------------------------------------------
+
+FC_FEEDS = ("hrrr-fc", "hrrr-fcx")
+KMH_PER_MS_F = 3.6
+# Thunder where NBM gives it a real chance in the hour; showers where it
+# is likely to rain and the air is unstable; rain where it is likely to
+# rain. Only these codes are read (95 to 99 thunder, 80 to 82 showers).
+THUNDER_PCT, RAIN_PCT, SHOWER_CAPE = 30, 50, 300
+RAIN_MMH = 0.25
+
+
+def _find_in(store: ModelStore, feeds, valid: datetime):
+    for feed in feeds:
+        for cycle in store.cycles(feed):
+            fhr = int(round((valid - cycle).total_seconds() / 3600))
+            if fhr in store.hours(feed, cycle):
+                return feed, cycle, fhr
+    return None
+
+
+def weather_code(tstm: Optional[float], pop: Optional[float], prate: Optional[float],
+                 cape: Optional[float], cloud: Optional[float]) -> int:
+    wet = (pop is not None and pop >= RAIN_PCT) or (pop is None and prate is not None and prate >= RAIN_MMH)
+    if tstm is not None and tstm >= THUNDER_PCT:
+        return 95
+    if wet:
+        return 80 if (cape or 0) >= SHOWER_CAPE else 61
+    c = cloud or 0
+    return 0 if c < 20 else 1 if c < 50 else 2 if c < 85 else 3
+
+
+def _temp_at_agl(store: ModelStore, lat: float, lon: float, valid: datetime, agl_m: float) -> Optional[float]:
+    """Temperature (C) `agl_m` above the ground from the column feeds, by
+    linear interpolation between the levels either side."""
+    found = _find_in(store, COL_FEEDS, valid)
+    if found is None:
+        return None
+    feed, cycle, fhr = found
+    g = grid(store, feed, cycle)
+    if g is None:
+        return None
+    la, lo = np.array([lat]), np.array([lon])
+
+    def at(name):
+        arr = store.load(feed, cycle, fhr, name)
+        return float(g.sample(arr, la, lo)[0]) if arr is not None else float("nan")
+
+    target = at("zsfc") + agl_m
+    t2 = at("t2")
+    pts = [(at("zsfc") + 2.0, t2)] if math.isfinite(t2) else []
+    for p in COL_LEVELS:
+        h, t = at(f"hgt{p}"), at(f"t{p}")
+        if math.isfinite(h) and math.isfinite(t):
+            pts.append((h, t))
+    pts.sort()
+    for (h0, t0), (h1, t1) in zip(pts, pts[1:]):
+        if h0 <= target <= h1 and h1 > h0:
+            return round(t0 + (t1 - t0) * (target - h0) / (h1 - h0), 1)
+    return None
+
+
+def forecast(store: ModelStore, lat: float, lon: float, now: datetime, hours: int = 48
+             ) -> Optional[Tuple[List[ForecastHour], SunTimes, str]]:
+    """Hourly forecast at a point from the HRRR forecast feeds, NBM laid
+    over the fields it does better for the hours it covers. From the
+    newest hourly cycle's analysis to `hours` past the current hour. None
+    when the point is off the grid or nothing is held."""
+    from . import route as route_mod
+    fc = store.cycles("hrrr-fc")
+    if not fc:
+        return None
+    start = fc[0]
+    end = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=hours)
+    la, lo = np.array([lat]), np.array([lon])
+    nbm_runs = store.cycles("nbm")
+    nbm = nbm_runs[0] if nbm_runs else None
+    ng = grid(store, "nbm", nbm) if nbm else None
+    used_nbm = False
+    out: List[ForecastHour] = []
+    valid = start
+    while valid <= end:
+        found = _find_in(store, FC_FEEDS, valid)
+        if found is None:
+            valid += timedelta(hours=1)
+            continue
+        feed, cycle, fhr = found
+        g = grid(store, feed, cycle)
+
+        def at(name):
+            arr = store.load(feed, cycle, fhr, name)
+            v = float(g.sample(arr, la, lo)[0]) if arr is not None and g is not None else float("nan")
+            return v if math.isfinite(v) else None
+
+        u, v = at("u10"), at("v10")
+        if u is None or v is None:
+            return None                                   # off the grid
+        spd, deg = grib.wind_speed_dir(u, v)
+        u80, v80 = at("u80"), at("v80")
+        spd80 = float(grib.wind_speed_dir(u80, v80)[0]) if u80 is not None and v80 is not None else None
+        h = dict(
+            t=valid, pressure_msl=at("mslp"), surface_pressure=at("psfc"),
+            windspeed=round(float(spd) * KMH_PER_MS_F, 1), winddir=round(float(deg)),
+            windgust=round(at("gust") * KMH_PER_MS_F, 1) if at("gust") is not None else None,
+            temperature=at("t2"), dewpoint=at("td2"), cloudcover=at("tcc"),
+            cape=at("cape"), cin=at("cin"), boundary_layer=at("hpbl"), radiation=at("dswrf"),
+            wind80m=round(spd80 * KMH_PER_MS_F, 1) if spd80 is not None else None,
+            temp180m=_temp_at_agl(store, lat, lon, valid, 180.0),
+        )
+        pop = tstm = None
+        if nbm is not None and ng is not None:
+            nf = int(round((valid - nbm).total_seconds() / 3600))
+            if nf in store.hours("nbm", nbm):
+                def nb(name):
+                    arr = store.load("nbm", nbm, nf, name)
+                    x = float(ng.sample(arr, la, lo)[0]) if arr is not None else float("nan")
+                    return x if math.isfinite(x) else None
+                t2, td2, ws, wd, gu, sky = nb("t2"), nb("td2"), nb("wspd"), nb("wdir"), nb("gust"), nb("sky")
+                pop, tstm = nb("pop1"), nb("tstm1")
+                if t2 is not None:
+                    used_nbm = True
+                    h["temperature"] = t2
+                if td2 is not None:
+                    h["dewpoint"] = td2
+                if ws is not None and wd is not None:
+                    h["windspeed"], h["winddir"] = round(ws * KMH_PER_MS_F, 1), round(wd) % 360
+                if gu is not None:
+                    h["windgust"] = round(gu * KMH_PER_MS_F, 1)
+                if sky is not None:
+                    h["cloudcover"] = sky
+        for k in ("temperature", "dewpoint", "pressure_msl", "surface_pressure", "cape", "cin",
+                  "boundary_layer", "radiation", "cloudcover"):
+            if h[k] is not None:
+                h[k] = round(h[k], 1)
+        h["precip_prob"] = int(round(pop)) if pop is not None else None
+        h["weather_code"] = weather_code(tstm, pop, at("prate"), h["cape"], h["cloudcover"])
+        out.append(ForecastHour(**h))
+        valid += timedelta(hours=1)
+    if len(out) < 12:
+        return None
+    rises, sets = [], []
+    for d in range(-1, 3):
+        day = now + timedelta(days=d)
+        r, s_ = route_mod.sunrise(lat, lon, day), route_mod.sunset(lat, lon, day)
+        if r is not None:
+            rises.append(r)
+        if s_ is not None:
+            sets.append(s_)
+    sun = SunTimes(sunrise=sorted(set(rises)), sunset=sorted(set(sets)))
+    return out, sun, ("hrrr+nbm" if used_nbm else "hrrr")
+
+
+def forecast_key(store: ModelStore) -> str:
+    parts = []
+    for feed in FC_FEEDS + COL_FEEDS + ("nbm",):
+        c = store.cycles(feed)
+        parts.append(c[0].strftime("%Y%m%d%H") if c else "-")
+    return ":".join(parts)

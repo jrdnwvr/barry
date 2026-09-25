@@ -10,3 +10,9 @@
 10:5148:d=2026092500:HGT:0C isotherm:1 hour fcst:
 11:5336:d=2026092500:HGT:surface:1 hour fcst:
 12:6676:d=2026092500:PRES:surface:1 hour fcst:
+13:8016:d=2026092500:TCDC:entire atmosphere:1 hour fcst:
+14:8204:d=2026092500:CIN:surface:1 hour fcst:
+15:8392:d=2026092500:DSWRF:surface:1 hour fcst:
+16:8580:d=2026092500:UGRD:80 m above ground:1 hour fcst:
+17:9920:d=2026092500:VGRD:80 m above ground:1 hour fcst:
+18:11260:d=2026092500:PRATE:surface:1 hour fcst:

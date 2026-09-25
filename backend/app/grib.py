@@ -39,6 +39,7 @@ class IdxEntry:
     name: str
     level: str
     fcst: str
+    extra: str = ""       # what follows: "prob >0.254:prob fcst 255/255", "ens std dev"
 
 
 def parse_idx(text: str) -> List[IdxEntry]:
@@ -48,11 +49,20 @@ def parse_idx(text: str) -> List[IdxEntry]:
         if len(parts) < 6:
             continue
         try:
-            out.append(IdxEntry(int(parts[0]), int(parts[1]), parts[3], parts[4], parts[5]))
+            out.append(IdxEntry(int(parts[0]), int(parts[1]), parts[3], parts[4], parts[5],
+                                ":".join(p for p in parts[6:] if p)))
         except ValueError:
             continue
     out.sort(key=lambda e: e.offset)
     return out
+
+
+def range_of(entries: Sequence[IdxEntry], match) -> Optional[Tuple[int, Optional[int]]]:
+    """Byte range of the first message `match(entry)` accepts."""
+    for i, e in enumerate(entries):
+        if match(e):
+            return e.offset, (entries[i + 1].offset - 1 if i + 1 < len(entries) else None)
+    return None
 
 
 def byte_ranges(entries: Sequence[IdxEntry], wanted: Iterable[Tuple[str, str]]
@@ -64,6 +74,10 @@ def byte_ranges(entries: Sequence[IdxEntry], wanted: Iterable[Tuple[str, str]]
     out: Dict[Tuple[str, str], Tuple[int, Optional[int]]] = {}
     for i, e in enumerate(entries):
         key = (e.name, e.level)
+        # Probability and spread messages share a name and level with the
+        # plain field; the plain one is what a (name, level) asks for.
+        if e.extra:
+            continue
         if key in want and key not in out:
             end = entries[i + 1].offset - 1 if i + 1 < len(entries) else None
             out[key] = (e.offset, end)

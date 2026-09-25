@@ -35,8 +35,8 @@ def test_index_ranges_and_merging():
     assert [e.name for e in entries][:3] == ["ABSV", "UGRD", "VGRD"]
     r = grib.byte_ranges(entries, [("UGRD", "10 m above ground"), ("MSLMA", "mean sea level")])
     assert r[("UGRD", "10 m above ground")] == (entries[1].offset, entries[2].offset - 1)
-    r = grib.byte_ranges(entries, [("PRES", "surface")])
-    assert r[("PRES", "surface")][1] is None                   # the last message runs to the end
+    r = grib.byte_ranges(entries, [("PRATE", "surface")])
+    assert r[("PRATE", "surface")][1] is None                  # the last message runs to the end
     merged = grib.merge_ranges([(0, 9), (10, 19), (40, 49), (50, None)])
     assert merged == [(0, 19), (40, None)]
     assert grib.merge_ranges([(0, 9), (15, 19)], gap=10) == [(0, 19)]
@@ -261,3 +261,41 @@ async def test_old_hazards_are_not_served(client, upstream, hrrr_on, monkeypatch
     await s.poll_hazards()
     a = await s.get_aloft(LAT, LON)
     assert a.turbulence is None and a.icing is None
+
+
+@pytest.mark.asyncio
+async def test_the_point_forecast_is_hrrr_with_nbm_over_its_first_hours(client, upstream, hrrr_on, monkeypatch):
+    monkeypatch.setattr("app.sources.hrrr.FC_LAST", 18)
+    monkeypatch.setattr("app.sources.hrrr.EXTENDED_FC_LAST", 48)
+    monkeypatch.setattr("app.sources.nbm.FHRS", tuple(range(1, 37)))
+    s = PressureService(client)
+    await s.poll_hrrr()
+    run = datetime(2026, 9, 25, 0, tzinfo=timezone.utc)
+    assert s.models.cycles("nbm") == [run]                      # 01z is not a three-hourly run
+    f = await s.get_forecast(LAT, LON)
+    # The forecast feed waits for all 18 hours (about 90 minutes), so at
+    # 03:10 its run is 01z.
+    assert f.source == "hrrr+nbm" and f.hourly[0].t == CYCLE - timedelta(hours=1)
+    assert f.hourly[-1].t == run + timedelta(hours=48)        # the 00z run's last hour
+    h = f.hourly[0]                                             # 01z: NBM's first hour
+    assert (h.temperature, h.dewpoint, h.cloudcover, h.precip_prob) == (20.0, 12.0, 70.0, 60)
+    assert (h.windspeed, h.winddir, h.windgust) == (18.0, 180, 32.4)
+    assert h.weather_code == 95                                 # thunder 35 percent in the hour
+    assert abs(h.pressure_msl - 1016.2) < 0.6 and h.cape == 500 and h.cin == -20 and h.boundary_layer == 900
+    assert h.wind80m == 50.4 and h.radiation == 300
+    late = next(x for x in f.hourly if x.t == run + timedelta(hours=40))   # past NBM's 36 hours
+    assert abs(late.temperature - 16.85) < 0.06 and late.windspeed == 36.0 and late.winddir == 270
+    assert late.precip_prob is None and late.weather_code == 1 and late.cloudcover == 40
+    assert f.sun.sunset and f.sun.sunrise
+    assert any(x.hour == 23 and x.day == 25 for x in f.sun.sunset)   # about 7:30 PM EDT
+    c = await s.get_combined("KLUK")
+    assert c.forecast.source == "hrrr+nbm" and c.sources.forecast == "hrrr+nbm"
+    assert (await s.get_forecast(45.0, -120.0)).source == "open-meteo"
+
+
+def test_weather_codes_from_probabilities():
+    from app.modelfields import weather_code
+    assert weather_code(40, 20, 0, 0, 30) == 95
+    assert weather_code(10, 70, 0, 800, 90) == 80 and weather_code(10, 70, 0, 50, 90) == 61
+    assert weather_code(None, None, 0.5, 0, 90) == 61 and weather_code(None, None, 0.0, 0, 90) == 3
+    assert [weather_code(0, 0, 0, 0, c) for c in (10, 30, 60, 95)] == [0, 1, 2, 3]

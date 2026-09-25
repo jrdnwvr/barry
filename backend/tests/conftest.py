@@ -423,6 +423,9 @@ def _nomads_unspaced(monkeypatch):
     # The day-long column feed takes 31 hours of each 48-hour cycle; tests
     # that don't read the column need only a few, and it is most of the time.
     monkeypatch.setattr("app.sources.hrrr.EXTENDED_LAST", 3)
+    monkeypatch.setattr("app.sources.hrrr.FC_LAST", 3)
+    monkeypatch.setattr("app.sources.hrrr.EXTENDED_FC_LAST", 3)
+    monkeypatch.setattr("app.sources.nbm.FHRS", (1, 2, 3))
     yield
 
 
@@ -468,6 +471,32 @@ class FakeUpstream:
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         url = str(request.url)
+        if "noaa-nbm-grib2-pds" in url:
+            # NBM: the small fixture for any run and hour, the index filled
+            # in with the hour asked for; nbm_runs, when set, are the runs
+            # the bucket has.
+            import re
+            self.nbm_calls = getattr(self, "nbm_calls", [])
+            self.nbm_calls.append((request.method, url.rsplit("/", 1)[-1], request.headers.get("range")))
+            m = re.search(r"blend\.(\d{8})/(\d{2})/core/blend\.t\d{2}z\.core\.f(\d{3})\.co\.grib2(\.idx)?$", url)
+            if not m:
+                return httpx.Response(404)
+            run = datetime.strptime(m.group(1) + m.group(2), "%Y%m%d%H").replace(tzinfo=timezone.utc)
+            have = getattr(self, "nbm_runs", None)
+            if have is not None and run not in have:
+                return httpx.Response(404, text="NoSuchKey")
+            fx = os.path.join(os.path.dirname(__file__), "fixtures")
+            if m.group(4):
+                f = int(m.group(3))
+                with open(os.path.join(fx, "nbm.idx.tmpl")) as fh:
+                    return httpx.Response(200, text=fh.read().replace("{f}", str(f)).replace("{p}", str(f - 1)))
+            with open(os.path.join(fx, "nbm.grib2"), "rb") as fh:
+                data = fh.read()
+            rng = request.headers.get("range")
+            if rng and request.method == "GET":
+                a, b = rng.split("=", 1)[1].split("-")
+                return httpx.Response(206, content=data[int(a): (int(b) + 1) if b else len(data)])
+            return httpx.Response(200, content=data)
         if "noaa-hrrr-bdp-pds" in url or "/hrrr/prod/" in url:
             # HRRR on the AWS bucket or NOMADS: the small fixture grid for
             # any cycle and hour, byte ranges honoured. hrrr_aws and

@@ -79,6 +79,7 @@ def main():
         return ue * np.cos(a) - ve * np.sin(a), ue * np.sin(a) + ve * np.cos(a)
 
     u10, v10 = to_grid(np.full_like(lat, 10.0), np.zeros_like(lat))
+    u80, v80 = to_grid(np.full_like(lat, 14.0), np.zeros_like(lat))
     high = lon < -86.0
     sfc = [
         ("ABSV", "1000 mb", np.zeros_like(lat)),                      # not asked for
@@ -94,6 +95,13 @@ def main():
         ("HGT", "surface", np.where(high, 1600.0, 200.0)),
         # High ground in the west third: 850 hPa lies under it there.
         ("PRES", "surface", np.where(high, 84000.0, 99000.0)),
+        # The point forecast's own fields.
+        ("TCDC", "entire atmosphere", np.full_like(lat, 40.0)),
+        ("CIN", "surface", np.full_like(lat, -20.0)),
+        ("DSWRF", "surface", np.full_like(lat, 300.0)),
+        ("UGRD", "80 m above ground", u80),
+        ("VGRD", "80 m above ground", v80),
+        ("PRATE", "surface", np.zeros_like(lat)),
     ]
     prs = [("ABSV", "1000 mb", np.zeros_like(lat))]
     col_levels = (1000, 975, 950, 925, 900, 875, 850, 825, 800, 750, 700, 650, 600, 550, 500, 450, 400)
@@ -150,6 +158,32 @@ def main():
     with open(os.path.join(OUT, "cip.grib2"), "wb") as fh:
         fh.write(data)
     print("gtg and cip written")
+
+    # NBM: the fields Barry takes, with an unwanted one first and a spread
+    # message after the temperature, and an index template whose hour is
+    # filled in per request ({f} and {p} for the hour and the one before).
+    nbm = [
+        ("APTMP", "2 m above ground", "{f} hour fcst", "", np.full_like(lat, 290.0)),
+        ("TMP", "2 m above ground", "{f} hour fcst", "", np.full_like(lat, 293.15)),
+        ("TMP", "2 m above ground", "{f} hour fcst", "ens std dev", np.full_like(lat, 1.0)),
+        ("DPT", "2 m above ground", "{f} hour fcst", "", np.full_like(lat, 285.15)),
+        ("WIND", "10 m above ground", "{f} hour fcst", "", np.full_like(lat, 5.0)),
+        ("WDIR", "10 m above ground", "{f} hour fcst", "", np.full_like(lat, 180.0)),
+        ("GUST", "10 m above ground", "{f} hour fcst", "", np.full_like(lat, 9.0)),
+        ("TCDC", "surface", "{f} hour fcst", "", np.full_like(lat, 70.0)),
+        ("APCP", "surface", "{p}-{f} hour acc fcst", "prob >0.254:prob fcst 255/255", np.full_like(lat, 60.0)),
+        ("TSTM", "surface", "{p}-{f} hour acc fcst", "probability forecast", np.full_like(lat, 35.0)),
+    ]
+    data = b""
+    idx = []
+    for n, (name, level, fcst, extra, values) in enumerate(nbm, start=1):
+        idx.append(f"{n}:{len(data)}:d=2026092500:{name}:{level}:{fcst}:{extra}")
+        data += message(values)
+    with open(os.path.join(OUT, "nbm.grib2"), "wb") as fh:
+        fh.write(data)
+    with open(os.path.join(OUT, "nbm.idx.tmpl"), "w") as fh:
+        fh.write("\n".join(idx) + "\n")
+    print("nbm written", len(data))
 
 
 if __name__ == "__main__":

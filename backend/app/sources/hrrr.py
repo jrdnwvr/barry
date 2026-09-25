@@ -124,7 +124,41 @@ MAP = FeedSpec("hrrr", FIELDS, WIND_PAIRS, lambda c: FHRS, nomads=True)
 # one is complete, and a day-long run is 3.5 GB.
 COL = FeedSpec("hrrr-col", COL_FIELDS, COL_WIND_PAIRS, lambda c: (0, 1, 2, 3), stride=2, dtype="float16", keep=1)
 COLX = FeedSpec("hrrr-colx", COL_FIELDS, COL_WIND_PAIRS, lambda c: _extended(c), stride=2, dtype="float16", keep=1)
-FEEDS: Tuple[FeedSpec, ...] = (MAP, COL, COLX)
+# The point forecast: everything the forecast cards, the storm outlook,
+# density altitude and the ride estimate read, for 18 hours from every
+# cycle and 48 from the four long ones. NBM overrides temperature, wind,
+# sky and adds real probabilities for the first 36 hours.
+FC_FIELDS: Tuple[Field, ...] = (
+    Field("mslp", "MSLMA", "mean sea level", "sfc", 0.01),
+    Field("psfc", "PRES", "surface", "sfc", 0.01),
+    Field("u10", "UGRD", "10 m above ground", "sfc"),
+    Field("v10", "VGRD", "10 m above ground", "sfc"),
+    Field("gust", "GUST", "surface", "sfc"),
+    Field("t2", "TMP", "2 m above ground", "sfc", offset=-273.15),
+    Field("td2", "DPT", "2 m above ground", "sfc", offset=-273.15),
+    Field("tcc", "TCDC", "entire atmosphere", "sfc"),
+    Field("cape", "CAPE", "surface", "sfc"),
+    Field("cin", "CIN", "surface", "sfc"),
+    Field("hpbl", "HPBL", "surface", "sfc"),
+    Field("dswrf", "DSWRF", "surface", "sfc"),
+    Field("u80", "UGRD", "80 m above ground", "sfc"),
+    Field("v80", "VGRD", "80 m above ground", "sfc"),
+    Field("prate", "PRATE", "surface", "sfc", 3600.0),          # kg/m2/s to mm/h
+)
+FC_WIND_PAIRS: Tuple[Tuple[str, str], ...] = (("u10", "v10"), ("u80", "v80"))
+EXTENDED_FC_LAST = 48
+
+
+def _extended_fc(cycle: datetime) -> Tuple[int, ...]:
+    return tuple(range(0, EXTENDED_FC_LAST + 1)) if cycle.hour % 6 == 0 else ()
+
+
+FC_LAST = 18
+FC = FeedSpec("hrrr-fc", FC_FIELDS, FC_WIND_PAIRS, lambda c: tuple(range(0, FC_LAST + 1)),
+              stride=2, dtype="float16", keep=1)
+FCX = FeedSpec("hrrr-fcx", FC_FIELDS, FC_WIND_PAIRS, lambda c: _extended_fc(c),
+               stride=2, dtype="float16", keep=1)
+FEEDS: Tuple[FeedSpec, ...] = (MAP, COL, COLX, FC, FCX)
 
 def path(cycle: datetime, fhr: int, kind: str) -> str:
     return f"hrrr.{cycle:%Y%m%d}/conus/hrrr.t{cycle:%H}z.wrf{kind}f{fhr:02d}.grib2"

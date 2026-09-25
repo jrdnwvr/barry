@@ -70,6 +70,7 @@ from .sources import advisories as adv
 from .sources import hazards as hazards_src
 from .sources import hrrr as hrrr_src
 from .sources import iem
+from .sources import nbm as nbm_src
 from .sources import lamp as lamp_src
 from .sources import ndbc
 from .sources import openmeteo as om
@@ -390,6 +391,19 @@ class PressureService:
         # The same cell goes upstream: one forecast per cell is what the cache
         # promises, and the precise point never leaves the server.
         lat, lon = round(lat, 1), round(lon, 1)
+        # NOAA's models on Tower first (HRRR, with NBM over the first 36
+        # hours); Open-Meteo off the HRRR grid or before a run is held.
+        if self.hrrr_enabled:
+            hkey = f"forecast-noaa:{lat}:{lon}:{modelfields.forecast_key(self.models)}"
+            cached = await self.cache.get(hkey) if use_cache else None
+            if cached is not None:
+                return cached
+            got = await asyncio.to_thread(modelfields.forecast, self.models, lat, lon, _now())
+            if got is not None:
+                hours, sun, source = got
+                resp = ForecastResponse(hourly=hours, sun=sun, source=source, cachedAt=_now())
+                await self.cache.set(hkey, resp, ttl=FORECAST_TTL)
+                return resp
         cache_key = f"forecast:{lat}:{lon}"
         last_good_key = f"{cache_key}:lastgood"
         if use_cache:
@@ -863,12 +877,23 @@ class PressureService:
             except Exception as exc:
                 errors.append(exc)
                 log.warning("hrrr: %s failed: %s: %s", spec.name, type(exc).__name__, exc)
+        try:
+            run = await nbm_src.choose(self._client, _now(), self.models.cycles(nbm_src.FEED))
+            if run is not None:
+                n = await nbm_src.pull(self._client, self.models, run)
+                written += n
+                await asyncio.to_thread(self.models.warm, nbm_src.FEED, run)
+                self._warmed.add((nbm_src.FEED, run))
+                log.info("nbm: %s, %d fields", run.strftime("%Y%m%d%H"), n)
+        except Exception as exc:
+            errors.append(exc)
+            log.warning("nbm: failed: %s: %s", type(exc).__name__, exc)
         # After a restart the store is on disk but nothing is open yet.
-        for spec in hrrr_src.FEEDS:
-            for cycle in self.models.cycles(spec.name)[:1]:
-                if (spec.name, cycle) not in self._warmed:
-                    await asyncio.to_thread(self.models.warm, spec.name, cycle)
-                    self._warmed.add((spec.name, cycle))
+        for name in [spec.name for spec in hrrr_src.FEEDS] + [nbm_src.FEED]:
+            for cycle in self.models.cycles(name)[:1]:
+                if (name, cycle) not in self._warmed:
+                    await asyncio.to_thread(self.models.warm, name, cycle)
+                    self._warmed.add((name, cycle))
         if errors and not written:
             raise errors[0]
         return written

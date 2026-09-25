@@ -375,6 +375,17 @@ async def radar_frames(source: Optional[str] = Query(None, pattern="^(mrms|rainv
     return resp.model_dump(mode="json", by_alias=True)
 
 
+# Tiles render on their own threads: a map view asks for dozens at once,
+# and in the shared pool they queued ahead of the API's own reads (the
+# Aloft column, the forecast), which then ran past the app's timeout.
+from concurrent.futures import ThreadPoolExecutor
+TILE_POOL = ThreadPoolExecutor(max_workers=6, thread_name_prefix="tiles")
+
+
+async def _render(fn, *args):
+    return await asyncio.get_running_loop().run_in_executor(TILE_POOL, fn, *args)
+
+
 @app.get("/radar/tiles/{t}/{size}/{z}/{x}/{y}/{color}/{opts}.png", include_in_schema=False)
 async def radar_tile(t: int, size: int, z: int, x: int, y: int, color: str, opts: str):
     """One radar tile of one MRMS frame, in RainViewer's URL shape and
@@ -386,7 +397,7 @@ async def radar_tile(t: int, size: int, z: int, x: int, y: int, color: str, opts
     miss = {"Cache-Control": "no-store"}
     if size not in (256, 512) or not (0 <= z <= 12) or not (0 <= x < 2 ** z) or not (0 <= y < 2 ** z):
         raise HTTPException(status_code=404, detail="no such tile", headers=miss)
-    png = await asyncio.to_thread(get_service().radar.tile, t, z, x, y, size)
+    png = await _render(get_service().radar.tile, t, z, x, y, size)
     if png is None:
         raise HTTPException(status_code=404, detail="no such frame", headers=miss)
     return Response(content=png, media_type="image/png",
@@ -400,7 +411,7 @@ async def lightning_next_tile(t: int, size: int, z: int, x: int, y: int):
     miss = {"Cache-Control": "no-store"}
     if size not in (256, 512) or not (0 <= z <= 12) or not (0 <= x < 2 ** z) or not (0 <= y < 2 ** z):
         raise HTTPException(status_code=404, detail="no such tile", headers=miss)
-    png = await asyncio.to_thread(get_service().ltg_next.tile, t, z, x, y, size)
+    png = await _render(get_service().ltg_next.tile, t, z, x, y, size)
     if png is None:
         raise HTTPException(status_code=404, detail="no such grid", headers=miss)
     return Response(content=png, media_type="image/png",

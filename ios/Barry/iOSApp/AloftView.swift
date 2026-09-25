@@ -8,6 +8,7 @@
 //  bottom 6,000 ft half the height, because that is where the detail is.
 
 import SwiftUI
+import os
 
 // MARK: - Model
 
@@ -20,17 +21,27 @@ final class AloftModel: ObservableObject {
     @Published private(set) var failed = false
     @Published private(set) var loading = false
     private let api = BarryAPI()
+    private static let log = Logger(subsystem: "me.wvr.barry", category: "aloft")
 
     func load(lat: Double, lon: Double) async {
         loading = true
         defer { loading = false }
         do {
-            let r = try await api.aloft(lat: lat, lon: lon)
+            // One more try after a moment: a slow answer (the server
+            // falling back while a model run lands) is not "no column".
+            let r: AloftResponse
+            do {
+                r = try await api.aloft(lat: lat, lon: lon)
+            } catch {
+                try await Task.sleep(nanoseconds: 1_500_000_000)
+                r = try await api.aloft(lat: lat, lon: lon)
+            }
             hours = r.hours
             turbulence = r.turbulence
             icing = r.icing
             failed = hours.isEmpty
         } catch {
+            Self.log.error("aloft load failed: \(String(describing: error), privacy: .public)")
             failed = hours.isEmpty
         }
     }
@@ -361,6 +372,7 @@ struct AloftScreen: View {
                             Text(" kt").font(.system(size: 12)).foregroundStyle(.secondary)
                         }
                         .lineLimit(1)
+                        .minimumScaleFactor(0.8)      // "030° / 12 kt" runs just past 80 pt
                         .padding(.horizontal, 2)
                         .background(Color(.secondarySystemGroupedBackground))
                         .frame(width: 80, alignment: .trailing)

@@ -94,3 +94,19 @@ struct AloftHazardTests {
         #expect(AloftHazards.turbulence(nil, groundFt: 0, ceilingFt: 12000).isEmpty)
     }
 }
+
+/// Live responses from the NOAA-backed server decode with the app's own
+/// decoder (saved 2026-09-25).
+struct NOAAResponseDecodingTests {
+    @Test func theHRRRColumnWithTurbulenceAndIcingDecodes() throws {
+        let r = try BarryAPI.decoder.decode(AloftResponse.self, from: Fixtures.data("aloft_hrrr"))
+        #expect(r.source == "hrrr" && r.hours.count == 25)
+        #expect(r.turbulence != nil && r.icing != nil)
+    }
+
+    @Test func theNOAAForecastAndLAMPDecodeInCombined() throws {
+        let c = try BarryAPI.decoder.decode(CombinedResponse.self, from: Fixtures.data("combined_noaa"))
+        #expect(c.forecast?.source.contains("hrrr") == true)
+        #expect(c.lamp != nil)
+    }
+}

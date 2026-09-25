@@ -76,6 +76,10 @@ targets:
         buildPhase: resources
       - path: ../backend/tests/fixtures/combined_kluk.json
         buildPhase: resources
+      - path: ../backend/tests/fixtures/aloft_hrrr.json
+        buildPhase: resources
+      - path: ../backend/tests/fixtures/combined_noaa.json
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: me.wvr.barry.tests

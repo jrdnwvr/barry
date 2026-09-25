@@ -31,6 +31,7 @@
 		20AD2A1B5CC1C7738EAEF8F5 /* StormAlerter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E569F3B3B9FAB65C07970B1A /* StormAlerter.swift */; };
 		22A7600022D22A39FD198199 /* FieldsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ED260902ADE48C188706FA8 /* FieldsCard.swift */; };
 		25F2CA5D0A085C6A963656C0 /* TendencyProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A24A6845ECB66698D61771D /* TendencyProvider.swift */; };
+		25FB215186C614D348386230 /* combined_noaa.json in Resources */ = {isa = PBXBuildFile; fileRef = 62A5B0C1E166F856B20660DC /* combined_noaa.json */; };
 		26D196BA1D0C9CD075B59F31 /* WindFlow.metal in Sources */ = {isa = PBXBuildFile; fileRef = 9C9E7A347455A6781BAB196E /* WindFlow.metal */; };
 		270E209661CB57713C9B71F5 /* BarometerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA32F779F49D1C628F2BC52E /* BarometerEngine.swift */; };
 		2BF26B141D9A63C4291EF0DF /* TafStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D63A9351C0871620CA4A195 /* TafStrip.swift */; };
@@ -46,6 +47,7 @@
 		31549614253BF1B636E51ED3 /* BarryComplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 726AB15B448612548C2CCCCD /* BarryComplication.swift */; };
 		316A4B6AE3D7881F77DC672C /* RunwayWindDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD313083D4B2A9BAD12BAB92 /* RunwayWindDial.swift */; };
 		31C975A1344ECEECC2458169 /* PhoneWidgetViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1326419A7770149C91B0438 /* PhoneWidgetViews.swift */; };
+		38590331F7F80BA90EBDE221 /* aloft_hrrr.json in Resources */ = {isa = PBXBuildFile; fileRef = A66F315CBE5FF869D4A502BD /* aloft_hrrr.json */; };
 		390537B91AECE9E9F057FE3B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F07D88A5BEA3FC7C9BD42D68 /* PrivacyInfo.xcprivacy */; };
 		395DCB7F587238A3F9D7C739 /* RunwayMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85C6CB170A65E1A614F64BB1 /* RunwayMath.swift */; };
 		3FD01657A6175EE55DF94D91 /* ConfirmationOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A59F4AD2D2CF0AC8FB31B534 /* ConfirmationOverlayView.swift */; };
@@ -301,6 +303,7 @@
 		5C59EF4878E06062DC20D1D7 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		5D63A9351C0871620CA4A195 /* TafStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TafStrip.swift; sourceTree = "<group>"; };
 		623D8012B9E2B6A8E0CE08AE /* CombinedStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CombinedStore.swift; sourceTree = "<group>"; };
+		62A5B0C1E166F856B20660DC /* combined_noaa.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = combined_noaa.json; sourceTree = "<group>"; };
 		6662DFD4A743261C8134B535 /* RadarMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarMapView.swift; sourceTree = "<group>"; };
 		68D08500DD9FA42C666DFF25 /* ComplicationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComplicationViews.swift; sourceTree = "<group>"; };
 		68F0E9DED173121E56E48C0B /* ForecastCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForecastCards.swift; sourceTree = "<group>"; };
@@ -341,6 +344,7 @@
 		9ED4E8ACC4DA64C6E1076B59 /* TemperatureUnitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemperatureUnitTests.swift; sourceTree = "<group>"; };
 		A376D4EE445D8849427A861E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A59F4AD2D2CF0AC8FB31B534 /* ConfirmationOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmationOverlayView.swift; sourceTree = "<group>"; };
+		A66F315CBE5FF869D4A502BD /* aloft_hrrr.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = aloft_hrrr.json; sourceTree = "<group>"; };
 		AD313083D4B2A9BAD12BAB92 /* RunwayWindDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayWindDial.swift; sourceTree = "<group>"; };
 		B6858331167EFEA8CE241D78 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureHistory.swift; sourceTree = "<group>"; };
@@ -460,7 +464,9 @@
 		40727EE05B56843AACC95379 /* fixtures */ = {
 			isa = PBXGroup;
 			children = (
+				A66F315CBE5FF869D4A502BD /* aloft_hrrr.json */,
 				47A973B22E958B730E977380 /* combined_kluk.json */,
+				62A5B0C1E166F856B20660DC /* combined_noaa.json */,
 				562F0C5A2584915B01FB409F /* tendency_cases.json */,
 			);
 			path = fixtures;
@@ -818,7 +824,9 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				38590331F7F80BA90EBDE221 /* aloft_hrrr.json in Resources */,
 				4FFC946A75A20E59DE996A0C /* combined_kluk.json in Resources */,
+				25FB215186C614D348386230 /* combined_noaa.json in Resources */,
 				09BD3BFC632BF28FB8587A1B /* tendency_cases.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

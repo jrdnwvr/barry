@@ -20,6 +20,7 @@ import numpy as np
 from . import conditions as conditions_mod
 from .guards import OMBudget, RateGate, RateLimited, check_station
 from . import explain
+from . import fallbacks as fallbacks_mod
 from . import modelfields
 from .modelstore import ModelStore
 from . import radar as radar_mod
@@ -273,6 +274,8 @@ class PressureService:
         self._rain_cache: Dict[tuple, tuple] = {}
         self._rain_calls: Optional[List[dict]] = None
         self._rain_calls_dirty = False
+        # Every answer served by a fallback instead of the NOAA feeds (fallbacks.py).
+        self.fallbacks = fallbacks_mod.Log()
         self.public_url = os.environ.get("BARRY_PUBLIC_URL", "https://barry.wide-stack.com").rstrip("/")
 
     # ---- pressure (observed) -------------------------------------------------
@@ -367,7 +370,24 @@ class PressureService:
             log.info("metar %s: transport error (%s), retrying once", ids, type(exc).__name__)
             return await awc.fetch_metars(ids, self._client, hours=hours)
 
+    def _fell_back(self, kind: str, where: str, lat: Optional[float] = None,
+                   lon: Optional[float] = None, reason: Optional[str] = None) -> None:
+        """Record an answer the NOAA store could not give. Without a reason,
+        it is `off` when the feed is switched off, `off-grid` when the point
+        lies outside the HRRR domain, otherwise `no-data`."""
+        if reason is None:
+            if not self.hrrr_enabled:
+                reason = "off"
+            else:
+                on = modelfields.on_grid(self.models, lat, lon) if lat is not None and lon is not None else None
+                reason = "off-grid" if on is False else "no-data"
+        try:
+            self.fallbacks.note(kind, reason, where, _now())
+        except Exception as exc:
+            log.warning("fallback log failed: %s: %s", type(exc).__name__, exc)
+
     async def _pressure_fallback(self, station: str, *, hours: int) -> PressureResponse:
+        self._fell_back("pressure", station, reason="upstream")
         info = stations.get(station)
         if info is None:
             # The small table misses most fields; the AWC directory has them all.
@@ -433,6 +453,7 @@ class PressureService:
                 resp = ForecastResponse(hourly=hours, sun=sun, source=source, cachedAt=_now())
                 await self.cache.set(hkey, resp, ttl=FORECAST_TTL)
                 return resp
+        self._fell_back("forecast", f"{lat},{lon}", lat, lon)
         cache_key = f"forecast:{lat}:{lon}"
         last_good_key = f"{cache_key}:lastgood"
         if use_cache:
@@ -1292,6 +1313,9 @@ class PressureService:
             own = self._mrms_frames()
             if own is not None:
                 return own
+            self._fell_back("radar", "radar", reason="stale" if self.radar.observed() else "no-data")
+        else:
+            self._fell_back("radar", "radar", reason="off")
         return await self.cache.fetch("radar_frames", lambda: rv.fetch_frames(self._client, now=_now()),
                                       ttl=FRAMES_TTL, negative_ttl=30.0)
 
@@ -1360,6 +1384,7 @@ class PressureService:
             points = await asyncio.to_thread(modelfields.field_points, self.models, lats, lons, now)
             if points:
                 return FieldGridResponse(points=points, source="hrrr", cachedAt=now)
+        self._fell_back("field", f"{q_lat},{q_lon}", q_lat, q_lon)
 
         async def _pull() -> FieldGridResponse:
             lats, lons = self._field_points(q_lat, q_lon, q_lat_span, q_lon_span)
@@ -1407,6 +1432,7 @@ class PressureService:
                 resp = AloftResponse(hours=hours, source="hrrr", cachedAt=_now())
                 await self.cache.set(hkey, resp, ttl=ALOFT_TTL)
                 return resp
+        self._fell_back("aloft", f"{lat},{lon}", lat, lon)
         key = f"aloft:{lat}:{lon}"
         last_good_key = f"{key}:lastgood"
 
@@ -1477,6 +1503,7 @@ class PressureService:
             points = await asyncio.to_thread(modelfields.level_points, self.models, lats, lons, now)
             if points:
                 return FieldLevelsResponse(points=points, source="hrrr", cachedAt=now)
+        self._fell_back("levels", f"{q_lat},{q_lon}", q_lat, q_lon)
 
         async def _pull() -> FieldLevelsResponse:
             lats, lons = self._field_points(q_lat, q_lon, q_lat_span, q_lon_span)

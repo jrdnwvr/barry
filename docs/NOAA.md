@@ -618,7 +618,11 @@ the days in the table compare like for like (the earlier hours are left
 out of it). The switch waits on those numbers through the winter.
 Not done: the RainViewer and Open-Meteo code paths stay as fallbacks
 (RainViewer when Barry's radar frames are stale, Open-Meteo off the HRRR
-grid); removing them is a decision for after a clean month.
+grid); removing them is a decision for after a clean month. Since later
+on 2026-09-25 every answer they give is logged with the reason and the
+place (`fallbacks.py`, `/fallbacks`, `barry_fallbacks_total` on
+/metrics), so the month is measured: `off-grid` answers are expected and
+cost nothing to keep; `no-data` and `stale` ones are the feeds failing.
 
 - Add the RRFS field table on the same grid and run it beside HRRR through
   the winter, comparing the two at the METAR sites the app already tracks.

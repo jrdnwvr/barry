@@ -137,6 +137,10 @@ class Scheduler:
             await self._service.flush_track_log()
         except Exception as exc:
             log.warning("scheduler: track log write failed: %s", exc)
+        try:
+            self._service.fallbacks.flush(_now())
+        except Exception as exc:
+            log.warning("scheduler: fallback log write failed: %s", exc)
 
         active = await self._service.registry.active()
         persist.save("registry", active)

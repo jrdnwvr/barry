@@ -430,6 +430,17 @@ async def model_scores(days: int = Query(14, ge=1, le=60)):
     return {"days": service.model_scores(days), "rainStarts": service.rain_scores(days)}
 
 
+@app.get("/fallbacks")
+async def fallbacks(days: int = Query(14, ge=1, le=60)):
+    """Every answer that came from a fallback instead of the NOAA feeds on
+    Tower (Open-Meteo for the forecast, the Aloft column, the radar's wind
+    grid and winds aloft; RainViewer for the radar timeline; Open-Meteo's
+    surface pressure when AWC fails): by UTC day with the reason (off-grid,
+    no-data, stale, off, upstream), and the newest events with where. The
+    evidence for taking the fallbacks out (NOAA.md phase 7)."""
+    return get_service().fallbacks.summary(days)
+
+
 @app.get("/aloft")
 async def get_aloft(
     lat: float = Query(..., ge=-90, le=90),

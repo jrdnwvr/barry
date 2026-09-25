@@ -1170,6 +1170,7 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 | `GET /radar/field/levels` | same | the same points at five levels, underground levels left out, and `source` | as `/radar/field` | as `/radar/field` | the altitude rail |
 | `GET /radar/heights` | `lat`, `lon`, spans, `hPa` (925, 850, 700, 600, 500) | height contours in metres, 30 m apart at 700 hPa and below and 60 m above, with the run and valid time | the HRRR store only; 503 off its grid | until five past the next hour, per level, region and run | the altitude rail |
 | `GET /models/scores` | `days` (1 to 60, default 14) | `days`: per UTC day, newest first, hours scored and for HRRR and RRFS (the same cycle, the same lead) the mean sea-level pressure error (raw, bias, and with each hour's bias taken out), 10 m wind speed error in knots, direction error where the wind is 8 kt or more, and the lead; `rainStarts`: the "rain starts at" calls scored, hits, hit rate, calls pending, and the same by day | none: the model store and the bulk METAR table, scored once an hour (`modelscore.py`), kept 60 days in `state/model_scores`; the rain calls in `state/rain_calls` | none | Jordan, for the RRFS switch and the rain line |
+| `GET /fallbacks` | `days` (1 to 60, default 14) | per UTC day, newest first: answers served by a fallback instead of the NOAA feeds, by kind (forecast, aloft, field, levels, radar, pressure) and reason (`off-grid`: outside the HRRR domain, expected; `no-data`: nothing held for it; `stale`: radar frames held but old; `off`: switched off in the configuration; `upstream`: AWC failed); then the newest 40 events with where (a station or a point to a tenth of a degree) | none: `fallbacks.py`, one event per kind, reason and place every ten minutes, kept 60 days in `state/fallbacks`, written by the scheduler once a cycle; every occurrence counts on `/metrics` as `barry_fallbacks_total` | none | Jordan, for taking the fallbacks out |
 | `GET /stations/search` | `q`, `limit` | id and name matches, METAR stations only | AWC directory | directory 24 h | Settings, onboarding |
 | `GET /glance` | `stations` (comma list, up to 8), `tz` | one line per field: category, wind, altimeter, sea-level pressure, 3 h change and class, the verdict without forecast, observation time | the same cached reports as `/combined` (saved fields are watched stations) | none of its own; a field that cannot be read is left out | the Fields card |
 | `GET /route` | `from`, `to`, `speedKt` (40 to 400, default 100), `tz` | distance, time, arrival time, both ends' glance lines, corridor stations (along and off the line, category, wind), the worst of them, nearest lightning near the line, fronts crossing it, the destination's category at arrival and where it came from (`arriveSource` taf or lamp), TEMPO at arrival, minutes from sunset | none: the bulk table, the flash store, `/fronts`, the ends' cached reports, TAF and LAMP | 5 min per pair and speed | the Route card and screen |
@@ -1250,7 +1251,12 @@ without blocking the response.
   1800 s, lightning 600 s, LAMP and model 3600 s). Degraded (200, or 503
   with `strict`): the lightning feed or the bulk table is stale, or no LAMP
   run or HRRR cycle for three hours.
-- Tests: `backend/tests`, 379 tests; `test_property` reads the app's own
+- Every answer a fallback gives instead of the NOAA feeds (Open-Meteo for
+  the forecast, the Aloft column, the radar's wind grid and winds aloft;
+  RainViewer for the radar timeline; Open-Meteo's surface pressure when
+  AWC fails) is logged with why and where (`fallbacks.py`, `/fallbacks`),
+  so the month before the fallback code comes out is measured.
+- Tests: `backend/tests`, 381 tests; `test_property` reads the app's own
   OpenAPI document.
 
 ## Settings keys
@@ -1399,4 +1405,5 @@ caching failures; `/stations/search` accepting one character.
   scores compare HRRR and RRFS from the same cycle at the same lead, with
   RRFS from every hourly cycle; the blank first radar run traced to
   Cloudflare's rate rule answering tile bursts with 429 pages the app
-  cached as tiles, and the map made to treat those as misses.
+  cached as tiles, and the map made to treat those as misses. Every
+  fallback answer logged at `/fallbacks`.

@@ -22,12 +22,14 @@ _gauges: Dict[str, float] = {}
 LABELS = {
     "barry_requests_total": ("route", "status"),
     "barry_upstream_requests_total": ("host",),
+    "barry_fallbacks_total": ("kind", "reason"),
     "barry_upstream_responses_total": ("host", "status"),
     "barry_cache_total": ("outcome",),
 }
 HELP = {
     "barry_requests_total": "requests answered, by route template and status",
     "barry_upstream_requests_total": "requests sent upstream, by host",
+    "barry_fallbacks_total": "answers served by a fallback instead of the NOAA feeds, by kind and reason",
     "barry_upstream_responses_total": "responses that came back, by host and status class",
     "barry_cache_total": "cache reads by outcome: hit, miss, joined (waited on a fetch in flight), negative",
     "barry_scheduler_cycles_total": "refresh cycles completed",

@@ -102,6 +102,19 @@ def _enough(values: np.ndarray) -> bool:
     return np.isfinite(values).mean() >= 0.5
 
 
+def on_grid(store: ModelStore, lat: float, lon: float) -> Optional[bool]:
+    """Whether a point lies on the HRRR grid, by the newest cycle held of
+    the map or forecast feeds; None when no cycle is held at all. Tells a
+    fallback off the grid (expected) from one with nothing to serve."""
+    for feed in (FEED,) + FC_FEEDS:
+        for cycle in store.cycles(feed)[:1]:
+            g = grid(store, feed, cycle)
+            if g is not None:
+                i, j = g.ij(lat, lon)
+                return bool(0 <= float(i) <= g.nx - 1 and 0 <= float(j) <= g.ny - 1)
+    return None
+
+
 def field_points(store: ModelStore, lats: Sequence[float], lons: Sequence[float],
                  now: datetime) -> Optional[List[FieldPoint]]:
     got = _pair(store, "u10", "v10", now)

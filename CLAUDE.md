@@ -231,8 +231,10 @@ meet the station's latest report. `/models/scores` scores HRRR and RRFS
 against the METARs hourly for the switch, both from the same cycle at
 the same lead. The rain-rate grid comes with the radar and `/combined`
 carries a rain line (`rainstart.py`, `conditions.rain`) traced back
-along the radar's motion; its calls are scored on the same route. The
-Cloudflare rate rule on the hostname (about 20 requests per 10 s) must
+along the radar's motion; its calls are scored on the same route. Every
+answer a fallback gives instead of the NOAA feeds is logged with why and
+where at `/fallbacks` (`fallbacks.py`), the measure for taking the
+fallback code out. The Cloudflare rate rule on the hostname (about 20 requests per 10 s) must
 exempt `/radar/`: a zoomed-out map's tile burst trips it and the map
 goes blank for its Retry-After (the app no longer caches those pages). Container memory limit 3 GB.
 On Tower the state volume is mounted from `/mnt/cache/...` directly

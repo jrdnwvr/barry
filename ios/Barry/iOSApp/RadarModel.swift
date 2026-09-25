@@ -185,15 +185,40 @@ final class RadarModel: ObservableObject {
     @Published var pressureField: PressureFieldResponse?
     @Published var pressureVersion = 0
 
-    func fetchPressureField(region: MKCoordinateRegion) async {
+    func fetchPressureField(region: MKCoordinateRegion, retried: Bool = false) async {
         if Self.nearEnough(region, to: pressureFetchedFor), pressureField != nil { return }
-        guard let resp = try? await BarryAPI().pressureField(
-            lat: region.center.latitude, lon: region.center.longitude,
-            latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta)
-        else { return }
+        let resp: PressureFieldResponse
+        do {
+            resp = try await BarryAPI().pressureField(
+                lat: region.center.latitude, lon: region.center.longitude,
+                latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta)
+        } catch {
+            // The old window stays drawn meanwhile (enrichment). One more
+            // try after the edge's rate-limit block, if the map has not moved.
+            if !retried { retryLater(for: region) { [weak self] in await self?.fetchPressureField(region: region, retried: true) } }
+            return
+        }
         pressureFetchedFor = region
         pressureField = resp
         pressureVersion += 1
+    }
+
+    /// Cloudflare's rate rule answers a burst (a zoom out asks for tiles and
+    /// every grid at once) with 429 for ten seconds, and the grids kept their
+    /// old window until the next pan. So a failed grid fetch is tried once
+    /// more after the block, if the map is still where it was.
+    private func retryLater(for region: MKCoordinateRegion, seconds: Double = 11,
+                            _ op: @escaping () async -> Void) {
+        Task {
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            guard let last = lastRegion, Self.sameRegion(last, region) else { return }
+            await op()
+        }
+    }
+
+    private static func sameRegion(_ a: MKCoordinateRegion, _ b: MKCoordinateRegion) -> Bool {
+        abs(a.center.latitude - b.center.latitude) < 1e-6 && abs(a.center.longitude - b.center.longitude) < 1e-6
+            && abs(a.span.latitudeDelta - b.span.latitudeDelta) < 1e-6
     }
 
     private var fieldFetchedFor: MKCoordinateRegion?
@@ -385,15 +410,21 @@ final class RadarModel: ObservableObject {
     /// The model wind for the region in ONE backend call (the server samples
     /// its 7×5 grid and shares one Open-Meteo request per region cell across
     /// users).
-    func fetchField(region: MKCoordinateRegion) async {
+    func fetchField(region: MKCoordinateRegion, retried: Bool = false) async {
         // The station layer already skips a refetch for a small move; the wind
         // grid used to hit the network on every nudge. A fifth of the span in
         // either direction, or a quarter of a zoom step, reuses what we have.
         if Self.nearEnough(region, to: fieldFetchedFor), !windField.isEmpty { return }
-        guard let resp = try? await BarryAPI().fieldGrid(
-            lat: region.center.latitude, lon: region.center.longitude,
-            latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta)
-        else { return }   // enrichment: fail quietly and keep whatever we had
+        let resp: FieldGridResponse
+        do {
+            resp = try await BarryAPI().fieldGrid(
+                lat: region.center.latitude, lon: region.center.longitude,
+                latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta)
+        } catch {
+            // Enrichment: keep whatever we had, and try once more after a block.
+            if !retried { retryLater(for: region) { [weak self] in await self?.fetchField(region: region, retried: true) } }
+            return
+        }
         fieldFetchedFor = region
         let all = resp.points.map {
             WindArrow(lat: $0.lat, lon: $0.lon, speedKmh: $0.windKmh, fromDeg: $0.windDeg)
@@ -406,12 +437,17 @@ final class RadarModel: ObservableObject {
     /// Winds at every altitude stop for the region, fetched only once the
     /// rail leaves the surface. Every level comes in one call, so moving
     /// between stops redraws from what is already here.
-    func fetchLevels(region: MKCoordinateRegion) async {
+    func fetchLevels(region: MKCoordinateRegion, retried: Bool = false) async {
         if Self.nearEnough(region, to: levelsFetchedFor), levels != nil { applyLevel(); return }
-        guard let resp = try? await BarryAPI().fieldLevels(
-            lat: region.center.latitude, lon: region.center.longitude,
-            latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta)
-        else { return }
+        let resp: FieldLevelsResponse
+        do {
+            resp = try await BarryAPI().fieldLevels(
+                lat: region.center.latitude, lon: region.center.longitude,
+                latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta)
+        } catch {
+            if !retried { retryLater(for: region) { [weak self] in await self?.fetchLevels(region: region, retried: true) } }
+            return
+        }
         levels = resp
         levelsFetchedFor = region
         applyLevel()

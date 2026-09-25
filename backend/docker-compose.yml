@@ -37,7 +37,11 @@ services:
       # ones (still pulled; /radar/frames?source=mrms asks for them).
       - BARRY_RADAR_SOURCE=mrms
     volumes:
-      - ./state:/var/lib/barry
+      # BARRY_STATE_DIR in .env points this at the pool itself on Unraid
+      # (/mnt/cache/...): through /mnt/user every read of the model store
+      # goes through the FUSE layer, which stalls for seconds while a model
+      # run is being written.
+      - ${BARRY_STATE_DIR:-./state}:/var/lib/barry
     # Optional: also expose on the LAN (e.g. for testing from the server itself).
     # The tunnel does NOT need this — it reaches the container over the compose
     # network as http://barry-backend:8080.

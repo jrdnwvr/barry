@@ -685,7 +685,9 @@ stored keys, but each has its own model, so they fetch separately.
 ### radar.timeline
 - Seen: a slider over every frame, the Now pill, the loop button, and the
   frame time ("8:20 PM · 20m ago", "· nowcast" in orange, "· model +2h" in
-  purple).
+  purple). The three nowcast frames are Barry's own since 2026-09-25: the
+  newest MRMS frame carried 10, 20 and 30 minutes forward by the motion
+  between it and the one before (no growth or decay).
 - Lives: `RadarView.swift` › `radarControls`; `RadarModel.swift`.
 - Settings: `radarAutoplay` true ("Play the last hour" or "Hold on the
   latest", in Settings › Radar).
@@ -823,11 +825,17 @@ stored keys, but each has its own model, so they fetch separately.
 ### radar.layer.lightning
 - Seen: GOES flash dots coloured by age (white new, lavender, violet, dim
   purple), a white arrival pulse on new cells, violet cluster outlines,
-  METAR bolt markers when Stations is off, the radar dimmed. Chip
-  "Lightning". The note line says "Lightning feed catching up." when the
-  feed is stale.
-- Lives: `LightningOverlay.swift`; `LightningMarkerView` in `StationLayer.swift`.
-- Data: `/lightning` (0.02° cells, 20 min window, clusters, coverage),
+  METAR bolt markers when Stations is off, the radar dimmed, and under it
+  all a light violet wash where NOAA gives a 10 percent or better chance of
+  lightning in the next hour, deeper as the chance rises (four steps, 10,
+  30, 50, 70). Chip "Lightning". The key says what the wash is. The note
+  line says "Lightning feed catching up." when the feed is stale.
+- Lives: `LightningOverlay.swift`; `LightningMarkerView` in `StationLayer.swift`;
+  the wash is a plain `MKTileOverlay` (`RadarMapView.syncLightningNext`).
+- Data: `/radar/frames.lightningNext` and its tiles at
+  `/radar/lightning/<time>/512/{z}/{x}/{y}.png` (MRMS's next-60-minute
+  lightning probability, refreshed every two minutes on Tower; absent from
+  RainViewer). `/lightning` (0.02° cells, 20 min window, clusters, coverage),
   refetched every 60 s, on a move over 1.5°, and on region change. The
   client sends no `half`, so the server's ±3° box applies: at continental
   zoom only the box around the centre shows flashes.
@@ -1141,7 +1149,8 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 | `GET /advisories` | `lat`, `lon`, `half` | SIGMET and G-AIRMET areas (kind, hazard, label, base and top, valid times, outline, bulletin) and PIREPs of turbulence and icing (position, time, altitude, aircraft, intensities, raw) that touch the box | AWC `airsigmet`, `gairmet` (current hour), `pirep` (lower 48, 2 h) | each feed 10 min for everyone, failures 60 s; a failed feed is left out | the radar Advisories layer |
 | `GET /radar/pressure` | `lat`, `lon`, spans | isobars, isallobars, grids, extrema | bulk table and history, no upstream | 5 min; centre 0.1°, spans 0.5°; two builds at a time | the radar pressure layers |
 | `GET /lightning` | `lat`, `lon`, `half` | 0.02° cells, clusters, window 1200 s, coverage | GLM store | 60 s; centre 0.2°, half 0.5° | the radar lightning layer |
-| `GET /radar/frames` | `source` (mrms or rainviewer, optional) | host and frames | Barry's MRMS frames (the last hour of the two held), else RainViewer | RainViewer's list 2 min; Barry's read from the store | the radar |
+| `GET /radar/frames` | `source` (mrms or rainviewer, optional) | host, frames (7 observed and 3 nowcast, the nowcast paths naming the run that made them), `lightningNext` | Barry's MRMS frames (the last hour of the two held), else RainViewer | RainViewer's list 2 min; Barry's read from the store | the radar |
+| `GET /radar/lightning/{t}/{size}/{z}/{x}/{y}.png` | the grid's unix time, 256 or 512, zoom to 12 | an RGBA PNG, violet by the chance of lightning in the next hour | MRMS LightningProbabilityNext60min, the newest three held | as the radar tiles | the Lightning layer |
 | `GET /radar/tiles/{t}/{size}/{z}/{x}/{y}/{color}/{opts}.png` | the frame's unix time, 256 or 512, zoom to 12 | an RGBA PNG in Universal Blue, empty tiles about 1 KB | the MRMS store: uint8 dBZ on the 0.01 degree grid and four max-pooled copies for wide views | `public, max-age=604800, immutable` (Cloudflare keeps them); misses `no-store`; 64 MB in process; own budget, 1,500 a minute per client (`BARRY_TILE_RATE_PER_MIN`) | the radar |
 | `GET /aloft` | `lat`, `lon` | 25 hourly columns, `source`, `stale`, and what is there now: `turbulence` (GTG) and `icing` (CIP) | the HRRR column feeds; Open-Meteo pressure levels off the grid | HRRR: 1 h per 0.1° cell and column run; Open-Meteo: 1 h per 0.1° cell, last good 12 h; the hazards are read fresh each request | Aloft |
 | `GET /radar/field` | `lat`, `lon`, spans | wind, boundary layer and CAPE at 88 points (HRRR) or 35 (Open-Meteo), and `source` | the HRRR store; Open-Meteo multi-point (35 weighted calls) off the HRRR grid or before a cycle is held | HRRR: none needed; Open-Meteo: until five past the next hour, at least 10 min; centre 0.05°, spans 0.5°; last good copy for 6 h | the radar wind layer |
@@ -1180,7 +1189,10 @@ without blocking the response.
 - Radar loop every 120 s: lists the MRMS composite on the bucket, fetches
   the file nearest each ten-minute mark of the last two hours that isn't
   held (1.2 MB, 0.2 s to decode), keeps two hours (about 400 MB with the
-  pooled copies) under `state/radar`. Degraded when the newest frame is 20
+  pooled copies) under `state/radar`. Then the nowcast for a new newest
+  frame (motion by block matching on the 0.04 degree copy, 0.3 s; each
+  frame advected, under a second) and the newest lightning probability
+  grid (30 KB) under `state/ltgnext`. Degraded when the newest frame is 20
   minutes old; `BARRY_MRMS=0` stops it.
 - The model loop also pulls the Aloft column feeds: `hrrr-col` (f00 to
   f03 of every cycle) and `hrrr-colx` (f00 to f30 of the 00, 06, 12 and
@@ -1209,7 +1221,7 @@ without blocking the response.
   1800 s, lightning 600 s, LAMP and model 3600 s). Degraded (200, or 503
   with `strict`): the lightning feed or the bulk table is stale, or no LAMP
   run or HRRR cycle for three hours.
-- Tests: `backend/tests`, 373 tests; `test_property` reads the app's own
+- Tests: `backend/tests`, 376 tests; `test_property` reads the app's own
   OpenAPI document.
 
 ## Settings keys

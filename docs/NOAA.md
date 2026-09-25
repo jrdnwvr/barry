@@ -562,6 +562,15 @@ the Cloudflare cache after the first viewer.
 
 Small to medium, after phase 5.
 
+Done 2026-09-25, in numpy rather than OpenCV: block matching (12-point
+blocks on the 0.04 degree copy, shifts up to 20 km in ten minutes, gaps
+filled from neighbouring blocks) gives motion in 0.3 s, and each nowcast
+frame is a gather under a second; checked on a textured test storm (exact
+motion) and on real frames (median 37 km/h over the Plains). No growth or
+decay. The lightning probability is the 60-minute grid, drawn as a light
+violet wash under the flashes. Not done: the "rain starts at" line from
+the rain rate grid, and the NLDN ground strikes.
+
 - Serve NOAA's lightning probability for the next 30 and 60 minutes under
   the lightning layer as "next hour" shading. It is a 40 KB grid every two
   minutes; no computation.

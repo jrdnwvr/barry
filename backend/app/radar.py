@@ -63,7 +63,8 @@ def _ltg_lut() -> np.ndarray:
     deeper with the chance; nothing under 10 percent."""
     lut = np.zeros((256, 4), dtype=np.uint8)
     for p in range(10, 101):
-        a = 0.18 if p < 30 else 0.30 if p < 50 else 0.42 if p < 70 else 0.55
+        # Light enough that the radar reads through it.
+        a = 0.12 if p < 30 else 0.20 if p < 50 else 0.28 if p < 70 else 0.36
         lut[p] = [140, 77, 242, int(round(a * 255))]
     return lut
 

@@ -174,5 +174,5 @@ async def test_the_chance_of_lightning_in_the_next_hour_comes_with_the_frames(cl
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
         r = await c.get(f"{f.lightningNext.path}/512/7/{x}/{y}.png")
         assert r.status_code == 200 and "immutable" in r.headers["cache-control"]
-        assert read_png(r.content)[py, px].tolist() == [140, 77, 242, 107]      # 60 percent
+        assert read_png(r.content)[py, px].tolist() == [140, 77, 242, 71]       # 60 percent
     assert await s._poll_lightning_next(NOW) is False                           # held

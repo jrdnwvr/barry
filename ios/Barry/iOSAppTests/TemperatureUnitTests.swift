@@ -79,9 +79,40 @@ struct AudienceTests {
         #expect(!Audience.pilot.radarLayers.buoys)
     }
 
-    @Test func justTheRadarIsJustTheRadar() {
-        let r = Audience.RadarLayers.justRadar
-        #expect(r.radar && !r.lightning && !r.wind && !r.isobars && !r.fronts && r.stations == "off")
+}
+
+/// Saved radar presets: what they capture, what they write back, and the
+/// store they live in.
+struct RadarPresetTests {
+    private func defaults() -> UserDefaults {
+        let d = UserDefaults(suiteName: "RadarPresetTests.\(UUID().uuidString)")!
+        return d
+    }
+
+    @Test func aFreshMapReadsAsTheRadarScreensDefaults() {
+        let p = RadarPreset.current(named: "x", defaults: defaults())
+        #expect(p.radar && p.wind && p.fronts && p.troughs && p.lightning)
+        #expect(!p.isobars && !p.advisories && !p.buoys && p.field == "off" && p.stations == "off")
+    }
+
+    @Test func applyWritesEverySwitchAndCurrentReadsThemBack() {
+        let d = defaults()
+        var p = RadarPreset(name: "Night XC")
+        p.radar = false; p.field = "change"; p.isobars = true; p.wind = false; p.windStyle = "arrows"
+        p.fronts = false; p.troughs = false; p.stations = "speeds"; p.lightning = false
+        p.advisories = true; p.buoys = true
+        p.apply(defaults: d)
+        let back = RadarPreset.current(named: "other", defaults: d)
+        #expect(back.sameLayers(as: p) && back != p)
+        #expect(d.string(forKey: "radarStationStyleLast") == "speeds")
+    }
+
+    @Test func presetsSurviveTheStore() {
+        let d = defaults()
+        #expect(RadarPresetStore.load(d).isEmpty)
+        let list = [RadarPreset(name: "One"), RadarPreset(name: "Two", isobars: true)]
+        RadarPresetStore.save(list, d)
+        #expect(RadarPresetStore.load(d) == list)
     }
 }
 

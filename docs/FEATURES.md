@@ -854,14 +854,22 @@ stored keys, but each has its own model, so they fetch separately.
 - Lives: `RadarSheets.swift` › `RadarKeySheet`.
 
 ### radar.sheet.more
-- Seen: "Map options": layer sets first (Flying, Wind, On the water,
-  Weather, Just the radar; one tap sets every chip and closes the sheet),
-  then four front toggles, Flow or Arrows, Barbs or Speeds, each with a
-  caption.
-- Lives: `RadarSheets.swift` › `RadarMoreSheet`; the sets are
-  `Audience.RadarLayers` (`HomeLayout.swift`), the same bundles "Set up
-  for" opens the radar with, written by `RadarLayers.apply()`.
-- Tests: `AudienceTests.justTheRadarIsJustTheRadar`.
+- Seen: "Map options": Presets first: the user's saved layer
+  combinations as pills, the one matching the map filled in; a tap puts
+  the map back that way and closes the sheet; a long press offers "Save
+  these layers here", Rename and Delete; a "Save these layers" pill (just
+  "Save" once there are some) asks for a name. Then Layers: every chip on
+  the map as a switch with its icon (Radar, Pressure, Change, Isobars,
+  Wind, Fronts, Troughs, Stations, Lightning, Advisories). Then four front
+  toggles, Flow or Arrows, Barbs or Speeds, each with a caption. The fixed
+  layer sets (Flying, Wind, On the water, Weather, Just the radar) went on
+  2026-09-25 when presets replaced them.
+- Lives: `RadarSheets.swift` › `RadarMoreSheet`; `RadarPresets.swift`
+  (`RadarPreset`, `RadarPresetStore`).
+- Settings: `radarPresets.v1`; a preset writes the chip keys plus
+  `radarWindStyle` and `radarBuoys`. "Set up for" still opens the radar
+  with its own bundle (`Audience.RadarLayers`).
+- Tests: `RadarPresetTests`.
 
 ### radar.region.debounce
 - Rules: each pan or zoom records the region; per layer only the last
@@ -879,7 +887,13 @@ For: P S D. The column of clouds, temperatures and winds above the field.
   `-uitest-aloft` launch argument.
 - Lives: `ContentView.aloftScreen` › `AloftView.swift` › `AloftScreen`.
 - Data: `/aloft?lat&lon`: 25 hourly columns, levels 1000 to 400 hPa in feet
-  and knots, cloud layers, freezing level, boundary layer.
+  and knots, cloud layers, freezing level, boundary layer. From HRRR on
+  Tower (17 levels, underground ones left out, cloud from humidity and
+  the model's cloud water and ice) where the point is on its grid, else
+  Open-Meteo (11 levels); `source` says which. Also `turbulence` (GTG,
+  now, every 1,000 ft) and `icing` (CIP, now, every 500 ft: probability,
+  severity 1 trace to 4 heavy, large drops); the app does not draw these
+  yet.
 - Rules: loads once; no retry. The `stale` flag from the server is not
   decoded. With no conditions block the ground is 0 ft MSL.
 
@@ -1097,7 +1111,7 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 | `GET /radar/pressure` | `lat`, `lon`, spans | isobars, isallobars, grids, extrema | bulk table and history, no upstream | 5 min; centre 0.1°, spans 0.5°; two builds at a time | the radar pressure layers |
 | `GET /lightning` | `lat`, `lon`, `half` | 0.02° cells, clusters, window 1200 s, coverage | GLM store | 60 s; centre 0.2°, half 0.5° | the radar lightning layer |
 | `GET /radar/frames` | none | host and frames | RainViewer | 2 min | the radar |
-| `GET /aloft` | `lat`, `lon` | 25 hourly columns, `stale` | Open-Meteo pressure levels | 1 h per 0.1° cell; last good 12 h | Aloft |
+| `GET /aloft` | `lat`, `lon` | 25 hourly columns, `source`, `stale`, and what is there now: `turbulence` (GTG) and `icing` (CIP) | the HRRR column feeds; Open-Meteo pressure levels off the grid | HRRR: 1 h per 0.1° cell and column run; Open-Meteo: 1 h per 0.1° cell, last good 12 h; the hazards are read fresh each request | Aloft |
 | `GET /radar/field` | `lat`, `lon`, spans | wind, boundary layer and CAPE at 88 points (HRRR) or 35 (Open-Meteo), and `source` | the HRRR store; Open-Meteo multi-point (35 weighted calls) off the HRRR grid or before a cycle is held | HRRR: none needed; Open-Meteo: until five past the next hour, at least 10 min; centre 0.05°, spans 0.5°; last good copy for 6 h | the radar wind layer |
 | `GET /radar/field/levels` | same | the same points at five levels, underground levels left out, and `source` | as `/radar/field` | as `/radar/field` | the altitude rail |
 | `GET /radar/heights` | `lat`, `lon`, spans, `hPa` (925, 850, 700, 600, 500) | height contours in metres, 30 m apart at 700 hPa and below and 60 m above, with the run and valid time | the HRRR store only; 503 off its grid | until five past the next hour, per level, region and run | the altitude rail |
@@ -1131,6 +1145,15 @@ without blocking the response.
   earth-relative, fields written to `state/model/hrrr/<cycle>/` as float32,
   two cycles kept (about 1 GB). A cycle takes 5 s and peaks near 700 MB.
   `BARRY_HRRR=0` disables and every map layer stays on Open-Meteo.
+- The model loop also pulls the Aloft column feeds: `hrrr-col` (f00 to
+  f03 of every cycle) and `hrrr-colx` (f00 to f30 of the 00, 06, 12 and
+  18 UTC cycles), 17 levels of height, temperature (stored in Celsius),
+  humidity, wind, cloud water and ice plus the surface, every other point
+  in float16. One run of each is kept (3.5 GB for the day-long one); a
+  day-long run takes about 4 minutes on Tower. Each run's files are opened
+  as soon as it lands, and after a restart, so the first column read is
+  quick. Then GTG turbulence (every 15 minutes) and CIP icing (hourly)
+  from NOMADS, one whole file each, newest run only.
 - LAMP loop every 300 s: when a new hourly run (HH:30, looked for eight
   minutes after) is not held, one 4.4 MB bulletin from NOMADS for every
   site, parsed in a thread (2,313 stations, 0.4 s). On a cold start a run
@@ -1141,7 +1164,7 @@ without blocking the response.
   1800 s, lightning 600 s, LAMP and model 3600 s). Degraded (200, or 503
   with `strict`): the lightning feed or the bulk table is stale, or no LAMP
   run or HRRR cycle for three hours.
-- Tests: `backend/tests`, 359 tests; `test_property` reads the app's own
+- Tests: `backend/tests`, 364 tests; `test_property` reads the app's own
   OpenAPI document.
 
 ## Settings keys
@@ -1191,7 +1214,8 @@ each device (the watch keeps its own copies).
 | `radarStations` | off | off, barbs, speeds | radar |
 | `radarStationStyleLast` | barbs | style restored when the chip turns on | radar More sheet |
 | `radarAdvisories` | false | SIGMETs, G-AIRMETs and PIREPs on the radar | radar chip |
-| `radarBuoys` | false | buoys and coastal stations in the station layer | radar Map options, the water set and preset |
+| `radarBuoys` | false | buoys and coastal stations in the station layer | radar Map options, the water preset in "Set up for", a saved preset |
+| `radarPresets.v1` | none | JSON list of saved radar presets: a name and every chip's state, the wind style and buoys | radar Map options |
 | `radarStorms` | true | Lightning chip | radar |
 | `radarAutoplay` | true | play the last hour, or hold on the latest | Settings › Radar |
 | `aloftCeilingFt` | 18000 | 6000, 12000, 18000, 24000; also caps the radar rail | Settings › Aloft, the Aloft menu |

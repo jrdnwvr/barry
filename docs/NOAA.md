@@ -368,7 +368,9 @@ alerter's decisions matches the public API's.
 Small, and independent of the bridge decision. The first piece needs no
 GRIB library.
 
-LAMP done 2026-09-24: `sources/lamp.py`, `sources/nomads.py`, a LAMP loop
+GTG and CIP done 2026-09-25: `sources/hazards.py`, read at the point
+and sent with every Aloft response as `turbulence` and `icing`; the
+Aloft screen's drawing of them is next. LAMP done 2026-09-24: `sources/lamp.py`, `sources/nomads.py`, a LAMP loop
 in the scheduler, `/combined.lamp`, the TAF card's stand-in at fields
 with no TAF, and the route's arrival. The 15 minute runs, the extended
 hours and the lightning probability wording are not used yet.
@@ -439,6 +441,15 @@ UI test passes with the flag on.
 ### Phase 3. The Aloft column from HRRR levels
 
 Medium. Sharpens the column and moves it off the bridge.
+
+Done 2026-09-25, differently from the plan below in two ways: 17 levels
+(every 25 hPa near the ground, 50 above 800) rather than 15, and stored
+at every other point in half precision, which a point's column doesn't
+miss and which makes a day-long run 3.5 GB instead of 25. Cloud cover per
+level is the larger of a Sundqvist humidity curve (none below 80
+percent) and the model's own cloud water and ice. Measured: a day-long
+run pulls in about 4 minutes on Tower; a column reads in tens of
+milliseconds once its files are open.
 
 - Pull height, temperature, dew point, wind and cloud water at 15 levels
   from 1000 to 400 hPa (every 25 hPa to 900, then every 50) for the hours

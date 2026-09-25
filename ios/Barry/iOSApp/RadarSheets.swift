@@ -236,15 +236,45 @@ struct RadarMoreSheet: View {
     @Binding var buoys: Bool
     @Environment(\.dismiss) private var dismiss
 
-    /// Layer sets: one tap sets every chip, then the sheet gets out of the
-    /// way. The same bundles the "Set up for" choice opens the radar with.
-    private let sets: [(String, Audience.RadarLayers)] = [
-        ("Flying", Audience.pilot.radarLayers),
-        ("Wind", Audience.soaring.radarLayers),
-        ("On the water", Audience.marine.radarLayers),
-        ("Weather", Audience.weather.radarLayers),
-        ("Just the radar", .justRadar),
-    ]
+    // Every chip's switch, so the sheet shows the whole map at once.
+    @AppStorage("radarShowRadar", store: AppConfig.sharedDefaults) private var showRadar = true
+    @AppStorage("radarField", store: AppConfig.sharedDefaults) private var fieldRaw = RadarField.off.rawValue
+    @AppStorage("radarIsobars", store: AppConfig.sharedDefaults) private var showIsobars = false
+    @AppStorage("radarWindArrows", store: AppConfig.sharedDefaults) private var showWind = true
+    @AppStorage("radarFronts", store: AppConfig.sharedDefaults) private var showFronts = true
+    @AppStorage("radarTroughs", store: AppConfig.sharedDefaults) private var showTroughs = true
+    @AppStorage("radarStations", store: AppConfig.sharedDefaults) private var stationsRaw = "off"
+    @AppStorage("radarStorms", store: AppConfig.sharedDefaults) private var showStorms = true
+    @AppStorage("radarAdvisories", store: AppConfig.sharedDefaults) private var showAdvisories = false
+
+    @State private var presets = RadarPresetStore.load()
+    /// The alert asking for a name: a new preset (renaming nil) or a rename.
+    @State private var naming = false
+    @State private var renaming: UUID?
+    @State private var name = ""
+
+    private func field(_ f: RadarField) -> Binding<Bool> {
+        Binding(get: { fieldRaw == f.rawValue }, set: { fieldRaw = $0 ? f.rawValue : RadarField.off.rawValue })
+    }
+
+    private var stationsOn: Binding<Bool> {
+        Binding(get: { stationsRaw != "off" }, set: { stationsRaw = $0 ? stationStyle : "off" })
+    }
+
+    private func store(_ list: [RadarPreset]) {
+        presets = list
+        RadarPresetStore.save(list)
+    }
+
+    private func commitName() {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !n.isEmpty else { return }
+        if let id = renaming {
+            store(presets.map { p in var q = p; if p.id == id { q.name = n }; return q })
+        } else {
+            store(presets + [RadarPreset.current(named: n)])
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -252,22 +282,8 @@ struct RadarMoreSheet: View {
             Text("Map options")
                 .font(.title3.weight(.semibold))
 
-            VStack(alignment: .leading, spacing: 8) {
-                Label("Layer sets", systemImage: "square.3.layers.3d")
-                    .font(.subheadline.weight(.semibold))
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(sets, id: \.0) { name, layers in
-                            Button(name) {
-                                layers.apply()
-                                dismiss()
-                            }
-                            .buttonStyle(.bordered)
-                            .accessibilityIdentifier("radar.set.\(name)")
-                        }
-                    }
-                }
-            }
+            presetsSection
+            layersSection
 
             VStack(alignment: .leading, spacing: 6) {
                 Label("Fronts", systemImage: "line.diagonal")
@@ -314,5 +330,77 @@ struct RadarMoreSheet: View {
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .alert(renaming == nil ? "Save these layers" : "Rename", isPresented: $naming) {
+            TextField("Name", text: $name)
+            Button("Save") { commitName() }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    /// Saved layer combinations. A tap puts the map back that way and closes
+    /// the sheet; the one that matches the map now is filled in. A long
+    /// press saves the map's layers into it, renames or deletes it.
+    private var presetsSection: some View {
+        let now = RadarPreset.current()
+        return VStack(alignment: .leading, spacing: 8) {
+            Label("Presets", systemImage: "bookmark")
+                .font(.subheadline.weight(.semibold))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(presets) { p in
+                        Button(p.name) {
+                            p.apply()
+                            dismiss()
+                        }
+                        .buttonStyle(ChipStyle(on: p.sameLayers(as: now)))
+                        .font(.subheadline)
+                        .contextMenu {
+                            Button("Save these layers here", systemImage: "square.and.arrow.down") {
+                                store(presets.map { $0.id == p.id ? RadarPreset.current(named: p.name).with(id: p.id) : $0 })
+                            }
+                            Button("Rename", systemImage: "pencil") {
+                                renaming = p.id
+                                name = p.name
+                                naming = true
+                            }
+                            Button("Delete", systemImage: "trash", role: .destructive) {
+                                store(presets.filter { $0.id != p.id })
+                            }
+                        }
+                        .accessibilityIdentifier("radar.preset.\(p.name)")
+                    }
+                    Button {
+                        renaming = nil
+                        name = ""
+                        naming = true
+                    } label: {
+                        Label(presets.isEmpty ? "Save these layers" : "Save", systemImage: "plus")
+                    }
+                    .buttonStyle(ChipStyle(on: false))
+                    .font(.subheadline)
+                    .accessibilityIdentifier("radar.preset.save")
+                }
+            }
+        }
+    }
+
+    /// The chips again, as switches, with the icons they wear on the map.
+    private var layersSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Layers", systemImage: "square.3.layers.3d")
+                .font(.subheadline.weight(.semibold))
+            Toggle(isOn: $showRadar) { Label("Radar", systemImage: "antenna.radiowaves.left.and.right") }
+            Toggle(isOn: field(.pressure)) { Label("Pressure", systemImage: "circle.circle") }
+            Toggle(isOn: field(.change)) { Label("Change", systemImage: "arrow.up.arrow.down") }
+            Toggle(isOn: $showIsobars) { Label("Isobars", systemImage: "circle.dashed") }
+            Toggle(isOn: $showWind) { Label("Wind", systemImage: "wind") }
+            Toggle(isOn: $showFronts) { Label("Fronts", systemImage: "line.diagonal") }
+            Toggle(isOn: $showTroughs) { Label("Troughs", systemImage: "point.topleft.down.to.point.bottomright.curvepath") }
+            Toggle(isOn: stationsOn) { Label("Stations", systemImage: "flag") }
+            Toggle(isOn: $showStorms) { Label("Lightning", systemImage: "bolt.fill") }
+            Toggle(isOn: $showAdvisories) { Label("Advisories", systemImage: "exclamationmark.triangle") }
+        }
+        .font(.subheadline)
+        .accessibilityIdentifier("radar.more.layers")
     }
 }

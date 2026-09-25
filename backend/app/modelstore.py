@@ -178,6 +178,17 @@ class ModelStore:
         self._mem[key] = arr
         return arr
 
+    def warm(self, feed: str, cycle: datetime) -> int:
+        """Open every field of a cycle now, so the first request after a
+        pull or a restart doesn't pay for thousands of opens (the Aloft
+        column reads about 3,000 fields; opened cold that was 10 s)."""
+        n = 0
+        for fhr, names in self.hours(feed, cycle).items():
+            for name in names:
+                if self.load(feed, cycle, fhr, name) is not None:
+                    n += 1
+        return n
+
     def nearest(self, feed: str, name: str, valid: datetime,
                 within: timedelta = timedelta(minutes=45)
                 ) -> Optional[Tuple[np.ndarray, datetime, int]]:

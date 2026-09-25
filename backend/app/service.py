@@ -243,6 +243,7 @@ class PressureService:
         self.models = ModelStore.from_env()
         self.hrrr_enabled = os.environ.get("BARRY_HRRR", "1") != "0"
         self.hrrr_ok_at: Optional[datetime] = None
+        self._warmed: set = set()
 
     # ---- pressure (observed) -------------------------------------------------
 
@@ -854,12 +855,20 @@ class PressureService:
                 cycle, source = pick
                 n = await hrrr_src.pull(self._client, self.models, spec, cycle, source)
                 written += n
+                await asyncio.to_thread(self.models.warm, spec.name, cycle)
+                self._warmed.add((spec.name, cycle))
                 if spec is hrrr_src.MAP:
                     self.hrrr_ok_at = _now()
                 log.info("hrrr: %s %s from %s, %d fields", spec.name, cycle.strftime("%Y%m%d%H"), source, n)
             except Exception as exc:
                 errors.append(exc)
                 log.warning("hrrr: %s failed: %s: %s", spec.name, type(exc).__name__, exc)
+        # After a restart the store is on disk but nothing is open yet.
+        for spec in hrrr_src.FEEDS:
+            for cycle in self.models.cycles(spec.name)[:1]:
+                if (spec.name, cycle) not in self._warmed:
+                    await asyncio.to_thread(self.models.warm, spec.name, cycle)
+                    self._warmed.add((spec.name, cycle))
         if errors and not written:
             raise errors[0]
         return written

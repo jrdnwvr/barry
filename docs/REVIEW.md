@@ -213,7 +213,7 @@ Audiences, smallest useful change each:
 - [x] Soaring: a cloud base line on Conditions from the spread, with "blue thermals" when the layer tops out below it.
 - [x] Drone: a line on the Wind card from the 80 m wind, now and the peak in the next six hours, shown when set up for drones. It reports rather than judges; a user-set limit could turn it into flyable or not later.
 - [x] Everyday: a threshold on the pressure alert (a three-step picker rather than a slider; small is 1 hPa in 3 h).
-- [x] Weather watchers: radar layer sets in Map options (Flying, Wind, On the water, Weather, Just the radar).
+- [x] Weather watchers: radar layer sets in Map options (Flying, Wind, On the water, Weather, Just the radar). Replaced 2026-09-25 by presets the user saves, with every layer also listed as a switch in Map options.
 - [x] Backcountry: the watch opens on its own saved page with "as of" when offline, like the phone; widgets, complications and the Live Activity already said "as of".
 - [x] Marine: NOAA buoys and coastal stations on the station layer (`/metars?buoys=1`), with waves, water temperature and the 3 h pressure change; on in the water preset.
 

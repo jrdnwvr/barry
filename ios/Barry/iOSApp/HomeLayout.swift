@@ -187,13 +187,11 @@ enum Audience: String, CaseIterable, Identifiable {
 
     var alertLevel: StormAlerter.Level { self == .everyday ? .moderate : .fast }
 
-    /// The radar layers that open by default. Also the radar's own layer
-    /// sets (Map options), so a weather watcher can jump between them.
+    /// The radar layers that open by default. (Map options had them as
+    /// fixed layer sets until saved presets replaced those, 2026-09-25.)
     struct RadarLayers: Equatable {
         var radar = true, isobars = false, troughs = false, wind = false, fronts = false
         var stations = "off", lightning = true, buoys = false
-
-        static let justRadar = RadarLayers(lightning: false)
 
         /// Write them to the radar's stored switches; the map follows.
         func apply() {

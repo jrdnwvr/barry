@@ -94,6 +94,7 @@
 		71A3F386AC931B1BD311F583 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A376D4EE445D8849427A861E /* PrivacyInfo.xcprivacy */; };
 		72AEB7C7D074A422FD0AA881 /* AlertTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E6BAE232810713F08EFD574 /* AlertTests.swift */; };
 		73C115787B3F6EB1F3D44776 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918B4D14CC966B0E820FC1AC /* Models.swift */; };
+		73F23F61819F26E69D4D21E1 /* RadarPresets.swift in Sources */ = {isa = PBXBuildFile; fileRef = C069C93DABB4FCDECF833A55 /* RadarPresets.swift */; };
 		7492FC46266CE19D8B710E51 /* RectangularComplications.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAFA9596978A2666CDFADAB4 /* RectangularComplications.swift */; };
 		772708512B575F16B6A02B14 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0094727B647701DDDCF17BD2 /* LocationManager.swift */; };
 		77A46CEAE1569CD88532A37F /* BarometerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C00F07F019E06DA06E95BD0 /* BarometerTests.swift */; };
@@ -346,6 +347,7 @@
 		B98E77604746429DE78EF9C4 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		BAFA9596978A2666CDFADAB4 /* RectangularComplications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RectangularComplications.swift; sourceTree = "<group>"; };
 		BB955C8C1263A03BA2C97A2F /* LightningBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightningBanner.swift; sourceTree = "<group>"; };
+		C069C93DABB4FCDECF833A55 /* RadarPresets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarPresets.swift; sourceTree = "<group>"; };
 		C0EBA6519DD65A01DF98B527 /* RadarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarView.swift; sourceTree = "<group>"; };
 		C1326419A7770149C91B0438 /* PhoneWidgetViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWidgetViews.swift; sourceTree = "<group>"; };
 		C4258044D160E9F49F088BAF /* RadarPaletteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarPaletteTests.swift; sourceTree = "<group>"; };
@@ -585,6 +587,7 @@
 				6662DFD4A743261C8134B535 /* RadarMapView.swift */,
 				8C448DCCFE61D866C777918A /* RadarModel.swift */,
 				C6BB37965D5198DB8A9DCE65 /* RadarPalette.swift */,
+				C069C93DABB4FCDECF833A55 /* RadarPresets.swift */,
 				1666B232D9C24406F937CCE8 /* RadarSheets.swift */,
 				C0EBA6519DD65A01DF98B527 /* RadarView.swift */,
 				7862164DF1A7B3BA33186444 /* RouteViews.swift */,
@@ -979,6 +982,7 @@
 				1440BAB18BF4B5F3EE776457 /* RadarMapView.swift in Sources */,
 				5204621388C2B94B99BE1CCF /* RadarModel.swift in Sources */,
 				54FC2F6A3476132FE681E5E6 /* RadarPalette.swift in Sources */,
+				73F23F61819F26E69D4D21E1 /* RadarPresets.swift in Sources */,
 				4DC0A2667AD32E4946FA8106 /* RadarSheets.swift in Sources */,
 				06E7445D9EF69D7CD6C141EE /* RadarView.swift in Sources */,
 				2FC7F63C72023A1812F99D63 /* RangeAnalysis.swift in Sources */,

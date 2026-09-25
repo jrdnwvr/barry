@@ -669,6 +669,8 @@ struct RadarMapView: UIViewRepresentable {
             applyDeclutter(on: mapView)
             flowView?.mapDidMove()
             prefetchRing(on: mapView)
+            // A zoom changes how many of the grid's arrows fit.
+            syncArrows(allArrows, on: mapView)
         }
 
         /// One ring of tiles around the visible ones, for the current frame,
@@ -776,9 +778,54 @@ struct RadarMapView: UIViewRepresentable {
             return view
         }
 
-        /// Sync arrow annotations only when the set actually changed — updateUIView
-        /// runs every animation tick and must not churn annotations.
-        func syncArrows(_ arrows: [WindArrow], on map: MKMapView) {
+        /// The whole grid the layer was given; what is drawn is a thinned
+        /// lattice of it (below).
+        private var allArrows: [WindArrow] = []
+        /// Arrows closer than this on screen, in points, are thinned to every
+        /// second, third... column or row of the grid, so a wider grid at a
+        /// level, or a zoom out, never turns into a wall of arrows and numbers.
+        static let arrowSpacingPt: CGFloat = 76
+        static let arrowRowSpacingPt: CGFloat = 60
+
+        /// The arrows to draw at this zoom: the grid's columns and rows kept
+        /// every k-th, k from the grid's spacing on screen. The grid is regular
+        /// (lats by lons), so indices come from the sorted distinct values.
+        private func thinned(_ arrows: [WindArrow], on map: MKMapView) -> [WindArrow] {
+            guard arrows.count > 4 else { return arrows }
+            func distinct(_ values: [Double]) -> [Double] {
+                var out: [Double] = []
+                for v in values.sorted() where out.last.map({ abs($0 - v) > 1e-6 }) ?? true { out.append(v) }
+                return out
+            }
+            let lats = distinct(arrows.map(\.lat)), lons = distinct(arrows.map(\.lon))
+            guard lats.count > 1, lons.count > 1 else { return arrows }
+            let midLat = lats[lats.count / 2], midLon = lons[lons.count / 2]
+            let p0 = map.convert(CLLocationCoordinate2D(latitude: midLat, longitude: midLon), toPointTo: map)
+            let px = map.convert(CLLocationCoordinate2D(latitude: midLat, longitude: lons[lons.count / 2 + 1 < lons.count ? lons.count / 2 + 1 : lons.count / 2 - 1]), toPointTo: map)
+            let py = map.convert(CLLocationCoordinate2D(latitude: lats[lats.count / 2 + 1 < lats.count ? lats.count / 2 + 1 : lats.count / 2 - 1], longitude: midLon), toPointTo: map)
+            let dx = abs(px.x - p0.x), dy = abs(py.y - p0.y)
+            guard dx.isFinite, dy.isFinite, dx > 0, dy > 0 else { return arrows }
+            let sx = max(1, Int(ceil(Self.arrowSpacingPt / dx)))
+            let sy = max(1, Int(ceil(Self.arrowRowSpacingPt / dy)))
+            if sx == 1 && sy == 1 { return arrows }
+            func index(_ v: Double, in list: [Double]) -> Int {
+                var best = 0
+                for (i, x) in list.enumerated() where abs(x - v) < abs(list[best] - v) { best = i }
+                return best
+            }
+            // Offset the kept rows and columns so the lattice stays centred.
+            let ox = (lons.count % sx) / 2, oy = (lats.count % sy) / 2
+            return arrows.filter {
+                (index($0.lon, in: lons) - ox) % sx == 0 && (index($0.lat, in: lats) - oy) % sy == 0
+            }
+        }
+
+        /// Sync arrow annotations only when the drawn set actually changed:
+        /// updateUIView runs every animation tick and must not churn
+        /// annotations, and a zoom re-thins the same grid.
+        func syncArrows(_ given: [WindArrow], on map: MKMapView) {
+            allArrows = given
+            let arrows = thinned(given, on: map)
             guard arrows != shownArrows else { return }
             shownArrows = arrows
             map.removeAnnotations(arrowAnnotations)

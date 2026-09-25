@@ -759,8 +759,12 @@ stored keys, but each has its own model, so they fetch separately.
 - Rules: particles scale with view area (70 to 240), 30 fps cap, CPU
   simulation and one Metal draw call, anchored to the ground so pans need
   nothing, respawn after a big zoom, a new grid bends existing streaks.
-  Arrows under 6 km/h are dropped. The one note line says "Wind under 3 kt
-  across the map." at the surface when nothing draws.
+  Arrows under 6 km/h are dropped. The grid is thinned on the phone to a
+  lattice at least 76 points apart across and 60 down at the current
+  zoom (every second, third... column and row), at the surface and at
+  every level, and re-thinned on each zoom, so a denser grid never
+  becomes a wall of arrows and numbers. The one note line says "Wind
+  under 3 kt across the map." at the surface when nothing draws.
 - Tests: the UI test turns Wind on.
 - For: P S D M W.
 

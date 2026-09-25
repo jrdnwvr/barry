@@ -436,11 +436,14 @@ def _hrrr_fixture(kind):
         return fh.read()
 
 
-def sample_mrms(lightning=False):
+def sample_mrms(lightning=False, rate=False, shift_deg=0.0, half_deg=0.2):
     """A small MRMS-shaped file: 0.05 degree from 45 N, 95 W to 35 N, 75 W
     (north to south, as MRMS scans), no echo (-99) everywhere but a 45 dBZ
-    cell over Cincinnati and a 60 dBZ single pixel near Dayton; no coverage
-    (-999) along the south edge. GRIB2, simple packing, gzipped."""
+    cell over Cincinnati (`half_deg` each way, moved east by `shift_deg`)
+    and a 60 dBZ single pixel near Dayton; no coverage (-999) along the
+    south edge. `rate` makes it the rain-rate product instead: 5 mm/h in
+    the cell, dry elsewhere, -3 where uncovered. GRIB2, simple packing,
+    gzipped."""
     import gzip as _gz
     import eccodes
     import numpy as np
@@ -449,12 +452,16 @@ def sample_mrms(lightning=False):
     lon = -95.0 + np.arange(ni) * d
     v = np.full((nj, ni), -99.0)
     la, lo = np.meshgrid(lat, lon, indexing="ij")
-    v[(np.abs(la - 39.1) < 0.2) & (np.abs(lo + 84.5) < 0.2)] = 45.0
+    cell = (np.abs(la - 39.1) < half_deg) & (np.abs(lo + 84.5 - shift_deg) < half_deg)
+    v[cell] = 45.0
     v[np.argmin(np.abs(lat - 39.9)), np.argmin(np.abs(lon + 84.2))] = 60.0
     v[-3:, :] = -999.0
     if lightning:
         # Chance of lightning: 60 percent over the Cincinnati cell, none elsewhere.
         v = np.where(v == 45.0, 60.0, 0.0)
+    if rate:
+        v = np.where(cell, 5.0, 0.0)
+        v[-3:, :] = -3.0
     h = eccodes.codes_grib_new_from_samples("GRIB2")
     for k, val in [("Ni", ni), ("Nj", nj), ("latitudeOfFirstGridPointInDegrees", 45.0),
                    ("longitudeOfFirstGridPointInDegrees", 265.0),
@@ -529,8 +536,9 @@ class FakeUpstream:
                 prefix = request.url.params.get("prefix", "")
                 after = request.url.params.get("start-after", "")
                 xml = sample_mrms_listing(self.clock(), prefix)
-                if "LightningProbability" in prefix:
-                    xml = xml.replace("MergedReflectivityQCComposite_00.50", "LightningProbabilityNext60minGrid_scale_1")
+                for product in ("LightningProbabilityNext60minGrid_scale_1", "PrecipRate_00.00"):
+                    if product in prefix:
+                        xml = xml.replace("MergedReflectivityQCComposite_00.50", product)
                 if after:
                     import re
                     keep = [c for c in re.findall(r"<Contents>.*?</Contents>", xml)
@@ -541,10 +549,23 @@ class FakeUpstream:
                 if not hasattr(self, "_ltg_file"):
                     self._ltg_file = sample_mrms(lightning=True)
                 return httpx.Response(200, content=self._ltg_file)
-            if not hasattr(self, "_mrms_file"):
-                self._mrms_file = sample_mrms()
-            self.mrms_files = getattr(self, "mrms_files", 0) + 1
-            return httpx.Response(200, content=self._mrms_file)
+            # The cell moves east `mrms_speed_deg` degrees every ten minutes
+            # from where it sits at `mrms_origin`, so frames differ by their
+            # time; by default it stands still and every file is the same.
+            from app.sources.mrms import key_time
+            speed = getattr(self, "mrms_speed_deg", 0.0)
+            shift = 0.0
+            if speed:
+                t = key_time(url)
+                shift = round(speed * (t - self.mrms_origin).total_seconds() / 600.0, 3)
+            rate = "PrecipRate" in url
+            files = self.__dict__.setdefault("_mrms_files_by", {})
+            key = (rate, shift)
+            if key not in files:
+                files[key] = sample_mrms(rate=rate, shift_deg=shift, half_deg=getattr(self, "mrms_half_deg", 0.2))
+            if not rate:
+                self.mrms_files = getattr(self, "mrms_files", 0) + 1
+            return httpx.Response(200, content=files[key])
         if "noaa-nbm-grib2-pds" in url:
             # NBM: the small fixture for any run and hour, the index filled
             # in with the hour asked for; nbm_runs, when set, are the runs

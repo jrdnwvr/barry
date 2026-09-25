@@ -613,10 +613,30 @@ class RideOut(BaseModel):
     changeAt: Optional[datetime] = None
 
 
+class RainOut(BaseModel):
+    """Rain reaching this point, from the radar's rain rate and motion
+    (rainstart.py): raining now, or due within ninety minutes. Absent when
+    neither. `startsAt` is when it arrives and `endsAt` when it clears, if
+    within the horizon; `detail` is the grey line under the title, and a
+    `{end}` in it is for the phone to fill with the clearing time."""
+
+    status: str                            # "now" | "soon"
+    startsAt: Optional[datetime] = None
+    endsAt: Optional[datetime] = None
+    intensity: str                         # light | moderate | heavy
+    distanceMi: Optional[int] = None       # soon: how far the rain is now
+    fromCardinal: Optional[str] = None     # soon: which way it lies ("west")
+    moving: Optional[str] = None           # which way it heads ("east"); absent when nearly still
+    speedMph: Optional[int] = None
+    detail: str
+    asOf: datetime                         # the rain-rate grid's time
+    source: str = "mrms"
+
+
 class ConditionsOut(BaseModel):
     """Field conditions (conditions.py): density altitude now + forecast, the
-    boundary layer, the fog outlook and the storm outlook. All optional,
-    each piece degrades independently."""
+    boundary layer, the fog outlook, the storm outlook and the rain line.
+    All optional, each piece degrades independently."""
 
     densityAltitudeFt: Optional[int] = None   # now, the AWOS method (dry air)
     densityAltitudeHumidFt: Optional[int] = None   # with the dew point's humidity
@@ -627,6 +647,7 @@ class ConditionsOut(BaseModel):
     fog: Optional[FogOut] = None
     storm: Optional[StormOut] = None
     ride: Optional[RideOut] = None
+    rain: Optional[RainOut] = None
 
 
 class LightningCell(BaseModel):

@@ -176,3 +176,72 @@ async def test_the_chance_of_lightning_in_the_next_hour_comes_with_the_frames(cl
         assert r.status_code == 200 and "immutable" in r.headers["cache-control"]
         assert read_png(r.content)[py, px].tolist() == [140, 77, 242, 71]       # 60 percent
     assert await s._poll_lightning_next(NOW) is False                           # held
+
+
+# ---- the "rain starts at" line ---------------------------------------------------
+
+@pytest.fixture
+def moving_cell(upstream):
+    """A cell two degrees across, centred on Cincinnati at 03:00 and moving
+    east 0.2 degrees every ten minutes (about 64 mph)."""
+    upstream.mrms_speed_deg = 0.2
+    upstream.mrms_half_deg = 1.0
+    upstream.mrms_origin = datetime(2026, 9, 25, 3, 0, tzinfo=timezone.utc)
+
+
+@pytest.mark.asyncio
+async def test_rain_reaches_a_point_downwind_and_clears_over_one_under_it(client, upstream, mrms_on, moving_cell):
+    s = PressureService(client)
+    await s.poll_radar()
+    assert s._rain_rate is not None and s._radar_motion is not None
+    # 0.6 degrees east of the cell's east edge: half an hour at 0.2 a step.
+    out = s.rain_outlook(39.1, -82.9, NOW)
+    assert out is not None and out.status == "soon"
+    mins = (out.startsAt - NOW).total_seconds() / 60
+    assert 18 <= mins <= 40, mins
+    assert out.intensity == "moderate" and out.fromCardinal == "west" and out.moving == "east"
+    assert 45 <= out.speedMph <= 85 and 20 <= out.distanceMi <= 50
+    assert out.detail.startswith("Moderate rain") and "to the west, moving east at" in out.detail
+    # Under the cell: raining now, clearing once its west edge has passed.
+    here = s.rain_outlook(39.1, -84.5, NOW)
+    assert here is not None and here.status == "now" and here.startsAt is None
+    assert here.endsAt is not None and 38 <= (here.endsAt - NOW).total_seconds() / 60 <= 62
+    assert here.detail.startswith("Moderate rain here, moving east") and "{end}" in here.detail
+    # Well clear of it: nothing to say.
+    assert s.rain_outlook(43.5, -80.0, NOW) is None
+
+
+@pytest.mark.asyncio
+async def test_the_combined_payload_carries_the_rain_line(client, upstream, mrms_on):
+    from app.main import app
+    s = PressureService(client)
+    await s.poll_radar()
+    app.state.service = s
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+        r = await c.get("/combined?station=KLUK&lat=39.1&lon=-84.5")
+    assert r.status_code == 200
+    rain = r.json()["conditions"]["rain"]
+    assert rain["status"] == "now" and rain["source"] == "mrms"
+    assert rain["detail"] == "Moderate rain here, nearly stationary."     # the fixture's cell does not move
+    assert rain["endsAt"] is None and rain["moving"] is None
+
+
+@pytest.mark.asyncio
+async def test_rain_calls_are_scored_against_the_frames_that_follow(client, upstream, mrms_on, moving_cell, monkeypatch):
+    s = PressureService(client)
+    await s.poll_radar()
+    out = s.rain_outlook(39.1, -82.9, NOW)
+    assert out.status == "soon"
+    calls = s._load_rain_calls()
+    assert len(calls) == 1 and calls[0]["lat"] == 39.1 and "hit" not in calls[0]
+    assert s.rain_outlook(39.1, -82.9, NOW) is out                          # cached, and not noted twice
+    assert s.rain_scores()["pending"] == 1
+    # An hour on, the cell has crossed the point and the frames show it.
+    later = NOW + timedelta(hours=1)
+    monkeypatch.setattr("app.service._now", lambda: later)
+    upstream.clock = lambda: later
+    await s.poll_radar()
+    assert calls[0]["hit"] is True
+    sc = s.rain_scores()
+    assert sc == {"calls": 1, "hits": 1, "hitRate": 1.0, "pending": 0,
+                  "days": [{"day": "2026-09-25", "calls": 1, "hits": 1}]}

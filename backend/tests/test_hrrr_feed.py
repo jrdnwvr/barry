@@ -308,13 +308,19 @@ def test_weather_codes_from_probabilities():
 
 
 @pytest.mark.asyncio
-async def test_rrfs_is_pulled_beside_hrrr_and_both_are_scored_against_the_metars(client, upstream, hrrr_on):
+async def test_rrfs_is_pulled_beside_hrrr_and_both_are_scored_from_the_same_cycle(client, upstream, hrrr_on, monkeypatch):
     from app import modelscore
     from app.models import StationObs
+    # 02:35: the 01z cycle is the newest both feeds should have (RRFS lands
+    # about 80 minutes after its time, the HRRR forecast feed an hour).
+    t = datetime(2026, 9, 25, 2, 35, tzinfo=timezone.utc)
+    monkeypatch.setattr("app.service._now", lambda: t)
+    upstream.clock = lambda: t
     s = PressureService(client)
     await s.poll_hrrr()
-    assert s.models.cycles("rrfs-sfc") == [datetime(2026, 9, 25, 0, tzinfo=timezone.utc)]
-    assert sorted(s.models.hours("rrfs-sfc", datetime(2026, 9, 25, 0, tzinfo=timezone.utc))) == [1, 2, 3, 4, 5, 6]
+    cycle = datetime(2026, 9, 25, 1, tzinfo=timezone.utc)
+    assert s.models.cycles("rrfs-sfc") == [cycle] and sorted(s.models.hours("rrfs-sfc", cycle)) == [1, 2, 3]
+    assert s.models.cycles("hrrr-fc3") == [cycle]
     valid = datetime(2026, 9, 25, 3, tzinfo=timezone.utc)
     rng = np.random.default_rng(0)
     table = []
@@ -325,11 +331,21 @@ async def test_rrfs_is_pulled_beside_hrrr_and_both_are_scored_against_the_metars
         table.append(StationObs(id=f"K{k:03d}", lat=la, lon=lo, obsTime=valid + timedelta(minutes=-7),
                                 slp=1016.0 - 2.0 * (la - 38.5) + 1.0, windKt=19.44, windDir=270.0))
     rec = modelscore.score_hour(s.models, table, valid)
-    assert rec["reports"] == 150 and rec["hrrr"]["lead"] == 1 and rec["rrfs"]["lead"] == 3
+    assert rec["reports"] == 150
+    # Like for like: the same run, the same lead.
+    assert rec["hrrr"]["run"] == rec["rrfs"]["run"] == cycle.isoformat() and rec["hrrr"]["lead"] == rec["rrfs"]["lead"] == 2
     for m in ("hrrr", "rrfs"):
         assert abs(rec[m]["slpBias"] + 1.0) < 0.05 and rec[m]["slpMaeUnbiased"] < 0.05
         assert rec[m]["windMaeKt"] < 0.2 and rec[m]["dirMaeDeg"] < 1.0
     day = modelscore.daily([rec])[0]
     assert day["day"] == "2026-09-25" and day["hours"] == 1 and abs(day["rrfs"]["slpBias"] + 1.0) < 0.05
+    assert day["hrrr"]["lead"] == 2.0
+    # A record that caught RRFS before HRRR's run was held is filled in later; a complete one is left alone.
+    partial = {k: v for k, v in rec.items() if k != "hrrr"}
+    filled = modelscore.score_hour(s.models, table, valid, partial)
+    assert filled["hrrr"] == rec["hrrr"] and filled["rrfs"] == rec["rrfs"]
+    assert modelscore.score_hour(s.models, table, valid, rec) is None
+    # Records from before the matched scoring, at different leads, count toward no day.
+    assert modelscore.daily([dict(rec, hrrr=dict(rec["hrrr"], lead=1))]) == []
     # Too few reports near the hour: nothing to say.
     assert modelscore.score_hour(s.models, table[:20], valid) is None

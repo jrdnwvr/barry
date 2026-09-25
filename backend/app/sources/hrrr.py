@@ -175,8 +175,11 @@ def _extended_fc(cycle: datetime) -> Tuple[int, ...]:
 
 
 FC_LAST = 18
+# Three runs of the hourly forecast feed are kept (about 260 MB each): the
+# model scores read HRRR from the cycle RRFS came from, which by the time
+# the METARs for the hour are in is two or three cycles back.
 FC = FeedSpec("hrrr-fc3", FC_FIELDS, FC_WIND_PAIRS, lambda c: tuple(range(0, FC_LAST + 1)),
-              stride=2, dtype="float16", keep=1, pack=True)
+              stride=2, dtype="float16", keep=3, pack=True)
 FCX = FeedSpec("hrrr-fcx3", FC_FIELDS, FC_WIND_PAIRS, lambda c: _extended_fc(c),
                stride=2, dtype="float16", keep=1, pack=True)
 FEEDS: Tuple[FeedSpec, ...] = (MAP, COL, COLX, FC, FCX)

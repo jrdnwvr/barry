@@ -57,6 +57,14 @@ def parse_listing(xml: str) -> List[str]:
 # GOES, on the same grid, every two minutes, about 30 KB. Percent.
 LIGHTNING_NEXT = "LightningProbabilityNext60minGrid_scale_1"
 
+# Rain rate at the ground in mm/h, from the seamless hybrid scan with the
+# reflectivity-to-rain relation chosen per precipitation type, every two
+# minutes, about a megabyte. What the "rain starts at" line reads: the
+# composite above keeps bright-band and hail returns that are not rain at
+# the surface. -3 where there is no coverage.
+PRECIP_RATE = "PrecipRate_00.00"
+RATE_STEP_MMH = 0.1           # the uint8 code is tenths of a millimetre an hour, capped at 25.5
+
 
 async def recent_keys(client: httpx.AsyncClient, now: datetime, product: str = PRODUCT,
                       hours: float = KEEP_H) -> List[str]:
@@ -96,10 +104,11 @@ def pick(keys: List[str], now: datetime) -> Dict[datetime, str]:
     return out
 
 
-def decode(gz: bytes, percent: bool = False) -> Tuple[np.ndarray, dict]:
-    """dBZ as uint8 codes (dBZ = code / 2 - 32; 0 is no echo or no
-    coverage), or with `percent` the value itself (0 to 100), and the
-    grid's corner and spacing, rows north to south."""
+def decode(gz: bytes, kind: str = "dbz") -> Tuple[np.ndarray, dict]:
+    """The grid as uint8 codes and its corner and spacing, rows north to
+    south. `dbz`: dBZ = code / 2 - 32, 0 for no echo or no coverage.
+    `percent`: the value itself, 0 to 100. `rate`: tenths of a millimetre
+    an hour, 0 where dry or uncovered."""
     import eccodes
     data = gzip.decompress(gz)
     h = eccodes.codes_new_from_message(data)
@@ -114,8 +123,10 @@ def decode(gz: bytes, percent: bool = False) -> Tuple[np.ndarray, dict]:
     v = vals.reshape(nj, ni)
     if int(meta["jScansPositively"]) == 1:
         v = v[::-1]
-    if percent:
+    if kind == "percent":
         codes = np.clip(np.rint(v), 0, 100).astype(np.uint8)
+    elif kind == "rate":
+        codes = np.clip(np.rint(v / RATE_STEP_MMH), 0, 255).astype(np.uint8)
     else:
         codes = np.clip(np.rint((v + 32.0) * 2.0), 0, 255).astype(np.uint8)
         codes[v < -32] = 0                  # -99 no echo, -999 no coverage

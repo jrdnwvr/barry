@@ -218,6 +218,19 @@ class RadarStore:
                 self._tile_bytes -= len(old)
         return png
 
+    def max_code(self, t: int, lat: float, lon: float, radius: int = 2) -> Optional[int]:
+        """The strongest code within `radius` points of a point in a frame;
+        None when the frame is not held or the point is off the grid."""
+        levels, g = self._frames.get(t), self.grid
+        if levels is None or g is None:
+            return None
+        r = int(math.floor((g["lat0"] + g["dlat"] / 2 - lat) / g["dlat"]))
+        c = int(math.floor((lon - (g["lon0"] - g["dlon"] / 2)) / g["dlon"]))
+        a = levels[0]
+        if not (0 <= r < a.shape[0] and 0 <= c < a.shape[1]):
+            return None
+        return int(a[max(0, r - radius):r + radius + 1, max(0, c - radius):c + radius + 1].max())
+
     def sample(self, t: int, lat: float, lon: float) -> Optional[float]:
         """dBZ at a point in a frame, None where there is no echo."""
         levels, g = self._frames.get(t), self.grid

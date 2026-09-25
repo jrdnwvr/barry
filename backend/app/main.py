@@ -423,8 +423,11 @@ async def model_scores(days: int = Query(14, ge=1, le=60)):
     """How HRRR and RRFS did at the METAR stations, by UTC day, newest
     first: the evidence for switching to RRFS. Daily means of each hour's
     sea-level pressure error (raw, bias, and with the hour's bias taken
-    out) and 10 m wind speed and direction error."""
-    return {"days": get_service().model_scores(days)}
+    out) and 10 m wind speed and direction error, both models from the
+    same cycle at the same lead. `rainStarts` is how the radar's "rain
+    starts at" calls did against the frames that followed."""
+    service = get_service()
+    return {"days": service.model_scores(days), "rainStarts": service.rain_scores(days)}
 
 
 @app.get("/aloft")

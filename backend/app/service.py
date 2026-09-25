@@ -28,6 +28,7 @@ from . import flashes as flashes_mod
 from . import lightning as lightning_mod
 from . import persist
 from . import pressure_field
+from . import rainstart
 from . import track
 from . import runways
 from . import route as route_mod
@@ -68,6 +69,7 @@ from .models import (
     StationsResponse,
     TendencyOut,
 )
+from .models import ConditionsOut, RainOut
 from .sources import aviationweather as awc
 from .sources import glm
 from .sources import advisories as adv
@@ -263,6 +265,14 @@ class PressureService:
         # /radar/frames?source=mrms asks for Barry's frames regardless.
         self.radar_default = os.environ.get("BARRY_RADAR_SOURCE", "mrms")
         self.radar_ok_at: Optional[datetime] = None
+        # The "rain starts at" line: the newest rain-rate grid (time, codes,
+        # grid), the motion between the last two frames (base time, vy,
+        # vx), a short cache of outlooks, and the calls kept for scoring.
+        self._rain_rate: Optional[tuple] = None
+        self._radar_motion: Optional[tuple] = None
+        self._rain_cache: Dict[tuple, tuple] = {}
+        self._rain_calls: Optional[List[dict]] = None
+        self._rain_calls_dirty = False
         self.public_url = os.environ.get("BARRY_PUBLIC_URL", "https://barry.wide-stack.com").rstrip("/")
 
     # ---- pressure (observed) -------------------------------------------------
@@ -948,7 +958,8 @@ class PressureService:
         return resp.model_copy(update={"turbulence": turb, "icing": ice})
 
     async def _score_models(self) -> Optional[dict]:
-        """Score the hour nearest the newest METARs, once (modelscore.py)."""
+        """Score the hour nearest the newest METARs (modelscore.py), and fill
+        in the hour before it if a model was still on its way then."""
         table = await self.metar_bulk() or []
         times = [s.obsTime for s in table if s.obsTime is not None]
         if not times:
@@ -961,15 +972,21 @@ class PressureService:
         near = lambda h: sum(1 for t in times if abs(t - h) <= modelscore.OBS_WINDOW)
         valid = max((top, top + timedelta(hours=1)), key=near)
         records = persist.load("model_scores") or []
-        if any(r.get("t") == valid.isoformat() for r in records):
+        changed = None
+        for hour in (valid, valid - timedelta(hours=1)):
+            key = hour.isoformat()
+            held = next((r for r in records if r.get("t") == key), None)
+            rec = await asyncio.to_thread(modelscore.score_hour, self.models, table, hour, held)
+            if rec is None:
+                continue
+            records = [r for r in records if r.get("t") != key] + [rec]
+            changed = rec if changed is None else changed
+        if changed is None:
             return None
-        rec = await asyncio.to_thread(modelscore.score_hour, self.models, table, valid)
-        if rec is None:
-            return None
-        records = modelscore.prune(records + [rec], _now())
+        records = modelscore.prune(sorted(records, key=lambda r: r["t"]), _now())
         persist.save("model_scores", records)
         self._score_cache = records
-        return rec
+        return changed
 
     def model_scores(self, days: int = 14) -> List[dict]:
         records = getattr(self, "_score_cache", None) or persist.load("model_scores") or []
@@ -1070,6 +1087,14 @@ class PressureService:
             await self._poll_lightning_next(now)
         except Exception as exc:
             log.warning("lightning probability failed: %s: %s", type(exc).__name__, exc)
+        try:
+            await self._poll_rain_rate(now)
+        except Exception as exc:
+            log.warning("rain rate failed: %s: %s", type(exc).__name__, exc)
+        try:
+            self._score_rain_calls(now)
+        except Exception as exc:
+            log.warning("rain call scoring failed: %s: %s", type(exc).__name__, exc)
         if self.radar.times():
             self.radar_ok_at = datetime.fromtimestamp(self.radar.times()[-1], tz=timezone.utc)
         return got
@@ -1078,17 +1103,26 @@ class PressureService:
         """The next half hour from the newest frame: motion from it and the
         one ten minutes before (radar.motion), the newest frame carried 10,
         20 and 30 minutes forward. Made once per newest frame; older
-        nowcasts are dropped. Returns frames made."""
+        nowcasts are dropped. The motion is kept for the rain line, and
+        found again after a restart even when the nowcast frames are on
+        disk. Returns frames made."""
         obs = self.radar.observed()
-        if len(obs) < 2 or obs[-1] - obs[-2] != self.radar.STEP_S or self.radar.casts(obs[-1]):
+        if len(obs) < 2 or obs[-1] - obs[-2] != self.radar.STEP_S:
             return 0
         t0, tp = obs[-1], obs[-2]
+        have_casts = bool(self.radar.casts(t0))
+        if have_casts and self._radar_motion is not None and self._radar_motion[0] == t0:
+            return 0
         prev2, cur2 = self.radar.level(tp, radar_mod.MOTION_LEVEL), self.radar.level(t0, radar_mod.MOTION_LEVEL)
         cur0 = self.radar.level(t0, 0)
         grid = self.radar.grid
         if prev2 is None or cur2 is None or cur0 is None or grid is None:
             return 0
         vy, vx, _ = await asyncio.to_thread(radar_mod.motion, np.asarray(prev2), np.asarray(cur2))
+        self._radar_motion = (t0, vy, vx)
+        self._rain_cache.clear()
+        if have_casts:
+            return 0
         for k in (1, 2, 3):
             frame = await asyncio.to_thread(radar_mod.advect, np.asarray(cur0), vy, vx, float(k))
             await asyncio.to_thread(self.radar.put, t0 + k, frame, grid)
@@ -1109,7 +1143,7 @@ class PressureService:
         if self.ltg_next.has(t):
             return False
         gz = await mrms.fetch(self._client, key)
-        codes, grid = await asyncio.to_thread(mrms.decode, gz, True)
+        codes, grid = await asyncio.to_thread(mrms.decode, gz, "percent")
         await asyncio.to_thread(self.ltg_next.put, t, codes, grid)
         held = self.ltg_next.times()
         if len(held) > 3:
@@ -1121,6 +1155,119 @@ class PressureService:
         if not held or _now().timestamp() - held[-1] > self.LTG_NEXT_MAX_AGE_S:
             return None
         return RadarFrameOut(time=held[-1], path=f"/radar/lightning/{held[-1]}")
+
+    # ---- The "rain starts at" line ----------------------------------------------
+
+    RAIN_RATE_MAX_AGE_S = 15 * 60.0        # older than this the grid says nothing about now
+    RAIN_MOTION_MAX_AGE_S = 40 * 60.0
+    RAIN_CACHE_S = 120.0
+    RAIN_SCORE_AFTER = timedelta(minutes=15)   # how long after a predicted start the frames are read
+    RAIN_SCORE_WINDOW_S = 15 * 60              # frames within this of the predicted start count
+    RAIN_HIT_CODE = int((20 + 32) * 2)         # 20 dBZ on the composite: rain reaching the ground
+    RAIN_CALL_KEEP_DAYS = 60
+
+    async def _poll_rain_rate(self, now: datetime) -> bool:
+        """The newest rain-rate grid, held in memory only (a restart waits
+        two minutes for the next one)."""
+        keys = await mrms.recent_keys(self._client, now, mrms.PRECIP_RATE, hours=0.25)
+        if not keys:
+            return False
+        key = keys[-1]
+        t = int(mrms.key_time(key).timestamp())
+        if self._rain_rate is not None and self._rain_rate[0] >= t:
+            return False
+        gz = await mrms.fetch(self._client, key)
+        codes, grid = await asyncio.to_thread(mrms.decode, gz, "rate")
+        self._rain_rate = (t, codes, grid)
+        self._rain_cache.clear()
+        return True
+
+    def rain_outlook(self, lat: float, lon: float, now: datetime) -> Optional[RainOut]:
+        """Rain here now or within the next ninety minutes, from the newest
+        rain-rate grid and the radar's motion (rainstart.py); None when
+        neither is fresh, or nothing is coming. A "starts at" call is kept
+        for scoring."""
+        if self._rain_rate is None or self._radar_motion is None:
+            return None
+        t_rate, codes, grid = self._rain_rate
+        base, vy, vx = self._radar_motion
+        if now.timestamp() - t_rate > self.RAIN_RATE_MAX_AGE_S or now.timestamp() - base > self.RAIN_MOTION_MAX_AGE_S:
+            return None
+        key = (round(lat, 2), round(lon, 2), t_rate)
+        hit = self._rain_cache.get(key)
+        if hit is not None and hit[0] > now.timestamp():
+            return hit[1]
+        out = rainstart.outlook(codes, grid, vy, vx, lat, lon, now, datetime.fromtimestamp(t_rate, tz=timezone.utc))
+        if len(self._rain_cache) > 2000:
+            self._rain_cache.clear()
+        self._rain_cache[key] = (now.timestamp() + self.RAIN_CACHE_S, out)
+        if out is not None:
+            self._note_rain_call(lat, lon, out, now)
+        return out
+
+    def _load_rain_calls(self) -> List[dict]:
+        if self._rain_calls is None:
+            self._rain_calls = persist.load("rain_calls") or []
+        return self._rain_calls
+
+    def _note_rain_call(self, lat: float, lon: float, out: RainOut, now: datetime) -> None:
+        """Keep a "starts at" call, one per point and predicted start."""
+        if out.status != "soon" or out.startsAt is None:
+            return
+        calls = self._load_rain_calls()
+        la, lo = round(lat, 2), round(lon, 2)
+        for c in calls:
+            if c.get("lat") == la and c.get("lon") == lo and "hit" not in c \
+               and abs((datetime.fromisoformat(c["start"]) - out.startsAt).total_seconds()) <= 600:
+                return
+        calls.append({"lat": la, "lon": lo, "at": now.isoformat(), "start": out.startsAt.isoformat()})
+        self._rain_calls_dirty = True
+
+    def _score_rain_calls(self, now: datetime) -> int:
+        """Score the calls whose predicted start is far enough behind for
+        the frames to have shown what happened: a hit when the composite
+        had rain within 15 minutes of the predicted start. Returns the
+        number scored."""
+        calls = self._load_rain_calls()
+        scored = 0
+        for c in calls:
+            if "hit" in c:
+                continue
+            start = datetime.fromisoformat(c["start"])
+            if now < start + self.RAIN_SCORE_AFTER:
+                continue
+            ts = int(start.timestamp())
+            frames = [t for t in self.radar.observed() if abs(t - ts) <= self.RAIN_SCORE_WINDOW_S]
+            if not frames:
+                c["hit"] = None                    # the frames are gone; unknown
+            else:
+                codes = [self.radar.max_code(t, c["lat"], c["lon"]) for t in frames]
+                c["hit"] = any(v is not None and v >= self.RAIN_HIT_CODE for v in codes)
+            scored += 1
+        cut = (now - timedelta(days=self.RAIN_CALL_KEEP_DAYS)).isoformat()
+        kept = [c for c in calls if c.get("at", "") >= cut]
+        if scored or self._rain_calls_dirty or len(kept) != len(calls):
+            self._rain_calls = kept
+            persist.save("rain_calls", kept)
+            self._rain_calls_dirty = False
+        return scored
+
+    def rain_scores(self, days: int = 14) -> dict:
+        """How the "rain starts at" calls did: calls scored, hits, and the
+        same by UTC day, newest first."""
+        calls = self._load_rain_calls()
+        done = [c for c in calls if c.get("hit") is not None]
+        by_day: Dict[str, List[dict]] = {}
+        for c in done:
+            by_day.setdefault(c["at"][:10], []).append(c)
+        hits = sum(1 for c in done if c["hit"])
+        return {
+            "calls": len(done), "hits": hits,
+            "hitRate": round(hits / len(done), 2) if done else None,
+            "pending": sum(1 for c in calls if "hit" not in c),
+            "days": [{"day": d, "calls": len(v), "hits": sum(1 for c in v if c["hit"])}
+                     for d in sorted(by_day, reverse=True)[:days] for v in [by_day[d]]],
+        }
 
     def _mrms_frames(self) -> Optional[RadarFramesResponse]:
         obs = self.radar.observed()
@@ -1656,6 +1803,14 @@ class PressureService:
         if nearby is not None and conditions is not None and conditions.storm is not None \
            and conditions.storm.forecastEnd is not None:
             nearby.continuesUntil = conditions.storm.forecastEnd
+        # The rain line, from the radar held on Tower. Enrichment.
+        try:
+            rain = self.rain_outlook(f_lat, f_lon, _now()) if f_lat is not None and f_lon is not None else None
+        except Exception as exc:
+            log.warning("rain outlook failed: %s: %s", type(exc).__name__, exc)
+            rain = None
+        if rain is not None:
+            conditions = (conditions or ConditionsOut()).model_copy(update={"rain": rain})
 
         sources = Sources(
             observed=pressure.source,

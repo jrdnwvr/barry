@@ -229,6 +229,11 @@ lightning; RainViewer only when those frames are stale
 1,000 hPa in half precision, and on `/combined` the curve is shifted to
 meet the station's latest report. `/models/scores` scores HRRR and RRFS
 against the METARs hourly for the switch. Container memory limit 3 GB.
+On Tower the state volume is mounted from `/mnt/cache/...` directly
+(`BARRY_STATE_DIR` in `backend/.env`): through `/mnt/user` the FUSE layer
+stalled model reads for seconds while a run was written. Feeds whose
+storage format changes get a new name and the old one goes in
+`hrrr.RETIRED`, dropped on start.
 
 **docs/FEATURES.md (2026-09-24)** is the feature registry: every user-facing
 feature with a stable slug, where it lives, what data and settings it uses,

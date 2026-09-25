@@ -291,7 +291,7 @@ final class RadarModel: ObservableObject {
     /// to the seven observed frames plus nowcast and shared across users, so a
     /// radar open costs one small request and RainViewer sees one call every
     /// two minutes total.
-    func load() async {
+    func load(retries: Int = 2) async {
         failed = false
         do {
             let resp = try await BarryAPI().radarFrames()
@@ -307,6 +307,15 @@ final class RadarModel: ObservableObject {
                 index = min(index, max(0, frames.count - 1))
             }
         } catch {
+            // Opening the radar asks for the frames, the grids and dozens of
+            // tiles at once, and the edge's rate rule answers the tail of that
+            // burst with 429 for ten seconds. Wait it out and ask again
+            // before calling it a connection problem.
+            if retries > 0 {
+                try? await Task.sleep(nanoseconds: 11_000_000_000)
+                await load(retries: retries - 1)
+                return
+            }
             failed = true
             return
         }

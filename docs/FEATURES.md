@@ -746,8 +746,9 @@ stored keys, but each has its own model, so they fetch separately.
 - Tests: `PressureLabelTests`.
 
 ### radar.layer.wind
-- Seen: grey streaks drifting with the wind (Flow) or arrows (Arrows).
-  Chip "Wind".
+- Seen: grey streaks drifting with the wind (Flow) or arrows (Arrows),
+  each arrow with its speed under it in the wind unit ("20 kts", since
+  2026-09-25). Chip "Wind".
 - Lives: `WindFlowView.swift` (the Metal shaders are a string in it,
   compiled on the device); `RadarMapView.syncArrows`.
 - Data: `/radar/field`: 11 by 8 points per region from the server's HRRR

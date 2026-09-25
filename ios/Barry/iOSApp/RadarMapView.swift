@@ -241,6 +241,52 @@ struct RadarMapView: UIViewRepresentable {
         var fromDeg: Double = 0
     }
 
+    /// One arrow of the Arrows wind style with its speed under it, in the
+    /// wind unit from Settings ("20 kts"). The arrow turns with the wind;
+    /// the number stays upright. Light air is small and faint, a real wind
+    /// full size and dark, so the field reads at a glance.
+    final class WindArrowView: MKAnnotationView {
+        private let arrow = UIImageView()
+        private let speed = UILabel()
+        private static let arrowCentreY: CGFloat = 12
+
+        override init(annotation: MKAnnotation?, reuseIdentifier: String?) {
+            super.init(annotation: annotation, reuseIdentifier: reuseIdentifier)
+            bounds = CGRect(x: 0, y: 0, width: 48, height: 36)
+            centerOffset = CGPoint(x: 0, y: bounds.height / 2 - Self.arrowCentreY)
+            arrow.contentMode = .center
+            arrow.frame = CGRect(x: 0, y: 0, width: 24, height: 24)
+            arrow.center = CGPoint(x: bounds.midX, y: Self.arrowCentreY)
+            speed.font = .monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
+            speed.textColor = .label
+            speed.textAlignment = .center
+            speed.frame = CGRect(x: 0, y: 23, width: bounds.width, height: 12)
+            // A faint halo so the number reads over roads and water.
+            speed.layer.shadowColor = UIColor.systemBackground.cgColor
+            speed.layer.shadowOpacity = 0.9
+            speed.layer.shadowRadius = 1.5
+            speed.layer.shadowOffset = .zero
+            addSubview(arrow)
+            addSubview(speed)
+            isEnabled = false
+            displayPriority = .defaultLow
+        }
+
+        required init?(coder: NSCoder) { fatalError("unused") }
+
+        func configure(speedKmh: Double, fromDeg: Double, unit: WindUnit) {
+            let t = CGFloat(min(1.0, max(0.0,
+                (speedKmh - RadarModel.minArrowKmh) / (RadarModel.fullArrowKmh - RadarModel.minArrowKmh))))
+            let cfg = UIImage.SymbolConfiguration(pointSize: 9 + 7 * t, weight: .bold)
+            arrow.image = UIImage(systemName: "arrow.up", withConfiguration: cfg)?
+                .withTintColor(.label, renderingMode: .alwaysOriginal)
+            // Wind FROM fromDeg blows TOWARD fromDeg+180: point the arrow with the flow.
+            arrow.transform = CGAffineTransform(rotationAngle: CGFloat((fromDeg + 180) * .pi / 180))
+            speed.text = "\(unit.format(speedKmh)) \(unit.label)"
+            alpha = 0.3 + 0.55 * t
+        }
+    }
+
     final class Coordinator: NSObject, MKMapViewDelegate {
         var overlays: [Int: RadarTileOverlay] = [:]
         var renderers: [Int: MKTileOverlayRenderer] = [:]
@@ -722,23 +768,11 @@ struct RadarMapView: UIViewRepresentable {
                 return view
             }
             let id = "windArrow"
-            let view = mapView.dequeueReusableAnnotationView(withIdentifier: id)
-                ?? MKAnnotationView(annotation: wind, reuseIdentifier: id)
+            let view = (mapView.dequeueReusableAnnotationView(withIdentifier: id) as? WindArrowView)
+                ?? WindArrowView(annotation: wind, reuseIdentifier: id)
             view.annotation = wind
-            // Light air = small and faint, a real wind = full size and dark: the
-            // map reads the wind field at a glance instead of hiding half of it.
-            let t = CGFloat(min(1.0, max(0.0,
-                (wind.speedKmh - RadarModel.minArrowKmh)
-                    / (RadarModel.fullArrowKmh - RadarModel.minArrowKmh))))
-            let cfg = UIImage.SymbolConfiguration(pointSize: 9 + 7 * t, weight: .bold)
-            view.image = UIImage(systemName: "arrow.up", withConfiguration: cfg)?
-                .withTintColor(.label, renderingMode: .alwaysOriginal)
-            // Wind FROM fromDeg blows TOWARD fromDeg+180 — point the arrow with the flow.
-            view.transform = CGAffineTransform(
-                rotationAngle: CGFloat((wind.fromDeg + 180) * .pi / 180))
-            view.alpha = 0.3 + 0.55 * t
-            view.isEnabled = false
-            view.displayPriority = .defaultLow
+            let unit = WindUnit(rawValue: AppConfig.sharedDefaults.string(forKey: "windUnit") ?? "") ?? .mph
+            view.configure(speedKmh: wind.speedKmh, fromDeg: wind.fromDeg, unit: unit)
             return view
         }
 

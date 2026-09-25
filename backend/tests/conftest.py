@@ -420,6 +420,7 @@ def _nomads_unspaced(monkeypatch):
     tests check still come from Open-Meteo."""
     monkeypatch.setenv("BARRY_NOMADS_SPACING", "0")
     monkeypatch.setenv("BARRY_HRRR", "0")
+    monkeypatch.setenv("BARRY_MRMS", "0")
     # The day-long column feed takes 31 hours of each 48-hour cycle; tests
     # that don't read the column need only a few, and it is most of the time.
     monkeypatch.setattr("app.sources.hrrr.EXTENDED_LAST", 3)
@@ -433,6 +434,52 @@ def _hrrr_fixture(kind):
     path = os.path.join(os.path.dirname(__file__), "fixtures", f"hrrr_{kind}.grib2")
     with open(path, "rb") as fh:
         return fh.read()
+
+
+def sample_mrms():
+    """A small MRMS-shaped file: 0.05 degree from 45 N, 95 W to 35 N, 75 W
+    (north to south, as MRMS scans), no echo (-99) everywhere but a 45 dBZ
+    cell over Cincinnati and a 60 dBZ single pixel near Dayton; no coverage
+    (-999) along the south edge. GRIB2, simple packing, gzipped."""
+    import gzip as _gz
+    import eccodes
+    import numpy as np
+    ni, nj, d = 400, 200, 0.05
+    lat = 45.0 - np.arange(nj) * d
+    lon = -95.0 + np.arange(ni) * d
+    v = np.full((nj, ni), -99.0)
+    la, lo = np.meshgrid(lat, lon, indexing="ij")
+    v[(np.abs(la - 39.1) < 0.2) & (np.abs(lo + 84.5) < 0.2)] = 45.0
+    v[np.argmin(np.abs(lat - 39.9)), np.argmin(np.abs(lon + 84.2))] = 60.0
+    v[-3:, :] = -999.0
+    h = eccodes.codes_grib_new_from_samples("GRIB2")
+    for k, val in [("Ni", ni), ("Nj", nj), ("latitudeOfFirstGridPointInDegrees", 45.0),
+                   ("longitudeOfFirstGridPointInDegrees", 265.0),
+                   ("latitudeOfLastGridPointInDegrees", 45.0 - (nj - 1) * d),
+                   ("longitudeOfLastGridPointInDegrees", 265.0 + (ni - 1) * d),
+                   ("iDirectionIncrementInDegrees", d), ("jDirectionIncrementInDegrees", d),
+                   ("jScansPositively", 0), ("packingType", "grid_simple"), ("bitsPerValue", 16)]:
+        eccodes.codes_set(h, k, val)
+    eccodes.codes_set_values(h, v.ravel())
+    msg = eccodes.codes_get_message(h)
+    eccodes.codes_release(h)
+    return _gz.compress(msg)
+
+
+def sample_mrms_listing(now, prefix):
+    """ListObjectsV2 for the MRMS composite: a file 40 s past every even
+    minute over the last three hours, as far as the day in `prefix`."""
+    day = prefix.rstrip("/").rsplit("/", 1)[-1]
+    items = []
+    t = now.replace(second=0, microsecond=0) - timedelta(hours=3)
+    while t <= now - timedelta(seconds=45):
+        if t.minute % 2 == 0 and t.strftime("%Y%m%d") == day:
+            ft = t + timedelta(seconds=40)
+            items.append(f"<Contents><Key>{prefix}MRMS_MergedReflectivityQCComposite_00.50_{ft:%Y%m%d-%H%M%S}.grib2.gz</Key>"
+                         f"<Size>1200000</Size></Contents>")
+        t += timedelta(minutes=1)
+    return ('<?xml version="1.0" encoding="UTF-8"?><ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">'
+            + "".join(items) + "</ListBucketResult>")
 
 
 class FakeUpstream:
@@ -471,6 +518,24 @@ class FakeUpstream:
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         url = str(request.url)
+        if "noaa-mrms-pds" in url:
+            self.mrms_calls = getattr(self, "mrms_calls", 0) + 1
+            if getattr(self, "mrms_fail", False):
+                return httpx.Response(503, text="down")
+            if "list-type=2" in url:
+                prefix = request.url.params.get("prefix", "")
+                after = request.url.params.get("start-after", "")
+                xml = sample_mrms_listing(self.clock(), prefix)
+                if after:
+                    import re
+                    keep = [c for c in re.findall(r"<Contents>.*?</Contents>", xml)
+                            if re.search(r"<Key>(.*?)</Key>", c).group(1) > after]
+                    xml = xml.split("<Contents>")[0] + "".join(keep) + "</ListBucketResult>"
+                return httpx.Response(200, text=xml)
+            if not hasattr(self, "_mrms_file"):
+                self._mrms_file = sample_mrms()
+            self.mrms_files = getattr(self, "mrms_files", 0) + 1
+            return httpx.Response(200, content=self._mrms_file)
         if "noaa-nbm-grib2-pds" in url:
             # NBM: the small fixture for any run and hour, the index filled
             # in with the hour asked for; nbm_runs, when set, are the runs

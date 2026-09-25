@@ -84,6 +84,7 @@ STATION_PATTERN = r"^[A-Za-z0-9]{3,4}$"
 # it is what actually keys on the real client address behind the tunnel.
 # BARRY_RATE_PER_MIN=0 disables it (tests, local dev).
 app.state.ip_limiter = IPLimiter(per_minute=float(os.environ.get("BARRY_RATE_PER_MIN", "60")))
+app.state.tile_limiter = IPLimiter(per_minute=float(os.environ.get("BARRY_TILE_RATE_PER_MIN", "1500")))
 
 
 @app.middleware("http")
@@ -96,7 +97,10 @@ async def _request_context(request: Request, call_next):
     try:
         response = None
         if request.url.path != "/healthz":
-            limiter: IPLimiter = request.app.state.ip_limiter
+            # Tiles come in dozens per map view and cost next to nothing,
+            # so they have their own, larger budget.
+            limiter: IPLimiter = (request.app.state.tile_limiter if request.url.path.startswith("/radar/tiles/")
+                                  else request.app.state.ip_limiter)
             key = client_key(request.client.host if request.client else None,
                              request.headers.get("cf-connecting-ip"))
             if not limiter.allow(key):
@@ -369,6 +373,21 @@ async def radar_frames():
         log.warning("radar frames unavailable: %s: %s", type(exc).__name__, exc)
         raise HTTPException(status_code=503, detail="radar frames unavailable")
     return resp.model_dump(mode="json", by_alias=True)
+
+
+@app.get("/radar/tiles/{t}/{size}/{z}/{x}/{y}/{color}/{opts}.png", include_in_schema=False)
+async def radar_tile(t: int, size: int, z: int, x: int, y: int, color: str, opts: str):
+    """One radar tile of one MRMS frame, in RainViewer's URL shape and
+    Universal Blue colours so the app treats it as it did RainViewer's.
+    The frame's time is in the URL, so the answer never changes: a week's
+    max-age for the phone and Cloudflare's edge."""
+    if size not in (256, 512) or not (0 <= z <= 12) or not (0 <= x < 2 ** z) or not (0 <= y < 2 ** z):
+        raise HTTPException(status_code=404, detail="no such tile")
+    png = await asyncio.to_thread(get_service().radar.tile, t, z, x, y, size)
+    if png is None:
+        raise HTTPException(status_code=404, detail="no such frame")
+    return Response(content=png, media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=604800, immutable"})
 
 
 @app.get("/aloft")

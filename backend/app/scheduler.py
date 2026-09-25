@@ -46,6 +46,9 @@ class Scheduler:
         self.lamp_enabled = os.environ.get("BARRY_LAMP", "1") != "0"
         self.last_lamp_at: Optional[datetime] = None
         self._model_task: Optional[asyncio.Task] = None
+        self._radar_task: Optional[asyncio.Task] = None
+        self.radar_enabled = bool(getattr(service, "mrms_enabled", False))
+        self.last_radar_at: Optional[datetime] = None
         self.models_enabled = bool(getattr(service, "hrrr_enabled", False))
         self.last_model_at: Optional[datetime] = None
         # For the health check: when each loop last finished an attempt,
@@ -60,6 +63,8 @@ class Scheduler:
     LAMP_STALE_S = 3 * 3600.0   # three hours without a new LAMP run
     MODEL_STALL_S = 3600.0  # an hour without the model loop finishing a pass
     MODEL_STALE_S = 3 * 3600.0  # three hours without a new HRRR cycle
+    RADAR_STALL_S = 1200.0  # twenty minutes without the radar loop finishing a pass
+    RADAR_STALE_S = 1200.0  # or without a new frame
 
     def problems(self, now: datetime) -> tuple[List[str], List[str]]:
         """Two lists for /healthz. The first is about the process: a loop
@@ -99,6 +104,13 @@ class Scheduler:
                 dead.append("model loop stalled")
             if age(self._service.hrrr_ok_at) > self.MODEL_STALE_S:
                 stale.append("hrrr fields stale")
+        if self.radar_enabled:
+            if self._radar_task is None or self._radar_task.done():
+                dead.append("radar loop exited")
+            elif age(self.last_radar_at) > self.RADAR_STALL_S:
+                dead.append("radar loop stalled")
+            if age(self._service.radar_ok_at) > self.RADAR_STALE_S:
+                stale.append("radar frames stale")
         if age(self._service.bulk_ok_at) > 2 * self._interval + 60.0:
             stale.append("bulk metar table missing")
         return dead, stale
@@ -260,6 +272,21 @@ class Scheduler:
             except asyncio.TimeoutError:
                 pass
 
+    # MRMS writes a composite every two minutes; Barry keeps one per ten.
+    RADAR_INTERVAL = 120.0
+
+    async def _run_radar(self) -> None:
+        while not self._stop.is_set():
+            try:
+                await self._service.poll_radar()
+            except Exception as exc:
+                log.warning("scheduler: radar poll failed: %s: %s", type(exc).__name__, exc)
+            self.last_radar_at = _now()
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=self.RADAR_INTERVAL)
+            except asyncio.TimeoutError:
+                pass
+
     def start(self) -> None:
         self.started_at = _now()
         if self._task is None:
@@ -273,6 +300,8 @@ class Scheduler:
             self._lamp_task = asyncio.create_task(self._run_lamp())
         if self._model_task is None and self.models_enabled:
             self._model_task = asyncio.create_task(self._run_models())
+        if self._radar_task is None and self.radar_enabled:
+            self._radar_task = asyncio.create_task(self._run_radar())
 
     async def stop(self) -> None:
         self._stop.set()
@@ -288,3 +317,6 @@ class Scheduler:
         if self._model_task is not None:
             await self._model_task
             self._model_task = None
+        if self._radar_task is not None:
+            await self._radar_task
+            self._radar_task = None

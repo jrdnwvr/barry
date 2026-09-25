@@ -21,6 +21,7 @@ from .guards import OMBudget, RateGate, RateLimited, check_station
 from . import explain
 from . import modelfields
 from .modelstore import ModelStore
+from .radar import RadarStore
 from . import flashes as flashes_mod
 from . import lightning as lightning_mod
 from . import persist
@@ -50,6 +51,7 @@ from .models import (
     TrackRecordOut,
     TafOut,
     RadarFramesResponse,
+    RadarFrameOut,
     CombinedResponse,
     CurrentObs,
     ForecastResponse,
@@ -70,6 +72,7 @@ from .sources import advisories as adv
 from .sources import hazards as hazards_src
 from .sources import hrrr as hrrr_src
 from .sources import iem
+from .sources import mrms
 from .sources import nbm as nbm_src
 from .sources import lamp as lamp_src
 from .sources import ndbc
@@ -247,6 +250,12 @@ class PressureService:
         self.hrrr_enabled = os.environ.get("BARRY_HRRR", "1") != "0"
         self.hrrr_ok_at: Optional[datetime] = None
         self._warmed: set = set()
+        # Radar frames from MRMS (radar.py), fed by the scheduler's radar
+        # loop; BARRY_MRMS=0 keeps the timeline on RainViewer.
+        self.radar = RadarStore.from_env()
+        self.mrms_enabled = os.environ.get("BARRY_MRMS", "1") != "0"
+        self.radar_ok_at: Optional[datetime] = None
+        self.public_url = os.environ.get("BARRY_PUBLIC_URL", "https://barry.wide-stack.com").rstrip("/")
 
     # ---- pressure (observed) -------------------------------------------------
 
@@ -993,10 +1002,47 @@ class PressureService:
 
     # ---- Radar frames (RainViewer) -------------------------------------------
 
+    RADAR_FRAMES = 7             # the last hour at ten minutes, as RainViewer gave; two hours are held
+    RADAR_STALE_S = 20 * 60.0
+
+    async def poll_radar(self) -> int:
+        """Fetch the MRMS file nearest each ten-minute mark of the last two
+        hours that isn't held, and drop frames older than that."""
+        now = _now()
+        keys = await mrms.recent_keys(self._client, now)
+        wanted = mrms.pick(keys, now)
+        got = 0
+        for mark, key in sorted(wanted.items()):
+            t = int(mark.timestamp())
+            if self.radar.has(t):
+                continue
+            gz = await mrms.fetch(self._client, key)
+            codes, grid = await asyncio.to_thread(mrms.decode, gz)
+            await asyncio.to_thread(self.radar.put, t, codes, grid)
+            got += 1
+        oldest = min(wanted) if wanted else now - timedelta(hours=mrms.KEEP_H)
+        self.radar.purge(int(oldest.timestamp()))
+        if self.radar.times():
+            self.radar_ok_at = datetime.fromtimestamp(self.radar.times()[-1], tz=timezone.utc)
+        return got
+
+    def _mrms_frames(self) -> Optional[RadarFramesResponse]:
+        times = self.radar.times()[-self.RADAR_FRAMES:]
+        if len(times) < 4 or _now().timestamp() - times[-1] > self.RADAR_STALE_S:
+            return None
+        return RadarFramesResponse(
+            host=self.public_url,
+            frames=[RadarFrameOut(time=t, path=f"/radar/tiles/{t}") for t in times],
+            cachedAt=_now())
+
     async def get_radar_frames(self) -> RadarFramesResponse:
-        """The radar timeline: last 7 observed frames + up to 3 nowcast, from
-        one RainViewer call every two minutes for every user (the app used to
-        fetch the full list itself on every radar open)."""
+        """The radar timeline: Barry's own MRMS frames when two hours of them
+        are held and fresh; otherwise RainViewer's last 7 observed frames and
+        up to 3 nowcast, from one call every two minutes for every user."""
+        if self.mrms_enabled:
+            own = self._mrms_frames()
+            if own is not None:
+                return own
         return await self.cache.fetch("radar_frames", lambda: rv.fetch_frames(self._client, now=_now()),
                                       ttl=FRAMES_TTL, negative_ttl=30.0)
 

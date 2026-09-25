@@ -242,6 +242,8 @@ class PressureService:
         # the scheduler's model loop. BARRY_HRRR=0 keeps every map layer on
         # Open-Meteo.
         self.models = ModelStore.from_env()
+        for feed in hrrr_src.RETIRED:
+            self.models.drop(feed)
         self.hrrr_enabled = os.environ.get("BARRY_HRRR", "1") != "0"
         self.hrrr_ok_at: Optional[datetime] = None
         self._warmed: set = set()

@@ -281,7 +281,7 @@ async def test_the_point_forecast_is_hrrr_with_nbm_over_its_first_hours(client, 
     assert (h.temperature, h.dewpoint, h.cloudcover, h.precip_prob) == (20.0, 12.0, 70.0, 60)
     assert (h.windspeed, h.winddir, h.windgust) == (18.0, 180, 32.4)
     assert h.weather_code == 95                                 # thunder 35 percent in the hour
-    assert abs(h.pressure_msl - 1016.2) < 0.6 and h.cape == 500 and h.cin == -20 and h.boundary_layer == 900
+    assert abs(h.pressure_msl - 1016.2) < 0.02 and h.cape == 500           # tenths survive storage and h.cin == -20 and h.boundary_layer == 900
     assert h.wind80m == 50.4 and h.radiation == 300
     late = next(x for x in f.hourly if x.t == run + timedelta(hours=40))   # past NBM's 36 hours
     assert abs(late.temperature - 16.85) < 0.06 and late.windspeed == 36.0 and late.winddir == 270

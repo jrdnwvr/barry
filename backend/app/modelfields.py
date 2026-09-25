@@ -351,7 +351,7 @@ def hazards(store: ModelStore, lat: float, lon: float, now: datetime
 
 # ---- the point forecast -------------------------------------------------------
 
-FC_FEEDS = ("hrrr-fc", "hrrr-fcx")
+FC_FEEDS = ("hrrr-fc2", "hrrr-fcx2")
 KMH_PER_MS_F = 3.6
 # Thunder where NBM gives it a real chance in the hour; showers where it
 # is likely to rain and the air is unstable; rain where it is likely to
@@ -417,7 +417,7 @@ def forecast(store: ModelStore, lat: float, lon: float, now: datetime, hours: in
     newest hourly cycle's analysis to `hours` past the current hour. None
     when the point is off the grid or nothing is held."""
     from . import route as route_mod
-    fc = store.cycles("hrrr-fc")
+    fc = store.cycles(FC_FEEDS[0])
     if not fc:
         return None
     start = fc[0]
@@ -448,8 +448,11 @@ def forecast(store: ModelStore, lat: float, lon: float, now: datetime, hours: in
         spd, deg = grib.wind_speed_dir(u, v)
         u80, v80 = at("u80"), at("v80")
         spd80 = float(grib.wind_speed_dir(u80, v80)[0]) if u80 is not None and v80 is not None else None
+        mslp, psfc = at("mslp"), at("psfc")
         h = dict(
-            t=valid, pressure_msl=at("mslp"), surface_pressure=at("psfc"),
+            t=valid,
+            pressure_msl=mslp + 1000.0 if mslp is not None else None,      # stored less 1,000
+            surface_pressure=psfc + 1000.0 if psfc is not None else None,
             windspeed=round(float(spd) * KMH_PER_MS_F, 1), winddir=round(float(deg)),
             windgust=round(at("gust") * KMH_PER_MS_F, 1) if at("gust") is not None else None,
             temperature=at("t2"), dewpoint=at("td2"), cloudcover=at("tcc"),

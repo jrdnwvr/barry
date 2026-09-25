@@ -128,9 +128,13 @@ COLX = FeedSpec("hrrr-colx", COL_FIELDS, COL_WIND_PAIRS, lambda c: _extended(c),
 # density altitude and the ride estimate read, for 18 hours from every
 # cycle and 48 from the four long ones. NBM overrides temperature, wind,
 # sky and adds real probabilities for the first 36 hours.
+# Pressures are stored less 1,000 hPa: half precision steps by a whole
+# hPa above 1,024 and half one below, which is coarser than the trend the
+# forecast curve is read for; around zero it steps by hundredths.
+PRESSURE_OFFSET = -1000.0
 FC_FIELDS: Tuple[Field, ...] = (
-    Field("mslp", "MSLMA", "mean sea level", "sfc", 0.01),
-    Field("psfc", "PRES", "surface", "sfc", 0.01),
+    Field("mslp", "MSLMA", "mean sea level", "sfc", 0.01, PRESSURE_OFFSET),
+    Field("psfc", "PRES", "surface", "sfc", 0.01, PRESSURE_OFFSET),
     Field("u10", "UGRD", "10 m above ground", "sfc"),
     Field("v10", "VGRD", "10 m above ground", "sfc"),
     Field("gust", "GUST", "surface", "sfc"),
@@ -154,11 +158,13 @@ def _extended_fc(cycle: datetime) -> Tuple[int, ...]:
 
 
 FC_LAST = 18
-FC = FeedSpec("hrrr-fc", FC_FIELDS, FC_WIND_PAIRS, lambda c: tuple(range(0, FC_LAST + 1)),
+FC = FeedSpec("hrrr-fc2", FC_FIELDS, FC_WIND_PAIRS, lambda c: tuple(range(0, FC_LAST + 1)),
               stride=2, dtype="float16", keep=1)
-FCX = FeedSpec("hrrr-fcx", FC_FIELDS, FC_WIND_PAIRS, lambda c: _extended_fc(c),
+FCX = FeedSpec("hrrr-fcx2", FC_FIELDS, FC_WIND_PAIRS, lambda c: _extended_fc(c),
                stride=2, dtype="float16", keep=1)
 FEEDS: Tuple[FeedSpec, ...] = (MAP, COL, COLX, FC, FCX)
+# Feeds stored in a format since changed; the store deletes them on start.
+RETIRED = ("hrrr-fc", "hrrr-fcx")        # pressures in absolute hPa (2026-09-25)
 
 def path(cycle: datetime, fhr: int, kind: str) -> str:
     return f"hrrr.{cycle:%Y%m%d}/conus/hrrr.t{cycle:%H}z.wrf{kind}f{fhr:02d}.grib2"

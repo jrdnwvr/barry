@@ -92,6 +92,16 @@ class ModelStore:
         tmp.write_text(json.dumps(self._manifest(feed, cycle)))
         tmp.replace(d / "manifest.json")
 
+    def drop(self, feed: str) -> None:
+        """Forget a feed entirely, files and all (a retired format)."""
+        with self._lock:
+            for key in [k for k in self._manifests if k[0] == feed]:
+                self._manifests.pop(key, None)
+            for key in [k for k in self._mem if k[0] == feed]:
+                self._mem.pop(key, None)
+            if self.root is not None:
+                shutil.rmtree(self.root / feed, ignore_errors=True)
+
     # ---- writing ----
 
     def put(self, feed: str, cycle: datetime, fhr: int, name: str, arr: np.ndarray,

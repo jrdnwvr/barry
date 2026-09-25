@@ -20,7 +20,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import httpx
 import numpy as np
@@ -40,6 +40,7 @@ class Field:
     level: str
     kind: str              # "sfc" (wrfsfc) or "prs" (wrfprs)
     scale: float = 1.0
+    offset: float = 0.0    # added after the scale: Kelvin to Celsius is -273.15
 
 
 LEVELS = (925, 850, 700, 600, 500)
@@ -66,11 +67,64 @@ WIND_PAIRS: Tuple[Tuple[str, str], ...] = (("u10", "v10"),) + tuple((f"u{p}", f"
 # them is valid within half an hour of it.
 FHRS: Tuple[int, ...] = (0, 1, 2)
 
-# Minutes after the cycle time when the last hour Barry needs is normally
-# on the bucket, and how late it may be before NOMADS is asked.
-EXPECTED_AFTER_MIN = 58
-LATE_MIN = 10
+# The Aloft column: 17 levels, closer together near the ground where the
+# screen gives the most room, with what the column draws at each (height,
+# temperature, humidity, wind, cloud water and ice), and the surface.
+COL_LEVELS = (1000, 975, 950, 925, 900, 875, 850, 825, 800, 750, 700, 650, 600, 550, 500, 450, 400)
+# Temperatures are stored in Celsius: in half precision a value near 280
+# steps by a quarter degree, near 5 by a two-hundred-fiftieth.
+COL_FIELDS: Tuple[Field, ...] = tuple(
+    Field(f"{short}{p}", g, f"{p} mb", "prs", offset=-273.15 if g == "TMP" else 0.0)
+    for p in COL_LEVELS
+    for short, g in (("hgt", "HGT"), ("t", "TMP"), ("rh", "RH"), ("u", "UGRD"), ("v", "VGRD"),
+                     ("qc", "CLMR"), ("qi", "CIMIXR"))
+) + (
+    Field("t2", "TMP", "2 m above ground", "sfc", offset=-273.15),
+    Field("td2", "DPT", "2 m above ground", "sfc", offset=-273.15),
+    Field("u10", "UGRD", "10 m above ground", "sfc"),
+    Field("v10", "VGRD", "10 m above ground", "sfc"),
+    Field("frz", "HGT", "0C isotherm", "sfc"),
+    Field("hpbl", "HPBL", "surface", "sfc"),
+    Field("zsfc", "HGT", "surface", "sfc"),
+)
+COL_WIND_PAIRS: Tuple[Tuple[str, str], ...] = (("u10", "v10"),) + tuple((f"u{p}", f"v{p}") for p in COL_LEVELS)
 
+
+@dataclass(frozen=True)
+class FeedSpec:
+    """One thing Barry keeps from HRRR: which fields, which forecast hours
+    of which cycles, and how they are stored. `hours` returns the hours to
+    pull for a cycle, or nothing when the feed skips that cycle."""
+    name: str
+    fields: Tuple[Field, ...]
+    wind_pairs: Tuple[Tuple[str, str], ...]
+    hours: Callable[[datetime], Tuple[int, ...]]
+    stride: int = 1                 # 2 keeps every other point: 6 km
+    dtype: str = "float32"
+    nomads: bool = False            # whole files from NOMADS when the bucket is late
+    keep: int = 2
+
+
+# The last hour the day-long column feed takes from a 48-hour cycle: six
+# hours until the next such cycle lands, plus the 24 the column shows.
+EXTENDED_LAST = 30
+
+
+def _extended(cycle: datetime) -> Tuple[int, ...]:
+    return tuple(range(0, EXTENDED_LAST + 1)) if cycle.hour % 6 == 0 else ()
+
+
+# The radar's map layers: full resolution, three hours of every cycle.
+MAP = FeedSpec("hrrr", FIELDS, WIND_PAIRS, lambda c: FHRS, nomads=True)
+# The Aloft column. The first hours from every cycle, and the day ahead
+# from the four cycles a day that run to 48 hours. A point's column needs
+# no 3 km detail, so these keep every other point in half precision:
+# 0.95 MB a field instead of 7.6.
+# One run of each is kept: the store deletes the old one only once the new
+# one is complete, and a day-long run is 3.5 GB.
+COL = FeedSpec("hrrr-col", COL_FIELDS, COL_WIND_PAIRS, lambda c: (0, 1, 2, 3), stride=2, dtype="float16", keep=1)
+COLX = FeedSpec("hrrr-colx", COL_FIELDS, COL_WIND_PAIRS, lambda c: _extended(c), stride=2, dtype="float16", keep=1)
+FEEDS: Tuple[FeedSpec, ...] = (MAP, COL, COLX)
 
 def path(cycle: datetime, fhr: int, kind: str) -> str:
     return f"hrrr.{cycle:%Y%m%d}/conus/hrrr.t{cycle:%H}z.wrf{kind}f{fhr:02d}.grib2"
@@ -84,10 +138,33 @@ def nomads_url(cycle: datetime, fhr: int, kind: str) -> str:
     return nomads.url(f"hrrr/prod/{path(cycle, fhr, kind)}")
 
 
-def expected_cycle(now: datetime) -> datetime:
-    """The newest cycle whose hours should all be on the bucket by now."""
-    t = now - timedelta(minutes=EXPECTED_AFTER_MIN)
-    return t.replace(minute=0, second=0, microsecond=0)
+def arrival_min(fhr: int) -> float:
+    """Minutes after the cycle time when forecast hour `fhr` is normally on
+    the bucket: about 50 for the analysis, two more an hour to 18, then one
+    (measured 2026-09-24: f00 +50, f18 +85, f36 +93, f48 +107)."""
+    return 50 + 2 * min(fhr, 18) + max(0, fhr - 18)
+
+
+READY_MARGIN_MIN = 4
+EXPECTED_AFTER_MIN = arrival_min(max(FHRS)) + READY_MARGIN_MIN      # 58 for the map
+LATE_MIN = 10
+
+
+def ready_after_min(spec: FeedSpec, cycle: datetime) -> Optional[float]:
+    hrs = spec.hours(cycle)
+    return arrival_min(max(hrs)) + READY_MARGIN_MIN if hrs else None
+
+
+def expected_cycle(now: datetime, spec: FeedSpec = MAP) -> Optional[datetime]:
+    """The newest cycle of this feed whose hours should all be on the
+    bucket by now."""
+    top = now.replace(minute=0, second=0, microsecond=0)
+    for back in range(0, 12):
+        cycle = top - timedelta(hours=back)
+        after = ready_after_min(spec, cycle)
+        if after is not None and now >= cycle + timedelta(minutes=after):
+            return cycle
+    return None
 
 
 def kinds(fields: Iterable[Field]) -> List[str]:
@@ -125,21 +202,28 @@ async def nomads_has(client: httpx.AsyncClient, cycle: datetime, fields: Sequenc
 
 
 async def choose(client: httpx.AsyncClient, now: datetime, held: Iterable[datetime],
-                 fields: Sequence[Field] = FIELDS, fhrs: Sequence[int] = FHRS
-                 ) -> Optional[Tuple[datetime, str]]:
+                 spec: FeedSpec = MAP) -> Optional[Tuple[datetime, str]]:
     """The cycle to pull and where from ("aws" or "nomads"), or None when
-    the newest one available is already held."""
+    the newest one available is already held. Looks back through the three
+    newest cycles the feed takes."""
     held = set(held)
-    exp = expected_cycle(now)
-    for back in range(0, 4):
-        cycle = exp - timedelta(hours=back)
-        if cycle in held:
-            return None
-        if await aws_has(client, cycle, fields, fhrs):
-            return cycle, "aws"
-        late = (now - cycle).total_seconds() / 60 > EXPECTED_AFTER_MIN + LATE_MIN
-        if back == 0 and late and await nomads_has(client, cycle, fields, fhrs):
-            return cycle, "nomads"
+    newest = expected_cycle(now, spec)
+    if newest is None:
+        return None
+    cycle, tried = newest, 0
+    while tried < 3:
+        hrs = spec.hours(cycle)
+        if hrs:
+            if cycle in held:
+                return None
+            if await aws_has(client, cycle, spec.fields, hrs):
+                return cycle, "aws"
+            after = ready_after_min(spec, cycle) or 0
+            late = (now - cycle).total_seconds() / 60 > after + LATE_MIN
+            if tried == 0 and spec.nomads and late and await nomads_has(client, cycle, spec.fields, hrs):
+                return cycle, "nomads"
+            tried += 1
+        cycle -= timedelta(hours=1)
     return None
 
 
@@ -152,11 +236,10 @@ async def _get(client: httpx.AsyncClient, url: str, rng: Optional[Tuple[int, Opt
     return r.content
 
 
-async def fetch_hour(client: httpx.AsyncClient, cycle: datetime, fhr: int,
-                     fields: Sequence[Field] = FIELDS, source: str = "aws"
-                     ) -> Dict[str, grib.Message]:
-    """Every field for one forecast hour, decoded, keyed by Barry's name."""
-    out: Dict[str, grib.Message] = {}
+async def fetch_raw(client: httpx.AsyncClient, cycle: datetime, fhr: int,
+                    fields: Sequence[Field], source: str = "aws") -> Dict[str, bytes]:
+    """Each field's GRIB message bytes for one forecast hour, by Barry's name."""
+    out: Dict[str, bytes] = {}
     for k in kinds(fields):
         want = [f for f in fields if f.kind == k]
         if source == "nomads":
@@ -188,36 +271,110 @@ async def fetch_hour(client: httpx.AsyncClient, cycle: datetime, fhr: int,
             raise LookupError("range not fetched")
 
         for f in want:
-            s, e = ranges[(f.grib, f.level)]
-            msg = await asyncio.to_thread(grib.decode, piece(s, e))
-            if f.scale != 1.0:
-                msg.values *= np.float32(f.scale)
-            out[f.name] = msg
+            out[f.name] = piece(*ranges[(f.grib, f.level)])
+        del chunks
+    return out
+
+
+async def fetch_hour(client: httpx.AsyncClient, cycle: datetime, fhr: int,
+                     fields: Sequence[Field] = FIELDS, source: str = "aws"
+                     ) -> Dict[str, grib.Message]:
+    """Every field for one forecast hour, decoded, keyed by Barry's name."""
+    raw = await fetch_raw(client, cycle, fhr, fields, source)
+    out: Dict[str, grib.Message] = {}
+    for f in fields:
+        msg = await asyncio.to_thread(grib.decode, raw.pop(f.name))
+        if f.scale != 1.0:
+            msg.values *= np.float32(f.scale)
+        out[f.name] = msg
     return out
 
 
 _ROTATION: Dict[Tuple, Tuple[np.ndarray, np.ndarray]] = {}
 
 
-def rotate_winds(msgs: Dict[str, grib.Message]) -> None:
+def rotate_pair(u: grib.Message, v: grib.Message) -> None:
     """Grid-relative u and v, in place, to earth-relative."""
-    for un, vn in WIND_PAIRS:
+    if not grib.grid_relative(u.meta):
+        return
+    g = grib.LambertGrid.from_meta(u.meta)
+    rot = _ROTATION.get(g.key())
+    if rot is None:
+        _, lon = g.lonlat_arrays()
+        a = g.rotation(lon)
+        rot = (np.cos(a).astype(np.float32), np.sin(a).astype(np.float32))
+        _ROTATION[g.key()] = rot
+    c, s = rot
+    uu, vv = u.values, v.values
+    u.values, v.values = uu * c + vv * s, -uu * s + vv * c
+
+
+def rotate_winds(msgs: Dict[str, grib.Message], pairs: Sequence[Tuple[str, str]] = WIND_PAIRS) -> None:
+    for un, vn in pairs:
         u, v = msgs.get(un), msgs.get(vn)
-        if u is None or v is None or not grib.grid_relative(u.meta):
-            continue
-        g = grib.LambertGrid.from_meta(u.meta)
-        rot = _ROTATION.get(g.key())
-        if rot is None:
-            _, lon = g.lonlat_arrays()
-            a = g.rotation(lon)
-            rot = (np.cos(a).astype(np.float32), np.sin(a).astype(np.float32))
-            _ROTATION[g.key()] = rot
-        c, s = rot
-        uu, vv = u.values, v.values
-        u.values, v.values = uu * c + vv * s, -uu * s + vv * c
+        if u is not None and v is not None:
+            rotate_pair(u, v)
 
 
-def grid_meta(msg: grib.Message) -> dict:
+def grid_meta(msg: grib.Message, stride: int = 1) -> dict:
     keys = ("Nx", "Ny", "latitudeOfFirstGridPointInDegrees", "longitudeOfFirstGridPointInDegrees",
             "LoVInDegrees", "Latin1InDegrees", "Latin2InDegrees", "DxInMetres", "DyInMetres")
-    return {k: msg.meta.get(k) for k in keys}
+    m = {k: msg.meta.get(k) for k in keys}
+    if stride > 1:
+        m["Nx"] = (int(m["Nx"]) + stride - 1) // stride
+        m["Ny"] = (int(m["Ny"]) + stride - 1) // stride
+        m["DxInMetres"] = float(m["DxInMetres"]) * stride
+        m["DyInMetres"] = float(m["DyInMetres"]) * stride
+    return m
+
+
+def _shrink(values: np.ndarray, spec: FeedSpec) -> np.ndarray:
+    v = values[::spec.stride, ::spec.stride] if spec.stride > 1 else values
+    return np.ascontiguousarray(v, dtype=np.dtype(spec.dtype))
+
+
+def _process_hour(raw: Dict[str, bytes], spec: FeedSpec, cycle: datetime, fhr: int, store) -> int:
+    """Decode, turn the winds, shrink and store one forecast hour. Runs in a
+    worker thread; eccodes and numpy do the work outside the interpreter."""
+    pair_of: Dict[str, str] = {}
+    for un, vn in spec.wind_pairs:
+        pair_of[un], pair_of[vn] = vn, un
+    pending: Dict[str, grib.Message] = {}
+    meta = None
+    written = 0
+    for f in spec.fields:
+        msg = grib.decode(raw.pop(f.name))
+        if f.scale != 1.0:
+            msg.values *= np.float32(f.scale)
+        if f.offset:
+            msg.values += np.float32(f.offset)
+        if meta is None:
+            meta = grid_meta(msg, spec.stride)
+        ready = [(f.name, msg)]
+        other = pair_of.get(f.name)
+        if other is not None:
+            if other not in pending:
+                pending[f.name] = msg
+                continue
+            o = pending.pop(other)
+            u, v = (msg, o) if (f.name, other) in spec.wind_pairs else (o, msg)
+            rotate_pair(u, v)
+            ready = [(f.name, msg), (other, o)]
+        for name, m in ready:
+            store.put(spec.name, cycle, fhr, name, _shrink(m.values, spec), meta)
+            written += 1
+    return written
+
+
+async def pull(client: httpx.AsyncClient, store, spec: FeedSpec, cycle: datetime,
+               source: str = "aws") -> int:
+    """Every hour the feed takes from this cycle, into the store, an hour
+    at a time so a cycle never sits in memory whole. Returns fields
+    written; marks the cycle complete and purges old ones."""
+    written = 0
+    for fhr in spec.hours(cycle):
+        raw = await fetch_raw(client, cycle, fhr, spec.fields, source)
+        written += await asyncio.to_thread(_process_hour, raw, spec, cycle, fhr, store)
+    store.mark_complete(spec.name, cycle)
+    store.purge(spec.name, keep=spec.keep)
+    return written

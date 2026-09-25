@@ -32,7 +32,7 @@ def hrrr_on(monkeypatch):
 def test_index_ranges_and_merging():
     with open(os.path.join(FIX, "hrrr_sfc.grib2.idx")) as fh:
         entries = grib.parse_idx(fh.read())
-    assert [e.name for e in entries][:3] == ["TMP", "UGRD", "VGRD"]
+    assert [e.name for e in entries][:3] == ["ABSV", "UGRD", "VGRD"]
     r = grib.byte_ranges(entries, [("UGRD", "10 m above ground"), ("MSLMA", "mean sea level")])
     assert r[("UGRD", "10 m above ground")] == (entries[1].offset, entries[2].offset - 1)
     r = grib.byte_ranges(entries, [("PRES", "surface")])
@@ -58,28 +58,67 @@ def test_the_hrrr_grid_round_trips_and_starts_where_ncep_says():
 def test_split_messages_follows_the_length_fields():
     with open(os.path.join(FIX, "hrrr_prs.grib2"), "rb") as fh:
         data = fh.read()
-    assert len(grib.split_messages(data)) == 16
+    assert len(grib.split_messages(data)) == 120
 
 
 @pytest.mark.asyncio
-async def test_a_cycle_is_pulled_by_range_and_the_winds_come_out_earth_relative(client, upstream, hrrr_on):
-    s = PressureService(client)
-    n = await s.poll_hrrr()
+async def test_the_map_feed_is_pulled_by_range(client, upstream):
+    store = ModelStore(None)
+    n = await hrrr.pull(client, store, hrrr.MAP, CYCLE)
     assert n == len(hrrr.FIELDS) * len(hrrr.FHRS)
-    assert s.models.cycles("hrrr") == [CYCLE]
     gets = [c for c in upstream.hrrr_calls if c[1] == "GET" and not c[2].endswith(".idx")]
     # Per hour: the surface fields sit together after the unwanted first
     # message (one request), the pressure ones likewise.
     assert all(c[0] == "aws" and c[3] for c in gets) and len(gets) == 2 * len(hrrr.FHRS)
+    assert store.cycles("hrrr") == [CYCLE]
+    assert store.load("hrrr", CYCLE, 1, "u10").dtype == np.float32
+
+
+@pytest.mark.asyncio
+async def test_a_cycle_is_pulled_and_the_winds_come_out_earth_relative(client, upstream, hrrr_on):
+    s = PressureService(client)
+    assert await s.poll_hrrr() > 0
+    assert s.models.cycles("hrrr") == [CYCLE]
+    assert s.models.cycles("hrrr-col") == [CYCLE]
+    assert s.models.cycles("hrrr-colx") == [datetime(2026, 9, 25, 0, tzinfo=timezone.utc)]
+    assert max(s.models.hours("hrrr-colx", datetime(2026, 9, 25, 0, tzinfo=timezone.utc))) == 3
     resp = await s.get_field_grid(LAT, LON, 3.0, 5.0)
     assert resp.source == "hrrr" and len(resp.points) == s.HRRR_COLS * s.HRRR_ROWS
     p = _centre(resp.points)
     assert abs(p.windDeg - 270) <= 1 and abs(p.windKmh - 36.0) < 0.5
     assert p.blM == 900 and p.capeJkg == 500
-    # Held: the next pass asks for one index and pulls nothing.
+    # Held: the next pass asks for indexes and pulls nothing.
     before = len(upstream.hrrr_calls)
     assert await s.poll_hrrr() == 0
     assert all(c[1] == "HEAD" for c in upstream.hrrr_calls[before:])
+
+
+@pytest.mark.asyncio
+async def test_the_aloft_column_comes_from_the_column_feeds(client, upstream, hrrr_on, monkeypatch):
+    monkeypatch.setattr("app.sources.hrrr.EXTENDED_LAST", 30)
+    s = PressureService(client)
+    await s.poll_hrrr()
+    a = await s.get_aloft(LAT, LON)
+    assert a.source == "hrrr" and len(a.hours) == 25
+    assert a.hours[0].t == datetime(2026, 9, 25, 3, tzinfo=timezone.utc)
+    h = a.hours[0]
+    lv = {l.hPa: l for l in h.levels}
+    assert 1000 not in lv and 975 in lv                        # 1000 hPa is under the 200 m ground
+    assert abs(lv[850].tempC - 5.2) < 0.2 and abs(lv[850].spdKt - 29.2) < 0.3 and lv[850].dirDeg == 250
+    assert lv[850].cloudPct == 80 and lv[700].cloudPct == 0 and lv[700].dewC is not None
+    assert [c.baseFt for c in h.clouds] == [lv[850].ft]
+    assert abs(h.surface.tempC - 16.85) < 0.06 and abs(h.surface.dewC - 9.85) < 0.06 and h.surface.dirDeg == 270
+    assert h.freezingFt == 7572 and h.blAglFt == 2953
+    # The west third stands at 1,600 m: nothing below it.
+    west = await s.get_aloft(LAT, -87.3)
+    assert min(l.ft for l in west.hours[0].levels) > 1600 * 3.28
+
+
+@pytest.mark.asyncio
+async def test_the_column_falls_back_off_the_grid(client, upstream, hrrr_on):
+    s = PressureService(client)
+    await s.poll_hrrr()
+    assert (await s.get_aloft(45.0, -120.0)).source == "open-meteo"
 
 
 @pytest.mark.asyncio
@@ -134,8 +173,10 @@ async def test_a_late_bucket_sends_the_pull_to_nomads_as_whole_files(client, ups
     s = PressureService(client)
     assert await s.poll_hrrr() > 0
     assert s.models.cycles("hrrr") == [CYCLE]
-    gets = [c for c in upstream.hrrr_calls if c[1] == "GET" and not c[2].endswith(".idx")]
+    gets = [c for c in upstream.hrrr_calls if c[1] == "GET" and not c[2].endswith(".idx") and "t02z" in c[2]]
     assert gets and all(c[0] == "nomads" and c[3] is None for c in gets)
+    # The column feeds wait for the bucket rather than pull whole files.
+    assert s.models.cycles("hrrr-col") == [CYCLE - timedelta(hours=1)]
 
 
 @pytest.mark.asyncio

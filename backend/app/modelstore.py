@@ -5,9 +5,11 @@
 
 A field is written once and read through a memory map, so the page cache
 does the memory management and a restart costs nothing: the manifest says
-what is complete and the files are still there. Float32 rather than
-float16, because sea-level pressure in hPa needs a tenth and float16
-steps by a whole hPa above 1,024. An HRRR field is 7.6 MB.
+what is complete and the files are still there. The map fields are
+float32, because sea-level pressure in hPa needs a tenth and float16
+steps by a whole hPa above 1,024 (an HRRR field is 7.6 MB); the column
+feeds keep every other point in float16 (0.95 MB), which is plenty for
+temperatures in Celsius, heights and winds at a point.
 
 With no root (tests, or no data directory), fields live in memory only.
 """
@@ -89,7 +91,9 @@ class ModelStore:
 
     def put(self, feed: str, cycle: datetime, fhr: int, name: str, arr: np.ndarray,
             grid: Optional[dict] = None) -> None:
-        arr = np.ascontiguousarray(arr, dtype=np.float32)
+        """Float16 arrays stay float16 (the column feeds); anything else is
+        stored as float32."""
+        arr = np.ascontiguousarray(arr, dtype=np.float16 if arr.dtype == np.float16 else np.float32)
         with self._lock:
             m = self._manifest(feed, cycle)
             if grid is not None:

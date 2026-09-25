@@ -10,7 +10,7 @@ coarser lattice) and run the same marching squares as the isobars.
 from __future__ import annotations
 
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -18,7 +18,8 @@ import numpy as np
 from . import grib
 from . import pressure_field
 from .modelstore import ModelStore
-from .models import ContourLine, FieldLevelPoint, FieldPoint, LevelWind
+from .models import (AloftHour, AloftLevel, AloftSurface, ContourLine, FieldLevelPoint,
+                     FieldPoint, LevelWind)
 
 FEED = "hrrr"
 LEVELS = (925, 850, 700, 600, 500)
@@ -173,3 +174,116 @@ def heights(store: ModelStore, hpa: int, lat: float, lon: float, lat_span: float
                 lines.append(ContourLine(level=level, points=[[round(a, 4), round(b, 4)] for a, b in line]))
         level += step
     return lines, step, cycle, fhr
+
+
+# ---- the Aloft column ---------------------------------------------------------
+
+COL_FEEDS = ("hrrr-col", "hrrr-colx")
+COL_LEVELS = (1000, 975, 950, 925, 900, 875, 850, 825, 800, 750, 700, 650, 600, 550, 500, 450, 400)
+FT_PER_M = 3.28084
+KT_PER_MS = 1.943844
+# Cloud from relative humidity (Sundqvist: none below 80 percent, overcast
+# at saturation) and from the model's own cloud water and ice, whichever
+# says more: 50 percent once there is any condensate to speak of, 80 once
+# there is a real amount.
+RH_CRIT = 0.80
+Q_TRACE, Q_CLOUD = 1e-6, 1e-5
+
+
+def _find(store: ModelStore, valid: datetime):
+    """(feed, cycle, fhr) for the newest cycle holding this valid hour, the
+    hourly feed before the day-long one."""
+    for feed in COL_FEEDS:
+        for cycle in store.cycles(feed):
+            fhr = int(round((valid - cycle).total_seconds() / 3600))
+            if fhr in store.hours(feed, cycle):
+                return feed, cycle, fhr
+    return None
+
+
+def cloud_pct(rh: float, qc: float, qi: float) -> int:
+    r = max(0.0, min(1.0, rh / 100.0))
+    c = 0.0 if r <= RH_CRIT else 1.0 - math.sqrt((1.0 - r) / (1.0 - RH_CRIT))
+    q = max(0.0, qc) + max(0.0, qi)
+    if q >= Q_CLOUD:
+        c = max(c, 0.8)
+    elif q >= Q_TRACE:
+        c = max(c, 0.5)
+    return int(round(100 * c))
+
+
+def dew_point_c(t_c: float, rh: float) -> Optional[float]:
+    """Magnus, over water."""
+    if not (rh > 0):
+        return None
+    g = math.log(min(rh, 100.0) / 100.0) + 17.625 * t_c / (243.04 + t_c)
+    return 243.04 * g / (17.625 - g)
+
+
+def column(store: ModelStore, lat: float, lon: float, start: datetime, hours: int = 25
+           ) -> Optional[List[AloftHour]]:
+    """Hourly columns at a point from `start` (the top of an hour), from the
+    column feeds. Levels under the ground are left out. None when fewer
+    than twelve hours can be built, so the caller falls back."""
+    from .sources.openmeteo import cloud_layers
+    out: List[AloftHour] = []
+    la, lo = np.array([lat]), np.array([lon])
+    for h in range(hours):
+        valid = start + timedelta(hours=h)
+        found = _find(store, valid)
+        if found is None:
+            continue
+        feed, cycle, fhr = found
+        g = grid(store, feed, cycle)
+        if g is None:
+            continue
+
+        def at(name: str) -> float:
+            arr = store.load(feed, cycle, fhr, name)
+            return float(g.sample(arr, la, lo)[0]) if arr is not None else float("nan")
+
+        ground = at("zsfc")
+        levels: List[AloftLevel] = []
+        for p in COL_LEVELS:
+            hgt, t = at(f"hgt{p}"), at(f"t{p}")
+            if not (math.isfinite(hgt) and math.isfinite(t)):
+                continue
+            if math.isfinite(ground) and hgt < ground:
+                continue
+            t_c = t                                   # stored in Celsius
+            rh = at(f"rh{p}")
+            u, v = at(f"u{p}"), at(f"v{p}")
+            spd, deg = grib.wind_speed_dir(u, v)
+            levels.append(AloftLevel(
+                hPa=p, ft=int(round(hgt * FT_PER_M)), tempC=round(t_c, 1),
+                dewC=round(dew_point_c(t_c, rh), 1) if math.isfinite(rh) and dew_point_c(t_c, rh) is not None else None,
+                dirDeg=round(float(deg)) if math.isfinite(float(spd)) else None,
+                spdKt=round(float(spd) * KT_PER_MS, 1) if math.isfinite(float(spd)) else None,
+                cloudPct=cloud_pct(rh, at(f"qc{p}"), at(f"qi{p}")) if math.isfinite(rh) else None,
+            ))
+        if len(levels) < 3:
+            continue
+        levels.sort(key=lambda lv: lv.ft)
+        t2, td2 = at("t2"), at("td2")
+        s_spd, s_deg = grib.wind_speed_dir(at("u10"), at("v10"))
+        frz, hpbl = at("frz"), at("hpbl")
+        out.append(AloftHour(
+            t=valid, levels=levels, clouds=cloud_layers(levels),
+            surface=AloftSurface(
+                tempC=round(t2, 1) if math.isfinite(t2) else None,
+                dewC=round(td2, 1) if math.isfinite(td2) else None,
+                dirDeg=round(float(s_deg)) if math.isfinite(float(s_spd)) else None,
+                spdKt=round(float(s_spd) * KT_PER_MS, 1) if math.isfinite(float(s_spd)) else None),
+            freezingFt=int(round(frz * FT_PER_M)) if math.isfinite(frz) else None,
+            blAglFt=int(round(hpbl * FT_PER_M)) if math.isfinite(hpbl) else None,
+        ))
+    return out if len(out) >= 12 else None
+
+
+def column_key(store: ModelStore) -> str:
+    """Changes whenever either column feed gains a cycle."""
+    parts = []
+    for feed in COL_FEEDS:
+        c = store.cycles(feed)
+        parts.append(c[0].strftime("%Y%m%d%H") if c else "-")
+    return ":".join(parts)

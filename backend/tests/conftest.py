@@ -420,6 +420,9 @@ def _nomads_unspaced(monkeypatch):
     tests check still come from Open-Meteo."""
     monkeypatch.setenv("BARRY_NOMADS_SPACING", "0")
     monkeypatch.setenv("BARRY_HRRR", "0")
+    # The day-long column feed takes 31 hours of each 48-hour cycle; tests
+    # that don't read the column need only a few, and it is most of the time.
+    monkeypatch.setattr("app.sources.hrrr.EXTENDED_LAST", 3)
     yield
 
 

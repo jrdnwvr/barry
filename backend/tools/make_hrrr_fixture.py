@@ -11,8 +11,12 @@ stored grid-relative the way HRRR stores them. Known values:
   the contours run east and west.
 - Sea-level pressure 1016 hPa at 38.5 N, 2 hPa less per degree north.
 - Gust 12 m/s, boundary layer 900 m, CAPE 500 J/kg.
-- Surface pressure 840 hPa west of 86 W (high ground, so 850 and 925
-  hPa are underground there) and 990 hPa east of it.
+- Surface pressure 840 hPa west of 86 W (high ground at 1,600 m, so 850
+  and 925 hPa are underground there) and 990 hPa east of it (200 m).
+- The Aloft column's 17 levels: temperature on the standard lapse rate,
+  a saturated deck with cloud water at 850 to 800 hPa, 60 percent humidity
+  elsewhere, wind from 250 strengthening with height; 2 m 17 C over 10 C,
+  freezing level 2,308 m.
 
 Two files, surface and pressure, each with an index in NOAA's format and
 a message Barry doesn't ask for between the ones it does, so the range
@@ -61,26 +65,39 @@ def main():
         return ue * np.cos(a) - ve * np.sin(a), ue * np.sin(a) + ve * np.cos(a)
 
     u10, v10 = to_grid(np.full_like(lat, 10.0), np.zeros_like(lat))
+    high = lon < -86.0
     sfc = [
-        ("TMP", "2 m above ground", np.full_like(lat, 290.0)),        # not asked for
+        ("ABSV", "1000 mb", np.zeros_like(lat)),                      # not asked for
         ("UGRD", "10 m above ground", u10),
         ("VGRD", "10 m above ground", v10),
         ("GUST", "surface", np.full_like(lat, 12.0)),
         ("HPBL", "surface", np.full_like(lat, 900.0)),
         ("CAPE", "surface", np.full_like(lat, 500.0)),
         ("MSLMA", "mean sea level", (1016.0 - 2.0 * (lat - 38.5)) * 100.0),
+        ("TMP", "2 m above ground", np.full_like(lat, 290.0)),
+        ("DPT", "2 m above ground", np.full_like(lat, 283.0)),
+        ("HGT", "0C isotherm", np.full_like(lat, 2308.0)),
+        ("HGT", "surface", np.where(high, 1600.0, 200.0)),
         # High ground in the west third: 850 hPa lies under it there.
-        ("PRES", "surface", np.where(lon < -86.0, 84000.0, 99000.0)),
+        ("PRES", "surface", np.where(high, 84000.0, 99000.0)),
     ]
-    prs = [("TMP", "1000 mb", np.full_like(lat, 288.0))]
-    for k, p in enumerate((925, 850, 700, 600, 500)):
-        # From 250 degrees at 10 m/s plus 5 per level.
-        spd = 10.0 + 5 * k
+    prs = [("ABSV", "1000 mb", np.zeros_like(lat))]
+    col_levels = (1000, 975, 950, 925, 900, 875, 850, 825, 800, 750, 700, 650, 600, 550, 500, 450, 400)
+    for p in col_levels:
+        # Heights: the map's round numbers at its five levels, the standard
+        # atmosphere elsewhere; 60 m less per degree north everywhere.
+        h0 = STD_HGT.get(p, 44330.8 * (1 - (p / 1013.25) ** 0.190263))
+        hgt = h0 - 60.0 * (lat - 38.5)
+        t = 288.15 - 0.0065 * h0
+        cloud = p in (850, 825, 800)                                   # a deck from about 5,000 to 6,500 ft
+        spd = float(np.interp(p, [500, 600, 700, 850, 925, 1000], [30, 25, 20, 15, 10, 8]))
         d = np.radians(250.0)
-        ue, ve = -spd * np.sin(d) * np.ones_like(lat), -spd * np.cos(d) * np.ones_like(lat)
-        ug, vg = to_grid(ue, ve)
-        prs += [("HGT", f"{p} mb", STD_HGT[p] - 60.0 * (lat - 38.5)),
-                ("UGRD", f"{p} mb", ug), ("VGRD", f"{p} mb", vg)]
+        ug, vg = to_grid(-spd * np.sin(d) * np.ones_like(lat), -spd * np.cos(d) * np.ones_like(lat))
+        prs += [("HGT", f"{p} mb", hgt), ("TMP", f"{p} mb", np.full_like(lat, t)),
+                ("RH", f"{p} mb", np.full_like(lat, 98.0 if cloud else 60.0)),
+                ("UGRD", f"{p} mb", ug), ("VGRD", f"{p} mb", vg),
+                ("CLMR", f"{p} mb", np.full_like(lat, 2e-5 if cloud else 0.0)),
+                ("CIMIXR", f"{p} mb", np.zeros_like(lat))]
 
     for name, fields in (("hrrr_sfc", sfc), ("hrrr_prs", prs)):
         data = b""

@@ -1,8 +1,12 @@
-1:0:d=2026092500:TMP:2 m above ground:1 hour fcst:
+1:0:d=2026092500:ABSV:1000 mb:1 hour fcst:
 2:188:d=2026092500:UGRD:10 m above ground:1 hour fcst:
 3:1528:d=2026092500:VGRD:10 m above ground:1 hour fcst:
 4:2868:d=2026092500:GUST:surface:1 hour fcst:
 5:3056:d=2026092500:HPBL:surface:1 hour fcst:
 6:3244:d=2026092500:CAPE:surface:1 hour fcst:
 7:3432:d=2026092500:MSLMA:mean sea level:1 hour fcst:
-8:4772:d=2026092500:PRES:surface:1 hour fcst:
+8:4772:d=2026092500:TMP:2 m above ground:1 hour fcst:
+9:4960:d=2026092500:DPT:2 m above ground:1 hour fcst:
+10:5148:d=2026092500:HGT:0C isotherm:1 hour fcst:
+11:5336:d=2026092500:HGT:surface:1 hour fcst:
+12:6676:d=2026092500:PRES:surface:1 hour fcst:

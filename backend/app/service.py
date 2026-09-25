@@ -839,25 +839,28 @@ class PressureService:
     # ---- HRRR (AWS, NOMADS fallback) -------------------------------------------
 
     async def poll_hrrr(self) -> int:
-        """Pull the newest HRRR cycle not held yet into the model store.
-        Returns the number of fields written, 0 when nothing was new."""
-        pick = await hrrr_src.choose(self._client, _now(), self.models.cycles(hrrr_src.FEED))
-        if pick is None:
-            return 0
-        cycle, source = pick
+        """Pull, for each HRRR feed (the map layers, the Aloft column's first
+        hours and its day ahead), the newest cycle not held yet. Returns the
+        number of fields written, 0 when nothing was new. One feed failing
+        does not stop the others."""
         written = 0
-        for fhr in hrrr_src.FHRS:
-            msgs = await hrrr_src.fetch_hour(self._client, cycle, fhr, source=source)
-            await asyncio.to_thread(hrrr_src.rotate_winds, msgs)
-            meta = hrrr_src.grid_meta(next(iter(msgs.values())))
-            for name, m in msgs.items():
-                await asyncio.to_thread(self.models.put, hrrr_src.FEED, cycle, fhr, name, m.values, meta)
-                written += 1
-            del msgs
-        self.models.mark_complete(hrrr_src.FEED, cycle)
-        self.models.purge(hrrr_src.FEED, keep=2)
-        self.hrrr_ok_at = _now()
-        log.info("hrrr: %s from %s, %d fields", cycle.strftime("%Y%m%d%H"), source, written)
+        errors = []
+        for spec in hrrr_src.FEEDS:
+            try:
+                pick = await hrrr_src.choose(self._client, _now(), self.models.cycles(spec.name), spec)
+                if pick is None:
+                    continue
+                cycle, source = pick
+                n = await hrrr_src.pull(self._client, self.models, spec, cycle, source)
+                written += n
+                if spec is hrrr_src.MAP:
+                    self.hrrr_ok_at = _now()
+                log.info("hrrr: %s %s from %s, %d fields", spec.name, cycle.strftime("%Y%m%d%H"), source, n)
+            except Exception as exc:
+                errors.append(exc)
+                log.warning("hrrr: %s failed: %s: %s", spec.name, type(exc).__name__, exc)
+        if errors and not written:
+            raise errors[0]
         return written
 
     def hrrr_run(self) -> Optional[datetime]:
@@ -1024,10 +1027,22 @@ class PressureService:
 
     async def get_aloft(self, lat: float, lon: float) -> AloftResponse:
         """Clouds, temperatures and wind by pressure level for the next day
-        at a point, keyed by the same tenth-degree cell as the forecast, so
-        the cost is one Open-Meteo call per watched cell per hour whatever
+        at a point, keyed by the same tenth-degree cell as the forecast.
+        From the HRRR column feeds on Tower where they cover the point;
+        otherwise one Open-Meteo call per watched cell per hour, whatever
         the number of phones looking."""
         lat, lon = round(lat, 1), round(lon, 1)
+        if self.hrrr_enabled:
+            hkey = f"aloft-hrrr:{lat}:{lon}:{modelfields.column_key(self.models)}"
+            cached = await self.cache.get(hkey)
+            if cached is not None:
+                return self._aloft_from_now(cached)
+            start = _now().replace(minute=0, second=0, microsecond=0)
+            hours = await asyncio.to_thread(modelfields.column, self.models, lat, lon, start)
+            if hours:
+                resp = AloftResponse(hours=hours, source="hrrr", cachedAt=_now())
+                await self.cache.set(hkey, resp, ttl=ALOFT_TTL)
+                return resp
         key = f"aloft:{lat}:{lon}"
         last_good_key = f"{key}:lastgood"
 
@@ -1055,6 +1070,13 @@ class PressureService:
             if len(ahead) < 2:
                 raise
             return last.model_copy(update={"hours": ahead, "stale": True})
+
+    @staticmethod
+    def _aloft_from_now(resp: AloftResponse) -> AloftResponse:
+        """A held column, trimmed to the hours still ahead."""
+        hour = _now().replace(minute=0, second=0, microsecond=0)
+        ahead = [h for h in resp.hours if h.t >= hour]
+        return resp if len(ahead) == len(resp.hours) else resp.model_copy(update={"hours": ahead})
 
     def _field_points(self, q_lat: float, q_lon: float, q_lat_span: float, q_lon_span: float,
                       cols: Optional[int] = None, rows: Optional[int] = None):

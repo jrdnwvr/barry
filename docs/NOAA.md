@@ -532,8 +532,8 @@ day, reproduced in the simulator: the zone's Cloudflare rate rule (about
 20 requests per 10 seconds per address, set for the API in PRODUCTION.md
 A2) answered the tile burst of a zoomed-out map with 429 pages, which the
 app cached as tiles and MapKit could not decode. The app now treats
-anything but a PNG as a miss, pauses for the Retry-After and reloads; the
-rule itself has to exempt `/radar/` (user-owned, see risks). Tile misses
+anything but a PNG as a miss, pauses for the Retry-After and reloads, and
+the rule exempts `/radar/` since the same day. Tile misses
 are `no-store` besides. Pulled either way; `BARRY_RADAR_SOURCE` chooses
 what `/radar/frames` serves.
 
@@ -698,10 +698,9 @@ with a credit line. The fixed costs stay the Apple fee and the domain.
   cache absorbs repeat views; the origin serves each tile once per frame
   per region.
 - **The edge rate rule.** The Cloudflare rate-limiting rule on the
-  hostname counts tile requests too, cache hits included, and a zoomed-out
-  radar asks for a hundred tiles in a second. Until the rule exempts
-  `/radar/` the map shows nothing for ten seconds after such a burst; the
-  app recovers on its own once it does.
+  hostname counted tile requests too, cache hits included, and a
+  zoomed-out radar asks for a hundred tiles in a second. It exempts
+  `/radar/` since 2026-09-25; a new rule on the hostname must do the same.
 - **Model bias in the copy.** Section 2 lists what the models get wrong.
   The copy rules stay: rounded numbers, calm wording, no promises about
   gust tops or the evening boundary layer collapse.

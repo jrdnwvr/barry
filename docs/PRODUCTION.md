@@ -135,12 +135,12 @@ A2. Rate limit at the edge and in the app (small)
 
 - One Cloudflare rate-limiting rule on the hostname, around 60 requests a
   minute per IP. This is free and catches the crude case. Since the radar
-  tiles moved onto the same hostname (2026-09-25) the rule must leave
-  `/radar/tiles/` and `/radar/lightning/` out (`not starts_with(
-  http.request.uri.path, "/radar/")` in its expression): one zoomed-out
-  map is a hundred tile requests in a second, cache hits count, and the
-  block answers 429 for ten seconds. The origin keeps its own tile
-  limiter at 1,500 a minute.
+  tiles moved onto the same hostname (2026-09-25) the rule leaves
+  `/radar/` out (`not starts_with(http.request.uri.path, "/radar/")` in
+  its expression, set the same day; the Free plan accepts it): one
+  zoomed-out map is a hundred tile requests in a second, cache hits
+  count, and the block answered 429 for ten seconds. The origin keeps its
+  own limits behind it, 60 a minute for the API and 1,500 for tiles.
 - In the app, a token bucket keyed on `CF-Connecting-IP`, honoured only when
   the request arrives from the cloudflared container.
 - Bind port 8077 to 127.0.0.1 or remove it. The tunnel does not use it.

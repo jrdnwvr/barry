@@ -365,6 +365,7 @@ struct RadarPanel: View {
                      stationStyle: stationStyle,
                      showStorms: showStorms,
                      lightning: model.lightning,
+                     lightningNextTemplate: model.lightningNextTemplate,
                      advisories: showAdvisories ? model.advisories : nil,
                      onSelectAdvisory: { selectedAdvisory = $0 },
                      onSelectStation: { selectedStation = $0 },

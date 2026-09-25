@@ -41,6 +41,8 @@ struct RadarMapView: UIViewRepresentable {
     var showStorms: Bool = false
     /// GLM flash cells for the Storms overlay; nil draws nothing.
     var lightning: LightningState? = nil
+    /// Tiles of the chance of lightning in the next hour, under the flashes.
+    var lightningNextTemplate: String? = nil
     var advisories: AdvisoriesResponse? = nil
     var onSelectAdvisory: ((AdvisoryDetailSheet.Item) -> Void)? = nil
     var onSelectStation: ((StationObs) -> Void)? = nil
@@ -278,6 +280,24 @@ struct RadarMapView: UIViewRepresentable {
         private var pulseUntil: CFTimeInterval = 0
         private weak var pulseMap: MKMapView?
 
+        var lightningNextOverlay: MKTileOverlay?
+
+        /// One tile layer for the chance of lightning, swapped when a newer
+        /// grid's template arrives, removed when Lightning goes off. It sits
+        /// with the roads, under the flashes.
+        func syncLightningNext(_ template: String?, on map: MKMapView) {
+            guard template != lightningNextOverlay?.urlTemplate else { return }
+            if let o = lightningNextOverlay { map.removeOverlay(o); lightningNextOverlay = nil }
+            guard let template else { return }
+            let o = MKTileOverlay(urlTemplate: template)
+            o.tileSize = CGSize(width: 512, height: 512)
+            o.canReplaceMapContent = false
+            o.minimumZ = 1
+            o.maximumZ = 12
+            lightningNextOverlay = o
+            map.addOverlay(o, level: .aboveRoads)
+        }
+
         func syncLightning(_ state: LightningState?, on map: MKMapView) {
             guard state != shownLightning else { return }
             shownLightning = state
@@ -501,6 +521,11 @@ struct RadarMapView: UIViewRepresentable {
             if let field = overlay as? FrontFieldOverlay {
                 let r = FrontFieldRenderer(overlay: field)
                 frontRenderer = r
+                return r
+            }
+            if let tile = overlay as? MKTileOverlay, !(tile is RadarTileOverlay) {
+                let r = MKTileOverlayRenderer(tileOverlay: tile)
+                r.alpha = 1
                 return r
             }
             if let tile = overlay as? RadarTileOverlay {
@@ -849,6 +874,7 @@ struct RadarMapView: UIViewRepresentable {
         context.coordinator.syncStations(stations, style: stationStyle, on: map)
         context.coordinator.syncStorms(stations, show: showStorms, stationsOn: stationStyle != .off, on: map)
         context.coordinator.syncLightning(showStorms ? lightning : nil, on: map)
+        context.coordinator.syncLightningNext(showStorms ? lightningNextTemplate : nil, on: map)
         context.coordinator.setRadarDimmed(showStorms)
         context.coordinator.setRadarHidden(!radarVisible)
 

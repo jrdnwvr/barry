@@ -255,6 +255,7 @@ class PressureService:
         # Radar frames from MRMS (radar.py), fed by the scheduler's radar
         # loop; BARRY_MRMS=0 keeps the timeline on RainViewer.
         self.radar = RadarStore.from_env()
+        self.ltg_next = RadarStore.from_env("ltgnext", radar_mod.LUT_LTG)
         self.mrms_enabled = os.environ.get("BARRY_MRMS", "1") != "0"
         # Pulled either way; served by default only when this says "mrms".
         # /radar/frames?source=mrms asks for Barry's frames regardless.
@@ -1031,6 +1032,10 @@ class PressureService:
             await self._nowcast()
         except Exception as exc:
             log.warning("radar nowcast failed: %s: %s", type(exc).__name__, exc)
+        try:
+            await self._poll_lightning_next(now)
+        except Exception as exc:
+            log.warning("lightning probability failed: %s: %s", type(exc).__name__, exc)
         if self.radar.times():
             self.radar_ok_at = datetime.fromtimestamp(self.radar.times()[-1], tz=timezone.utc)
         return got
@@ -1056,6 +1061,33 @@ class PressureService:
         self.radar.drop_casts_before(t0)
         return 3
 
+    LTG_NEXT_MAX_AGE_S = 15 * 60.0
+
+    async def _poll_lightning_next(self, now: datetime) -> bool:
+        """The newest chance-of-lightning grid, when it is newer than the one
+        held; the last three are kept so a phone mid-switch still finds its
+        tiles."""
+        keys = await mrms.recent_keys(self._client, now, mrms.LIGHTNING_NEXT, hours=0.25)
+        if not keys:
+            return False
+        key = keys[-1]
+        t = int(mrms.key_time(key).timestamp())
+        if self.ltg_next.has(t):
+            return False
+        gz = await mrms.fetch(self._client, key)
+        codes, grid = await asyncio.to_thread(mrms.decode, gz, True)
+        await asyncio.to_thread(self.ltg_next.put, t, codes, grid)
+        held = self.ltg_next.times()
+        if len(held) > 3:
+            self.ltg_next.purge(held[-3])
+        return True
+
+    def _lightning_next(self) -> Optional[RadarFrameOut]:
+        held = self.ltg_next.times()
+        if not held or _now().timestamp() - held[-1] > self.LTG_NEXT_MAX_AGE_S:
+            return None
+        return RadarFrameOut(time=held[-1], path=f"/radar/lightning/{held[-1]}")
+
     def _mrms_frames(self) -> Optional[RadarFramesResponse]:
         obs = self.radar.observed()
         times = obs[-self.RADAR_FRAMES:]
@@ -1067,7 +1099,8 @@ class PressureService:
         base = times[-1]
         frames += [RadarFrameOut(time=base + (key - base) * self.radar.STEP_S, path=f"/radar/tiles/{key}",
                                  nowcast=True) for key in self.radar.casts(base)]
-        return RadarFramesResponse(host=self.public_url, frames=frames, cachedAt=_now())
+        return RadarFramesResponse(host=self.public_url, frames=frames,
+                                   lightningNext=self._lightning_next(), cachedAt=_now())
 
     async def get_radar_frames(self, source: Optional[str] = None) -> RadarFramesResponse:
         """The radar timeline: Barry's own MRMS frames when an hour of them

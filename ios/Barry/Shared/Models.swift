@@ -672,6 +672,9 @@ struct RadarFrameOut: Codable, Hashable {
 struct RadarFramesResponse: Codable, Hashable {
     let host: String
     let frames: [RadarFrameOut]
+    /// NOAA's chance of lightning in the next hour, as tiles on the same
+    /// host; absent from RainViewer or when not held.
+    var lightningNext: RadarFrameOut?
     let cachedAt: Date
 }
 

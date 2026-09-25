@@ -58,6 +58,9 @@ struct WindAltitude: Identifiable, Equatable {
 final class RadarModel: ObservableObject {
     @Published var frames: [RadarFrame] = []
     @Published var host = "https://tilecache.rainviewer.com"
+    /// Tile template for the chance of lightning in the next hour, when
+    /// Barry serves it.
+    @Published private(set) var lightningNextTemplate: String?
     @Published var index = 0
     @Published var playing = true
     /// The Now pill: the map stays on the freshest observed frame, through
@@ -268,6 +271,7 @@ final class RadarModel: ObservableObject {
         do {
             let resp = try await BarryAPI().radarFrames()
             host = resp.host
+            lightningNextTemplate = resp.lightningNext.map { resp.host + $0.path + "/512/{z}/{x}/{y}.png" }
             let hadFrames = !frames.isEmpty
             frames = resp.frames.map { RadarFrame(time: $0.time, path: $0.path, nowcast: $0.nowcast) }
             // A reload snaps to now unless the user parked the timeline

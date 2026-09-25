@@ -436,7 +436,7 @@ def _hrrr_fixture(kind):
         return fh.read()
 
 
-def sample_mrms():
+def sample_mrms(lightning=False):
     """A small MRMS-shaped file: 0.05 degree from 45 N, 95 W to 35 N, 75 W
     (north to south, as MRMS scans), no echo (-99) everywhere but a 45 dBZ
     cell over Cincinnati and a 60 dBZ single pixel near Dayton; no coverage
@@ -452,6 +452,9 @@ def sample_mrms():
     v[(np.abs(la - 39.1) < 0.2) & (np.abs(lo + 84.5) < 0.2)] = 45.0
     v[np.argmin(np.abs(lat - 39.9)), np.argmin(np.abs(lon + 84.2))] = 60.0
     v[-3:, :] = -999.0
+    if lightning:
+        # Chance of lightning: 60 percent over the Cincinnati cell, none elsewhere.
+        v = np.where(v == 45.0, 60.0, 0.0)
     h = eccodes.codes_grib_new_from_samples("GRIB2")
     for k, val in [("Ni", ni), ("Nj", nj), ("latitudeOfFirstGridPointInDegrees", 45.0),
                    ("longitudeOfFirstGridPointInDegrees", 265.0),
@@ -526,12 +529,18 @@ class FakeUpstream:
                 prefix = request.url.params.get("prefix", "")
                 after = request.url.params.get("start-after", "")
                 xml = sample_mrms_listing(self.clock(), prefix)
+                if "LightningProbability" in prefix:
+                    xml = xml.replace("MergedReflectivityQCComposite_00.50", "LightningProbabilityNext60minGrid_scale_1")
                 if after:
                     import re
                     keep = [c for c in re.findall(r"<Contents>.*?</Contents>", xml)
                             if re.search(r"<Key>(.*?)</Key>", c).group(1) > after]
                     xml = xml.split("<Contents>")[0] + "".join(keep) + "</ListBucketResult>"
                 return httpx.Response(200, text=xml)
+            if "LightningProbability" in url:
+                if not hasattr(self, "_ltg_file"):
+                    self._ltg_file = sample_mrms(lightning=True)
+                return httpx.Response(200, content=self._ltg_file)
             if not hasattr(self, "_mrms_file"):
                 self._mrms_file = sample_mrms()
             self.mrms_files = getattr(self, "mrms_files", 0) + 1

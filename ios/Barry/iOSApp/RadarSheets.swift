@@ -107,6 +107,12 @@ struct RadarKeySheet: View {
                         }
                         Text("Flashes seen by NOAA's GOES satellites in the last 20 minutes. Bigger where more fell, fading with age.")
                         Text("The satellite sees the light a stroke throws onto the cloud top, in-cloud and ground strikes alike. A dot is where the cloud lit up, good to about 5 miles, a minute or two late.")
+                        HStack(spacing: 6) {
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color(red: 0.55, green: 0.30, blue: 0.95).opacity(0.35))
+                                .frame(width: 22, height: 12)
+                            Text("violet wash: NOAA's chance of lightning in the next hour, deeper as it rises")
+                        }
                         if lightningCoverage == false {
                             Text("The feed is catching up right now, so flashes may be missing.")
                                 .foregroundStyle(.orange)

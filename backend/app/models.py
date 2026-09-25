@@ -543,6 +543,9 @@ class RadarFrameOut(BaseModel):
 class RadarFramesResponse(BaseModel):
     host: str
     frames: List[RadarFrameOut] = Field(default_factory=list)
+    # NOAA's chance of lightning in the next hour, as tiles at `path` on the
+    # same host; absent when not held.
+    lightningNext: Optional[RadarFrameOut] = None
     cachedAt: datetime
 
 

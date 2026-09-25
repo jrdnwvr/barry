@@ -160,3 +160,19 @@ def test_motion_follows_a_moving_storm():
     nxt = radar.advect(cur, vy, vx, 1)
     ys, xs = np.nonzero(nxt)
     assert (ys.min(), xs.min()) == (416, 532)
+
+
+@pytest.mark.asyncio
+async def test_the_chance_of_lightning_in_the_next_hour_comes_with_the_frames(client, upstream, mrms_on):
+    from app.main import app
+    s = PressureService(client)
+    await s.poll_radar()
+    f = await s.get_radar_frames()
+    assert f.lightningNext is not None and f.lightningNext.path == f"/radar/lightning/{f.lightningNext.time}"
+    app.state.service = s
+    x, y, px, py = tile_of(39.1, -84.5, 7)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+        r = await c.get(f"{f.lightningNext.path}/512/7/{x}/{y}.png")
+        assert r.status_code == 200 and "immutable" in r.headers["cache-control"]
+        assert read_png(r.content)[py, px].tolist() == [140, 77, 242, 107]      # 60 percent
+    assert await s._poll_lightning_next(NOW) is False                           # held

@@ -58,6 +58,19 @@ def _lut() -> np.ndarray:
 LUT = _lut()
 
 
+def _ltg_lut() -> np.ndarray:
+    """Chance of lightning in the next hour (code = percent) -> violet,
+    deeper with the chance; nothing under 10 percent."""
+    lut = np.zeros((256, 4), dtype=np.uint8)
+    for p in range(10, 101):
+        a = 0.18 if p < 30 else 0.30 if p < 50 else 0.42 if p < 70 else 0.55
+        lut[p] = [140, 77, 242, int(round(a * 255))]
+    return lut
+
+
+LUT_LTG = _ltg_lut()
+
+
 def png_rgba(img: np.ndarray, level: int = 3) -> bytes:
     """A (h, w, 4) uint8 image as an RGBA PNG, no filtering (rows of
     nothing compress to almost nothing anyway)."""
@@ -92,8 +105,9 @@ def pool(a: np.ndarray) -> np.ndarray:
 
 
 class RadarStore:
-    def __init__(self, root: Optional[Path]) -> None:
-        self.root = Path(root) / "radar" if root else None
+    def __init__(self, root: Optional[Path], subdir: str = "radar", lut: Optional[np.ndarray] = None) -> None:
+        self.root = Path(root) / subdir if root else None
+        self.lut = LUT if lut is None else lut
         self.grid: Optional[dict] = None
         self._frames: Dict[int, List[np.ndarray]] = {}
         self._tiles: "OrderedDict[tuple, bytes]" = OrderedDict()
@@ -104,9 +118,9 @@ class RadarStore:
             self._load()
 
     @classmethod
-    def from_env(cls) -> "RadarStore":
+    def from_env(cls, subdir: str = "radar", lut: Optional[np.ndarray] = None) -> "RadarStore":
         d = os.environ.get("BARRY_DATA_DIR")
-        return cls(Path(d) if d else None)
+        return cls(Path(d) if d else None, subdir, lut)
 
     def _load(self) -> None:
         g = self.root / "grid.json"
@@ -194,7 +208,7 @@ class RadarStore:
             grid = self.grid
         if levels is None or grid is None:
             return None
-        png = render(levels, grid, z, x, y, size)
+        png = render(levels, grid, z, x, y, size, self.lut)
         with self._lock:
             self._tiles[key] = png
             self._tile_bytes += len(png)
@@ -217,7 +231,8 @@ class RadarStore:
         return code / 2.0 - 32.0 if code else None
 
 
-def render(levels: List[np.ndarray], grid: dict, z: int, x: int, y: int, size: int) -> bytes:
+def render(levels: List[np.ndarray], grid: dict, z: int, x: int, y: int, size: int,
+           lut: Optional[np.ndarray] = None) -> bytes:
     n = 2 ** z
     px_deg = 360.0 / (n * size)
     lvl = 0
@@ -241,7 +256,7 @@ def render(levels: List[np.ndarray], grid: dict, z: int, x: int, y: int, size: i
     codes[np.ix_(rok, cok)] = arr[np.ix_(row[rok], col[cok])]
     if not codes.any():
         return empty_png(size)
-    return png_rgba(LUT[codes])
+    return png_rgba((LUT if lut is None else lut)[codes])
 
 
 # ---- the next half hour ----------------------------------------------------------

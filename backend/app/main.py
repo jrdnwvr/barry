@@ -99,8 +99,8 @@ async def _request_context(request: Request, call_next):
         if request.url.path != "/healthz":
             # Tiles come in dozens per map view and cost next to nothing,
             # so they have their own, larger budget.
-            limiter: IPLimiter = (request.app.state.tile_limiter if request.url.path.startswith("/radar/tiles/")
-                                  else request.app.state.ip_limiter)
+            tiles = request.url.path.startswith(("/radar/tiles/", "/radar/lightning/"))
+            limiter: IPLimiter = request.app.state.tile_limiter if tiles else request.app.state.ip_limiter
             key = client_key(request.client.host if request.client else None,
                              request.headers.get("cf-connecting-ip"))
             if not limiter.allow(key):
@@ -389,6 +389,20 @@ async def radar_tile(t: int, size: int, z: int, x: int, y: int, color: str, opts
     png = await asyncio.to_thread(get_service().radar.tile, t, z, x, y, size)
     if png is None:
         raise HTTPException(status_code=404, detail="no such frame", headers=miss)
+    return Response(content=png, media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=604800, immutable"})
+
+
+@app.get("/radar/lightning/{t}/{size}/{z}/{x}/{y}.png", include_in_schema=False)
+async def lightning_next_tile(t: int, size: int, z: int, x: int, y: int):
+    """One tile of NOAA's chance of lightning in the next hour, violet,
+    deeper with the chance. Same caching as the radar tiles."""
+    miss = {"Cache-Control": "no-store"}
+    if size not in (256, 512) or not (0 <= z <= 12) or not (0 <= x < 2 ** z) or not (0 <= y < 2 ** z):
+        raise HTTPException(status_code=404, detail="no such tile", headers=miss)
+    png = await asyncio.to_thread(get_service().ltg_next.tile, t, z, x, y, size)
+    if png is None:
+        raise HTTPException(status_code=404, detail="no such grid", headers=miss)
     return Response(content=png, media_type="image/png",
                     headers={"Cache-Control": "public, max-age=604800, immutable"})
 

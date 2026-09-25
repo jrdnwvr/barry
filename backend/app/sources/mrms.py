@@ -53,15 +53,22 @@ def parse_listing(xml: str) -> List[str]:
     return [c.findtext(f"{_S3_NS}Key") or "" for c in root.iter(f"{_S3_NS}Contents")]
 
 
-async def recent_keys(client: httpx.AsyncClient, now: datetime) -> List[str]:
-    """Keys from the last KEEP_H hours and a bit, across midnight when the
+# NOAA's chance of lightning (any flash) in the next hour, from MRMS and
+# GOES, on the same grid, every two minutes, about 30 KB. Percent.
+LIGHTNING_NEXT = "LightningProbabilityNext60minGrid_scale_1"
+
+
+async def recent_keys(client: httpx.AsyncClient, now: datetime, product: str = PRODUCT,
+                      hours: float = KEEP_H) -> List[str]:
+    """Keys from the last `hours` and a bit, across midnight when the
     window crosses it. A day holds about 720 keys, one listing page."""
-    start = now - timedelta(hours=KEEP_H, minutes=15)
+    start = now - timedelta(hours=hours, minutes=15)
     keys: List[str] = []
     for day in sorted({start.date(), now.date()}):
         d = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
-        after = f"CONUS/{PRODUCT}/{d:%Y%m%d}/MRMS_{PRODUCT}_{max(d, start):%Y%m%d-%H%M%S}.grib2.gz"
-        r = await client.get(list_url(d, after), headers={"User-Agent": USER_AGENT}, timeout=20.0)
+        after = f"CONUS/{product}/{d:%Y%m%d}/MRMS_{product}_{max(d, start):%Y%m%d-%H%M%S}.grib2.gz"
+        u = f"{BUCKET}/?list-type=2&prefix=CONUS/{product}/{d:%Y%m%d}/&start-after={after}"
+        r = await client.get(u, headers={"User-Agent": USER_AGENT}, timeout=20.0)
         r.raise_for_status()
         keys += parse_listing(r.text)
     return sorted(k for k in keys if key_time(k) is not None)
@@ -89,9 +96,10 @@ def pick(keys: List[str], now: datetime) -> Dict[datetime, str]:
     return out
 
 
-def decode(gz: bytes) -> Tuple[np.ndarray, dict]:
+def decode(gz: bytes, percent: bool = False) -> Tuple[np.ndarray, dict]:
     """dBZ as uint8 codes (dBZ = code / 2 - 32; 0 is no echo or no
-    coverage) and the grid's corner and spacing, rows north to south."""
+    coverage), or with `percent` the value itself (0 to 100), and the
+    grid's corner and spacing, rows north to south."""
     import eccodes
     data = gzip.decompress(gz)
     h = eccodes.codes_new_from_message(data)
@@ -106,8 +114,11 @@ def decode(gz: bytes) -> Tuple[np.ndarray, dict]:
     v = vals.reshape(nj, ni)
     if int(meta["jScansPositively"]) == 1:
         v = v[::-1]
-    codes = np.clip(np.rint((v + 32.0) * 2.0), 0, 255).astype(np.uint8)
-    codes[v < -32] = 0                      # -99 no echo, -999 no coverage
+    if percent:
+        codes = np.clip(np.rint(v), 0, 100).astype(np.uint8)
+    else:
+        codes = np.clip(np.rint((v + 32.0) * 2.0), 0, 255).astype(np.uint8)
+        codes[v < -32] = 0                  # -99 no echo, -999 no coverage
     lon0 = float(meta["longitudeOfFirstGridPointInDegrees"])
     return codes, {
         "lat0": float(meta["latitudeOfFirstGridPointInDegrees"]),

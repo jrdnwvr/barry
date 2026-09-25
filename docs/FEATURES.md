@@ -452,8 +452,10 @@ hidden). A card shows only when it is not hidden and has something to say.
 
 ### home.footer (was card.sources)
 - Seen: at the foot of the page, the Barry mark and under it one quiet
-  line: "KLUK aviationweather.gov · forecast Open-Meteo.com (CC BY 4.0) ·
-  radar RainViewer, NOAA NEXRAD · lightning NOAA GOES · fronts NWS WPC".
+  line: "KLUK aviationweather.gov · forecast NOAA HRRR and NBM · radar
+  RainViewer, NOAA NEXRAD · lightning NOAA GOES · fronts NWS WPC", with
+  "forecast Open-Meteo.com (CC BY 4.0)" instead where the forecast came
+  from Open-Meteo (off the HRRR grid).
 - Lives: `ContentView.glanceCards` footer, `DataSourceFootnote`.
 - Rules: it carries the forecast data's required credit and RainViewer's,
   so it is not a card and cannot be hidden or moved. The `.sources` case
@@ -1123,7 +1125,7 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 |---|---|---|---|---|---|
 | `GET /combined` | `station`, `lat`, `lon`, `tz` | pressure (series, current, tendency), forecast, reading (trend, feature, confidence, explanation), conditions, runways, taf, lamp (LAMP guidance from this hour, when the site has it), lightningNearby, verdict | AWC METAR (Open-Meteo surface pressure as fallback), Open-Meteo forecast, AWC TAF, LAMP from NOMADS, OurAirports runways, GLM flashes, bulk METAR lightning | pressure 12 min per station; forecast 30 min per 0.1° cell; TAF 30 min | the phone and watch (`PressureStore`), complications, widgets, the airport check in Settings |
 | `GET /pressure/{station}` | `hours` | pressure only | as above | one key per station, whole day | nobody now |
-| `GET /forecast` | `lat`, `lon` | hourly, sun, `stale` | Open-Meteo, 2 days | 30 min per 0.1° cell; last good re-served 12 h when upstream fails | inside `/combined` |
+| `GET /forecast` | `lat`, `lon` | hourly, sun, `source` ("hrrr+nbm", "hrrr" or "open-meteo"), `stale`; on `/combined` also `pressureOffset` | the HRRR forecast feeds (48 h) with NBM over the first 36 h, sun times computed; Open-Meteo, 2 days, off the grid | NOAA: 30 min per 0.1° cell and run; Open-Meteo: 30 min per 0.1° cell, last good re-served 12 h when upstream fails | inside `/combined` |
 | `GET /front` | `station`, `lat`, `lon` | status, headline, bearing, eta, nearestFront | bulk METAR history (7.5 h) or an AWC box, forecast, `/fronts` | 15 min per station and 0.1° | the phone's front banner only |
 | `GET /fronts` | none | WPC analysis plus 12 to 48 h progs | IEM AFOS (CODSUS, CODSRP) | 30 min, one entry | the radar |
 | `GET /radar/hrrr` | none | run time | IEM tile probe | 10 min | nobody (parked) |
@@ -1175,6 +1177,14 @@ without blocking the response.
   as soon as it lands, and after a restart, so the first column read is
   quick. Then GTG turbulence (every 15 minutes) and CIP icing (hourly)
   from NOMADS, one whole file each, newest run only.
+- And the point forecast: `hrrr-fc2` (f00 to f18 of every cycle) and
+  `hrrr-fcx2` (f00 to f48 of the long cycles), 15 surface fields each hour,
+  pressures stored less 1,000 hPa so half precision keeps tenths; then NBM
+  every third hour (f01 to f36: temperature, dew point, wind, direction,
+  gust, sky, and the hourly chance of rain and of thunder). On `/combined`
+  the NOAA pressure curve is shifted to meet the station's latest reading
+  (`pressureOffset`; HRRR reduces to sea level its own way, and Open-Meteo
+  at KLUK serves the same HRRR numbers without the shift).
 - LAMP loop every 300 s: when a new hourly run (HH:30, looked for eight
   minutes after) is not held, one 4.4 MB bulletin from NOMADS for every
   site, parsed in a thread (2,313 stations, 0.4 s). On a cold start a run

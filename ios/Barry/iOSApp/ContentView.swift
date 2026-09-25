@@ -718,7 +718,11 @@ private struct DataSourceFootnote: View {
     /// forecast data and RainViewer asks for its name somewhere visible.
     private var text: String {
         var parts = ["\(combined.pressure.station) \(combined.pressure.source)"]
-        if combined.sources?.forecast != nil { parts.append("forecast Open-Meteo.com (CC BY 4.0)") }
+        if let f = combined.sources?.forecast {
+            // NOAA's models run on Barry's own server where they cover the
+            // field; Open-Meteo (CC BY 4.0, credit required) elsewhere.
+            parts.append(f.contains("hrrr") ? "forecast NOAA HRRR and NBM" : "forecast Open-Meteo.com (CC BY 4.0)")
+        }
         parts.append("radar RainViewer, NOAA NEXRAD")
         parts.append("lightning NOAA GOES")
         parts.append("fronts NWS WPC")

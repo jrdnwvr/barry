@@ -480,6 +480,18 @@ few knots at the shared levels.
 Medium. The rain percentage becomes a real probability, and the forecast
 moves off the bridge.
 
+Done 2026-09-25, with HRRR as the base for every field and hour (0 to 48
+from the four long cycles, 0 to 18 from every cycle) and NBM laid over
+temperature, dew point, wind, gust, sky and the hourly rain and thunder
+chances for its first 36 hours, rather than HRRR for 0 to 6 and NBM after.
+Weather codes are derived only as far as the app reads them (thunder,
+showers, rain, cloud). The 180 m temperature for the ride estimate comes
+from the column feeds where they reach. Two things the build found: the
+forecast pressure needed storing less 1,000 hPa (half precision rounds a
+value near 1,024 to the whole hPa), and HRRR's sea-level reduction sits a
+hPa or two off a station's, so the curve is shifted to meet the latest
+report. Open-Meteo at KLUK had been serving the same HRRR numbers.
+
 - Pull from NBM, every three hours: temperature, dew point, wind, direction,
   gust, sky cover, ceiling, visibility, CAPE, rain probability, thunder
   probability and maximum reflectivity for hours 1 to 24, then every three

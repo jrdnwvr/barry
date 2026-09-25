@@ -107,6 +107,11 @@ class FeedSpec:
     # set (RRFS names its files its own way and lands later).
     url: Optional[Callable[[datetime, int, str], str]] = None
     arrival: Optional[Callable[[int], float]] = None
+    # Point-major: each hour one (ny, nx, fields) array, so everything at a
+    # point sits together and a column or a forecast at a point is a few
+    # reads instead of one per field. For feeds read at points, not over
+    # regions.
+    pack: bool = False
 
     def url_for(self, cycle: datetime, fhr: int, kind: str) -> str:
         return (self.url or aws_url)(cycle, fhr, kind)
@@ -132,8 +137,10 @@ MAP = FeedSpec("hrrr", FIELDS, WIND_PAIRS, lambda c: FHRS, nomads=True)
 # 0.95 MB a field instead of 7.6.
 # One run of each is kept: the store deletes the old one only once the new
 # one is complete, and a day-long run is 3.5 GB.
-COL = FeedSpec("hrrr-col", COL_FIELDS, COL_WIND_PAIRS, lambda c: (0, 1, 2, 3), stride=2, dtype="float16", keep=1)
-COLX = FeedSpec("hrrr-colx", COL_FIELDS, COL_WIND_PAIRS, lambda c: _extended(c), stride=2, dtype="float16", keep=1)
+COL = FeedSpec("hrrr-col2", COL_FIELDS, COL_WIND_PAIRS, lambda c: (0, 1, 2, 3), stride=2, dtype="float16",
+               keep=1, pack=True)
+COLX = FeedSpec("hrrr-colx2", COL_FIELDS, COL_WIND_PAIRS, lambda c: _extended(c), stride=2, dtype="float16",
+                keep=1, pack=True)
 # The point forecast: everything the forecast cards, the storm outlook,
 # density altitude and the ride estimate read, for 18 hours from every
 # cycle and 48 from the four long ones. NBM overrides temperature, wind,
@@ -168,13 +175,14 @@ def _extended_fc(cycle: datetime) -> Tuple[int, ...]:
 
 
 FC_LAST = 18
-FC = FeedSpec("hrrr-fc2", FC_FIELDS, FC_WIND_PAIRS, lambda c: tuple(range(0, FC_LAST + 1)),
-              stride=2, dtype="float16", keep=1)
-FCX = FeedSpec("hrrr-fcx2", FC_FIELDS, FC_WIND_PAIRS, lambda c: _extended_fc(c),
-               stride=2, dtype="float16", keep=1)
+FC = FeedSpec("hrrr-fc3", FC_FIELDS, FC_WIND_PAIRS, lambda c: tuple(range(0, FC_LAST + 1)),
+              stride=2, dtype="float16", keep=1, pack=True)
+FCX = FeedSpec("hrrr-fcx3", FC_FIELDS, FC_WIND_PAIRS, lambda c: _extended_fc(c),
+               stride=2, dtype="float16", keep=1, pack=True)
 FEEDS: Tuple[FeedSpec, ...] = (MAP, COL, COLX, FC, FCX)
 # Feeds stored in a format since changed; the store deletes them on start.
-RETIRED = ("hrrr-fc", "hrrr-fcx")        # pressures in absolute hPa (2026-09-25)
+RETIRED = ("hrrr-fc", "hrrr-fcx",        # pressures in absolute hPa (2026-09-25)
+           "hrrr-col", "hrrr-colx", "hrrr-fc2", "hrrr-fcx2")   # one file per field (2026-09-25)
 
 def path(cycle: datetime, fhr: int, kind: str) -> str:
     return f"hrrr.{cycle:%Y%m%d}/conus/hrrr.t{cycle:%H}z.wrf{kind}f{fhr:02d}.grib2"
@@ -390,6 +398,7 @@ def _process_hour(raw: Dict[str, bytes], spec: FeedSpec, cycle: datetime, fhr: i
     for un, vn in spec.wind_pairs:
         pair_of[un], pair_of[vn] = vn, un
     pending: Dict[str, grib.Message] = {}
+    packed: Dict[str, np.ndarray] = {}
     meta = None
     written = 0
     for f in spec.fields:
@@ -411,8 +420,15 @@ def _process_hour(raw: Dict[str, bytes], spec: FeedSpec, cycle: datetime, fhr: i
             rotate_pair(u, v)
             ready = [(f.name, msg), (other, o)]
         for name, m in ready:
-            store.put(spec.name, cycle, fhr, name, _shrink(m.values, spec), meta)
+            if spec.pack:
+                packed[name] = _shrink(m.values, spec)
+            else:
+                store.put(spec.name, cycle, fhr, name, _shrink(m.values, spec), meta)
             written += 1
+    if spec.pack:
+        names = [f.name for f in spec.fields]
+        arr = np.stack([packed[n] for n in names], axis=-1)
+        store.put(spec.name, cycle, fhr, "pack", arr, dict(meta, pack=names))
     return written
 
 

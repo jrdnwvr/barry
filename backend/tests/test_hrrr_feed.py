@@ -24,9 +24,10 @@ def _centre(points):
 
 
 @pytest.fixture
-def hrrr_on(monkeypatch):
+def hrrr_on(monkeypatch, upstream):
     monkeypatch.setenv("BARRY_HRRR", "1")
     monkeypatch.setattr("app.service._now", lambda: NOW)
+    upstream.clock = lambda: NOW          # the fake Open-Meteo's hours follow the same clock
 
 
 def test_index_ranges_and_merging():
@@ -79,9 +80,9 @@ async def test_a_cycle_is_pulled_and_the_winds_come_out_earth_relative(client, u
     s = PressureService(client)
     assert await s.poll_hrrr() > 0
     assert s.models.cycles("hrrr") == [CYCLE]
-    assert s.models.cycles("hrrr-col") == [CYCLE]
-    assert s.models.cycles("hrrr-colx") == [datetime(2026, 9, 25, 0, tzinfo=timezone.utc)]
-    assert max(s.models.hours("hrrr-colx", datetime(2026, 9, 25, 0, tzinfo=timezone.utc))) == 3
+    assert s.models.cycles("hrrr-col2") == [CYCLE]
+    assert s.models.cycles("hrrr-colx2") == [datetime(2026, 9, 25, 0, tzinfo=timezone.utc)]
+    assert max(s.models.hours("hrrr-colx2", datetime(2026, 9, 25, 0, tzinfo=timezone.utc))) == 3
     resp = await s.get_field_grid(LAT, LON, 3.0, 5.0)
     assert resp.source == "hrrr" and len(resp.points) == s.HRRR_COLS * s.HRRR_ROWS
     p = _centre(resp.points)
@@ -176,7 +177,7 @@ async def test_a_late_bucket_sends_the_pull_to_nomads_as_whole_files(client, ups
     gets = [c for c in upstream.hrrr_calls if c[1] == "GET" and not c[2].endswith(".idx") and "t02z" in c[2]]
     assert gets and all(c[0] == "nomads" and c[3] is None for c in gets)
     # The column feeds wait for the bucket rather than pull whole files.
-    assert s.models.cycles("hrrr-col") == [CYCLE - timedelta(hours=1)]
+    assert s.models.cycles("hrrr-col2") == [CYCLE - timedelta(hours=1)]
 
 
 @pytest.mark.asyncio

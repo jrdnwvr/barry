@@ -33,12 +33,54 @@ def grid(store: ModelStore, feed: str, cycle: datetime) -> Optional[grib.Lambert
     meta = store.grid(feed, cycle)
     if not meta:
         return None
-    key = tuple(sorted(meta.items()))
+    key = tuple(sorted((k, v) for k, v in meta.items() if k != "pack"))
     g = _GRIDS.get(key)
     if g is None:
         g = grib.LambertGrid.from_meta(meta)
         _GRIDS[key] = g
     return g
+
+
+class Point:
+    """Every field of one model hour at one point, bilinear. A packed hour
+    (the column and forecast feeds) is read in one go, the four corner
+    points' whole rows of fields; otherwise each field is read as asked."""
+
+    def __init__(self, store: ModelStore, feed: str, cycle: datetime, fhr: int, lat: float, lon: float):
+        self.store, self.feed, self.cycle, self.fhr = store, feed, cycle, fhr
+        self.g = grid(store, feed, cycle)
+        self.la, self.lo = np.array([lat]), np.array([lon])
+        self.values: Optional[Dict[str, float]] = None
+        meta = store.grid(feed, cycle) or {}
+        names = meta.get("pack")
+        if names and self.g is not None:
+            arr = store.load(feed, cycle, fhr, "pack")
+            if arr is not None:
+                vals = _bilinear_channels(self.g, arr, lat, lon)
+                self.values = dict(zip(names, vals)) if vals is not None else {}
+
+    def __call__(self, name: str) -> float:
+        if self.values is not None:
+            v = self.values.get(name)
+            return float(v) if v is not None else float("nan")
+        arr = self.store.load(self.feed, self.cycle, self.fhr, name)
+        if arr is None or self.g is None:
+            return float("nan")
+        return float(self.g.sample(arr, self.la, self.lo)[0])
+
+
+def _bilinear_channels(g: grib.LambertGrid, arr: np.ndarray, lat: float, lon: float) -> Optional[List[float]]:
+    i, j = g.ij(lat, lon)
+    i, j = float(np.asarray(i)), float(np.asarray(j))
+    ny, nx = arr.shape[0], arr.shape[1]
+    if not (0 <= i <= nx - 1 and 0 <= j <= ny - 1):
+        return None
+    i0, j0 = min(int(i), nx - 2), min(int(j), ny - 2)
+    fi, fj = i - i0, j - j0
+    a = arr[j0:j0 + 2, i0:i0 + 2, :].astype(np.float64)
+    v = (a[0, 0] * (1 - fi) * (1 - fj) + a[0, 1] * fi * (1 - fj)
+         + a[1, 0] * (1 - fi) * fj + a[1, 1] * fi * fj)
+    return v.tolist()
 
 
 def _pair(store: ModelStore, un: str, vn: str, now: datetime):
@@ -179,7 +221,7 @@ def heights(store: ModelStore, hpa: int, lat: float, lon: float, lat_span: float
 
 # ---- the Aloft column ---------------------------------------------------------
 
-COL_FEEDS = ("hrrr-col", "hrrr-colx")
+COL_FEEDS = ("hrrr-col2", "hrrr-colx2")
 COL_LEVELS = (1000, 975, 950, 925, 900, 875, 850, 825, 800, 750, 700, 650, 600, 550, 500, 450, 400)
 FT_PER_M = 3.28084
 KT_PER_MS = 1.943844
@@ -235,14 +277,9 @@ def column(store: ModelStore, lat: float, lon: float, start: datetime, hours: in
         if found is None:
             continue
         feed, cycle, fhr = found
-        g = grid(store, feed, cycle)
-        if g is None:
+        at = Point(store, feed, cycle, fhr, lat, lon)
+        if at.g is None:
             continue
-
-        def at(name: str) -> float:
-            arr = store.load(feed, cycle, fhr, name)
-            return float(g.sample(arr, la, lo)[0]) if arr is not None else float("nan")
-
         ground = at("zsfc")
         levels: List[AloftLevel] = []
         for p in COL_LEVELS:
@@ -351,7 +388,7 @@ def hazards(store: ModelStore, lat: float, lon: float, now: datetime
 
 # ---- the point forecast -------------------------------------------------------
 
-FC_FEEDS = ("hrrr-fc2", "hrrr-fcx2")
+FC_FEEDS = ("hrrr-fc3", "hrrr-fcx3")
 KMH_PER_MS_F = 3.6
 # Thunder where NBM gives it a real chance in the hour; showers where it
 # is likely to rain and the air is unstable; rain where it is likely to
@@ -387,15 +424,9 @@ def _temp_at_agl(store: ModelStore, lat: float, lon: float, valid: datetime, agl
     if found is None:
         return None
     feed, cycle, fhr = found
-    g = grid(store, feed, cycle)
-    if g is None:
+    at = Point(store, feed, cycle, fhr, lat, lon)
+    if at.g is None:
         return None
-    la, lo = np.array([lat]), np.array([lon])
-
-    def at(name):
-        arr = store.load(feed, cycle, fhr, name)
-        return float(g.sample(arr, la, lo)[0]) if arr is not None else float("nan")
-
     target = at("zsfc") + agl_m
     t2 = at("t2")
     pts = [(at("zsfc") + 2.0, t2)] if math.isfinite(t2) else []
@@ -435,11 +466,10 @@ def forecast(store: ModelStore, lat: float, lon: float, now: datetime, hours: in
             valid += timedelta(hours=1)
             continue
         feed, cycle, fhr = found
-        g = grid(store, feed, cycle)
+        point = Point(store, feed, cycle, fhr, lat, lon)
 
-        def at(name):
-            arr = store.load(feed, cycle, fhr, name)
-            v = float(g.sample(arr, la, lo)[0]) if arr is not None and g is not None else float("nan")
+        def at(name, point=point):
+            v = point(name)
             return v if math.isfinite(v) else None
 
         u, v = at("u10"), at("v10")

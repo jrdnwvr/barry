@@ -109,6 +109,7 @@ class ModelStore:
         """Float16 arrays stay float16 (the column feeds); anything else is
         stored as float32."""
         arr = np.ascontiguousarray(arr, dtype=np.float16 if arr.dtype == np.float16 else np.float32)
+        # A packed hour holds every field; the manifest lists the names.
         with self._lock:
             m = self._manifest(feed, cycle)
             if grid is not None:

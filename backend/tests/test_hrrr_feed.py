@@ -290,6 +290,11 @@ async def test_the_point_forecast_is_hrrr_with_nbm_over_its_first_hours(client, 
     assert any(x.hour == 23 and x.day == 25 for x in f.sun.sunset)   # about 7:30 PM EDT
     c = await s.get_combined("KLUK")
     assert c.forecast.source == "hrrr+nbm" and c.sources.forecast == "hrrr+nbm"
+    # The curve is shifted to meet the station's latest reading.
+    last = [p for p in c.pressure.series if p.slp is not None][-1]
+    assert c.forecast.pressureOffset is not None
+    near = min(c.forecast.hourly, key=lambda x: abs((x.t - last.t).total_seconds()))
+    assert abs(near.pressure_msl - last.slp) < 0.6
     assert (await s.get_forecast(45.0, -120.0)).source == "open-meteo"
 
 

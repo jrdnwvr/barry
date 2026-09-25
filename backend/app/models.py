@@ -130,6 +130,10 @@ class ForecastResponse(BaseModel):
     sun: Optional[SunTimes] = None
     source: str
     cachedAt: datetime
+    # hPa added to every pressure_msl so the curve meets the station's own
+    # latest reading (the model reduces to sea level its own way); set on
+    # /combined for the NOAA forecast, absent otherwise.
+    pressureOffset: Optional[float] = None
     # True when the upstream fetch failed and this is the last good forecast being
     # re-served (stale-if-error). Clients should say so rather than hide the loss.
     stale: bool = False

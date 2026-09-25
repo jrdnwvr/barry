@@ -1445,6 +1445,8 @@ class PressureService:
             except Exception:
                 forecast = None  # forecast is enrichment; never block the response
 
+        if forecast is not None and "hrrr" in forecast.source:
+            forecast = _anchor_pressure(forecast, pressure)
         interp, local_offset = _run_interpreter(pressure, forecast)
         # The client's real UTC offset beats the longitude/15 guess (which is
         # an hour off wherever daylight saving is in effect).
@@ -1540,6 +1542,36 @@ class PressureService:
             sources=sources,
             verdict=verdict,
         )
+
+
+ANCHOR_MAX_HPA = 6.0
+
+
+def _anchor_pressure(forecast: ForecastResponse, pressure: PressureResponse) -> ForecastResponse:
+    """Shift the model's sea-level pressure so it meets the station's latest
+    reading. HRRR reduces to sea level its own way (MAPS), a hPa or two off
+    a station's SLP; left alone, the step where the dashed line starts
+    reads as a rise or a fall that isn't happening. A constant shift keeps
+    the model's shape, which is what the curve is read for. Left alone past
+    6 hPa (a bad report) or with no forecast hour either side of the report."""
+    obs = [p for p in pressure.series if p.slp is not None]
+    hrs = [h for h in forecast.hourly if h.pressure_msl is not None]
+    if not obs or len(hrs) < 2:
+        return forecast
+    last = obs[-1]
+    before = [h for h in hrs if h.t <= last.t]
+    after = [h for h in hrs if h.t >= last.t]
+    if not before or not after:
+        return forecast
+    a, b = before[-1], after[0]
+    span = (b.t - a.t).total_seconds()
+    fv = a.pressure_msl if span == 0 else a.pressure_msl + (b.pressure_msl - a.pressure_msl) * (last.t - a.t).total_seconds() / span
+    off = last.slp - fv
+    if abs(off) > ANCHOR_MAX_HPA:
+        return forecast
+    hourly = [h.model_copy(update={"pressure_msl": round(h.pressure_msl + off, 1)}) if h.pressure_msl is not None else h
+              for h in forecast.hourly]
+    return forecast.model_copy(update={"hourly": hourly, "pressureOffset": round(off, 1)})
 
 
 def _run_interpreter(

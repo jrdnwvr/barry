@@ -1367,3 +1367,7 @@ caching failures; `/stations/search` accepting one character.
   behind the TAF card and the route's arrival (NOAA.md phase 1a). HRRR
   on Tower behind the radar's wind grid, the rail's winds and new height
   contours (phase 2).
+- 2026-09-25: the rest of the NOAA switch: the Aloft column from HRRR with
+  GTG turbulence and CIP icing, the point forecast from HRRR and NBM, radar
+  tiles from MRMS with a nowcast and the chance of lightning, RRFS scored
+  beside HRRR; Map options presets.

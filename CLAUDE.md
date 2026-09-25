@@ -214,6 +214,22 @@ mirror for those, and the only home of LAMP, GTG turbulence and CIP icing
 non-commercial only and RainViewer's is personal use only, which is the
 reason for the plan.
 
+Live since 2026-09-25 (phases 1a to 6, and 7 started): the scheduler's
+model loop pulls HRRR (map, column and forecast feeds), NBM, GTG, CIP and
+RRFS into `state/model` (`modelstore.py`, `sources/hrrr.py`, `nbm.py`,
+`hazards.py`, `rrfs.py`; decoding and the Lambert grid in `grib.py`), and
+serves the radar wind grid, the rail's winds and height contours, the
+Aloft column with turbulence and icing, and the point forecast from it
+(`modelfields.py`), Open-Meteo only off the HRRR grid. The radar loop pulls
+MRMS into `state/radar` and serves Barry's own tiles in RainViewer's URL
+shape and colours (`radar.py`), with a nowcast and NOAA's chance of
+lightning; RainViewer only when those frames are stale
+(`BARRY_RADAR_SOURCE`). LAMP comes from NOMADS (`sources/lamp.py`,
+`nomads.py`, 10 s between requests). Forecast pressure is stored less
+1,000 hPa in half precision, and on `/combined` the curve is shifted to
+meet the station's latest report. `/models/scores` scores HRRR and RRFS
+against the METARs hourly for the switch. Container memory limit 3 GB.
+
 **docs/FEATURES.md (2026-09-24)** is the feature registry: every user-facing
 feature with a stable slug, where it lives, what data and settings it uses,
 its tests, and the defects found on the day. A change that adds, removes or

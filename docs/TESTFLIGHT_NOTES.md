@@ -22,3 +22,4 @@ This build:
 - Build 84 (2026-09-17, 78ef98f): storm row, watch sync + 6 h chart, shorter copy, I67 fix. First build on the short template.
 - Build 85 (2026-09-19, 36a2561): internal only, new Internal only workflow (Turpentine group). Widgets, radar layers stack, home screen editor, Backcountry, Live Activity, TAF card.
 - Build 86 (2026-09-20, 8cd51b4): Pilots. Same content as 85. Notes written by Jordan.
+- Build 87 (2026-09-25, 17849f7): Pilots. NOAA switch: radar from MRMS with nowcast and lightning chance, rain line, Aloft turbulence and icing, LAMP TAF stand-in, saved map presets, height contours, the rate-limited tile fix. Notes written by Jordan.

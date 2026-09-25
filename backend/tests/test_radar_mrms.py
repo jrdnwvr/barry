@@ -78,7 +78,8 @@ async def test_a_tile_draws_the_storm_in_universal_blue(client, upstream, mrms_o
         assert "immutable" in r.headers["cache-control"]
         img = read_png(r.content)
         assert img[py, px].tolist() == ub(45)
-        assert (await c.get(f"/radar/tiles/{t - 1}/512/7/{x}/{y}/2/0_1.png")).status_code == 404
+        miss = await c.get(f"/radar/tiles/{t - 1}/512/7/{x}/{y}/2/0_1.png")
+        assert miss.status_code == 404 and miss.headers["cache-control"] == "no-store"
         assert (await c.get(f"/radar/tiles/{t}/512/7/999/{y}/2/0_1.png")).status_code == 404
         # Far from any echo: an empty tile, small.
         ex, ey, _, _ = tile_of(20.0, -150.0, 7)

@@ -519,6 +519,19 @@ no new false alarms.
 Medium to large. Replaces RainViewer, which is the one dependency with no
 free commercial path at all.
 
+Done 2026-09-25. Tiles are rendered on request (about 5 ms each, 1 KB when
+empty) rather than pre-rendered, from the uint8 frame and four max-pooled
+copies so wide views keep small storms; Cloudflare keeps them (checked:
+MISS then HIT). They keep RainViewer's URL shape and Universal Blue
+colours, so the app needed no change. Two findings: RainViewer's "Universal
+Blue" tiles use a different half of the app's colour table than the
+published CSV column of that name, and both read back; and MRMS's quality
+control removes the night-time biological returns RainViewer showed. The
+first production run drew blank for a few minutes and could not be
+reproduced; tile misses are now `no-store` in case Cloudflare kept a 404
+from before a frame landed. Pulled either way; `BARRY_RADAR_SOURCE`
+chooses what `/radar/frames` serves.
+
 - Pull composite reflectivity every 2 minutes, precipitation type and rain
   rate every 10. Keep two hours at 10 minute spacing plus the latest.
 - Render Web Mercator tiles on demand from the uint8 frames. A tile is one

@@ -661,9 +661,17 @@ stored keys, but each has its own model, so they fetch separately.
   "Radar".
 - Lives: `RadarMapView.swift` › `RadarTileOverlay`, `Coordinator`;
   `RadarPalette.swift`.
-- Data: `/radar/frames` (host, 7 past frames, up to 3 nowcast). Tiles from
-  RainViewer at `/512/{z}/{x}/{y}/2/0_1.png` (Universal Blue, unsmoothed,
-  snow on), native zoom 7, ancestors cropped and upscaled beyond it.
+- Data: `/radar/frames` (host, 7 past frames, up to 3 nowcast). Since
+  2026-09-25 the host is Barry itself: MRMS frames every ten minutes,
+  tiles at `/radar/tiles/<time>/512/{z}/{x}/{y}/2/0_1.png` drawn on Tower
+  in RainViewer's Universal Blue colours, so the app reads them back
+  exactly as it read RainViewer's. RainViewer (same URL shape, with up to
+  3 nowcast frames) when Barry's frames are missing or over 20 minutes
+  old, or when `BARRY_RADAR_SOURCE=rainviewer`. Native zoom 7, ancestors
+  cropped and upscaled beyond it.
+- Seen, differently: MRMS is quality-controlled, so the faint night-time
+  returns from birds and insects that RainViewer showed as pale blobs
+  around the radar sites are gone.
 - Settings: `radarShowRadar` true.
 - Rules: alpha 0.75 full, 0.55 dimmed under Lightning, 0.02 for hidden
   frames so their tiles stay warm, 0 while the map moves. Crossfade 0.3 s.
@@ -1133,7 +1141,8 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 | `GET /advisories` | `lat`, `lon`, `half` | SIGMET and G-AIRMET areas (kind, hazard, label, base and top, valid times, outline, bulletin) and PIREPs of turbulence and icing (position, time, altitude, aircraft, intensities, raw) that touch the box | AWC `airsigmet`, `gairmet` (current hour), `pirep` (lower 48, 2 h) | each feed 10 min for everyone, failures 60 s; a failed feed is left out | the radar Advisories layer |
 | `GET /radar/pressure` | `lat`, `lon`, spans | isobars, isallobars, grids, extrema | bulk table and history, no upstream | 5 min; centre 0.1°, spans 0.5°; two builds at a time | the radar pressure layers |
 | `GET /lightning` | `lat`, `lon`, `half` | 0.02° cells, clusters, window 1200 s, coverage | GLM store | 60 s; centre 0.2°, half 0.5° | the radar lightning layer |
-| `GET /radar/frames` | none | host and frames | RainViewer | 2 min | the radar |
+| `GET /radar/frames` | `source` (mrms or rainviewer, optional) | host and frames | Barry's MRMS frames (the last hour of the two held), else RainViewer | RainViewer's list 2 min; Barry's read from the store | the radar |
+| `GET /radar/tiles/{t}/{size}/{z}/{x}/{y}/{color}/{opts}.png` | the frame's unix time, 256 or 512, zoom to 12 | an RGBA PNG in Universal Blue, empty tiles about 1 KB | the MRMS store: uint8 dBZ on the 0.01 degree grid and four max-pooled copies for wide views | `public, max-age=604800, immutable` (Cloudflare keeps them); misses `no-store`; 64 MB in process; own budget, 1,500 a minute per client (`BARRY_TILE_RATE_PER_MIN`) | the radar |
 | `GET /aloft` | `lat`, `lon` | 25 hourly columns, `source`, `stale`, and what is there now: `turbulence` (GTG) and `icing` (CIP) | the HRRR column feeds; Open-Meteo pressure levels off the grid | HRRR: 1 h per 0.1° cell and column run; Open-Meteo: 1 h per 0.1° cell, last good 12 h; the hazards are read fresh each request | Aloft |
 | `GET /radar/field` | `lat`, `lon`, spans | wind, boundary layer and CAPE at 88 points (HRRR) or 35 (Open-Meteo), and `source` | the HRRR store; Open-Meteo multi-point (35 weighted calls) off the HRRR grid or before a cycle is held | HRRR: none needed; Open-Meteo: until five past the next hour, at least 10 min; centre 0.05°, spans 0.5°; last good copy for 6 h | the radar wind layer |
 | `GET /radar/field/levels` | same | the same points at five levels, underground levels left out, and `source` | as `/radar/field` | as `/radar/field` | the altitude rail |
@@ -1168,6 +1177,11 @@ without blocking the response.
   earth-relative, fields written to `state/model/hrrr/<cycle>/` as float32,
   two cycles kept (about 1 GB). A cycle takes 5 s and peaks near 700 MB.
   `BARRY_HRRR=0` disables and every map layer stays on Open-Meteo.
+- Radar loop every 120 s: lists the MRMS composite on the bucket, fetches
+  the file nearest each ten-minute mark of the last two hours that isn't
+  held (1.2 MB, 0.2 s to decode), keeps two hours (about 400 MB with the
+  pooled copies) under `state/radar`. Degraded when the newest frame is 20
+  minutes old; `BARRY_MRMS=0` stops it.
 - The model loop also pulls the Aloft column feeds: `hrrr-col` (f00 to
   f03 of every cycle) and `hrrr-colx` (f00 to f30 of the 00, 06, 12 and
   18 UTC cycles), 17 levels of height, temperature (stored in Celsius),
@@ -1195,7 +1209,7 @@ without blocking the response.
   1800 s, lightning 600 s, LAMP and model 3600 s). Degraded (200, or 503
   with `strict`): the lightning feed or the bulk table is stale, or no LAMP
   run or HRRR cycle for three hours.
-- Tests: `backend/tests`, 364 tests; `test_property` reads the app's own
+- Tests: `backend/tests`, 373 tests; `test_property` reads the app's own
   OpenAPI document.
 
 ## Settings keys

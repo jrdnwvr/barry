@@ -381,11 +381,14 @@ async def radar_tile(t: int, size: int, z: int, x: int, y: int, color: str, opts
     Universal Blue colours so the app treats it as it did RainViewer's.
     The frame's time is in the URL, so the answer never changes: a week's
     max-age for the phone and Cloudflare's edge."""
+    # A miss must not be kept by Cloudflare: a frame not held yet can be
+    # held a minute later, under the same URL.
+    miss = {"Cache-Control": "no-store"}
     if size not in (256, 512) or not (0 <= z <= 12) or not (0 <= x < 2 ** z) or not (0 <= y < 2 ** z):
-        raise HTTPException(status_code=404, detail="no such tile")
+        raise HTTPException(status_code=404, detail="no such tile", headers=miss)
     png = await asyncio.to_thread(get_service().radar.tile, t, z, x, y, size)
     if png is None:
-        raise HTTPException(status_code=404, detail="no such frame")
+        raise HTTPException(status_code=404, detail="no such frame", headers=miss)
     return Response(content=png, media_type="image/png",
                     headers={"Cache-Control": "public, max-age=604800, immutable"})
 

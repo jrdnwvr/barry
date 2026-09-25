@@ -950,11 +950,16 @@ class PressureService:
     async def _score_models(self) -> Optional[dict]:
         """Score the hour nearest the newest METARs, once (modelscore.py)."""
         table = await self.metar_bulk() or []
-        times = sorted(s.obsTime for s in table if s.obsTime is not None)
+        times = [s.obsTime for s in table if s.obsTime is not None]
         if not times:
             return None
-        newest = times[len(times) * 9 // 10]               # most reports are at or before this
-        valid = (newest + timedelta(minutes=30)).replace(minute=0, second=0, microsecond=0)
+        # The table holds each station's latest report: the hour to score
+        # is the one most of them sit near (routine reports at :51 to :56
+        # count for the next hour; stations that report every 20 minutes
+        # scatter).
+        top = _now().replace(minute=0, second=0, microsecond=0)
+        near = lambda h: sum(1 for t in times if abs(t - h) <= modelscore.OBS_WINDOW)
+        valid = max((top, top + timedelta(hours=1)), key=near)
         records = persist.load("model_scores") or []
         if any(r.get("t") == valid.isoformat() for r in records):
             return None

@@ -370,7 +370,8 @@ GRIB library.
 
 GTG and CIP done 2026-09-25: `sources/hazards.py`, read at the point
 and sent with every Aloft response as `turbulence` and `icing`; the
-Aloft screen's drawing of them is next. LAMP done 2026-09-24: `sources/lamp.py`, `sources/nomads.py`, a LAMP loop
+Aloft screen draws them on its first stop, and CIP replaces the
+column's icing guess there. LAMP done 2026-09-24: `sources/lamp.py`, `sources/nomads.py`, a LAMP loop
 in the scheduler, `/combined.lamp`, the TAF card's stand-in at fields
 with no TAF, and the route's arrival. The 15 minute runs, the extended
 hours and the lightning probability wording are not used yet.

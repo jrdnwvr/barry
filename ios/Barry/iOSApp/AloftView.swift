@@ -14,6 +14,9 @@ import SwiftUI
 @MainActor
 final class AloftModel: ObservableObject {
     @Published private(set) var hours: [AloftHour] = []
+    /// What is there now (GTG and CIP), drawn on the scrubber's first stop.
+    @Published private(set) var turbulence: AloftTurbulence?
+    @Published private(set) var icing: AloftIcing?
     @Published private(set) var failed = false
     @Published private(set) var loading = false
     private let api = BarryAPI()
@@ -22,7 +25,10 @@ final class AloftModel: ObservableObject {
         loading = true
         defer { loading = false }
         do {
-            hours = try await api.aloft(lat: lat, lon: lon).hours
+            let r = try await api.aloft(lat: lat, lon: lon)
+            hours = r.hours
+            turbulence = r.turbulence
+            icing = r.icing
             failed = hours.isEmpty
         } catch {
             failed = hours.isEmpty
@@ -31,7 +37,7 @@ final class AloftModel: ObservableObject {
 }
 
 enum AloftLayer: String, CaseIterable, Identifiable {
-    case clouds, wind, temp, icing, layer
+    case clouds, wind, temp, icing, turb, layer
     var id: String { rawValue }
     var label: String {
         switch self {
@@ -39,10 +45,11 @@ enum AloftLayer: String, CaseIterable, Identifiable {
         case .wind: return "Wind"
         case .temp: return "Temp"
         case .icing: return "Icing"
+        case .turb: return "Turb"
         case .layer: return "Layer"
         }
     }
-    static let defaultOn: Set<AloftLayer> = [.clouds, .wind, .temp, .icing]
+    static let defaultOn: Set<AloftLayer> = [.clouds, .wind, .temp, .icing, .turb]
     static let key = "aloftLayers"
     static let ceilingKey = "aloftCeilingFt"
 }
@@ -57,6 +64,7 @@ enum AloftColors {
     static let surface = Color(uiColor: .init { $0.userInterfaceStyle == .dark ? UIColor(red: 0.23, green: 0.19, blue: 0.16, alpha: 1) : UIColor(red: 0.91, green: 0.87, blue: 0.82, alpha: 1) })
     static let surfaceText = Color(uiColor: .init { $0.userInterfaceStyle == .dark ? UIColor(red: 0.82, green: 0.77, blue: 0.69, alpha: 1) : UIColor(red: 0.36, green: 0.29, blue: 0.21, alpha: 1) })
     static let toggleOn = Color(uiColor: .init { $0.userInterfaceStyle == .dark ? UIColor(red: 0.11, green: 0.18, blue: 0.29, alpha: 1) : UIColor(red: 0.88, green: 0.93, blue: 0.98, alpha: 1) })
+    static let turbulence = Color(uiColor: .init { $0.userInterfaceStyle == .dark ? UIColor(red: 0.98, green: 0.55, blue: 0.42, alpha: 1) : UIColor(red: 0.8, green: 0.3, blue: 0.16, alpha: 1) })
     static let scaleBreak = Color(uiColor: .init { $0.userInterfaceStyle == .dark ? UIColor(white: 0.36, alpha: 1) : UIColor(red: 0.78, green: 0.78, blue: 0.8, alpha: 1) })
 }
 
@@ -72,7 +80,7 @@ struct AloftScreen: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var model = AloftModel()
     @AppStorage(AloftLayer.ceilingKey, store: AppConfig.sharedDefaults) private var ceilingFt: Int = 18000
-    @AppStorage(AloftLayer.key, store: AppConfig.sharedDefaults) private var layersRaw: String = "clouds,wind,temp,icing"
+    @AppStorage(AloftLayer.key, store: AppConfig.sharedDefaults) private var layersRaw: String = "clouds,wind,temp,icing,turb"
     @AppStorage(TemperatureUnit.key, store: AppConfig.sharedDefaults) private var tempUnitRaw: String = TemperatureUnit.celsius.rawValue
     private var tempUnit: TemperatureUnit { TemperatureUnit(rawValue: tempUnitRaw) ?? .celsius }
     @State private var hourOffset: Double = 0
@@ -92,6 +100,9 @@ struct AloftScreen: View {
     }
 
     private var hourIndex: Int { min(Int(hourOffset.rounded()), max(0, model.hours.count - 1)) }
+    /// The scrubber's first stop: the hour we are in, where NOAA's analyses
+    /// of turbulence and icing apply.
+    private var isNow: Bool { hourIndex == 0 }
     private var hour: AloftHour? { model.hours.isEmpty ? nil : model.hours[hourIndex] }
     private var groundFt: Int { combined.conditions?.fieldElevationFt ?? 0 }
 
@@ -246,16 +257,43 @@ struct AloftScreen: View {
                 .position(x: W / 2, y: y(ft))
             }
 
-            // cloud layers, in the clouds column
+            // cloud layers, in the clouds column. On the first stop CIP's
+            // icing replaces the guess from cloud and temperature.
             if let hr, layers.contains(.clouds) {
                 ForEach(Array(hr.clouds.enumerated()), id: \.offset) { _, c in
                     let top = y(min(c.topFt, ceilingFt)), base = y(max(c.baseFt, groundFt))
                     if base > top + 2 && c.baseFt < ceilingFt {
-                        AloftCloudBand(cloud: c, showIcing: layers.contains(.icing),
+                        AloftCloudBand(cloud: c, showIcing: layers.contains(.icing) && !(isNow && model.icing != nil),
                                        hideBase: metarY.map { abs($0 - base) < 22 } ?? false)
                             .frame(width: cloudsW, height: base - top)
                             .position(x: cloudsX + cloudsW / 2, y: (top + base) / 2)
                     }
+                }
+            }
+
+            // what is there now: icing on the clouds column's left edge,
+            // turbulence on its right, one word at the top of each run
+            if isNow && layers.contains(.icing) {
+                ForEach(Array(AloftHazards.icing(model.icing, groundFt: groundFt, ceilingFt: ceilingFt).enumerated()), id: \.offset) { _, run in
+                    let top = y(run.topFt), base = y(run.baseFt)
+                    Rectangle()
+                        .fill(AloftColors.tint.opacity(0.3 + 0.23 * Double(run.level)))
+                        .frame(width: 6, height: max(2, base - top))
+                        .position(x: cloudsX + 3, y: (top + base) / 2)
+                    AloftLabel(text: run.words, color: AloftColors.tint)
+                        .offset(x: cloudsX + 10, y: top)
+                }
+            }
+            if isNow && layers.contains(.turb) {
+                ForEach(Array(AloftHazards.turbulence(model.turbulence, groundFt: groundFt, ceilingFt: ceilingFt).enumerated()), id: \.offset) { _, run in
+                    let top = y(run.topFt), base = y(run.baseFt)
+                    Rectangle()
+                        .fill(AloftColors.turbulence.opacity(0.3 + 0.23 * Double(run.level)))
+                        .frame(width: 6, height: max(2, base - top))
+                        .position(x: cloudsX + cloudsW - 3, y: (top + base) / 2)
+                    AloftLabel(text: run.words, color: AloftColors.turbulence)
+                        .frame(width: cloudsW - 12, alignment: .trailing)
+                        .position(x: cloudsX + (cloudsW - 12) / 2, y: top + 8)
                 }
             }
 

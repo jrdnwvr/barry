@@ -318,10 +318,36 @@ struct AloftHour: Codable, Hashable {
     var blAglFt: Int?
 }
 
+struct AloftTurbLevel: Codable, Hashable {
+    let ft: Int
+    let edr: Double
+}
+
+/// GTG's turbulence nowcast at the point, every 1,000 ft.
+struct AloftTurbulence: Codable, Hashable {
+    let t: Date
+    var levels: [AloftTurbLevel] = []
+}
+
+struct AloftIceLevel: Codable, Hashable {
+    let ft: Int
+    let prob: Double
+    let severity: Int          // 0 none, 1 trace, 2 light, 3 moderate, 4 heavy
+    var sld: Double?
+}
+
+/// CIP's current icing at the point, every 500 ft.
+struct AloftIcing: Codable, Hashable {
+    let t: Date
+    var levels: [AloftIceLevel] = []
+}
+
 struct AloftResponse: Codable, Hashable {
     var hours: [AloftHour] = []
     let source: String
     let cachedAt: Date
+    var turbulence: AloftTurbulence?
+    var icing: AloftIcing?
 }
 
 // MARK: - Station wind layer

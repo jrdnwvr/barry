@@ -61,3 +61,36 @@ struct PressureLabelTests {
         #expect(PressureFieldRenderer.changeText(3, .inHg) == "0.09")
     }
 }
+
+/// Turbulence and icing now, from GTG and CIP, as runs the column draws.
+struct AloftHazardTests {
+    private let t = Date(timeIntervalSince1970: 1_790_300_000)
+
+    @Test func turbulenceRunsFollowAWCsCategories() {
+        let levels = [(1100, 0.05), (2100, 0.16), (3100, 0.25), (4100, 0.12), (8100, 0.4), (9100, 0.36)]
+            .map { AloftTurbLevel(ft: $0.0, edr: $0.1) }
+        let runs = AloftHazards.turbulence(AloftTurbulence(t: t, levels: levels), groundFt: 500, ceilingFt: 18000)
+        #expect(runs.count == 2)
+        #expect(runs[0] == HazardRun(baseFt: 1600, topFt: 3600, level: 2, words: "moderate turbulence"))
+        #expect(runs[1].level == 3 && runs[1].words == "severe turbulence" && runs[1].baseFt == 7600)
+        #expect(AloftHazards.turbulenceLevel(0.149) == 0 && AloftHazards.turbulenceLevel(0.15) == 1)
+    }
+
+    @Test func icingLeavesOutTraceAndNamesLargeDrops() {
+        let levels = [
+            AloftIceLevel(ft: 5000, prob: 0.1, severity: 1),
+            AloftIceLevel(ft: 5500, prob: 0.3, severity: 2),
+            AloftIceLevel(ft: 6000, prob: 0.5, severity: 3, sld: 0.6),
+            AloftIceLevel(ft: 6500, prob: 0.2, severity: 1),
+        ]
+        let runs = AloftHazards.icing(AloftIcing(t: t, levels: levels), groundFt: 0, ceilingFt: 12000)
+        #expect(runs == [HazardRun(baseFt: 5250, topFt: 6250, level: 2, words: "moderate icing, large drops")])
+    }
+
+    @Test func runsAreClippedToTheColumn() {
+        let levels = [AloftTurbLevel(ft: 11100, edr: 0.2), AloftTurbLevel(ft: 12100, edr: 0.2), AloftTurbLevel(ft: 13100, edr: 0.2)]
+        let runs = AloftHazards.turbulence(AloftTurbulence(t: t, levels: levels), groundFt: 0, ceilingFt: 12000)
+        #expect(runs.count == 1 && runs[0].topFt == 12000 && runs[0].baseFt == 10600)
+        #expect(AloftHazards.turbulence(nil, groundFt: 0, ceilingFt: 12000).isEmpty)
+    }
+}

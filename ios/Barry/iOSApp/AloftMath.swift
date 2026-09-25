@@ -94,3 +94,70 @@ enum AloftFormat {
         ft.formatted(.number.grouping(.automatic))
     }
 }
+
+
+/// Turbulence and icing now, from NOAA's analyses (GTG and CIP), as runs
+/// of altitude the column can draw as a strip with one word on it.
+struct HazardRun: Equatable {
+    let baseFt: Int
+    let topFt: Int
+    /// 1 light, 2 moderate, 3 severe (turbulence) or heavy (icing).
+    let level: Int
+    let words: String
+}
+
+enum AloftHazards {
+    /// AWC's categories for eddy dissipation rate, for a medium aircraft.
+    static func turbulenceLevel(_ edr: Double) -> Int {
+        edr >= 0.34 ? 3 : edr >= 0.22 ? 2 : edr >= 0.15 ? 1 : 0
+    }
+
+    static func turbulenceWord(_ level: Int) -> String {
+        ["", "light turbulence", "moderate turbulence", "severe turbulence"][min(max(level, 0), 3)]
+    }
+
+    static func icingWord(_ level: Int) -> String {
+        ["", "light icing", "moderate icing", "heavy icing"][min(max(level, 0), 3)]
+    }
+
+    static func turbulence(_ t: AloftTurbulence?, groundFt: Int, ceilingFt: Int) -> [HazardRun] {
+        guard let t else { return [] }
+        let marks = t.levels.sorted { $0.ft < $1.ft }.map { ($0.ft, turbulenceLevel($0.edr), false) }
+        return runs(marks, half: 500, gap: 1100, groundFt: groundFt, ceilingFt: ceilingFt) { lv, _ in
+            turbulenceWord(lv)
+        }
+    }
+
+    /// Light icing and worse; trace is left out. "Large drops" when CIP
+    /// gives supercooled large drops an even chance or better.
+    static func icing(_ i: AloftIcing?, groundFt: Int, ceilingFt: Int) -> [HazardRun] {
+        guard let i else { return [] }
+        let marks = i.levels.sorted { $0.ft < $1.ft }.map { ($0.ft, max(0, $0.severity - 1), ($0.sld ?? 0) >= 0.5) }
+        return runs(marks, half: 250, gap: 600, groundFt: groundFt, ceilingFt: ceilingFt) { lv, sld in
+            icingWord(lv) + (sld ? ", large drops" : "")
+        }
+    }
+
+    private static func runs(_ marks: [(Int, Int, Bool)], half: Int, gap: Int, groundFt: Int, ceilingFt: Int,
+                             words: (Int, Bool) -> String) -> [HazardRun] {
+        var out: [HazardRun] = []
+        var cur: (base: Int, top: Int, level: Int, flag: Bool, last: Int)?
+        func close() {
+            guard let c = cur else { return }
+            let base = max(c.base, groundFt), top = min(c.top, ceilingFt)
+            if top > base { out.append(HazardRun(baseFt: base, topFt: top, level: c.level, words: words(c.level, c.flag))) }
+            cur = nil
+        }
+        for (ft, level, flag) in marks {
+            if level == 0 { close(); continue }
+            if let c = cur, ft - c.last <= gap {
+                cur = (c.base, ft + half, max(c.level, level), c.flag || flag, ft)
+            } else {
+                close()
+                cur = (ft - half, ft + half, level, flag, ft)
+            }
+        }
+        close()
+        return out
+    }
+}

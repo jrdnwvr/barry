@@ -892,8 +892,8 @@ For: P S D. The column of clouds, temperatures and winds above the field.
   the model's cloud water and ice) where the point is on its grid, else
   Open-Meteo (11 levels); `source` says which. Also `turbulence` (GTG,
   now, every 1,000 ft) and `icing` (CIP, now, every 500 ft: probability,
-  severity 1 trace to 4 heavy, large drops); the app does not draw these
-  yet.
+  severity 1 trace to 4 heavy, large drops), drawn on the first stop
+  (`aloft.now.turbulence`, `aloft.now.icing`).
 - Rules: loads once; no retry. The `stale` flag from the server is not
   decoded. With no conditions block the ground is 0 ft MSL.
 
@@ -939,9 +939,30 @@ For: P S D. The column of clouds, temperatures and winds above the field.
 
 ### aloft.chips
 - Seen: behind the Layers button in the bar: Clouds, Wind, Temp, Icing,
-  Layer chips and a More menu ("Show every layer", "Clouds only"). Whether
-  the row is open is not remembered.
-- Settings: `aloftLayers` "clouds,wind,temp,icing".
+  Turb, Layer chips and a More menu ("Show every layer", "Clouds only").
+  Whether the row is open is not remembered.
+- Settings: `aloftLayers` "clouds,wind,temp,icing,turb" (Turb added
+  2026-09-25; anyone who had changed the chips before keeps their set and
+  turns Turb on themselves).
+
+### aloft.now.turbulence and aloft.now.icing
+- Seen: on the scrubber's first stop only, a thin strip on the clouds
+  column's right edge where GTG has light turbulence or worse, with
+  "moderate turbulence" (light, moderate, severe) at the top of each run;
+  a strip on its left edge where CIP has light icing or worse, with
+  "light icing" (light, moderate, heavy) and ", large drops" when
+  supercooled large drops are even odds. The strip deepens with the
+  category. On that stop the cloud bands drop their "icing" guess; later
+  hours keep it.
+- Lives: `AloftView.swift` (the strips); `AloftMath.swift` ›
+  `AloftHazards`, `HazardRun`.
+- Data: `/aloft.turbulence`, `/aloft.icing` (served when a run under 90
+  minutes old is held).
+- Rules: AWC's categories for a medium aircraft (0.15, 0.22, 0.34 EDR);
+  trace icing is left out; neither product forecasts, so later hours show
+  nothing from them.
+- Tests: `AloftHazardTests`; backend `test_turbulence_and_icing_now_come_with_the_column`.
+- For: P S.
 
 ### aloft.scrubber and aloft.animation
 - Seen: a slider over the hours ("Now · 3:00 PM", "+N h · time"), haptic
@@ -1219,7 +1240,7 @@ each device (the watch keeps its own copies).
 | `radarStorms` | true | Lightning chip | radar |
 | `radarAutoplay` | true | play the last hour, or hold on the latest | Settings › Radar |
 | `aloftCeilingFt` | 18000 | 6000, 12000, 18000, 24000; also caps the radar rail | Settings › Aloft, the Aloft menu |
-| `aloftLayers` | clouds,wind,temp,icing | adds layer | Aloft chips |
+| `aloftLayers` | clouds,wind,temp,icing,turb | adds layer | Aloft chips |
 | `savedLocations.v1` | My location | JSON list | Settings, onboarding |
 | `savedLocations.selected.v1` | first entry | UUID | Settings, the hero menu |
 | `homeStation` | unset, then the snapshot's, then KLUK | also the watch sync key | onboarding, PressureStore |

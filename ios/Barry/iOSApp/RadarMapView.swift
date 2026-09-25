@@ -147,10 +147,41 @@ struct RadarMapView: UIViewRepresentable {
         private static let inflightLock = NSLock()
         private static var inflight: [NSString: [(Data?) -> Void]] = [:]
 
+        /// Only a PNG is a tile. Cloudflare answers a burst over the zone's
+        /// rate rule with a 429 and a text body, and on 2026-09-25 the radar
+        /// drew blank after a zoom out because every tile of every frame
+        /// was one of those, cached here as if it were a picture and handed
+        /// to MapKit, which could not decode it. Anything that is not a PNG
+        /// is a miss and is never cached; a 429 or 503 pauses every fetch
+        /// for the Retry-After (ten seconds at Cloudflare) so the burst does
+        /// not extend the block, and the map reloads its tiles once it lifts.
+        private static let pngSignature = Data([0x89, 0x50, 0x4E, 0x47])
+        private static var blockedUntil = Date.distantPast
+        private static let blockLock = NSLock()
+        /// Told the wait, once per block, so the renderers can reload after it.
+        static var onBlocked: ((TimeInterval) -> Void)?
+
+        private static func isBlocked() -> Bool {
+            blockLock.lock(); defer { blockLock.unlock() }
+            return blockedUntil > Date()
+        }
+
+        private static func block(for seconds: TimeInterval) {
+            blockLock.lock()
+            let fresh = blockedUntil <= Date()
+            blockedUntil = max(blockedUntil, Date().addingTimeInterval(seconds))
+            blockLock.unlock()
+            if fresh { onBlocked?(seconds) }
+        }
+
         private func fetchCached(_ url: URL, completion: @escaping (Data?) -> Void) {
             let key = url.absoluteString as NSString
             if let hit = Self.parentCache.object(forKey: key) {
                 completion(hit as Data)
+                return
+            }
+            if Self.isBlocked() {
+                completion(nil)
                 return
             }
             Self.inflightLock.lock()
@@ -161,12 +192,20 @@ struct RadarMapView: UIViewRepresentable {
             }
             Self.inflight[key] = [completion]
             Self.inflightLock.unlock()
-            URLSession.shared.dataTask(with: url) { data, _, _ in
-                if let data { Self.parentCache.setObject(data as NSData, forKey: key, cost: data.count) }
+            URLSession.shared.dataTask(with: url) { data, response, _ in
+                let http = response as? HTTPURLResponse
+                var tile: Data? = nil
+                if http?.statusCode == 200, let data, data.starts(with: Self.pngSignature) {
+                    tile = data
+                    Self.parentCache.setObject(data as NSData, forKey: key, cost: data.count)
+                } else if let status = http?.statusCode, status == 429 || status == 503 {
+                    let retry = http?.value(forHTTPHeaderField: "Retry-After").flatMap(Double.init) ?? 10
+                    Self.block(for: min(max(retry, 2), 60))
+                }
                 Self.inflightLock.lock()
                 let waiters = Self.inflight.removeValue(forKey: key) ?? []
                 Self.inflightLock.unlock()
-                for w in waiters { w(data) }
+                for w in waiters { w(tile) }
             }.resume()
         }
 
@@ -205,6 +244,25 @@ struct RadarMapView: UIViewRepresentable {
     final class Coordinator: NSObject, MKMapViewDelegate {
         var overlays: [Int: RadarTileOverlay] = [:]
         var renderers: [Int: MKTileOverlayRenderer] = [:]
+
+        /// Every live map, so a rate-limit block lifting reloads all of
+        /// them (the iPad dashboard and the full screen can both be up).
+        private static let live = NSHashTable<Coordinator>.weakObjects()
+
+        override init() {
+            super.init()
+            Self.live.add(self)
+            RadarTileOverlay.onBlocked = { wait in
+                DispatchQueue.main.asyncAfter(deadline: .now() + wait + 0.5) {
+                    for c in Self.live.allObjects { c.reloadTiles() }
+                }
+            }
+        }
+
+        /// Ask MapKit for the tiles again, after a block on fetching them.
+        func reloadTiles() {
+            for r in renderers.values { r.reloadData() }
+        }
 
         /// Hidden frames sit at a hair above zero instead of zero — MapKit still
         /// draws them, so every frame's tiles load and cache up front. Kills the

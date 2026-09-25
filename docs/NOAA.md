@@ -527,10 +527,15 @@ colours, so the app needed no change. Two findings: RainViewer's "Universal
 Blue" tiles use a different half of the app's colour table than the
 published CSV column of that name, and both read back; and MRMS's quality
 control removes the night-time biological returns RainViewer showed. The
-first production run drew blank for a few minutes and could not be
-reproduced; tile misses are now `no-store` in case Cloudflare kept a 404
-from before a frame landed. Pulled either way; `BARRY_RADAR_SOURCE`
-chooses what `/radar/frames` serves.
+first production run drew blank for a few minutes; found later the same
+day, reproduced in the simulator: the zone's Cloudflare rate rule (about
+20 requests per 10 seconds per address, set for the API in PRODUCTION.md
+A2) answered the tile burst of a zoomed-out map with 429 pages, which the
+app cached as tiles and MapKit could not decode. The app now treats
+anything but a PNG as a miss, pauses for the Retry-After and reloads; the
+rule itself has to exempt `/radar/` (user-owned, see risks). Tile misses
+are `no-store` besides. Pulled either way; `BARRY_RADAR_SOURCE` chooses
+what `/radar/frames` serves.
 
 - Pull composite reflectivity every 2 minutes, precipitation type and rain
   rate every 10. Keep two hours at 10 minute spacing plus the latest.
@@ -568,8 +573,15 @@ filled from neighbouring blocks) gives motion in 0.3 s, and each nowcast
 frame is a gather under a second; checked on a textured test storm (exact
 motion) and on real frames (median 37 km/h over the Plains). No growth or
 decay. The lightning probability is the 60-minute grid, drawn as a light
-violet wash under the flashes. Not done: the "rain starts at" line from
-the rain rate grid, and the NLDN ground strikes.
+violet wash under the flashes. The "rain starts at" line came later the
+same day (`rainstart.py`): the newest PrecipRate grid is pulled with every
+radar pass, and a point is traced back through the motion field two
+minutes at a time for up to ninety, so the rain over it in t minutes is
+the rain now t minutes upstream; it goes on the Conditions card as "Rain
+from about 2:40 PM" or "Rain until about 3:10 PM" with how heavy, where
+and which way. Every "starts at" call is kept and scored against the
+frames that follow (`/models/scores`, `rainStarts`), which is the month
+of evidence this phase asked for. Not done: the NLDN ground strikes.
 
 - Serve NOAA's lightning probability for the next 30 and 60 minutes under
   the lightning layer as "next hour" shading. It is a 40 KB grid every two
@@ -594,10 +606,16 @@ Done when: the loop's future frames come from Barry, and a month of
 Small for the swap, larger for the products.
 
 Started 2026-09-25: RRFS is pulled beside HRRR (surface pressure and wind,
-hours 1 to 6 of the long cycles; its CONUS files carry no pressure levels,
-and they land about two hours after their time against HRRR's 53
-minutes), and both are scored against the METARs every hour at
-`/models/scores`. The switch waits on those numbers through the winter.
+hours 1 to 3 of every cycle; its CONUS files carry no pressure levels, the
+hourly cycles land about 80 minutes after their time and the 00 and 12 UTC
+ones at two hours, and before the operational date some hourly cycles are
+missing), and both are scored against the METARs every hour at
+`/models/scores`. The first version scored HRRR at its freshest lead
+(about one hour) against RRFS at whatever lead reached the hour (three to
+six), which was not a fair test; since later the same day HRRR is read
+from the same cycle at the same lead as RRFS, from its forecast feed, so
+the days in the table compare like for like (the earlier hours are left
+out of it). The switch waits on those numbers through the winter.
 Not done: the RainViewer and Open-Meteo code paths stay as fallbacks
 (RainViewer when Barry's radar frames are stale, Open-Meteo off the HRRR
 grid); removing them is a decision for after a clean month.
@@ -675,6 +693,11 @@ with a credit line. The fixed costs stay the Apple fee and the domain.
 - **Tile bandwidth.** Radar tiles to phones scale with users. The edge
   cache absorbs repeat views; the origin serves each tile once per frame
   per region.
+- **The edge rate rule.** The Cloudflare rate-limiting rule on the
+  hostname counts tile requests too, cache hits included, and a zoomed-out
+  radar asks for a hundred tiles in a second. Until the rule exempts
+  `/radar/` the map shows nothing for ten seconds after such a burst; the
+  app recovers on its own once it does.
 - **Model bias in the copy.** Section 2 lists what the models get wrong.
   The copy rules stay: rounded numbers, calm wording, no promises about
   gust tops or the evening boundary layer collapse.

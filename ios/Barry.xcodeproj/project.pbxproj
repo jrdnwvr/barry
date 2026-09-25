@@ -34,6 +34,7 @@
 		25FB215186C614D348386230 /* combined_noaa.json in Resources */ = {isa = PBXBuildFile; fileRef = 62A5B0C1E166F856B20660DC /* combined_noaa.json */; };
 		26D196BA1D0C9CD075B59F31 /* WindFlow.metal in Sources */ = {isa = PBXBuildFile; fileRef = 9C9E7A347455A6781BAB196E /* WindFlow.metal */; };
 		270E209661CB57713C9B71F5 /* BarometerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA32F779F49D1C628F2BC52E /* BarometerEngine.swift */; };
+		2AD8EC369D496BFBE30DFC88 /* RainLineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28FD6CF786038D6B942CA43E /* RainLineTests.swift */; };
 		2BF26B141D9A63C4291EF0DF /* TafStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D63A9351C0871620CA4A195 /* TafStrip.swift */; };
 		2C56C28A6BD13F7F21CA306B /* BarryWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = F776D233FE3E44CDDD61C05B /* BarryWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2D039F6DE65B45CABECF405F /* SavedLocations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B0E52A4D1E854014D5785B8 /* SavedLocations.swift */; };
@@ -147,6 +148,7 @@
 		B6D9791F6FAE018A283A6A45 /* RunwayMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85C6CB170A65E1A614F64BB1 /* RunwayMath.swift */; };
 		B75A870FF81FADA19E72223D /* RunwayMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85C6CB170A65E1A614F64BB1 /* RunwayMath.swift */; };
 		BE243D5806C72810E6127F89 /* TafStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D63A9351C0871620CA4A195 /* TafStrip.swift */; };
+		BF20A7010675D5C099B7F646 /* RainLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 836AE501A2EA875BB4B177C6 /* RainLine.swift */; };
 		BF6E49201E9E4A6A26A9C857 /* ForecastCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68F0E9DED173121E56E48C0B /* ForecastCards.swift */; };
 		C10944BA3D2626C8FF342DCD /* TafTimelineCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBA1D35A89B06FE9E7708D10 /* TafTimelineCard.swift */; };
 		C1FA94A165B7428939C8372D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CD077DE63D0DE437229C43CC /* Assets.xcassets */; };
@@ -277,6 +279,7 @@
 		22E85CED436F95A55C69D8B0 /* CombinedProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CombinedProvider.swift; sourceTree = "<group>"; };
 		252EE81999FF16293FA0CF7A /* LightningOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightningOverlay.swift; sourceTree = "<group>"; };
 		2542DA2C850B2399B31A9069 /* Tendency.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tendency.swift; sourceTree = "<group>"; };
+		28FD6CF786038D6B942CA43E /* RainLineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RainLineTests.swift; sourceTree = "<group>"; };
 		292532F4A2C2D5C39CC797B1 /* CoreMotion.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMotion.framework; path = System/Library/Frameworks/CoreMotion.framework; sourceTree = SDKROOT; };
 		29C7E17624E3FBD582130C1E /* TafTimelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TafTimelineTests.swift; sourceTree = "<group>"; };
 		29ED804DF107D966F7295562 /* RunwayMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayMathTests.swift; sourceTree = "<group>"; };
@@ -327,6 +330,7 @@
 		7ED260902ADE48C188706FA8 /* FieldsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldsCard.swift; sourceTree = "<group>"; };
 		82E8C122995032DFD8C5C5EC /* PhoneSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSync.swift; sourceTree = "<group>"; };
 		830E6CE85533F8C3169A8E97 /* BarryPhoneWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryPhoneWidget.swift; sourceTree = "<group>"; };
+		836AE501A2EA875BB4B177C6 /* RainLine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RainLine.swift; sourceTree = "<group>"; };
 		85C6CB170A65E1A614F64BB1 /* RunwayMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayMath.swift; sourceTree = "<group>"; };
 		85C80120E59692CD007DB4FB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		886DA735AE684A5A59D95000 /* WatchBarometer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchBarometer.swift; sourceTree = "<group>"; };
@@ -414,6 +418,7 @@
 				75CA082BD890DE5E1469223E /* CardRenderTests.swift */,
 				024F41291A68B29C57129A86 /* Fixtures.swift */,
 				C4258044D160E9F49F088BAF /* RadarPaletteTests.swift */,
+				28FD6CF786038D6B942CA43E /* RainLineTests.swift */,
 				29ED804DF107D966F7295562 /* RunwayMathTests.swift */,
 				779DF49061F06FC05038FBE1 /* ShortTermForecastTests.swift */,
 				0E50753B814745AF734760F1 /* SnapshotStalenessTests.swift */,
@@ -596,6 +601,7 @@
 				C069C93DABB4FCDECF833A55 /* RadarPresets.swift */,
 				1666B232D9C24406F937CCE8 /* RadarSheets.swift */,
 				C0EBA6519DD65A01DF98B527 /* RadarView.swift */,
+				836AE501A2EA875BB4B177C6 /* RainLine.swift */,
 				7862164DF1A7B3BA33186444 /* RouteViews.swift */,
 				F83C3064588614F2B8DEAA34 /* RunwayWindsView.swift */,
 				DA12AC45B8A41856114FD9A7 /* SensorComparisonView.swift */,
@@ -861,6 +867,7 @@
 				5B4110D0966F6475A5E665D5 /* CardRenderTests.swift in Sources */,
 				9A3EF5B92F7E694E33F31FFC /* Fixtures.swift in Sources */,
 				DE9BEC621A1206759924685E /* RadarPaletteTests.swift in Sources */,
+				2AD8EC369D496BFBE30DFC88 /* RainLineTests.swift in Sources */,
 				99DBC62DAB0A16C1295609C3 /* RunwayMathTests.swift in Sources */,
 				F1692F2A13D80C1E31C80FA5 /* ShortTermForecastTests.swift in Sources */,
 				4B7660EBAD37CF36FA22AAA6 /* SnapshotStalenessTests.swift in Sources */,
@@ -993,6 +1000,7 @@
 				73F23F61819F26E69D4D21E1 /* RadarPresets.swift in Sources */,
 				4DC0A2667AD32E4946FA8106 /* RadarSheets.swift in Sources */,
 				06E7445D9EF69D7CD6C141EE /* RadarView.swift in Sources */,
+				BF20A7010675D5C099B7F646 /* RainLine.swift in Sources */,
 				2FC7F63C72023A1812F99D63 /* RangeAnalysis.swift in Sources */,
 				99C92D6363B996DC08EC3A18 /* RouteViews.swift in Sources */,
 				395DCB7F587238A3F9D7C739 /* RunwayMath.swift in Sources */,

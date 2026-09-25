@@ -382,19 +382,27 @@ hidden). A card shows only when it is not hidden and has something to say.
   the cloud base by the spread ("Cumulus base about 4,800 ft AGL.", or
   "Blue thermals; cloud base would be 4,800 ft AGL." when the layer tops
   out below 85% of it), all on the same line; storms (at the field, in the area, likely, possible) with
-  distance, motion and timing; fog (likely, possible, overnight).
+  distance, motion and timing; rain ("Rain from about 2:40 PM", "Rain
+  until about 3:10 PM", "Raining now") with how heavy it is, where it
+  is and which way it moves, from the radar's rain rate carried along
+  its motion, within ninety minutes only; fog (likely, possible,
+  overnight).
   Thinned 2026-09-24: no dividers, no separate "Clouds and winds aloft"
   row, no ride info button, no "Cover holds near 60%" line.
-- Lives: `FieldConditionsView.swift`.
-- Data: `/combined.conditions`, `current.clouds`, `forecast.hourly`.
+- Lives: `FieldConditionsView.swift`; the rain row's words in `RainLine.swift`.
+- Data: `/combined.conditions` (the rain line is `conditions.rain`, from
+  `rainstart.py` on the server), `current.clouds`, `forecast.hourly`.
 - Settings: `boundaryLayerReference` agl.
 - Tests: the Aloft UI test taps the Clouds row (`conditions.clouds`);
+  `RainLineTests` covers the rain row's words and decoding;
   `CloudBaseTests` covers the spread rule (`Shared/Models.swift` ›
   `CloudBase`: 400 ft per °C of spread, nothing under 1 °C or over
   15,000 ft). Night comes from `SunTimes.isNight`, shared with the hourly
   forecast card.
 - Rules: the card exists only with density altitude, boundary layer, fog,
-  storm or cloud content. The Clouds row always shows while there is a
+  storm, rain or cloud content. The rain row exists only while rain is
+  here or due within ninety minutes; a dry radar shows nothing, and so
+  does one whose echo is not moving (there is nothing to time). The Clouds row always shows while there is a
   way into Aloft, "No report" when the station says nothing about the sky.
 - For: P S D. The cloud base is the soaring line (review 2026-09-24).
 
@@ -675,6 +683,11 @@ stored keys, but each has its own model, so they fetch separately.
 - Settings: `radarShowRadar` true.
 - Rules: alpha 0.75 full, 0.55 dimmed under Lightning, 0.02 for hidden
   frames so their tiles stay warm, 0 while the map moves. Crossfade 0.3 s.
+  Only a PNG is a tile: a 429 or 503 (Cloudflare's rate rule on the
+  hostname answers a burst that way) is a miss, never cached, fetching
+  pauses for its Retry-After and the renderers reload after it. Found
+  2026-09-25: the first production run drew blank because the error
+  pages had been cached as tiles.
   Palette: transparent below 5 dBZ, blues to 45, orange 45 to 50, red 55 to
   60, magenta 60 to 65, pale above. Tiles are repainted from RainViewer's
   colours; snow pixels pass through. Tile caches are sized in bytes (48 MB
@@ -1139,7 +1152,7 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 
 | Route | Parameters | Returns | Upstream | Cache and rounding | Used by |
 |---|---|---|---|---|---|
-| `GET /combined` | `station`, `lat`, `lon`, `tz` | pressure (series, current, tendency), forecast, reading (trend, feature, confidence, explanation), conditions, runways, taf, lamp (LAMP guidance from this hour, when the site has it), lightningNearby, verdict | AWC METAR (Open-Meteo surface pressure as fallback), Open-Meteo forecast, AWC TAF, LAMP from NOMADS, OurAirports runways, GLM flashes, bulk METAR lightning | pressure 12 min per station; forecast 30 min per 0.1° cell; TAF 30 min | the phone and watch (`PressureStore`), complications, widgets, the airport check in Settings |
+| `GET /combined` | `station`, `lat`, `lon`, `tz` | pressure (series, current, tendency), forecast, reading (trend, feature, confidence, explanation), conditions (with the rain line, `conditions.rain`, when the radar has rain here or on the way), runways, taf, lamp (LAMP guidance from this hour, when the site has it), lightningNearby, verdict | AWC METAR (Open-Meteo surface pressure as fallback), Open-Meteo forecast, AWC TAF, LAMP from NOMADS, OurAirports runways, GLM flashes, bulk METAR lightning | pressure 12 min per station; forecast 30 min per 0.1° cell; TAF 30 min | the phone and watch (`PressureStore`), complications, widgets, the airport check in Settings |
 | `GET /pressure/{station}` | `hours` | pressure only | as above | one key per station, whole day | nobody now |
 | `GET /forecast` | `lat`, `lon` | hourly, sun, `source` ("hrrr+nbm", "hrrr" or "open-meteo"), `stale`; on `/combined` also `pressureOffset` | the HRRR forecast feeds (48 h) with NBM over the first 36 h, sun times computed; Open-Meteo, 2 days, off the grid | NOAA: 30 min per 0.1° cell and run; Open-Meteo: 30 min per 0.1° cell, last good re-served 12 h when upstream fails | inside `/combined` |
 | `GET /front` | `station`, `lat`, `lon` | status, headline, bearing, eta, nearestFront | bulk METAR history (7.5 h) or an AWC box, forecast, `/fronts` | 15 min per station and 0.1° | the phone's front banner only |
@@ -1156,7 +1169,7 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 | `GET /radar/field` | `lat`, `lon`, spans | wind, boundary layer and CAPE at 88 points (HRRR) or 35 (Open-Meteo), and `source` | the HRRR store; Open-Meteo multi-point (35 weighted calls) off the HRRR grid or before a cycle is held | HRRR: none needed; Open-Meteo: until five past the next hour, at least 10 min; centre 0.05°, spans 0.5°; last good copy for 6 h | the radar wind layer |
 | `GET /radar/field/levels` | same | the same points at five levels, underground levels left out, and `source` | as `/radar/field` | as `/radar/field` | the altitude rail |
 | `GET /radar/heights` | `lat`, `lon`, spans, `hPa` (925, 850, 700, 600, 500) | height contours in metres, 30 m apart at 700 hPa and below and 60 m above, with the run and valid time | the HRRR store only; 503 off its grid | until five past the next hour, per level, region and run | the altitude rail |
-| `GET /models/scores` | `days` (1 to 60, default 14) | per UTC day, newest first: hours scored, and for HRRR and RRFS the mean sea-level pressure error (raw, bias, and with each hour's bias taken out), 10 m wind speed error in knots, direction error where the wind is 8 kt or more, and the lead | none: the model store and the bulk METAR table, scored once an hour (`modelscore.py`), kept 60 days in `state/model_scores` | none | Jordan, for the RRFS switch |
+| `GET /models/scores` | `days` (1 to 60, default 14) | `days`: per UTC day, newest first, hours scored and for HRRR and RRFS (the same cycle, the same lead) the mean sea-level pressure error (raw, bias, and with each hour's bias taken out), 10 m wind speed error in knots, direction error where the wind is 8 kt or more, and the lead; `rainStarts`: the "rain starts at" calls scored, hits, hit rate, calls pending, and the same by day | none: the model store and the bulk METAR table, scored once an hour (`modelscore.py`), kept 60 days in `state/model_scores`; the rain calls in `state/rain_calls` | none | Jordan, for the RRFS switch and the rain line |
 | `GET /stations/search` | `q`, `limit` | id and name matches, METAR stations only | AWC directory | directory 24 h | Settings, onboarding |
 | `GET /glance` | `stations` (comma list, up to 8), `tz` | one line per field: category, wind, altimeter, sea-level pressure, 3 h change and class, the verdict without forecast, observation time | the same cached reports as `/combined` (saved fields are watched stations) | none of its own; a field that cannot be read is left out | the Fields card |
 | `GET /route` | `from`, `to`, `speedKt` (40 to 400, default 100), `tz` | distance, time, arrival time, both ends' glance lines, corridor stations (along and off the line, category, wind), the worst of them, nearest lightning near the line, fronts crossing it, the destination's category at arrival and where it came from (`arriveSource` taf or lamp), TEMPO at arrival, minutes from sunset | none: the bulk table, the flash store, `/fronts`, the ends' cached reports, TAF and LAMP | 5 min per pair and speed | the Route card and screen |
@@ -1192,11 +1205,16 @@ without blocking the response.
   held (1.2 MB, 0.2 s to decode), keeps two hours (about 400 MB with the
   pooled copies) under `state/radar`. Then the nowcast for a new newest
   frame (motion by block matching on the 0.04 degree copy, 0.3 s; each
-  frame advected, under a second) and the newest lightning probability
-  grid (30 KB) under `state/ltgnext`. Degraded when the newest frame is 20
-  minutes old; `BARRY_MRMS=0` stops it.
-- The model loop also pulls the Aloft column feeds: `hrrr-col` (f00 to
-  f03 of every cycle) and `hrrr-colx` (f00 to f30 of the 00, 06, 12 and
+  frame advected, under a second; the motion is kept for the rain line),
+  the newest lightning probability grid (30 KB) under `state/ltgnext`,
+  and the newest rain-rate grid (PrecipRate, a megabyte, held in memory
+  only). Then the "rain starts at" calls old enough to check are scored
+  against the frames within 15 minutes of their predicted start (a hit
+  is 20 dBZ within two points), kept 60 days in `state/rain_calls`.
+  Degraded when the newest frame is 20 minutes old; `BARRY_MRMS=0` stops
+  it.
+- The model loop also pulls the Aloft column feeds: `hrrr-col2` (f00 to
+  f03 of every cycle) and `hrrr-colx2` (f00 to f30 of the 00, 06, 12 and
   18 UTC cycles), 17 levels of height, temperature (stored in Celsius),
   humidity, wind, cloud water and ice plus the surface, every other point
   in float16. One run of each is kept (3.5 GB for the day-long one); a
@@ -1204,19 +1222,24 @@ without blocking the response.
   as soon as it lands, and after a restart, so the first column read is
   quick. Then GTG turbulence (every 15 minutes) and CIP icing (hourly)
   from NOMADS, one whole file each, newest run only.
-- And the point forecast: `hrrr-fc2` (f00 to f18 of every cycle) and
-  `hrrr-fcx2` (f00 to f48 of the long cycles), 15 surface fields each hour,
-  pressures stored less 1,000 hPa so half precision keeps tenths; then NBM
+- And the point forecast: `hrrr-fc3` (f00 to f18 of every cycle, three
+  runs kept for the model scores) and `hrrr-fcx3` (f00 to f48 of the long
+  cycles), 15 surface fields each hour stored point-major, pressures less
+  1,000 hPa so half precision keeps tenths; then NBM
   every third hour (f01 to f36: temperature, dew point, wind, direction,
   gust, sky, and the hourly chance of rain and of thunder). On `/combined`
   the NOAA pressure curve is shifted to meet the station's latest reading
   (`pressureOffset`; HRRR reduces to sea level its own way, and Open-Meteo
   at KLUK serves the same HRRR numbers without the shift).
 - And RRFS beside HRRR (`sources/rrfs.py`): sea-level pressure and 10 m
-  wind for hours 1 to 6 of the 00, 06, 12 and 18 UTC cycles, about two
-  hours after each, served to nobody. Each pass then scores the hour
-  nearest the newest METARs for both models at every station reporting
-  within 15 minutes of it (`/models/scores`).
+  wind for hours 1 to 3 of every cycle (about 80 minutes after each; the
+  00 and 12 UTC ones two hours; some hourly cycles are missing before the
+  operational date and are walked past), served to nobody. Each pass then
+  scores the hour nearest the newest METARs, and fills in the hour before,
+  at every station reporting within 15 minutes of it: RRFS from the newest
+  cycle that reaches the hour, HRRR from the same cycle at the same lead
+  (`modelscore.py`, `/models/scores`), so the two are compared like for
+  like.
 - LAMP loop every 300 s: when a new hourly run (HH:30, looked for eight
   minutes after) is not held, one 4.4 MB bulletin from NOMADS for every
   site, parsed in a thread (2,313 stations, 0.4 s). On a cold start a run
@@ -1227,7 +1250,7 @@ without blocking the response.
   1800 s, lightning 600 s, LAMP and model 3600 s). Degraded (200, or 503
   with `strict`): the lightning feed or the bulk table is stale, or no LAMP
   run or HRRR cycle for three hours.
-- Tests: `backend/tests`, 376 tests; `test_property` reads the app's own
+- Tests: `backend/tests`, 379 tests; `test_property` reads the app's own
   OpenAPI document.
 
 ## Settings keys
@@ -1371,3 +1394,9 @@ caching failures; `/stations/search` accepting one character.
   GTG turbulence and CIP icing, the point forecast from HRRR and NBM, radar
   tiles from MRMS with a nowcast and the chance of lightning, RRFS scored
   beside HRRR; Map options presets.
+- 2026-09-25, later: the rain line on the Conditions card from the radar's
+  rain rate and motion, scored against the frames that follow; the model
+  scores compare HRRR and RRFS from the same cycle at the same lead, with
+  RRFS from every hourly cycle; the blank first radar run traced to
+  Cloudflare's rate rule answering tile bursts with 429 pages the app
+  cached as tiles, and the map made to treat those as misses.

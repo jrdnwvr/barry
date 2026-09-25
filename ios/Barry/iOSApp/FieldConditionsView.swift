@@ -381,6 +381,23 @@ struct FieldConditionsCard: View {
                 }
             }
 
+            if let rain = conditions.rain {
+                group {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Image(systemName: rain.status == "now" ? "cloud.rain.fill" : "cloud.drizzle.fill")
+                            .font(.subheadline)
+                            .foregroundStyle(.blue)
+                        Text(RainLine.title(rain, now: now))
+                            .font(.subheadline.weight(.medium))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text(RainLine.detail(rain))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             if let fog = conditions.fog {
                 group {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {

@@ -264,6 +264,23 @@ struct RideOut: Codable, Hashable {
     var changeAt: Date?
 }
 
+/// Rain reaching this point, from the radar's rain rate and motion on
+/// the server: raining now, or due within ninety minutes. Absent when
+/// neither. `{end}` in the detail is for the clearing time.
+struct RainOut: Codable, Hashable {
+    let status: String        // "now" | "soon"
+    var startsAt: Date?
+    var endsAt: Date?
+    let intensity: String     // light | moderate | heavy
+    var distanceMi: Int?
+    var fromCardinal: String?
+    var moving: String?
+    var speedMph: Int?
+    let detail: String
+    let asOf: Date
+    var source: String = "mrms"
+}
+
 struct ConditionsOut: Codable, Hashable {
     var densityAltitudeFt: Int?
     var densityAltitudeHumidFt: Int?   // absent on old backends
@@ -274,11 +291,12 @@ struct ConditionsOut: Codable, Hashable {
     var fog: FogOut?
     var storm: StormOut?
     var ride: RideOut?
+    var rain: RainOut?
 
     /// Anything worth a card at all.
     var hasContent: Bool {
         densityAltitudeFt != nil || !daForecast.isEmpty || boundaryLayerFt != nil
-            || fog != nil || storm != nil
+            || fog != nil || storm != nil || rain != nil
     }
 }
 

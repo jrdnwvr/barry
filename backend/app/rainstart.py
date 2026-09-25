@@ -145,7 +145,7 @@ def outlook(codes: np.ndarray, grid: dict, vy: np.ndarray, vx: np.ndarray,
     dist_mi = math.hypot(dy_km, dx_km) * MI_PER_KM
     frm = cardinal(math.degrees(math.atan2(dx_km, dy_km)))
     where = f"{int(round(dist_mi))} mi to the {frm}" if dist_mi >= 1.5 else f"just to the {frm}"
-    starts_at = max(now, as_of + timedelta(minutes=start))
+    starts_at = max(now, as_of + timedelta(minutes=start)).replace(second=0, microsecond=0)
     return RainOut(status="soon", startsAt=starts_at, endsAt=ends_at, intensity=intensity(peak),
                    distanceMi=int(round(dist_mi)), fromCardinal=frm, moving=moving, speedMph=mph,
                    detail=f"{word} rain {where}, moving {moving} at {mph} mph.{tail}", asOf=as_of)

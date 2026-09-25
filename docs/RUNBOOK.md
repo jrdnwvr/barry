@@ -81,7 +81,11 @@ This is the accepted single point of failure.
 per-address budget answers 429 after 60 a minute; upstream budgets fail
 fast with 503 before any call goes out; the grid builds two at a time.
 The Cloudflare rate rule on the hostname is the outer wall (user-owned,
-suggested 20 requests per 10 seconds).
+suggested 20 requests per 10 seconds). It must not count `/radar/`: the
+radar tiles come from this hostname now, a zoomed-out map asks for a
+hundred in a second, and a rule that counts them blanks the radar for ten
+seconds at a time (the app's tile counter on `/metrics` stays flat while
+it happens, because the 429s never reach the box).
 
 ## Backups
 

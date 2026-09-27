@@ -27,3 +27,4 @@ This build:
 - Build 89 (2026-09-25, 8c4cdc4): the shader compiled on the device instead; archive succeeded, cancelled before TestFlight so the wind speed labels could go in.
 - Build 90 (2026-09-25, 4108fe0): cancelled before TestFlight; the labelled arrows were far too dense at the levels.
 - Build 91 (2026-09-25): Pilots. NOAA switch: radar from MRMS with nowcast and lightning chance, rain line, Aloft turbulence and icing, LAMP TAF stand-in, saved map presets, height contours, the rate-limited tile fix, speed labels on the wind arrows thinned to a readable lattice. Notes written by Jordan.
+- Build 92 (2026-09-27, 18f58e4): Pilots. iOS 17 dates and 24-hour clock text, radar retries after a rate-limit block, height lines kept at altitude, thinned wind arrows (91 had them), and the checked iOS 17 UI tests. Notes written by Jordan.

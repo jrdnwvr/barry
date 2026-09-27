@@ -102,6 +102,8 @@ struct BarryAPI {
         // The verdict and explanation quote local clock times; the device
         // knows the real offset (with daylight saving), the server can only guess.
         items.append(URLQueryItem(name: "tz", value: String(TimeZone.current.secondsFromGMT() / 60)))
+        // And its clock, so the times the server writes read like the rest.
+        items.append(URLQueryItem(name: "clock", value: ClockText.queryValue))
         comps?.queryItems = items
         return try await get(comps?.url)
     }
@@ -145,6 +147,7 @@ struct BarryAPI {
             URLQueryItem(name: "speedKt", value: String(speedKt)),
         ]
         if let tzMinutes { comps?.queryItems?.append(URLQueryItem(name: "tz", value: String(tzMinutes))) }
+        comps?.queryItems?.append(URLQueryItem(name: "clock", value: ClockText.queryValue))
         return try await get(comps?.url)
     }
 
@@ -154,6 +157,7 @@ struct BarryAPI {
                                   resolvingAgainstBaseURL: false)
         comps?.queryItems = [URLQueryItem(name: "stations", value: stations)]
         if let tzMinutes { comps?.queryItems?.append(URLQueryItem(name: "tz", value: String(tzMinutes))) }
+        comps?.queryItems?.append(URLQueryItem(name: "clock", value: ClockText.queryValue))
         return try await get(comps?.url)
     }
 

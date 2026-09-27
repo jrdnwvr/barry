@@ -670,7 +670,7 @@ struct RadarPanel: View {
     /// Local valid time of the analysis on screen.
     private var frontChipTime: String {
         guard let f = model.analysisFrame else { return "" }
-        return "at " + f.valid.formatted(.dateTime.weekday(.abbreviated).hour())
+        return "at " + f.valid.formatted(.dateTime.weekday(.abbreviated)) + " " + ClockText.hour(f.valid)
     }
 
     private var frontValidText: String {

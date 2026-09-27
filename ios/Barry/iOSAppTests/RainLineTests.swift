@@ -61,3 +61,26 @@ struct ServerDateTests {
         #expect(r.sun?.sunrise.count == 1 && r.source == "hrrr+nbm")
     }
 }
+
+/// The phone's clock in words: "4 PM" on a 12-hour clock, "16:00" on a
+/// 24-hour one, the way the system formats every other time.
+struct ClockTextTests {
+    private let utc = TimeZone(identifier: "UTC")!
+    private let t = Date(timeIntervalSince1970: 1_790_352_000)       // 2026-09-26 16:00Z
+
+    @Test func hoursReadInTheClockThePhoneUses() {
+        // The system writes a narrow no-break space before PM, as in every other time on the phone.
+        let twelve = ClockText.hour(t, h24: false, locale: Locale(identifier: "en_US"), timeZone: utc)
+        #expect(twelve.replacingOccurrences(of: "\u{202F}", with: " ") == "4 PM")
+        #expect(ClockText.hour(t, h24: true, locale: Locale(identifier: "da_DK"), timeZone: utc) == "16.00")
+        #expect(ClockText.hour(t, h24: true, locale: Locale(identifier: "en_US"), timeZone: utc) == "16:00")
+        let nine = t.addingTimeInterval(-7 * 3600)
+        #expect(ClockText.hour(nine, h24: true, locale: Locale(identifier: "en_US"), timeZone: utc) == "09:00")
+    }
+
+    @Test func theRegionDecidesTheClockWhenNothingIsOverridden() {
+        #expect(!ClockText.uses24Hour(locale: Locale(identifier: "en_US")))
+        #expect(ClockText.uses24Hour(locale: Locale(identifier: "en_GB")))
+        #expect(ClockText.uses24Hour(locale: Locale(identifier: "de_DE")))
+    }
+}

@@ -194,7 +194,7 @@ struct RangeAnalysis: Equatable {
         if moving.isEmpty {
             if tideAmp >= tideMinAmplitude {
                 return ("The atmosphere breathing",
-                        "The daily pressure tide, about \(mag(tideAmp)) either way, peaking near 10 AM and 10 PM. Nothing bigger is moving through.")
+                        "The daily pressure tide, about \(mag(tideAmp)) either way, peaking near \(ClockText.hour(ofDay: 10)) and \(ClockText.hour(ofDay: 22)). Nothing bigger is moving through.")
             }
             if spread < 0.8 {
                 return ("Dead calm",

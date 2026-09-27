@@ -47,6 +47,8 @@
 		31549614253BF1B636E51ED3 /* BarryComplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 726AB15B448612548C2CCCCD /* BarryComplication.swift */; };
 		316A4B6AE3D7881F77DC672C /* RunwayWindDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD313083D4B2A9BAD12BAB92 /* RunwayWindDial.swift */; };
 		31C975A1344ECEECC2458169 /* PhoneWidgetViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1326419A7770149C91B0438 /* PhoneWidgetViews.swift */; };
+		325FC9E0E19CA9164FA918FE /* ClockText.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEDAB3CFD369F1E384B6983A /* ClockText.swift */; };
+		35C8273E2D931343DB466189 /* ClockText.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEDAB3CFD369F1E384B6983A /* ClockText.swift */; };
 		38590331F7F80BA90EBDE221 /* aloft_hrrr.json in Resources */ = {isa = PBXBuildFile; fileRef = A66F315CBE5FF869D4A502BD /* aloft_hrrr.json */; };
 		390537B91AECE9E9F057FE3B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F07D88A5BEA3FC7C9BD42D68 /* PrivacyInfo.xcprivacy */; };
 		395DCB7F587238A3F9D7C739 /* RunwayMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85C6CB170A65E1A614F64BB1 /* RunwayMath.swift */; };
@@ -151,8 +153,10 @@
 		BF6E49201E9E4A6A26A9C857 /* ForecastCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68F0E9DED173121E56E48C0B /* ForecastCards.swift */; };
 		C10944BA3D2626C8FF342DCD /* TafTimelineCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBA1D35A89B06FE9E7708D10 /* TafTimelineCard.swift */; };
 		C1FA94A165B7428939C8372D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CD077DE63D0DE437229C43CC /* Assets.xcassets */; };
+		C2657FEFBF6DCF444CECABE3 /* ClockText.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEDAB3CFD369F1E384B6983A /* ClockText.swift */; };
 		C2BB4B03167622269DA26352 /* PressureFieldOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 763CE62FEE3C1CA173ABA1C3 /* PressureFieldOverlay.swift */; };
 		C4F305519CC385B7AF7DADBB /* TafTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72EC9A1E421849C76710D333 /* TafTimeline.swift */; };
+		CE970C2100A2ADB417F28C32 /* ClockText.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEDAB3CFD369F1E384B6983A /* ClockText.swift */; };
 		D08CDC9351A19DA080345D28 /* RunwayWindDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD313083D4B2A9BAD12BAB92 /* RunwayWindDial.swift */; };
 		D21F7D7C1B619DD998B3C235 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0094727B647701DDDCF17BD2 /* LocationManager.swift */; };
 		D25C2FA5C3B9D0F9937DCC60 /* FlightCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB485493ACD08C4C6CD5804F /* FlightCategory.swift */; };
@@ -363,6 +367,7 @@
 		CF51EF6C7C37D4CEE92CE308 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		CFA4A69E8BBEEF268407FC68 /* WatchSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSync.swift; sourceTree = "<group>"; };
 		DA12AC45B8A41856114FD9A7 /* SensorComparisonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorComparisonView.swift; sourceTree = "<group>"; };
+		DEDAB3CFD369F1E384B6983A /* ClockText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClockText.swift; sourceTree = "<group>"; };
 		E569F3B3B9FAB65C07970B1A /* StormAlerter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StormAlerter.swift; sourceTree = "<group>"; };
 		E5A4A8464736F548F6F72A42 /* WatchContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchContentView.swift; sourceTree = "<group>"; };
 		EB906A0DF0FCEFBE609EBF06 /* HorizontalDragGesture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorizontalDragGesture.swift; sourceTree = "<group>"; };
@@ -433,6 +438,7 @@
 				5C59EF4878E06062DC20D1D7 /* AppConfig.swift */,
 				FA32F779F49D1C628F2BC52E /* BarometerEngine.swift */,
 				77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */,
+				DEDAB3CFD369F1E384B6983A /* ClockText.swift */,
 				623D8012B9E2B6A8E0CE08AE /* CombinedStore.swift */,
 				FB485493ACD08C4C6CD5804F /* FlightCategory.swift */,
 				0094727B647701DDDCF17BD2 /* LocationManager.swift */,
@@ -882,6 +888,7 @@
 				2D7A5E61DF49C1DD1C90956C /* BarometerEngine.swift in Sources */,
 				571426E9EFB2689033DDB2CD /* BarryAPI.swift in Sources */,
 				31549614253BF1B636E51ED3 /* BarryComplication.swift in Sources */,
+				C2657FEFBF6DCF444CECABE3 /* ClockText.swift in Sources */,
 				005B0A311FFA7BEE137BAEF6 /* CombinedStore.swift in Sources */,
 				55E5298970D9B65C1E5B4F44 /* ComplicationDial.swift in Sources */,
 				0DBDAD9882985AF6C51BD205 /* ComplicationViews.swift in Sources */,
@@ -924,6 +931,7 @@
 				A11B605E76613C43AC5FE11E /* BarryAPI.swift in Sources */,
 				811727C7296B6B80F9E3F81C /* BarryPhoneWidget.swift in Sources */,
 				A6A900288E1F1C496143CB88 /* CardWidgets.swift in Sources */,
+				325FC9E0E19CA9164FA918FE /* ClockText.swift in Sources */,
 				7A6DDBC8AE57AB1B76FBBD68 /* CombinedProvider.swift in Sources */,
 				145DC0D7FB6BC1AAE8E2C6AA /* CombinedStore.swift in Sources */,
 				D25C2FA5C3B9D0F9937DCC60 /* FlightCategory.swift in Sources */,
@@ -964,6 +972,7 @@
 				D3CCE6CB0DB066A238922179 /* BarryAPI.swift in Sources */,
 				DACD1A75954EE1A27EDEC976 /* BarryApp.swift in Sources */,
 				4253341F1F79930A611AD743 /* CardIcons.swift in Sources */,
+				CE970C2100A2ADB417F28C32 /* ClockText.swift in Sources */,
 				4517F602E94072402651DC30 /* CombinedStore.swift in Sources */,
 				3FD01657A6175EE55DF94D91 /* ConfirmationOverlayView.swift in Sources */,
 				E1DA0A2BA6D5DAE408366B62 /* ContentView.swift in Sources */,
@@ -1031,6 +1040,7 @@
 				270E209661CB57713C9B71F5 /* BarometerEngine.swift in Sources */,
 				42482AB94F1FE3D8035354D9 /* BarryAPI.swift in Sources */,
 				4B47718B22FC9723FF410F76 /* BarryWatchApp.swift in Sources */,
+				35C8273E2D931343DB466189 /* ClockText.swift in Sources */,
 				A9DE64996E41CEA4D9FB8833 /* CombinedStore.swift in Sources */,
 				AE283E279AEC60F9B0C8D74D /* FlightCategory.swift in Sources */,
 				B0ED75F3A2F54154E9DC25F8 /* LocationManager.swift in Sources */,

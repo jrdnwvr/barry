@@ -200,3 +200,15 @@ def test_feature_enrichment_still_layers_precip():
     out = build_verdict("falling_mod", forecast, reading=r)
     assert "forecast to bottom out" in out
     assert "Rain likely around 9 PM" in out
+
+
+def test_hour_labels_follow_the_phones_clock_and_round_half_up():
+    from datetime import datetime, timezone
+    from app.verdict import _fmt_local_hour
+    t = datetime(2026, 9, 26, 19, 30, tzinfo=timezone.utc)          # 15:30 at -4
+    assert _fmt_local_hour(t, -4.0) == "4 PM"
+    assert _fmt_local_hour(t, -4.0, hour24=True) == "16:00"
+    t2 = datetime(2026, 9, 26, 18, 30, tzinfo=timezone.utc)         # 14:30 used to round down to 2 PM
+    assert _fmt_local_hour(t2, -4.0) == "3 PM"
+    assert _fmt_local_hour(datetime(2026, 9, 26, 4, 0, tzinfo=timezone.utc), -4.0, hour24=True) == "00:00"
+    assert _fmt_local_hour(datetime(2026, 9, 26, 13, 0, tzinfo=timezone.utc), -4.0, hour24=True) == "09:00"

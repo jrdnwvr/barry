@@ -272,9 +272,11 @@ async def get_combined(
     lon: Optional[float] = Query(None, ge=-180, le=180),
     tz: Optional[int] = Query(None, ge=-14 * 60, le=14 * 60,
                               description="client UTC offset in minutes, for local times in copy"),
+    clock: Optional[str] = Query(None, pattern="^(12|24)$",
+                                 description="the phone's clock: 24 for times like 15:00 in copy, else 3 PM"),
 ):
     service = get_service()
-    resp = await service.get_combined(station, lat, lon, tz_minutes=tz)
+    resp = await service.get_combined(station, lat, lon, tz_minutes=tz, hour24=clock == "24")
     return resp.model_dump(mode="json", by_alias=True)
 
 
@@ -539,13 +541,15 @@ async def search_stations(q: str = Query(..., min_length=2, max_length=40),
 async def glance(
     stations: str = Query(..., min_length=3, max_length=60),
     tz: Optional[int] = Query(None, ge=-840, le=840),
+    clock: Optional[str] = Query(None, pattern="^(12|24)$",
+                                 description="the phone's clock: 24 for times like 15:00 in copy, else 3 PM"),
 ):
     """The saved fields at a glance: one compact line each, from the same
     cached reports as /combined. Up to eight comma-separated ids."""
     ids = [s.strip() for s in stations.split(",") if s.strip()]
     for sid in ids:
         check_station(sid)
-    resp = await get_service().get_glance([s.upper() for s in ids], tz_minutes=tz)
+    resp = await get_service().get_glance([s.upper() for s in ids], tz_minutes=tz, hour24=clock == "24")
     return resp.model_dump(mode="json", by_alias=True)
 
 
@@ -555,13 +559,15 @@ async def get_route(
     dest: str = Query(..., min_length=3, max_length=4, alias="to"),
     speedKt: float = Query(100.0, ge=40, le=400),
     tz: Optional[int] = Query(None, ge=-840, le=840),
+    clock: Optional[str] = Query(None, pattern="^(12|24)$",
+                                 description="the phone's clock: 24 for times like 15:00 in copy, else 3 PM"),
 ):
     """From one field to another in still air: both ends, distance, time,
     the destination at arrival by its TAF, and what lies along a 15 NM
     corridor (stations, lightning, fronts). No upstream call of its own."""
     a, b = check_station(dep), check_station(dest)
     try:
-        resp = await get_service().get_route(a, b, speed_kt=speedKt, tz_minutes=tz)
+        resp = await get_service().get_route(a, b, speed_kt=speedKt, tz_minutes=tz, hour24=clock == "24")
     except LookupError:
         raise HTTPException(status_code=404, detail="no position for one end of the route")
     return resp.model_dump(mode="json", by_alias=True)

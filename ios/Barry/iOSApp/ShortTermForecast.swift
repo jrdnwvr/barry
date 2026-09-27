@@ -149,10 +149,14 @@ struct ShortTermForecast {
 
     // MARK: - Words
 
-    static func clock(_ d: Date) -> String { d.formatted(.dateTime.hour()) }
+    /// "4 PM", or "16:00" on a 24-hour clock (a bare "16" in a sentence
+    /// read as a number, not a time).
+    static func clock(_ d: Date) -> String { ClockText.hour(d) }
 
-    /// "midnight" and "noon" where a sentence reads better with them.
+    /// "midnight" and "noon" where a sentence reads better with them, on a
+    /// 12-hour clock; a 24-hour clock says "00:00" and "12:00".
     static func spoken(_ d: Date) -> String {
+        if ClockText.uses24Hour() { return clock(d) }
         let c = Calendar.current.dateComponents([.hour, .minute], from: d)
         if c.minute == 0, c.hour == 0 { return "midnight" }
         if c.minute == 0, c.hour == 12 { return "noon" }

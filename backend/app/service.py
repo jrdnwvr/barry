@@ -1600,7 +1600,7 @@ class PressureService:
 
     GLANCE_MAX = 8
 
-    def _glance_item(self, pressure, tz_minutes: Optional[int]) -> GlanceItem:
+    def _glance_item(self, pressure, tz_minutes: Optional[int], hour24: bool = False) -> GlanceItem:
         interp, local_offset = _run_interpreter(pressure, None)
         if tz_minutes is not None:
             local_offset = tz_minutes / 60.0
@@ -1613,11 +1613,12 @@ class PressureService:
             altim=cur.altim, slp=cur.slp,
             delta3h=pressure.tendency.delta3h if pressure.tendency else None,
             cls=cls,
-            verdict=build_verdict(cls, None, reading=interp, local_hour_offset=local_offset),
+            verdict=build_verdict(cls, None, reading=interp, local_hour_offset=local_offset, hour24=hour24),
             obsTime=pressure.series[-1].t if pressure.series else None,
         )
 
-    async def get_glance(self, station_ids: List[str], tz_minutes: Optional[int] = None) -> GlanceResponse:
+    async def get_glance(self, station_ids: List[str], tz_minutes: Optional[int] = None,
+                         hour24: bool = False) -> GlanceResponse:
         """Each saved field in one line, from the same cached reports and the
         same interpreter as /combined, minus the forecast. Saved fields are
         watched stations, so the scheduler already keeps them fresh; a field
@@ -1630,19 +1631,20 @@ class PressureService:
                 continue
             if not pressure.series:
                 continue
-            items.append(self._glance_item(pressure, tz_minutes))
+            items.append(self._glance_item(pressure, tz_minutes, hour24))
         return GlanceResponse(items=items, cachedAt=_now())
 
     ROUTE_CORRIDOR_NM = 15.0
     ROUTE_LIGHTNING_NM = 30.0
 
     async def get_route(self, dep_id: str, dest_id: str, speed_kt: float = 100.0,
-                        tz_minutes: Optional[int] = None) -> RouteResponse:
+                        tz_minutes: Optional[int] = None, hour24: bool = False) -> RouteResponse:
         """From one field to another in still air, from data already held:
         the two ends' reports, the METAR table along the corridor, the
         lightning store, the WPC analysis and the destination's TAF. Held
         five minutes per pair and speed."""
-        key = f"route:{dep_id}:{dest_id}:{int(speed_kt)}"
+        # The verdicts in it quote clock times in the asker's zone and clock.
+        key = f"route:{dep_id}:{dest_id}:{int(speed_kt)}:{tz_minutes}:{int(hour24)}"
         cached = await self.cache.get(key)
         if cached is not None:
             return cached
@@ -1736,7 +1738,7 @@ class PressureService:
                     source = "lamp"
 
         resp = RouteResponse(
-            dep=self._glance_item(dep_p, tz_minutes), dest=self._glance_item(dest_p, tz_minutes),
+            dep=self._glance_item(dep_p, tz_minutes, hour24), dest=self._glance_item(dest_p, tz_minutes, hour24),
             depLat=a[0], depLon=a[1], destLat=b[0], destLon=b[1],
             distanceNm=round(dist, 1), speedKt=speed_kt, eteMin=ete, arriveAt=arrive,
             arriveCat=arrive_cat, arriveWindKt=arrive_wkt, arriveWindDir=arrive_wdir,
@@ -1753,6 +1755,7 @@ class PressureService:
         lat: Optional[float] = None,
         lon: Optional[float] = None,
         tz_minutes: Optional[int] = None,
+        hour24: bool = False,
     ) -> CombinedResponse:
         pressure = await self.get_pressure(station)
 
@@ -1787,7 +1790,7 @@ class PressureService:
             try:
                 reading_out.explanation = explain.build(
                     interp, forecast.hourly if forecast else None, pressure.series,
-                    _now(), local_hour_offset=local_offset, taf=taf,
+                    _now(), local_hour_offset=local_offset, taf=taf, hour24=hour24,
                     current=pressure.current)
                 reading_out.confidence, extra = explain.adjust_confidence(
                     reading_out.confidence, reading_out.explanation)
@@ -1801,6 +1804,7 @@ class PressureService:
             forecast.hourly if forecast else None,
             reading=interp,
             local_hour_offset=local_offset,
+            hour24=hour24,
         )
 
         # Nearest lightning report within 100 mi: real flashes from orbit

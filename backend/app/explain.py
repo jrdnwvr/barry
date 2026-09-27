@@ -126,10 +126,10 @@ def _taf_signals(taf: Optional[TafOut], now: datetime, fmt, reading: Reading) ->
 def build(reading: Optional[Reading], forecast: Optional[Sequence[ForecastHour]],
           series: Sequence[SeriesPoint], now: datetime,
           local_hour_offset: float = 0.0, taf: Optional[TafOut] = None,
-          current: Optional[CurrentObs] = None) -> Optional[ExplanationOut]:
+          current: Optional[CurrentObs] = None, hour24: bool = False) -> Optional[ExplanationOut]:
     if reading is None:
         return None
-    fmt = lambda t: _fmt_local_hour(t, local_hour_offset)
+    fmt = lambda t: _fmt_local_hour(t, local_hour_offset, hour24)
     falling = reading.trend in FALLING or reading.feature in FALL_FEATURES
     rising = reading.trend in RISING or reading.feature == "ridge_peak"
 

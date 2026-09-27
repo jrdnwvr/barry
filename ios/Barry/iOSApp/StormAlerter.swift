@@ -63,9 +63,10 @@ enum StormAlerter {
         var label: String {
             switch self {
             case .off: return "Off"
-            case .h22to7: return "10 PM to 7 AM"
-            case .h23to6: return "11 PM to 6 AM"
-            case .h21to8: return "9 PM to 8 AM"
+            default:
+                // In the phone's clock: "10 PM to 7 AM" or "22:00 to 07:00".
+                guard let h = hours else { return "Off" }
+                return "\(ClockText.hour(ofDay: h.start)) to \(ClockText.hour(ofDay: h.end))"
             }
         }
         /// Start and end hour, local time; the window wraps midnight.

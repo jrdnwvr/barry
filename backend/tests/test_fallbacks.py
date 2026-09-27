@@ -2,6 +2,8 @@
 why and where, summed by day on /fallbacks, and survives a restart."""
 from datetime import datetime, timedelta, timezone
 
+import json
+
 import httpx
 import pytest
 
@@ -111,3 +113,27 @@ async def test_no_date_the_app_reads_carries_fractional_seconds(client, upstream
     # Python code still sees datetimes, microseconds and all.
     fc = await s.get_forecast(39.1, -84.5)
     assert isinstance(fc.cachedAt, datetime) and fc.cachedAt.tzinfo is not None
+
+
+@pytest.mark.asyncio
+async def test_clock_times_in_the_copy_follow_the_clock_the_phone_asks_for(client, upstream, noaa_on):
+    """The verdict and the reading's summary quote clock times the server
+    writes; the phone formats every other time itself, so with clock=24 the
+    server writes 15:00 where it would write 3 PM."""
+    import re
+    from app.main import app
+    s = PressureService(client)
+    await s.poll_hrrr()
+    app.state.service = s
+    ampm = re.compile(r"\b\d{1,2} (AM|PM)\b")
+    h24 = re.compile(r"\b\d{2}:00\b")
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+        base = "/combined?station=KLUK&lat=39.1&lon=-84.5&tz=-240"
+        r12, r24 = (await c.get(base)).json(), (await c.get(base + "&clock=24")).json()
+        text12 = r12["verdict"] + " " + ((r12.get("reading") or {}).get("explanation") or {}).get("summary", "")
+        text24 = r24["verdict"] + " " + ((r24.get("reading") or {}).get("explanation") or {}).get("summary", "")
+        assert ampm.search(text12), text12                      # the fixture's front has times in it
+        assert not ampm.search(text24) and h24.search(text24), text24
+        assert (await c.get(base + "&clock=13")).status_code == 422
+        g = (await c.get("/glance?stations=KLUK&tz=-240&clock=24")).json()
+        assert not ampm.search(json.dumps(g))

@@ -1162,7 +1162,7 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 
 | Route | Parameters | Returns | Upstream | Cache and rounding | Used by |
 |---|---|---|---|---|---|
-| `GET /combined` | `station`, `lat`, `lon`, `tz` | pressure (series, current, tendency), forecast, reading (trend, feature, confidence, explanation), conditions (with the rain line, `conditions.rain`, when the radar has rain here or on the way), runways, taf, lamp (LAMP guidance from this hour, when the site has it), lightningNearby, verdict | AWC METAR (Open-Meteo surface pressure as fallback), Open-Meteo forecast, AWC TAF, LAMP from NOMADS, OurAirports runways, GLM flashes, bulk METAR lightning | pressure 12 min per station; forecast 30 min per 0.1° cell; TAF 30 min | the phone and watch (`PressureStore`), complications, widgets, the airport check in Settings |
+| `GET /combined` | `station`, `lat`, `lon`, `tz`, `clock` (12 or 24) | pressure (series, current, tendency), forecast, reading (trend, feature, confidence, explanation), conditions (with the rain line, `conditions.rain`, when the radar has rain here or on the way), runways, taf, lamp (LAMP guidance from this hour, when the site has it), lightningNearby, verdict | AWC METAR (Open-Meteo surface pressure as fallback), Open-Meteo forecast, AWC TAF, LAMP from NOMADS, OurAirports runways, GLM flashes, bulk METAR lightning | pressure 12 min per station; forecast 30 min per 0.1° cell; TAF 30 min | the phone and watch (`PressureStore`), complications, widgets, the airport check in Settings |
 | `GET /pressure/{station}` | `hours` | pressure only | as above | one key per station, whole day | nobody now |
 | `GET /forecast` | `lat`, `lon` | hourly, sun, `source` ("hrrr+nbm", "hrrr" or "open-meteo"), `stale`; on `/combined` also `pressureOffset` | the HRRR forecast feeds (48 h) with NBM over the first 36 h, sun times computed; Open-Meteo, 2 days, off the grid | NOAA: 30 min per 0.1° cell and run; Open-Meteo: 30 min per 0.1° cell, last good re-served 12 h when upstream fails | inside `/combined` |
 | `GET /front` | `station`, `lat`, `lon` | status, headline, bearing, eta, nearestFront | bulk METAR history (7.5 h) or an AWC box, forecast, `/fronts` | 15 min per station and 0.1° | the phone's front banner only |
@@ -1182,8 +1182,8 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 | `GET /models/scores` | `days` (1 to 60, default 14) | `days`: per UTC day, newest first, hours scored and for HRRR and RRFS (the same cycle, the same lead) the mean sea-level pressure error (raw, bias, and with each hour's bias taken out), 10 m wind speed error in knots, direction error where the wind is 8 kt or more, and the lead; `rainStarts`: the "rain starts at" calls scored, hits, hit rate, calls pending, and the same by day | none: the model store and the bulk METAR table, scored once an hour (`modelscore.py`), kept 60 days in `state/model_scores`; the rain calls in `state/rain_calls` | none | Jordan, for the RRFS switch and the rain line |
 | `GET /fallbacks` | `days` (1 to 60, default 14) | per UTC day, newest first: answers served by a fallback instead of the NOAA feeds, by kind (forecast, aloft, field, levels, radar, pressure) and reason (`off-grid`: outside the HRRR domain, expected; `no-data`: nothing held for it; `stale`: radar frames held but old; `off`: switched off in the configuration; `upstream`: AWC failed); then the newest 40 events with where (a station or a point to a tenth of a degree) | none: `fallbacks.py`, one event per kind, reason and place every ten minutes, kept 60 days in `state/fallbacks`, written by the scheduler once a cycle; every occurrence counts on `/metrics` as `barry_fallbacks_total` | none | Jordan, for taking the fallbacks out |
 | `GET /stations/search` | `q`, `limit` | id and name matches, METAR stations only | AWC directory | directory 24 h | Settings, onboarding |
-| `GET /glance` | `stations` (comma list, up to 8), `tz` | one line per field: category, wind, altimeter, sea-level pressure, 3 h change and class, the verdict without forecast, observation time | the same cached reports as `/combined` (saved fields are watched stations) | none of its own; a field that cannot be read is left out | the Fields card |
-| `GET /route` | `from`, `to`, `speedKt` (40 to 400, default 100), `tz` | distance, time, arrival time, both ends' glance lines, corridor stations (along and off the line, category, wind), the worst of them, nearest lightning near the line, fronts crossing it, the destination's category at arrival and where it came from (`arriveSource` taf or lamp), TEMPO at arrival, minutes from sunset | none: the bulk table, the flash store, `/fronts`, the ends' cached reports, TAF and LAMP | 5 min per pair and speed | the Route card and screen |
+| `GET /glance` | `stations` (comma list, up to 8), `tz`, `clock` | one line per field: category, wind, altimeter, sea-level pressure, 3 h change and class, the verdict without forecast, observation time | the same cached reports as `/combined` (saved fields are watched stations) | none of its own; a field that cannot be read is left out | the Fields card |
+| `GET /route` | `from`, `to`, `speedKt` (40 to 400, default 100), `tz`, `clock` | distance, time, arrival time, both ends' glance lines, corridor stations (along and off the line, category, wind), the worst of them, nearest lightning near the line, fronts crossing it, the destination's category at arrival and where it came from (`arriveSource` taf or lamp), TEMPO at arrival, minutes from sunset | none: the bulk table, the flash store, `/fronts`, the ends' cached reports, TAF and LAMP | 5 min per pair and speed | the Route card and screen |
 | `GET /stations/nearest` | `lat`, `lon` | station, name, distance | bulk table, AWC box, built-in table | 10 min per 0.2° | My location, the watch alone, onboarding |
 | `GET /healthz` | `strict` | status, problems, cycle counts | none | none | Docker, monitors |
 | `POST /diagnostics` | header `X-Barry-Kind` | 202 | none | 30 a minute, 1 MiB | MetricKit reports |
@@ -1335,6 +1335,19 @@ each device (the watch keeps its own copies).
 
 Not a key: `combined.json` in the App Group container holds the last
 `/combined` payload for the widgets and the cold start.
+
+## Clock times
+
+The verdict and the reading's summary (`/combined`, `/glance`, `/route`)
+are written on the server, with the hour in the phone's zone (`tz`) and
+clock (`clock=24` gives "16:00", otherwise "4 PM"; `verdict.py`
+`_fmt_local_hour`, half an hour rounds up). Every other time is formatted
+on the phone: `.formatted(date: .omitted, time: .shortened)` for times
+with minutes, and `ClockText.hour` ("4 PM" or "16:00") for an hour in a
+sentence, the quiet-hours labels, the onboarding sample and the tide
+sentence. Chart axes keep the bare hour. Placeholders the server leaves
+for the phone: `{eta}` (storm), `{end}` (rain). Until 2026-09-26 the
+server always wrote "4 PM", beside cards that followed a 24-hour phone.
 
 ## Look and voice
 

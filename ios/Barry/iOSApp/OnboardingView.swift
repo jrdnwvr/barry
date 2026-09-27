@@ -125,7 +125,7 @@ struct OnboardingView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            Text("Pressure falling. Rain likely around 5 PM.")
+            Text("Pressure falling. Rain likely around \(ClockText.hour(ofDay: 17)).")
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(Color(red: 0.52, green: 0.33, blue: 0.03))
                 .padding(.horizontal, 12)

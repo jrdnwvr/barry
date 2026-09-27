@@ -10,6 +10,8 @@ over-promise on a smoothed model output.
 
 from __future__ import annotations
 
+import math
+
 from datetime import datetime
 from typing import Optional, Sequence
 
@@ -65,10 +67,15 @@ def forecast_stays_calm(forecast: Sequence[ForecastHour]) -> bool:
     return True
 
 
-def _fmt_local_hour(t: datetime, local_hour_offset: float = 0.0) -> str:
-    """Render an hour label like '3 PM' from a (UTC) datetime + local offset."""
+def _fmt_local_hour(t: datetime, local_hour_offset: float = 0.0, hour24: bool = False) -> str:
+    """The nearest local hour of a (UTC) datetime: '3 PM', or '15:00' when
+    the phone uses a 24-hour clock (it says so with `clock=24`; the phone
+    formats every other time itself, so the server must match it). Half an
+    hour rounds up."""
     h_raw = (t.hour + t.minute / 60.0 + local_hour_offset) % 24.0
-    h = int(round(h_raw)) % 24
+    h = int(math.floor(h_raw + 0.5)) % 24
+    if hour24:
+        return f"{h:02d}:00"
     hr = h % 12 or 12
     ampm = "AM" if h < 12 else "PM"
     return f"{hr} {ampm}"
@@ -86,7 +93,7 @@ def find_precip_peak(
     return None
 
 
-def _feature_sentence(reading: Reading, *, local_hour_offset: float) -> Optional[str]:
+def _feature_sentence(reading: Reading, *, local_hour_offset: float, hour24: bool = False) -> Optional[str]:
     """Feature-specific phrasing. Returns None for features that should defer to
     the trend-only base sentence (`none`, `diurnal_only`)."""
     f = reading.feature
@@ -95,7 +102,7 @@ def _feature_sentence(reading: Reading, *, local_hour_offset: float) -> Optional
 
     if f == "approaching_trough":
         if t is not None:
-            time_str = _fmt_local_hour(t, local_hour_offset)
+            time_str = _fmt_local_hour(t, local_hour_offset, hour24)
             lead = "forecast to bottom out" if forecast_derived else "dropping toward a trough"
             return f"Pressure {lead} around {time_str}. A front looks likely."
         return "Pressure dropping toward a low. A front looks likely."
@@ -129,6 +136,7 @@ def build_verdict(
     reading: Optional[Reading] = None,
     *,
     local_hour_offset: float = 0.0,
+    hour24: bool = False,
 ) -> str:
     """Compose the one-line verdict. When `reading` is supplied, prefer its
     feature-specific phrasing; otherwise fall back to the trend class."""
@@ -138,7 +146,7 @@ def build_verdict(
 
     sentence: Optional[str] = None
     if reading is not None:
-        sentence = _feature_sentence(reading, local_hour_offset=local_hour_offset)
+        sentence = _feature_sentence(reading, local_hour_offset=local_hour_offset, hour24=hour24)
     if sentence is None:
         sentence = BASE_VERDICTS.get(effective_class, BASE_VERDICTS["steady"])
 
@@ -146,7 +154,7 @@ def build_verdict(
     if effective_class.startswith("falling") and forecast:
         peak = find_precip_peak(forecast)
         if peak is not None:
-            sentence += f" Rain likely around {_fmt_local_hour(peak.t, local_hour_offset)}."
+            sentence += f" Rain likely around {_fmt_local_hour(peak.t, local_hour_offset, hour24)}."
         elif forecast_stays_calm(forecast):
             # No rain coming and no meaningful wind: swap the generic alarm
             # sentence for the honest "big change, maybe no weather" version.

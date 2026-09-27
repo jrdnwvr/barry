@@ -310,7 +310,13 @@ says so. The level is not remembered between opens.
   at weather that is somewhere else today). Give the UI
   test a specific simulator: `-destination 'platform=iOS Simulator,id=<udid>'`.
   The name "iPhone 17 Pro" matches one device per installed runtime, and the
-  iOS 27 beta one hung the run for twenty minutes without a line of output. The tendency
+  iOS 27 beta one hung the run for twenty minutes without a line of output.
+  An iPhone 15 on iOS 17.0 (the oldest iOS the app supports, and a Pilots
+  tester's) is installed as "iPhone 15 iOS 17.0" since 2026-09-26: run the
+  suite there before a build that touches decoding or navigation. With that
+  runtime `xcodebuild test` finishes the tests and then never exits; read
+  the log and stop it. The simulator control tool's taps do not reach an
+  iOS 17 simulator; drive it with the UI tests. The tendency
   table is checked on both sides against `tendency_cases.json`;
   regenerate it with `backend/tools/gen_tendency_fixture.py` after
   changing `tendency.py`, then mirror the change in `Tendency.swift`.

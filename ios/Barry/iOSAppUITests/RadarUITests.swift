@@ -17,6 +17,17 @@ final class RadarUITests: XCTestCase {
         app.buttons["radar.chip.\(name)"]
     }
 
+    /// The copy of an element that is on screen. On iOS 17 the dashboard's
+    /// radar card stays in the accessibility tree under the full-screen
+    /// radar, with the same identifiers, and a plain query tapped the card's
+    /// Layers button at the bottom of the screen (found 2026-09-26 on an
+    /// iOS 17.0 simulator; iOS 26 hides the covered card).
+    private func onScreen(_ query: XCUIElementQuery, _ id: String, timeout: TimeInterval = 5) -> XCUIElement {
+        let first = query[id]
+        _ = first.waitForExistence(timeout: timeout)
+        return query.matching(identifier: id).allElementsBoundByIndex.first(where: { $0.isHittable }) ?? first
+    }
+
     /// The chip bar scrolls sideways. A swipe carries with momentum and
     /// overshoots, so this drags, slowly, by the distance the chip is from
     /// the bar's centre, a step at a time, until the chip can be tapped.
@@ -49,10 +60,11 @@ final class RadarUITests: XCTestCase {
         app.launch()
 
         // Scroll the dashboard until the radar card's expand button is in
-        // reach, tap it, and confirm the full screen actually came up (the
-        // map key button only exists there).
+        // reach, tap it, and confirm the full screen actually came up: its
+        // "Radar" navigation bar (the card has a map key button of its own,
+        // so that proved nothing).
         let expand = app.buttons["radar.expand"]
-        let key = app.buttons["Map key"]
+        let key = app.navigationBars["Radar"]
         for attempt in 0..<3 {
             var swipes = 0
             while !(expand.exists && expand.isHittable) && swipes < 8 {
@@ -67,7 +79,7 @@ final class RadarUITests: XCTestCase {
         }
 
         // The chips sit behind the Layers button; open the bar first.
-        let layersButton = app.buttons["radar.layers"]
+        let layersButton = onScreen(app.buttons, "radar.layers")
         XCTAssertTrue(layersButton.waitForExistence(timeout: 5), "no Layers button\n\(app.debugDescription)")
         layersButton.tap()
         XCTAssertTrue(app.scrollViews["radar.chips"].waitForExistence(timeout: 5), "the chip bar did not open")
@@ -103,13 +115,14 @@ final class RadarUITests: XCTestCase {
 
         // The timeline: Now parks on the latest frame, a scrub pauses where
         // it lands, the loop button starts the last hour again.
-        let now = app.buttons["radar.now"], loop = app.buttons["radar.loop"]
-        let frameTime = app.staticTexts["radar.frameTime"]
+        let now = onScreen(app.buttons, "radar.now"), loop = onScreen(app.buttons, "radar.loop")
+        let frameTime = onScreen(app.staticTexts, "radar.frameTime")
         XCTAssertTrue(now.waitForExistence(timeout: 5) && loop.exists)
         now.tap()
         XCTAssertTrue(now.isSelected && !loop.isSelected)
         XCTAssertTrue(frameTime.label.contains("latest"), frameTime.label)
-        app.sliders.firstMatch.adjust(toNormalizedSliderPosition: 0.2)
+        (app.sliders.allElementsBoundByIndex.first(where: { $0.isHittable }) ?? app.sliders.firstMatch)
+            .adjust(toNormalizedSliderPosition: 0.2)
         XCTAssertTrue(!now.isSelected && !loop.isSelected, "a scrub should pause where it lands")
         XCTAssertFalse(frameTime.label.contains("latest"), frameTime.label)
         loop.tap()

@@ -6,10 +6,27 @@ the TendencyOut model aliases the `cls` field to serialize as "class".
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import List, Optional
+from datetime import datetime as _datetime, timezone as _timezone
+from typing import Annotated, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer
+
+
+def _whole_seconds(v: _datetime) -> str:
+    """ISO 8601 in UTC to the whole second, "2026-09-27T00:57:07Z". Before
+    iOS 18, JSONDecoder's .iso8601 strategy rejects fractional seconds and
+    fails the whole response, so a phone on iOS 17 could not read /combined
+    at all (found 2026-09-26: cachedAt and the computed sun times carried
+    microseconds). Newer iOS accepts either; this form suits both."""
+    if v.tzinfo is not None:
+        v = v.astimezone(_timezone.utc)
+    s = v.replace(microsecond=0).isoformat()
+    return s[:-6] + "Z" if s.endswith("+00:00") else s
+
+
+# Every date in every response model is this type: a datetime in Python,
+# whole seconds in JSON.
+datetime = Annotated[_datetime, PlainSerializer(_whole_seconds, return_type=str, when_used="json")]
 
 
 class SeriesPoint(BaseModel):

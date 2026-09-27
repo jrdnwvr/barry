@@ -60,8 +60,36 @@ struct BarryAPI {
 
     static let decoder: JSONDecoder = {
         let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
+        d.dateDecodingStrategy = .custom { dec in
+            let c = try dec.singleValueContainer()
+            let s = try c.decode(String.self)
+            guard let date = BarryAPI.parseDate(s) else {
+                throw DecodingError.dataCorruptedError(in: c, debugDescription: "Expected an ISO 8601 date, got \(s)")
+            }
+            return date
+        }
         return d
+    }()
+
+    /// An ISO 8601 date with or without fractional seconds. The built-in
+    /// .iso8601 strategy rejects "…07.402195Z" before iOS 18 and fails the
+    /// whole response: a tester's iPhone on iOS 17 and his iPad could not
+    /// load anything (2026-09-26). The server now sends whole seconds; this
+    /// keeps an older or future server from doing it again.
+    static func parseDate(_ s: String) -> Date? {
+        if let d = isoWhole.date(from: s) { return d }
+        // "…07.402195Z" -> "…07Z": the fraction dropped, the zone kept.
+        guard let dot = s.firstIndex(of: "."),
+              let zone = s[dot...].firstIndex(where: { $0 == "Z" || $0 == "+" || $0 == "-" })
+        else { return nil }
+        return isoWhole.date(from: String(s[..<dot]) + String(s[zone...]))
+    }
+
+    /// Thread-safe (ISO8601DateFormatter is documented so), shared.
+    private static let isoWhole: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
     }()
 
     /// Primary call — the full −24/+24 picture in one request (brief §5).

@@ -94,6 +94,12 @@ Prefer the station-reported `presTend`; otherwise compute `d` from the time seri
 The Swift `Codable` models in `Shared/Models.swift` match this exactly (note the
 JSON key `class` ↔ Swift `cls`).
 
+Dates in every response are ISO 8601 in UTC to the whole second
+(`2026-09-27T00:57:07Z`; `models.py` types every `datetime` so). Before
+iOS 18 the app's decoder rejected fractional seconds and failed the whole
+response, and a tester on iOS 17 could load nothing until 2026-09-26. The
+app now accepts either form (`BarryAPI.parseDate`).
+
 ## Run locally
 
 ```bash

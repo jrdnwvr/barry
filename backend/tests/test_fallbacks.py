@@ -84,3 +84,30 @@ def test_the_log_survives_a_restart_and_forgets_old_events(tmp_path, monkeypatch
     assert again.summary(1, NOW)["days"][0]["byKind"] == {"radar": {"stale": 2}}
     assert again.flush(NOW + timedelta(days=61)) and again.events() == []
     assert fallbacks.Log().events() == []
+
+
+@pytest.mark.asyncio
+async def test_no_date_the_app_reads_carries_fractional_seconds(client, upstream, noaa_on, monkeypatch):
+    """iOS 17's JSONDecoder rejects "…07.402195Z" and fails the whole
+    response, so every date goes out to the whole second."""
+    import re
+    from app.main import app
+    # A clock with microseconds, as the real one has.
+    monkeypatch.setattr("app.service._now", lambda: NOW.replace(microsecond=402195))
+    s = PressureService(client)
+    await s.poll_hrrr()
+    await s.poll_radar()
+    app.state.service = s
+    frac = re.compile(r'"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d+')
+    whole = re.compile(r'"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ"')
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+        for path in ("/combined?station=KLUK&lat=39.1&lon=-84.5", "/aloft?lat=39.1&lon=-84.5",
+                     "/radar/frames", "/forecast?lat=39.1&lon=-84.5",
+                     "/radar/field?lat=39.1&lon=-84.5&latSpan=3&lonSpan=3"):
+            r = await c.get(path)
+            assert r.status_code == 200, path
+            assert not frac.search(r.text), (path, frac.search(r.text).group(0))
+            assert whole.search(r.text), path
+    # Python code still sees datetimes, microseconds and all.
+    fc = await s.get_forecast(39.1, -84.5)
+    assert isinstance(fc.cachedAt, datetime) and fc.cachedAt.tzinfo is not None

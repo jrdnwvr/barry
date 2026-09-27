@@ -34,12 +34,13 @@ def _metar_record(sid, obs_time, slp, *, altim=None, pres_tend=None, name="Test 
     }
 
 
-def sample_metars(sid="KLUK", *, with_pres_tend=True):
+def sample_metars(sid="KLUK", *, with_pres_tend=True, now=None):
     """A 4-point series, 1h apart, falling 1012 -> 1009.6 over 3h (delta -2.4).
 
     Anchored to wall-clock time so the interpreter's trailing-window logic sees
-    "recent" data regardless of when the test suite runs."""
-    end = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    "recent" data regardless of when the test suite runs, or to `now` (the
+    fake upstream's clock) when a test freezes time."""
+    end = (now or datetime.now(timezone.utc)).replace(minute=0, second=0, microsecond=0)
     base = int((end - timedelta(hours=3)).timestamp())
     pts = [
         (base + 0 * 3600, 1012.0),
@@ -758,7 +759,7 @@ class FakeUpstream:
                 # Like real AWC: only K-prefixed identifiers report (typing
                 # "LUK" or "I67" returns nothing; "KLUK"/"KI67" work).
                 if sid and sid.startswith("K"):
-                    recs.extend(sample_metars(sid))
+                    recs.extend(sample_metars(sid, now=self.clock()))
             if not recs:
                 # Faithful to real AWC: unknown identifiers get an EMPTY BODY,
                 # not an empty JSON array — this exact quirk broke normalization

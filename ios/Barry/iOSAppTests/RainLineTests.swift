@@ -40,3 +40,24 @@ struct RainLineTests {
         #expect(ConditionsOut(rain: rain).hasContent)
     }
 }
+
+/// Dates from the server, with and without fractional seconds, on every iOS
+/// version the app runs on. Uses the same legacy formatter iOS 17 uses, so
+/// the check holds on the newer simulators too.
+struct ServerDateTests {
+    @Test func wholeAndFractionalSecondsBothParse() throws {
+        let whole = try #require(BarryAPI.parseDate("2026-09-27T00:57:07Z"))
+        let frac = try #require(BarryAPI.parseDate("2026-09-27T00:57:07.402195Z"))
+        #expect(whole == frac)
+        let offset = try #require(BarryAPI.parseDate("2026-09-26T20:57:07.5-04:00"))
+        #expect(offset == whole)
+        #expect(BarryAPI.parseDate("not a date") == nil)
+        #expect(BarryAPI.parseDate("2026-09-27") == nil)
+    }
+
+    @Test func aResponseWithMicrosecondsDecodes() throws {
+        let json = #"{"hourly":[],"sun":{"sunrise":["2026-09-26T11:29:10.071551Z"],"sunset":["2026-09-26T23:29:30Z"]},"source":"hrrr+nbm","cachedAt":"2026-09-27T01:06:54.159412Z"}"#
+        let r = try BarryAPI.decoder.decode(ForecastResponse.self, from: Data(json.utf8))
+        #expect(r.sun?.sunrise.count == 1 && r.source == "hrrr+nbm")
+    }
+}

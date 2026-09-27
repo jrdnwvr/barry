@@ -93,3 +93,71 @@ async def test_glm_outage_is_quiet(client, upstream):
     await service.poll_lightning()                # logs, never raises
     resp = await service.get_lightning(39.1, -84.5)
     assert resp.cells == [] and resp.coverage is False
+
+
+# ---- Which flashes to believe ------------------------------------------------
+
+def _store(echo):
+    """A store whose radar says `echo(lat, lon)` dBZ (None: cannot see)."""
+    return fl.FlashStore(echo_at=lambda la, lo, t: echo(la, lo))
+
+
+def test_a_lone_flash_in_clear_air_is_not_lightning_nearby():
+    t0 = NOW.timestamp()
+    s = _store(lambda la, lo: -99.0)                              # the radar sees no echo anywhere
+    s.add([Flash(t0 - 60, 39.3, -84.6, 1.0)], NOW)
+    assert s.nearest(39.1, -84.5, NOW) is None
+    assert s.cells(39.1, -84.5, 2.0, NOW) == [] and s.dropped == 1
+    # The same flash over a storm the radar sees: believed.
+    s2 = _store(lambda la, lo: 42.0)
+    s2.add([Flash(t0 - 60, 39.3, -84.6, 1.0)], NOW)
+    near = s2.nearest(39.1, -84.5, NOW)
+    assert near is not None and near.flashes == 1 and s2.dropped == 0
+
+
+def test_in_clear_air_it_takes_three_flashes_together():
+    t0 = NOW.timestamp()
+    s = _store(lambda la, lo: None)                               # no radar there (offshore, or none held)
+    two = [Flash(t0 - 60, 39.30, -84.60, 1.0), Flash(t0 - 50, 39.35, -84.55, 1.0)]
+    s.add(two, NOW)
+    assert s.nearest(39.1, -84.5, NOW) is None
+    s.add([Flash(t0 - 40, 39.32, -84.58, 1.0)], NOW)              # a third within 20 km
+    near = s.nearest(39.1, -84.5, NOW)
+    assert near is not None and near.flashes == 3
+    # Three spread 30 km apart are still three lone flashes.
+    s3 = _store(lambda la, lo: None)
+    s3.add([Flash(t0 - 60, 39.0, -84.0, 1.0), Flash(t0 - 50, 39.27, -84.0, 1.0), Flash(t0 - 40, 39.54, -84.0, 1.0)], NOW)
+    assert s3.nearest(39.2, -84.1, NOW) is None
+
+
+def test_weak_echo_does_not_back_a_flash_and_a_backed_flash_stays_backed():
+    t0 = NOW.timestamp()
+    echo = {"dbz": 25.0}
+    s = _store(lambda la, lo: echo["dbz"])
+    s.add([Flash(t0 - 60, 39.3, -84.6, 1.0)], NOW)
+    assert s.nearest(39.1, -84.5, NOW) is None                    # 25 dBZ: rain, not a thunderstorm core
+    echo["dbz"] = 35.0
+    s.add([], NOW)                                                # a newer radar frame, checked on the next poll
+    assert s.nearest(39.1, -84.5, NOW) is not None
+    echo["dbz"] = -99.0
+    s.add([], NOW)
+    assert s.nearest(39.1, -84.5, NOW) is not None                # the storm was there when it flashed
+
+
+@pytest.mark.asyncio
+async def test_the_service_checks_flashes_against_its_own_radar(client, upstream, monkeypatch):
+    """The MRMS fixture has a 45 dBZ cell over Cincinnati and nothing near
+    Cleveland: a flash over the cell is lightning nearby, a lone one near
+    Cleveland is not."""
+    monkeypatch.setenv("BARRY_MRMS", "1")
+    now = datetime(2026, 9, 25, 3, 7, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr("app.service._now", lambda: now)
+    upstream.clock = lambda: now
+    s = PressureService(client)
+    await s.poll_radar()
+    t0 = now.timestamp()
+    s.flashes.add([Flash(t0 - 60, 39.10, -84.50, 1.0), Flash(t0 - 60, 41.40, -81.70, 1.0)], now)
+    assert s._echo_at(39.10, -84.50, t0) >= 40 and s._echo_at(41.40, -81.70, t0) < 0
+    over = s.flashes.nearest(39.05, -84.45, now)
+    assert over is not None and over.distanceMi <= 5
+    assert s.flashes.nearest(41.45, -81.75, now) is None and s.flashes.dropped == 1

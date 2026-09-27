@@ -2,6 +2,16 @@
 read off it: a binned slice for the map, and the nearest flash to a point
 with the storm's drift.
 
+Only credible flashes are read off it. GLM reports the odd flash in clear
+air (a pilot saw "lightning nearby" under a clear sky, 2026-09-26), so a
+flash counts when the radar backs it, echo of BACKED_DBZ or more within
+about 10 km (lightning needs a strong convective core), or, where the radar
+shows nothing or cannot see, when it is one of GROUP_MIN flashes within
+GROUP_KM over the window. Measured on 2026-09-26 against the MRMS
+composite: of 4,088 flashes inside radar coverage, 93 percent had 30 dBZ or
+more within 5 km; of the 101 with no other flash within 20 km, 22 had no
+echo at all. One backed flash is enough; a lone flash in clear air is not.
+
 Fed by the GLM poll (sources/glm.py) once a minute. Pure data structure
 with no I/O so the geometry tests without a network.
 """
@@ -10,7 +20,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from .models import LightningCell, LightningCluster, LightningNearby, LightningResponse
 from .sources.glm import Flash
@@ -20,6 +30,9 @@ BIN_DEG = 0.02              # ~2 km cells on the map
 MAX_CELLS = 2500            # densest / newest cells per slice
 RADIUS_KM = 160.9           # 100 statute miles, same as the METAR search
 CLUSTER_MIN_FLASHES = 3     # smaller groups are noise, not a storm
+BACKED_DBZ = 30.0           # radar echo that makes a single flash believable
+GROUP_KM = 20.0             # an unbacked flash needs company this close...
+GROUP_MIN = 3               # ...this many flashes, itself included
 CLUSTER_RECENT_S = 300.0    # "recent" flashes: the last five minutes
 MOTION_MIN_FLASHES = 5      # per half-window before a drift is claimed
 MOTION_MIN_KM = 3.0         # centroid must move this far to be called motion
@@ -71,12 +84,17 @@ def _convex_hull(points: Sequence[Tuple[float, float]]) -> List[Tuple[float, flo
 
 
 class FlashStore:
-    def __init__(self) -> None:
+    def __init__(self, echo_at: Optional[Callable[[float, float, float], Optional[float]]] = None) -> None:
         self._flashes: List[Flash] = []
         self.seen: Dict[str, str] = {}          # satellite -> last key taken
         self.last_fetch: Optional[datetime] = None
         self.files = 0
         self.bytes = 0
+        # The strongest radar echo, dBZ, near (lat, lon) at unix time t, or
+        # None where the radar cannot say (no frame near t, out of coverage).
+        self.echo_at = echo_at
+        self._backed: set = set()
+        self._credible: Optional[List[Flash]] = None     # None: to be worked out
 
     def __len__(self) -> int:
         return len(self._flashes)
@@ -85,19 +103,73 @@ class FlashStore:
         cutoff = now.timestamp() - WINDOW_S
         self._flashes = [f for f in self._flashes if f.t >= cutoff]
         self._flashes.extend(f for f in flashes if f.t >= cutoff and f.t <= now.timestamp() + 120)
+        self._credible = None
 
     def prune(self, now: datetime) -> None:
         cutoff = now.timestamp() - WINDOW_S
         self._flashes = [f for f in self._flashes if f.t >= cutoff]
+        self._backed = {f for f in self._backed if f.t >= cutoff}
+        self._credible = None
+
+    # ---- Which flashes to believe ------------------------------------------
+
+    def credible(self) -> List[Flash]:
+        """The flashes the radar backs, and those in a group of GROUP_MIN
+        within GROUP_KM; worked out once per change to the store (a backed
+        flash stays backed; the rest are checked again against newer radar)."""
+        if self._credible is not None:
+            return self._credible
+        if self.echo_at is not None:
+            for f in self._flashes:
+                if f in self._backed:
+                    continue
+                try:
+                    e = self.echo_at(f.lat, f.lon, f.t)
+                except Exception:
+                    e = None
+                if e is not None and e >= BACKED_DBZ:
+                    self._backed.add(f)
+        cell = GROUP_KM / 111.0
+        bins: Dict[Tuple[int, int], List[Flash]] = {}
+        for f in self._flashes:
+            bins.setdefault((int(math.floor(f.lat / cell)), int(math.floor(f.lon / cell))), []).append(f)
+        out: List[Flash] = []
+        for f in self._flashes:
+            if f in self._backed:
+                out.append(f)
+                continue
+            bi, bj = int(math.floor(f.lat / cell)), int(math.floor(f.lon / cell))
+            n = 0
+            # Longitude cells shrink toward the pole; two either side covers 20 km to 60 degrees.
+            for di in (-1, 0, 1):
+                for dj in (-2, -1, 0, 1, 2):
+                    for o in bins.get((bi + di, bj + dj), ()):
+                        if _haversine_km(f.lat, f.lon, o.lat, o.lon) <= GROUP_KM:
+                            n += 1
+                            if n >= GROUP_MIN:
+                                break
+                    if n >= GROUP_MIN:
+                        break
+                if n >= GROUP_MIN:
+                    break
+            if n >= GROUP_MIN:
+                out.append(f)
+        self._credible = out
+        return out
+
+    @property
+    def dropped(self) -> int:
+        """Flashes in the window not believed (lone, and the radar shows no storm)."""
+        return len(self._flashes) - len(self.credible())
 
     def fresh(self, now: datetime, max_age_s: float = 300.0) -> bool:
         return self.last_fetch is not None and (now - self.last_fetch).total_seconds() <= max_age_s
 
     def recent(self, now: datetime) -> List[Flash]:
-        """Every flash still in the window, for callers with their own shape
-        to test against (the route's corridor)."""
+        """Every credible flash still in the window, for callers with their
+        own shape to test against (the route's corridor)."""
         cutoff = now.timestamp() - WINDOW_S
-        return [f for f in self._flashes if f.t >= cutoff]
+        return [f for f in self.credible() if f.t >= cutoff]
 
     # ---- Map slice ----------------------------------------------------------
 
@@ -107,7 +179,7 @@ class FlashStore:
         lon_half = half / max(0.2, math.cos(math.radians(lat)))
         bins: Dict[Tuple[int, int], List[float]] = {}
         t_now = now.timestamp()
-        for f in self._flashes:
+        for f in self.credible():
             if abs(f.lat - lat) > half or abs(f.lon - lon) > lon_half:
                 continue
             k = (int(math.floor(f.lat / BIN_DEG)), int(math.floor(f.lon / BIN_DEG)))
@@ -176,7 +248,7 @@ class FlashStore:
         toward the point (centroid of the newer half against the older half)."""
         t_now = now.timestamp()
         near: List[Tuple[Flash, float]] = []
-        for f in self._flashes:
+        for f in self.credible():
             if abs(f.lat - lat) > 1.6 or abs(f.lon - lon) > 2.2:
                 continue   # cheap box before the trig
             d = _haversine_km(lat, lon, f.lat, f.lon)

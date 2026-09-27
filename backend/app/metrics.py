@@ -36,6 +36,7 @@ HELP = {
     "barry_scheduler_cycle_seconds": "how long the last refresh cycle took",
     "barry_registry_size": "stations the scheduler is refreshing",
     "barry_glm_flashes": "lightning flashes in the twenty minute window",
+    "barry_glm_flashes_dropped": "flashes in the window not believed: lone, with no radar storm under them",
     "barry_rss_bytes": "resident memory of the process",
     "barry_cache_entries": "entries in the TTL cache",
 }

@@ -313,6 +313,14 @@ hidden). A card shows only when it is not hidden and has something to say.
   98 flashes within 100 mi". Opens the radar.
 - Lives: `LightningBanner.swift`.
 - Data: `/combined.lightningNearby`.
+- Rules: only credible GOES flashes count, here and on the map, the
+  storm row, alerts and the route (`flashes.py`, since 2026-09-26): one
+  flash is enough when the radar has 30 dBZ or more within about 10 km of
+  it (a convective core); where the radar shows no storm or cannot see,
+  it takes three flashes within 20 km over the 20 minutes. A pilot saw
+  "lightning nearby" under a clear sky; on that day 22 of the 101 lone
+  flashes inside radar coverage had no echo under them. Station reports
+  (TS, VCTS, LTG remarks) are not filtered.
 - For: P M E.
 
 ### card.chart
@@ -1203,7 +1211,10 @@ without blocking the response.
   registry to disk, then batched METAR calls for watched stations (50 per
   call).
 - Lightning loop every 60 s: GOES-19 east of 106 W and GOES-18 west of it,
-  20 minutes kept. `BARRY_GLM=0` disables.
+  20 minutes kept. After each poll the credible flashes are worked out
+  against the newest radar frame within 15 minutes of each flash (about
+  80 ms for 25,000 flashes); the rest are counted on `/metrics` as
+  `barry_glm_flashes_dropped`. `BARRY_GLM=0` disables.
 - Model loop every 300 s: when the newest HRRR cycle (expected 58 min
   after its hour) is not held, the analysis and the next two hours of the
   fields in `sources/hrrr.py` by byte range from AWS, or whole files from

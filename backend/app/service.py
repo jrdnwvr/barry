@@ -27,7 +27,7 @@ from . import radar as radar_mod
 from .radar import RadarStore
 from . import flashes as flashes_mod
 from . import lightning as lightning_mod
-from . import persist
+from . import metrics, persist
 from . import pressure_field
 from . import rainstart
 from . import track
@@ -238,7 +238,7 @@ class PressureService:
         # cycle warms them instead of waiting for each phone to ask again.
         self.registry.restore(persist.load("registry") or [])
         # GLM flashes (sources/glm.py), fed by the scheduler's minute poll.
-        self.flashes = flashes_mod.FlashStore()
+        self.flashes = flashes_mod.FlashStore(echo_at=self._echo_at)
         # Contour builds are seconds of numpy each. Two at a time keeps a
         # sweep of distinct map centres from taking every core and, through
         # the GIL, the event loop with it; the rest wait their turn.
@@ -1564,10 +1564,34 @@ class PressureService:
             if todo:
                 store.seen[sat] = max(todo)
         store.prune(now)
+        # Which flashes to believe, worked out here once a minute rather than
+        # by the first request after the poll (flashes.py).
+        store.credible()
+        metrics.gauge("barry_glm_flashes_dropped", store.dropped)
         if any_ok:
             store.last_fetch = now
             store.files += fetched
         return fetched
+
+    ECHO_MAX_GAP_S = 15 * 60.0
+    ECHO_RADIUS_PTS = 10            # 0.1 degree each way: about 10 km, for GLM's parallax and the frame's age
+
+    def _echo_at(self, lat: float, lon: float, t: float) -> Optional[float]:
+        """The strongest composite echo, dBZ, within about 10 km of a point
+        in the radar frame nearest time t; None when no frame is within 15
+        minutes or the point is off the grid, -99 for no echo."""
+        if not self.mrms_enabled:
+            return None
+        frames = self.radar.observed()
+        if not frames:
+            return None
+        best = min(frames, key=lambda ft: abs(ft - t))
+        if abs(best - t) > self.ECHO_MAX_GAP_S:
+            return None
+        code = self.radar.max_code(best, lat, lon, radius=self.ECHO_RADIUS_PTS)
+        if code is None:
+            return None
+        return code / 2.0 - 32.0 if code else -99.0
 
     async def get_lightning(self, lat: float, lon: float, half: float = 3.0) -> LightningResponse:
         """Binned GLM flashes around a point for the map's Storms overlay.

@@ -201,7 +201,11 @@ never "no lightning". **Strike positions** come from NOAA's GOES lightning
 mapper (`backend/app/sources/glm.py`, public S3, anonymous, polled per
 minute by the scheduler; `flashes.py` holds 20 min; `/lightning` slices
 0.02° bins; `LightningOverlay.swift` draws them). Fixed server cost, zero
-per user; `BARRY_GLM=0` disables the poll.
+per user; `BARRY_GLM=0` disables the poll. Only credible flashes are read
+off the store (since 2026-09-26): one backed by 30 dBZ or more of radar
+echo within about 10 km, or three within 20 km where the radar shows no
+storm; a lone flash in clear air once put "lightning nearby" under a
+clear sky.
 
 Parked, fully built: **forecast radar** (HRRR via Iowa Mesonet, +6 h model
 frames) behind `RadarModel.modelFramesEnabled = false` — flip one Bool to ship;

@@ -28,3 +28,4 @@ This build:
 - Build 90 (2026-09-25, 4108fe0): cancelled before TestFlight; the labelled arrows were far too dense at the levels.
 - Build 91 (2026-09-25): Pilots. NOAA switch: radar from MRMS with nowcast and lightning chance, rain line, Aloft turbulence and icing, LAMP TAF stand-in, saved map presets, height contours, the rate-limited tile fix, speed labels on the wind arrows thinned to a readable lattice. Notes written by Jordan.
 - Build 92 (2026-09-27, 18f58e4): Pilots. iOS 17 dates and 24-hour clock text, radar retries after a rate-limit block, height lines kept at altitude, thinned wind arrows (91 had them), and the checked iOS 17 UI tests. Notes written by Jordan.
+- Build 93 (2026-09-30, 8eb5cdf): Pilots. The watch and its complications lead with the altimeter setting, the phone pushes each new report to the watch face, and the complication looks again at :08 past the hour. Notes written by Jordan.

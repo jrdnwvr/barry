@@ -48,6 +48,9 @@ enum AppConfig {
     /// new value only when this changes, so a switch flipped on the watch
     /// survives the phone re-sending the same old context at every launch.
     static let syncWatchSensorLastKey = "sync.watchSensor.lastFromPhone"
+    /// The complication snapshot the phone pushes to the watch after each
+    /// new report (a WatchConnectivity user-info payload, not a setting).
+    static let syncSnapshotKey = "sync.snapshot"
 }
 
 /// How Barry chooses the "where am I" coordinates for forecast + station lookup.

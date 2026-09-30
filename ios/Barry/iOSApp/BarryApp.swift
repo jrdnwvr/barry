@@ -31,6 +31,11 @@ struct BarryApp: App {
         DiagnosticsReporter.shared.start()
         // Let storm alerts surface as banners even while the app is open.
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
+        // Every snapshot the phone saves (a load, a background refresh) goes
+        // to the watch, so its face shows a new report without waiting for
+        // its own refresh.
+        WatchSync.shared.activate()
+        SnapshotStore.onSave = { WatchSync.shared.push($0) }
         // RainViewer serves every radar tile with a two day max-age and an
         // ETag. The default shared cache is too small to keep more than a
         // screenful, so a tile evicted from memory went back to the network.

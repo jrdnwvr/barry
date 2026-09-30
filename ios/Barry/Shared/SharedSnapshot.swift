@@ -51,17 +51,30 @@ struct TendencySnapshot: Codable, Hashable {
     var localDisplayHPa: Double? = nil
     var localAt: Date? = nil
 
-    /// Altimeter at an airport; elsewhere the local sensor while it is fresh
-    /// (under two hours), otherwise the station's sea-level pressure.
+    /// Whether the altimeter setting is the headline. On the watch it is
+    /// whenever the station reports one: a glance at the wrist is how a
+    /// pilot sets the altimeter while the AWOS cycles (asked 2026-09-30).
+    /// The phone's widgets keep the phone's own rule, altimeter at an
+    /// airport (selected, or within 3 NM).
+    var altimeterLeads: Bool {
+        #if os(watchOS)
+        return altimeterHPa != nil
+        #else
+        return atAirport == true && altimeterHPa != nil
+        #endif
+    }
+
+    /// The altimeter setting when it leads; otherwise the local sensor while
+    /// it is fresh (under two hours), otherwise the sea-level pressure.
     var displayPressureHPa: Double? {
-        if atAirport == true, let a = altimeterHPa { return a }
+        if altimeterLeads, let a = altimeterHPa { return a }
         if let l = localDisplayHPa, let at = localAt, updatedAt.timeIntervalSince(at) < 2 * 3600 { return l }
         return currentPressureHPa
     }
     var showsLocal: Bool {
-        atAirport != true && localDisplayHPa != nil && localAt.map { updatedAt.timeIntervalSince($0) < 2 * 3600 } == true
+        !altimeterLeads && localDisplayHPa != nil && localAt.map { updatedAt.timeIntervalSince($0) < 2 * 3600 } == true
     }
-    var showsAltimeter: Bool { atAirport == true && altimeterHPa != nil }
+    var showsAltimeter: Bool { altimeterLeads }
     /// Front watch (D7): status when active (approaching | passing | passed |
     /// forecast) and the direction the change is coming from. Filled in after
     /// /front answers; nil on quiet days or before it does.
@@ -140,9 +153,15 @@ enum SnapshotStore {
         UserDefaults(suiteName: AppConfig.appGroupID)
     }
 
+    /// Called after every save. The phone app sets it to push the snapshot
+    /// to the watch (WatchSync), so the complication shows a new report as
+    /// soon as the phone has it rather than at its own next refresh.
+    static var onSave: ((TendencySnapshot) -> Void)?
+
     static func save(_ snapshot: TendencySnapshot) {
         guard let data = try? JSONEncoder().encode(snapshot) else { return }
         defaults?.set(data, forKey: key)
+        onSave?(snapshot)
     }
 
     static func load() -> TendencySnapshot? {

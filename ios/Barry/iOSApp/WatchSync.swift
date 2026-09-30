@@ -49,6 +49,31 @@ final class WatchSync: NSObject, WCSessionDelegate {
         try? s.updateApplicationContext(ctx)
     }
 
+    private var lastPushed: String?
+
+    /// Hand the watch the snapshot the phone just saved, when it carries a
+    /// new report. Through the complication channel while the watch face has
+    /// Barry on it and the day's budget lasts (about 50 transfers; a new
+    /// report is at most a few an hour), which wakes the complication at
+    /// once; otherwise queued for the watch app's next run.
+    func push(_ snap: TendencySnapshot) {
+        guard WCSession.isSupported() else { return }
+        let s = WCSession.default
+        guard s.activationState == .activated, s.isPaired, s.isWatchAppInstalled,
+              let data = try? JSONEncoder().encode(snap) else { return }
+        let fingerprint = [snap.station, snap.altimeterHPa.map { String($0) } ?? "-",
+                           snap.currentPressureHPa.map { String($0) } ?? "-",
+                           snap.frontStatus ?? "-"].joined(separator: "|")
+        guard fingerprint != lastPushed else { return }
+        lastPushed = fingerprint
+        let info: [String: Any] = [AppConfig.syncSnapshotKey: data]
+        if s.isComplicationEnabled, s.remainingComplicationUserInfoTransfers > 0 {
+            s.transferCurrentComplicationUserInfo(info)
+        } else {
+            s.transferUserInfo(info)
+        }
+    }
+
     // MARK: WCSessionDelegate
 
     func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState,

@@ -84,3 +84,26 @@ struct ClockTextTests {
         #expect(ClockText.uses24Hour(locale: Locale(identifier: "de_DE")))
     }
 }
+
+/// The watch face shows a new report soon after it lands: its next refresh
+/// is at :08, when the hour's METAR has reached the server, or twenty
+/// minutes on, whichever comes first.
+struct ComplicationRefreshTests {
+    private var cal: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "UTC")!; return c }
+    private func at(_ h: Int, _ m: Int) -> Date { cal.date(from: DateComponents(year: 2026, month: 9, day: 30, hour: h, minute: m))! }
+
+    @Test func refreshesJustAfterTheNewReportLands() {
+        #expect(TendencyProvider.nextRefresh(after: at(10, 50), calendar: cal) == at(11, 8))
+        #expect(TendencyProvider.nextRefresh(after: at(11, 0), calendar: cal) == at(11, 8))
+        #expect(TendencyProvider.nextRefresh(after: at(11, 7), calendar: cal) == at(11, 27))   // :08 too close; the regular twenty
+        #expect(TendencyProvider.nextRefresh(after: at(11, 20), calendar: cal) == at(11, 40))
+    }
+
+    @Test func thePhoneWidgetsKeepTheAirportRule() throws {
+        let c = try Fixtures.combinedKLUK()
+        let away = TendencySnapshot(from: c, atAirport: false)
+        let here = TendencySnapshot(from: c, atAirport: true)
+        #expect(!away.showsAltimeter && away.displayPressureHPa == c.currentPressure)
+        #expect(here.showsAltimeter && here.displayPressureHPa == c.pressure.current.altim)
+    }
+}

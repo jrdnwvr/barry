@@ -8,6 +8,7 @@
 
 import Foundation
 import WatchConnectivity
+import WidgetKit
 
 @MainActor
 final class PhoneSync: NSObject, WCSessionDelegate {
@@ -72,5 +73,25 @@ final class PhoneSync: NSObject, WCSessionDelegate {
 
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext ctx: [String: Any]) {
         Task { @MainActor in self.apply(ctx) }
+    }
+
+    /// A snapshot the phone pushed after a new report (WatchSync.push). Saved
+    /// for the complication unless the watch already holds a newer one for
+    /// the same station, keeping the watch's own sensor reading, and the
+    /// complication is asked to redraw.
+    nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
+        guard let data = userInfo[AppConfig.syncSnapshotKey] as? Data,
+              let snap = try? JSONDecoder().decode(TendencySnapshot.self, from: data) else { return }
+        Task { @MainActor in Self.take(snap) }
+    }
+
+    static func take(_ pushed: TendencySnapshot) {
+        var snap = pushed
+        let held = SnapshotStore.load()
+        if let held, held.station == snap.station, held.updatedAt >= snap.updatedAt { return }
+        snap.localDisplayHPa = held?.localDisplayHPa
+        snap.localAt = held?.localAt
+        SnapshotStore.save(snap)
+        WidgetCenter.shared.reloadAllTimelines()
     }
 }

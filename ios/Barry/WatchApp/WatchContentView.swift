@@ -5,10 +5,10 @@
 //  the last six hours as a small chart, and the one-line verdict. Fetches via
 //  the same backend; the shared snapshot doubles as an offline fallback.
 //
-//  The headline is the same number the complication shows: the field's
-//  altimeter setting when the phone has an airport chosen or the wearer is
-//  within 3 NM of the station, the sea-level pressure otherwise. The store
-//  makes that call once (`atAirport`) and writes it into the snapshot.
+//  The headline is the same number the complication shows: the station's
+//  altimeter setting whenever it reports one, so a glance at the wrist
+//  sets the altimeter (2026-09-30); the watch sensor's reading or the
+//  sea-level pressure only when it does not.
 
 import SwiftUI
 import Charts
@@ -143,8 +143,9 @@ struct WatchContentView: View {
     private func loaded(_ combined: CombinedResponse) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             if let t = combined.tendency {
-                let head = combined.headlinePressure(atAirport: store.atAirport)
+                let head = combined.headlinePressure(atAirport: true)
                 let local = head?.isAltimeter == true ? nil : localReading(combined)
+                let estimate = !store.atAirport ? localReading(combined) : nil
                 HStack {
                     Image(systemName: t.cls.symbolName)
                         .font(.title2.weight(.bold))
@@ -168,7 +169,7 @@ struct WatchContentView: View {
                             .lineLimit(1).minimumScaleFactor(0.8)
                     }
                 }
-                if backcountryEnabled, local != nil, let r = barometer.lastLocalReading {
+                if backcountryEnabled, estimate != nil, let r = barometer.lastLocalReading {
                     // Off-field, Backcountry on: the setting to dial, marked as
                     // an estimate, and how fresh the calibration is.
                     Text("altimeter here \(unit.format(r.altim)) est." + calibrationAge)

@@ -47,7 +47,7 @@ struct TendencyProvider: TimelineProvider {
         let now = Date()
         if let cached = SnapshotStore.load() {
             completion(Timeline(entries: [TendencyEntry(date: now, snapshot: cached)],
-                                policy: .after(now.addingTimeInterval(20 * 60))))
+                                policy: .after(Self.nextRefresh(after: now))))
             if now.timeIntervalSince(cached.updatedAt) >= 15 * 60 {
                 Task {
                     if await Self.fetchAndSave(cached: cached) != nil {
@@ -60,10 +60,25 @@ struct TendencyProvider: TimelineProvider {
         Task {
             let snapshot = await Self.fetchAndSave(cached: nil, timeout: 5)
             // Nothing yet: try again soon rather than in twenty minutes.
-            let retry = snapshot == nil ? 2 * 60.0 : 20 * 60.0
+            let after = snapshot == nil ? Date().addingTimeInterval(2 * 60) : Self.nextRefresh(after: Date())
             completion(Timeline(entries: [TendencyEntry(date: Date(), snapshot: snapshot)],
-                                policy: .after(Date().addingTimeInterval(retry))))
+                                policy: .after(after)))
         }
+    }
+
+    /// When to look again: twenty minutes on, or sooner when a new report
+    /// is due. Routine METARs are taken at about :53 and reach Barry's
+    /// server by about :05 (its refresh runs every ten minutes), so a
+    /// refresh at :08 shows the new hour's altimeter setting within minutes
+    /// instead of up to twenty later. The phone also pushes each new report
+    /// (WatchSync), which covers specials and anything this misses.
+    static func nextRefresh(after now: Date, calendar: Calendar = .current) -> Date {
+        let regular = now.addingTimeInterval(20 * 60)
+        var comps = calendar.dateComponents([.year, .month, .day, .hour], from: now)
+        comps.minute = 8
+        guard var due = calendar.date(from: comps) else { return regular }
+        if due.timeIntervalSince(now) < 2 * 60 { due = due.addingTimeInterval(3600) }
+        return min(regular, due)
     }
 
     /// A short-timeout backend fetch for the last-known station, persisted so

@@ -1040,6 +1040,16 @@ station and which mode.
   is reachable. Sent after every load, every 300 s refresh, a saved
   location change, and the Backcountry switches. App Groups are local to
   each device, so units and layouts do not cross.
+- Since 2026-09-30 the phone also pushes each new report: every snapshot
+  it saves (`SnapshotStore.onSave`, set at launch) goes to the watch as
+  `sync.snapshot` when its station, altimeter, pressure or front differ
+  from the last one sent, through the complication channel while Barry is
+  on the watch face and the day's budget lasts (about 50), which wakes the
+  complication at once, otherwise queued for the watch app's next run. The
+  watch saves it unless it holds a newer snapshot for the same station,
+  keeps its own sensor reading, and reloads the complication
+  (`PhoneSync.take`). A pilot's face showed the last hour's number until
+  the app was opened.
 
 ### watch.page.main
 - Seen: station title with a gear, the trend glyph coloured by class and
@@ -1048,9 +1058,12 @@ station and which mode.
   here X est." line in Backcountry mode off an airport.
 - Lives: `WatchApp/WatchContentView.swift` › `loaded`.
 - Data: `/combined?station=&tz=` (no coordinates; `/front` is phone only).
-- Rules: the headline is the altimeter setting at an airport (selected, or
-  within 3 NM), otherwise sea-level pressure, otherwise the calibrated
-  sensor with an orange dot. The sensor counts only if calibrated (or
+- Rules: the headline is the station's altimeter setting whenever it
+  reports one, wherever the wearer is (since 2026-09-30: a glance at the
+  wrist sets the altimeter while the AWOS cycles); otherwise the
+  calibrated sensor with an orange dot, otherwise sea-level pressure. The
+  complications show the same number (`TendencySnapshot.altimeterLeads`);
+  the phone's widgets keep the airport rule. The sensor counts only if calibrated (or
   rough) and newer than the METAR or under an hour old. Refresh on open,
   and on foreground when older than 3 min.
 
@@ -1115,10 +1128,12 @@ reading the watch's `pressureUnit`.
   approaching trough, ridge peak, rapid fall, rapid rise and front knee each
   have a symbol; otherwise the class's own.
 - `complication.provider`: returns the cached snapshot at once and asks for
-  +20 min; refreshes in the background when 15 min old; without a snapshot
+  its next look at :08 past the hour or +20 min, whichever is sooner
+  (`nextRefresh`: routine METARs reach the server by about :05); refreshes
+  in the background when 15 min old; without a snapshot
   waits 5 s then retries in 2 min. Stale after 2 h. Never blocks on the
   network, because a slow fetch leaves the slot grey for good.
-- Tests: `SnapshotStalenessTests`, `TendencyParityTests`.
+- Tests: `SnapshotStalenessTests`, `TendencyParityTests`, `ComplicationRefreshTests`.
 
 ## Phone widgets and Live Activity
 
@@ -1342,6 +1357,7 @@ each device (the watch keeps its own copies).
 | `tendency.snapshot.v1` | none | the complication and lock widget snapshot | SnapshotStore |
 | `airportSelected`, `selectionPhysical` | false | watch sync keys, not phone settings | PhoneSync |
 | `sync.watchSensor.lastFromPhone` | unset | the last "use watch sensor" value the phone sent; the watch applies a new value only when it changes | PhoneSync |
+| `sync.snapshot` | none | not a setting: the key the phone's pushed complication snapshot travels under in a WatchConnectivity user-info payload | WatchSync, PhoneSync |
 | `locationMode`, `placeLabel`, `placeLat`, `placeLon` | legacy | read once for migration | |
 
 Not a key: `combined.json` in the App Group container holds the last

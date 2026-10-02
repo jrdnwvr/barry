@@ -272,10 +272,9 @@ struct BarryAPI {
         return try await get(comps?.url)
     }
 
-    /// Isobars for a map region at each hour of the day span, and each
-    /// hour's gridded field when the shading wants it.
-    func pressureSeries(lat: Double, lon: Double, latSpan: Double, lonSpan: Double,
-                        grid: Bool) async throws -> PressureSeriesResponse {
+    /// Sea-level pressure gridded over a map region at each hour of the
+    /// day span and now, all on one lattice.
+    func pressureSeries(lat: Double, lon: Double, latSpan: Double, lonSpan: Double) async throws -> PressureSeriesResponse {
         var comps = URLComponents(url: baseURL.appendingPathComponent("radar/pressure/series"),
                                   resolvingAgainstBaseURL: false)
         comps?.queryItems = [
@@ -283,7 +282,7 @@ struct BarryAPI {
             URLQueryItem(name: "lon", value: String(lon)),
             URLQueryItem(name: "latSpan", value: String(latSpan)),
             URLQueryItem(name: "lonSpan", value: String(lonSpan)),
-        ] + (grid ? [URLQueryItem(name: "grid", value: "1")] : [])
+        ]
         return try await get(comps?.url)
     }
 

@@ -9,8 +9,8 @@
 //  Three pieces:
 //    FrontGlyphs        one drawing routine for a front, shared by the map
 //                       renderer and the key so the two can never disagree
-//    FrontMorph         match fronts of the same type across consecutive valid
-//                       times, resample, and interpolate; unmatched ones fade
+//    FrontMorph         a chart as render state, and one chart crossfading to
+//                       the next (no matching, no sliding: see crossfade)
 //    FrontFieldOverlay  a single world-sized MKOverlay whose renderer draws the
 //                       whole (morphed) field from a state struct, so animating
 //                       is "update the struct, setNeedsDisplay" — no overlay churn
@@ -239,140 +239,51 @@ struct FrontRenderState {
     static let empty = FrontRenderState()
 }
 
-// MARK: - Morph (the old Weather Channel glide)
+// MARK: - A chart as what the map draws
 
 enum FrontMorph {
-    static let resampleCount = 32
-    /// Fronts of the same type whose centroids are within this are "the same
-    /// front later"; anything farther fades in or out instead of teleporting.
-    static let matchKm = 650.0
-
-    static func state(for frame: FrontFrame) -> FrontRenderState {
+    static func state(for frame: FrontFrame, alpha: CGFloat = 1) -> FrontRenderState {
         FrontRenderState(
             fronts: frame.fronts.compactMap { line in
                 guard let kind = FrontKind(rawValue: line.type) else { return nil }
                 return RenderedFront(kind: kind, weak: line.isWeak,
-                                     coordinates: coords(line), alpha: 1)
+                                     coordinates: coords(line), alpha: alpha)
             },
-            centers: frame.highs.map { RenderedCenter(isHigh: true, pressure: $0.pressure, lat: $0.lat, lon: $0.lon, alpha: 1) }
-                   + frame.lows.map { RenderedCenter(isHigh: false, pressure: $0.pressure, lat: $0.lat, lon: $0.lon, alpha: 1) }
+            centers: frame.highs.map { RenderedCenter(isHigh: true, pressure: $0.pressure, lat: $0.lat, lon: $0.lon, alpha: alpha) }
+                   + frame.lows.map { RenderedCenter(isHigh: false, pressure: $0.pressure, lat: $0.lat, lon: $0.lon, alpha: alpha) }
         )
     }
 
-    /// The field at fraction `t` of the way from `a` to `b`.
-    /// Unused since the front timeline came out: the map shows the analysis
-    /// and nothing else. Kept because putting the progs back on the radar's
-    /// own clock, rather than a second one, is the plan.
-    static func blend(_ a: FrontFrame, _ b: FrontFrame, t: Double) -> FrontRenderState {
-        let t = min(1, max(0, t))
-        var out = FrontRenderState()
-
-        // --- fronts ---
-        var usedB = Set<Int>()
-        for la in a.fronts {
-            guard let kind = FrontKind(rawValue: la.type) else { continue }
-            let ca = coords(la)
-            var best: (Int, Double)? = nil
-            for (j, lb) in b.fronts.enumerated() where lb.type == la.type && !usedB.contains(j) {
-                let d = km(centroid(ca), centroid(coords(lb)))
-                if d <= matchKm, best == nil || d < best!.1 { best = (j, d) }
-            }
-            if let (j, _) = best {
-                usedB.insert(j)
-                var cb = coords(b.fronts[j])
-                if km(ca.first!, cb.last!) < km(ca.first!, cb.first!) { cb.reverse() }
-                let ra = resample(ca), rb = resample(cb)
-                let mixed = zip(ra, rb).map { p, q in
-                    CLLocationCoordinate2D(latitude: p.latitude + (q.latitude - p.latitude) * t,
-                                           longitude: p.longitude + (q.longitude - p.longitude) * t)
-                }
-                let weak = t < 0.5 ? la.isWeak : b.fronts[j].isWeak
-                out.fronts.append(RenderedFront(kind: kind, weak: weak, coordinates: mixed, alpha: 1))
-            } else {
-                out.fronts.append(RenderedFront(kind: kind, weak: la.isWeak, coordinates: ca,
-                                                alpha: CGFloat(1 - t)))
-            }
-        }
-        for (j, lb) in b.fronts.enumerated() where !usedB.contains(j) {
-            guard let kind = FrontKind(rawValue: lb.type) else { continue }
-            out.fronts.append(RenderedFront(kind: kind, weak: lb.isWeak, coordinates: coords(lb),
-                                            alpha: CGFloat(t)))
-        }
-
-        // --- pressure centers: same idea, no resampling needed ---
-        func blendCenters(_ xs: [PressureCenter], _ ys: [PressureCenter], isHigh: Bool) {
-            var used = Set<Int>()
-            for x in xs {
-                var best: (Int, Double)? = nil
-                for (j, y) in ys.enumerated() where !used.contains(j) {
-                    let d = km(CLLocationCoordinate2D(latitude: x.lat, longitude: x.lon),
-                               CLLocationCoordinate2D(latitude: y.lat, longitude: y.lon))
-                    if d <= matchKm, best == nil || d < best!.1 { best = (j, d) }
-                }
-                if let (j, _) = best {
-                    used.insert(j)
-                    let y = ys[j]
-                    out.centers.append(RenderedCenter(
-                        isHigh: isHigh,
-                        pressure: Int((Double(x.pressure) + (Double(y.pressure) - Double(x.pressure)) * t).rounded()),
-                        lat: x.lat + (y.lat - x.lat) * t, lon: x.lon + (y.lon - x.lon) * t, alpha: 1))
-                } else {
-                    out.centers.append(RenderedCenter(isHigh: isHigh, pressure: x.pressure,
-                                                      lat: x.lat, lon: x.lon, alpha: CGFloat(1 - t)))
-                }
-            }
-            for (j, y) in ys.enumerated() where !used.contains(j) {
-                out.centers.append(RenderedCenter(isHigh: isHigh, pressure: y.pressure,
-                                                  lat: y.lat, lon: y.lon, alpha: CGFloat(t)))
-            }
-        }
-        blendCenters(a.highs, b.highs, isHigh: true)
-        blendCenters(a.lows, b.lows, isHigh: false)
-        return out
+    /// One chart giving way to the next: `a` fading out as `b` fades in,
+    /// every line where its own chart drew it. Nothing is moved from one
+    /// chart's position toward the other's.
+    ///
+    /// Until 2026-10-02 this matched each front to the nearest of its type
+    /// on the other chart and slid it there. WPC does not draw the same
+    /// front the same way twice: four consecutive analyses that day held
+    /// 62, 80, 48 and 97 segments, and of the pairs the matching made, a
+    /// third had an end travelling over 500 km and one 2,600. On screen:
+    /// fronts breaking apart and flying across the map. The charts do not
+    /// say where a front was between them, so the map does not either.
+    static func crossfade(_ a: FrontFrame, _ b: FrontFrame, t: Double) -> FrontRenderState {
+        let t = CGFloat(min(1, max(0, t)))
+        let from = state(for: a, alpha: 1 - t), to = state(for: b, alpha: t)
+        return FrontRenderState(fronts: from.fronts + to.fronts, centers: from.centers + to.centers)
     }
 
     // helpers
     static func coords(_ line: FrontLine) -> [CLLocationCoordinate2D] {
         line.points.compactMap { $0.count >= 2 ? CLLocationCoordinate2D(latitude: $0[0], longitude: $0[1]) : nil }
     }
-
-    static func centroid(_ c: [CLLocationCoordinate2D]) -> CLLocationCoordinate2D {
-        let n = Double(max(c.count, 1))
-        return CLLocationCoordinate2D(latitude: c.reduce(0) { $0 + $1.latitude } / n,
-                                      longitude: c.reduce(0) { $0 + $1.longitude } / n)
-    }
-
-    static func km(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D) -> Double {
-        let dy = (b.latitude - a.latitude) * 111.32
-        let dx = (b.longitude - a.longitude) * 111.32 * cos((a.latitude + b.latitude) / 2 * .pi / 180)
-        return hypot(dx, dy)
-    }
-
-    /// Resample to `resampleCount` points evenly spaced by arc length.
-    static func resample(_ c: [CLLocationCoordinate2D]) -> [CLLocationCoordinate2D] {
-        guard c.count >= 2 else { return Array(repeating: c.first ?? CLLocationCoordinate2D(), count: resampleCount) }
-        var cum: [Double] = [0]
-        for i in 1..<c.count { cum.append(cum[i - 1] + km(c[i - 1], c[i])) }
-        let total = max(cum.last!, 1e-6)
-        var out: [CLLocationCoordinate2D] = []
-        var seg = 0
-        for k in 0..<resampleCount {
-            let target = total * Double(k) / Double(resampleCount - 1)
-            while seg < c.count - 2 && cum[seg + 1] < target { seg += 1 }
-            let span = max(cum[seg + 1] - cum[seg], 1e-9)
-            let f = min(1, max(0, (target - cum[seg]) / span))
-            out.append(CLLocationCoordinate2D(
-                latitude: c[seg].latitude + (c[seg + 1].latitude - c[seg].latitude) * f,
-                longitude: c[seg].longitude + (c[seg + 1].longitude - c[seg].longitude) * f))
-        }
-        return out
-    }
 }
 
-// MARK: - Map overlay + renderer
-
 final class FrontFieldOverlay: NSObject, MKOverlay {
-    var state: FrontRenderState = .empty
+    /// Written on the main thread, read by the renderer on MapKit's.
+    private let box = Locked(FrontRenderState.empty)
+    var state: FrontRenderState {
+        get { box.value }
+        set { box.value = newValue }
+    }
     var coordinate: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: 0, longitude: 0) }
     var boundingMapRect: MKMapRect { .world }
 }
@@ -384,8 +295,10 @@ final class FrontFieldRenderer: MKOverlayRenderer {
         // Only fronts that come anywhere near this tile (generous padding for pips).
         let pad = 40 * scale
         let visible = mapRect.insetBy(dx: -pad, dy: -pad)
-        let style = overlay.state.style
-        for f in overlay.state.fronts {
+        // One read: the main thread may replace the state mid-draw.
+        let state = overlay.state
+        let style = state.style
+        for f in state.fronts {
             if f.kind == .trof, !style.troughs { continue }
             if f.weak, !style.weak { continue }
             let mapPts = f.coordinates.map { MKMapPoint($0) }

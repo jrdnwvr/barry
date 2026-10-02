@@ -17,6 +17,11 @@ enum RadarSpan: String {
 
     /// How far back the loop starts, seconds before the newest observed frame.
     var loopSeconds: Int { self == .hour ? 3_600 : 6 * 3_600 }
+
+    /// How fast the loop's clock runs, in seconds of weather per second:
+    /// the hour in just under four seconds (a ten-minute frame every 0.55 s,
+    /// as it always was), the six hours in eight.
+    var rate: Double { self == .hour ? 600 / 0.55 : Double(loopSeconds) / 8 }
 }
 
 enum RadarFrameKind: String {
@@ -28,9 +33,6 @@ enum RadarTimeline {
     /// that only know the present are right for it, and the isobars are the
     /// live field's.
     static let nowToleranceS = 15 * 60
-    /// A pressure frame is used for a moment within this of its hour.
-    static let pressureMatchS = 35 * 60
-
     /// Where the loop starts: the first frame within the span's loop length
     /// of the newest observed one.
     static func loopStart(frames: [RadarFrame], nowIndex: Int, span: RadarSpan) -> Int {
@@ -39,11 +41,37 @@ enum RadarTimeline {
         return frames.firstIndex { $0.time >= from } ?? 0
     }
 
-    /// The next frame of the loop: from the loop's start through now, then
-    /// around again. A playhead outside the loop (scrubbed further back, or
-    /// into the forecast) rejoins it at the start.
-    static func nextLoopIndex(current: Int, start: Int, nowIndex: Int) -> Int {
-        current >= nowIndex || current < start ? start : current + 1
+    /// How long the loop rests on the newest frame before going round, seconds.
+    static let dwell = 1.65
+
+    /// The loop's clock, one tick on. The clock is a moment in the weather,
+    /// in seconds, not a frame number: it runs evenly from the loop's start
+    /// to the newest observed frame, rests there, and goes round. The radar
+    /// shows the frame nearest it; the fronts and the isobars are drawn for
+    /// the moment itself, which is what makes them glide. A clock outside
+    /// the loop (the slider was further back, or in the forecast) rejoins
+    /// at the start. Returns the new clock and what is left of the rest.
+    static func advance(clock: Double, dwellLeft: Double, by dt: Double, span: RadarSpan,
+                        start: Double, end: Double) -> (clock: Double, dwellLeft: Double) {
+        guard end > start else { return (end, 0) }
+        if clock < start || clock > end { return (start, 0) }
+        if dwellLeft > 0 {
+            let left = dwellLeft - dt
+            return left > 0 ? (end, left) : (start, 0)
+        }
+        let next = clock + dt * span.rate
+        return next >= end ? (end, dwell) : (next, 0)
+    }
+
+    /// The frame the radar shows for a moment on the loop's clock: the
+    /// nearest in time among the loop's own.
+    static func frameIndex(nearest clock: Double, frames: [RadarFrame], start: Int, nowIndex: Int) -> Int {
+        guard start <= nowIndex, frames.indices.contains(start), frames.indices.contains(nowIndex) else { return nowIndex }
+        var best = start
+        for i in start...nowIndex where abs(Double(frames[i].time) - clock) <= abs(Double(frames[best].time) - clock) {
+            best = i
+        }
+        return best
     }
 
     static func isNow(_ time: Int, nowTime: Int) -> Bool {
@@ -72,56 +100,58 @@ enum RadarTimeline {
         }
     }
 
-    /// The isobars for a moment: nil when it is now (the live field is the
-    /// better picture) or when no hour of the series is near it.
-    static func pressureFrame(_ series: [PressureFrame], time: Int, nowTime: Int) -> PressureFrame? {
-        guard !isNow(time, nowTime: nowTime) else { return nil }
-        let best = series.min { abs($0.time - time) < abs($1.time - time) }
-        guard let best, abs(best.time - time) <= pressureMatchS else { return nil }
-        return best
-    }
-
-    /// Where the fronts are at a moment.
+    /// Which chart the map draws at a moment.
     enum FrontPick: Equatable {
         case none
         case frame(FrontFrame)
-        case blend(FrontFrame, FrontFrame, Double)
+        /// The first chart giving way to the second, 0 to 1.
+        case fade(FrontFrame, FrontFrame, Double)
+
+        /// The chart that has the say: the one being faded to once it is
+        /// past half way.
+        var chart: FrontFrame? {
+            switch self {
+            case .none: return nil
+            case .frame(let f): return f
+            case .fade(let a, let b, let t): return t >= 0.5 ? b : a
+            }
+        }
     }
 
-    /// The chart for a moment on the timeline. The analysis stands from its
-    /// own valid time until now, as it always has on this map. Before that,
-    /// the earlier analyses are blended by their valid times. After now, the
-    /// analysis is carried to the next forecast chart, reaching it at that
-    /// chart's valid time, and on to the one after. Nothing is run past the
-    /// oldest or the last chart held.
-    static func fronts(at time: Int, nowTime: Int, analysis: FrontFrame?, history: [FrontFrame],
+    /// How long one chart takes to give way to the next, in seconds of
+    /// weather: about half a second of the six-hour loop.
+    static let frontFadeS = 20.0 * 60
+
+    /// The chart for a moment on the timeline, each one as WPC drew it.
+    /// An analysis has the map from its valid time until the next one's;
+    /// the newest stands through now, as it always has here. Ahead of now
+    /// a forecast chart takes over half way between the chart before it and
+    /// its own valid time. One chart gives way to the next over
+    /// `frontFadeS`, ending as the next takes over. No front is drawn
+    /// anywhere a chart did not put it: sliding fronts between charts was
+    /// tried and flew them across the map (FrontMorph.crossfade).
+    static func fronts(at t: Double, nowTime: Int, analysis: FrontFrame?, history: [FrontFrame],
                        progs: [FrontFrame]) -> FrontPick {
         guard let analysis else { return .none }
-        let t = Double(time), now = Double(nowTime)
-        let valid = analysis.valid.timeIntervalSince1970
-        if t > now + Double(nowToleranceS) {
-            // The analysis leaves from now, not from its valid time: the
-            // map has shown it at now all along, and a jump there would
-            // read as the front leaping.
-            var from = analysis, fromT = now
-            for p in progs.sorted(by: { $0.valid < $1.valid }) {
-                let pt = p.valid.timeIntervalSince1970
-                guard pt > fromT else { continue }
-                if t <= pt { return .blend(from, p, (t - fromT) / (pt - fromT)) }
-                from = p
-                fromT = pt
-            }
-            return .frame(from)
+        let now = Double(nowTime)
+        // Each chart with the moment it takes over.
+        var charts: [(frame: FrontFrame, from: Double)] = []
+        let past = history.filter { $0.valid < analysis.valid }.sorted { $0.valid < $1.valid }
+        for (i, f) in (past + [analysis]).enumerated() {
+            charts.append((f, i == 0 ? -.infinity : f.valid.timeIntervalSince1970))
         }
-        if t >= valid { return .frame(analysis) }
-        let past = (history.filter { $0.valid < analysis.valid } + [analysis]).sorted { $0.valid < $1.valid }
-        guard let first = past.first else { return .frame(analysis) }
-        if t <= first.valid.timeIntervalSince1970 { return .frame(first) }
-        for (a, b) in zip(past, past.dropFirst()) {
-            let at = a.valid.timeIntervalSince1970, bt = b.valid.timeIntervalSince1970
-            if t <= bt { return .blend(a, b, (t - at) / (bt - at)) }
+        var before = max(now, analysis.valid.timeIntervalSince1970)
+        for p in progs.sorted(by: { $0.valid < $1.valid }) {
+            let at = p.valid.timeIntervalSince1970
+            guard at > before else { continue }
+            charts.append((p, (before + at) / 2))
+            before = at
         }
-        return .frame(analysis)
+        let i = charts.lastIndex { $0.from <= t } ?? 0
+        if i + 1 < charts.count, t > charts[i + 1].from - frontFadeS {
+            return .fade(charts[i].frame, charts[i + 1].frame, (t - (charts[i + 1].from - frontFadeS)) / frontFadeS)
+        }
+        return .frame(charts[i].frame)
     }
 
     /// Whether to say which layers are not on the slider's clock. The answer

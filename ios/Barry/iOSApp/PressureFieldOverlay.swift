@@ -29,6 +29,10 @@ struct PressureFieldState: Equatable {
     /// while the height lines for a new view are still on their way: under a
     /// "5,000 ft" note they would read as the pressure up there.
     var aloft = false
+    /// Off while the six-hour loop plays: the lines then show the shape of
+    /// the field with the area's own rise or fall taken out, so a value on
+    /// a line would not be the pressure there at that moment.
+    var isobarLabels = true
     var version = 0
 
     var drawsAnything: Bool {
@@ -37,16 +41,24 @@ struct PressureFieldState: Equatable {
 }
 
 final class PressureFieldOverlay: NSObject, MKOverlay {
-    var state = PressureFieldState()
+    /// Written on the main thread, read by the renderer on MapKit's.
+    private let box = Locked(PressureFieldState())
+    var state: PressureFieldState {
+        get { box.value }
+        set { box.value = newValue }
+    }
     var coordinate: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: 0, longitude: 0) }
     var boundingMapRect: MKMapRect { .world }
 }
 
 final class PressureFieldRenderer: MKOverlayRenderer {
     /// Shaded images are rebuilt only when the field or the shade choice changes.
-    private var shadeImage: CGImage?
-    private var shadeRect: MKMapRect = .null
-    private var shadeKey = ""
+    private struct Shade {
+        var image: CGImage?
+        var rect: MKMapRect = .null
+        var key = ""
+    }
+    private let shade = Locked(Shade())
 
     override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in ctx: CGContext) {
         guard let overlay = overlay as? PressureFieldOverlay else { return }
@@ -70,8 +82,8 @@ final class PressureFieldRenderer: MKOverlayRenderer {
             for line in field.isobars {
                 // Indigo, not gray: gray reads as a road on Apple's map.
                 drawLine(line, color: UIColor.systemIndigo.withAlphaComponent(0.85), width: 1.6 * scale,
-                         dash: nil, label: Self.levelText(line.level, st.unit), unit: st.unit.label,
-                         scale: scale, visible: visible, in: ctx)
+                         dash: nil, label: st.isobarLabels ? Self.levelText(line.level, st.unit) : nil,
+                         unit: st.unit.label, scale: scale, visible: visible, in: ctx)
             }
         }
         if st.showIsallobars {
@@ -147,7 +159,7 @@ final class PressureFieldRenderer: MKOverlayRenderer {
     /// to inHg has been read as some other unit entirely, and a label that
     /// only appears where a line starts is usually off screen.
     private func drawLine(_ line: ContourLine, color: UIColor, width: CGFloat, dash: [CGFloat]?,
-                          label: String, unit: String? = nil, scale: CGFloat,
+                          label: String?, unit: String? = nil, scale: CGFloat,
                           visible: MKMapRect, in ctx: CGContext) {
         let pts = line.points.compactMap { p -> CGPoint? in
             guard p.count == 2 else { return nil }
@@ -168,6 +180,7 @@ final class PressureFieldRenderer: MKOverlayRenderer {
         ctx.strokePath()
         ctx.restoreGState()
 
+        guard let label else { return }
         // Value labels along the line, every ~170 screen points, on small
         // knockouts so they stay legible over the radar (the chart style).
         let font = UIFont.systemFont(ofSize: 9 * scale, weight: .bold)
@@ -203,17 +216,20 @@ final class PressureFieldRenderer: MKOverlayRenderer {
     /// pixel per grid cell; Core Graphics interpolates it across the tile.
     private func drawShade(_ grid: GridOut, kind: PressureShade, version: Int, opacity: Double, in ctx: CGContext) {
         let key = "\(kind.rawValue)-\(version)"
-        if shadeKey != key || shadeImage == nil {
-            shadeImage = makeImage(grid, kind: kind)
-            shadeKey = key
-            let sw = MKMapPoint(CLLocationCoordinate2D(latitude: grid.lat0, longitude: grid.lon0))
-            let ne = MKMapPoint(CLLocationCoordinate2D(
-                latitude: grid.lat0 + Double(grid.ny - 1) * grid.dlat,
-                longitude: grid.lon0 + Double(grid.nx - 1) * grid.dlon))
-            shadeRect = MKMapRect(x: min(sw.x, ne.x), y: min(sw.y, ne.y),
-                                  width: abs(ne.x - sw.x), height: abs(ne.y - sw.y))
+        let (image, shadeRect): (CGImage?, MKMapRect) = shade.withLock { cache in
+            if cache.key != key || cache.image == nil {
+                cache.image = makeImage(grid, kind: kind)
+                cache.key = key
+                let sw = MKMapPoint(CLLocationCoordinate2D(latitude: grid.lat0, longitude: grid.lon0))
+                let ne = MKMapPoint(CLLocationCoordinate2D(
+                    latitude: grid.lat0 + Double(grid.ny - 1) * grid.dlat,
+                    longitude: grid.lon0 + Double(grid.nx - 1) * grid.dlon))
+                cache.rect = MKMapRect(x: min(sw.x, ne.x), y: min(sw.y, ne.y),
+                                       width: abs(ne.x - sw.x), height: abs(ne.y - sw.y))
+            }
+            return (cache.image, cache.rect)
         }
-        guard let img = shadeImage else { return }
+        guard let img = image else { return }
         let r = rect(for: shadeRect)
         ctx.saveGState()
         ctx.interpolationQuality = .high

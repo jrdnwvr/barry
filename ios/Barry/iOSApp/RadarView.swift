@@ -62,7 +62,6 @@ struct RadarPanel: View {
     var active: Bool = true
 
     @StateObject private var model = RadarModel()
-    @State private var dwellTicks = 0
 
     // Layers. Radar is one of them now, not a base the others sit on, so
     // the pressure field can shade over the rain. The field is exclusive
@@ -139,7 +138,8 @@ struct RadarPanel: View {
     @State private var showMore = false
     @State private var selectedStation: StationObs?
 
-    private let ticker = Timer.publish(every: 0.55, on: .main, in: .common).autoconnect()
+    private let ticker = Timer.publish(every: 1.0 / 30, on: .main, in: .common).autoconnect()
+    @State private var lastTick = Date()
     /// The flash slice ages a minute at a time; the server polls NOAA per minute.
     private let lightningTicker = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
@@ -222,8 +222,13 @@ struct RadarPanel: View {
             model.frontStyle = frontStyle
             syncPressureWants()
             await model.load()
-            model.playing = autoplay
-            model.lockedToNow = !autoplay
+            // The newest frame first; the loop once its frames are loaded.
+            if autoplay {
+                model.startLoop()
+            } else {
+                model.stopLoop()
+                model.lockedToNow = true
+            }
             if showWind {
                 await model.fetchField(region: model.lastRegion ?? initialRegion)
             }
@@ -247,22 +252,16 @@ struct RadarPanel: View {
             guard showStorms else { return }
             Task { await model.fetchLightning(center: model.lastRegion?.center ?? initialRegion.center, force: true) }
         }
-        .onReceive(ticker) { _ in
+        .onReceive(ticker) { now in
+            // The loop's clock: the span's past, the last hour or the last
+            // six, through now, at an even rate, resting on the freshest
+            // frame before going round (the Dark Sky rhythm). Nowcast and
+            // model frames are there for the scrubber. The model turns the
+            // clock into radar frames; the map draws the lines for it.
+            let dt = min(0.1, max(0, now.timeIntervalSince(lastTick)))
+            lastTick = now
             guard showRadar, active, model.playing, !model.frames.isEmpty else { return }
-            // Dwell at the end of the loop (the freshest picture) before
-            // restarting — the Dark Sky rhythm, and it reads far calmer.
-            if dwellTicks > 0 {
-                dwellTicks -= 1
-                return
-            }
-            // The loop is the span's past: the last hour, or the last six,
-            // through now. Nowcast and model frames are there for the
-            // scrubber.
-            let last = model.nowIndex
-            model.index = RadarTimeline.nextLoopIndex(current: model.index, start: model.loopStart, nowIndex: last)
-            if model.index == last {
-                dwellTicks = 3
-            }
+            model.advance(by: dt)
         }
         .onChange(of: wantsPressure) { _, _ in syncPressureWants() }
         .onChange(of: fieldRaw) { _, _ in syncPressureWants() }
@@ -275,18 +274,39 @@ struct RadarPanel: View {
         model.wantsPressureSeries = showIsobars || field == .pressure
     }
 
+    /// What the map draws the fronts and the isobars from while a loop
+    /// plays: the loop's own clock, thirty times a second, not the frame
+    /// the radar is on. Nil when nothing is playing or neither is showing.
+    private var lineSource: RadarLineSource? {
+        guard showRadar, active, model.playing, wantsFronts || wantsPressure else { return nil }
+        let fronts = wantsFronts, pressure = showIsobars || field == .pressure
+        // Over six hours the lines show the field's shape (and no values);
+        // over one they are the isobars of the moment.
+        let shape = model.span == .day
+        return RadarLineSource(
+            clock: { [model] in model.playing ? model.playClock : nil },
+            fronts: { [model] t in fronts ? model.frontState(at: t) : nil },
+            pressure: { [model] t in pressure ? model.pressureField(at: t, pattern: shape) : nil },
+            labelIsobars: !shape)
+    }
+
     /// Tap a replay chip: play its span, or pause if it is the one playing.
     private func replay(_ span: RadarSpan) {
-        if model.playing, model.span == span {
-            model.playing = false
+        if model.playing || model.buffering, model.span == span {
+            model.stopLoop()
             return
         }
         Task {
             guard await model.setSpan(span) else { return }
-            model.lockedToNow = false
-            model.index = model.loopStart
-            dwellTicks = 0
-            model.playing = true
+            model.startLoop()
+        }
+    }
+
+    /// The loop waiting for its frames, for the map to load them.
+    private var bufferRequest: RadarBufferRequest? {
+        guard model.buffering, showRadar else { return nil }
+        return RadarBufferRequest(id: model.bufferID, keys: model.loopKeys) { [model] id in
+            model.bufferReady(id)
         }
     }
 
@@ -386,6 +406,8 @@ struct RadarPanel: View {
         RadarMapView(host: model.host,
                      frames: model.frames,
                      loopKeys: model.loopKeys,
+                     lines: lineSource,
+                     buffer: bufferRequest,
                      index: model.index,
                      radarVisible: showRadar,
                      center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
@@ -700,14 +722,12 @@ struct RadarPanel: View {
         }
     }
 
-    /// Local valid time of the analysis on screen.
-    private var frontChipTime: String {
-        guard let f = model.analysisFrame else { return "" }
-        return "at " + f.valid.formatted(.dateTime.weekday(.abbreviated)) + " " + ClockText.hour(f.valid)
-    }
-
+    /// The chart on screen and its valid time, for the key: an analysis
+    /// "at", a forecast chart "forecast for".
     private var frontValidText: String {
-        "WPC fronts \(frontChipTime)"
+        guard let f = model.shownFrontChart ?? model.analysisFrame else { return "WPC fronts" }
+        let when = f.valid.formatted(.dateTime.weekday(.abbreviated)) + " " + ClockText.hour(f.valid)
+        return f.hours > 0 ? "WPC fronts, forecast for \(when)" : "WPC fronts at \(when)"
     }
 
     /// The two replay chips, the slider, then Now. A replay chip plays its
@@ -726,8 +746,8 @@ struct RadarPanel: View {
                     value: Binding(
                         get: { Double(model.index) },
                         set: {
+                            model.stopLoop()
                             model.index = Int($0.rounded())
-                            model.playing = false
                             model.lockedToNow = false
                         }
                     ),
@@ -736,7 +756,7 @@ struct RadarPanel: View {
                 )
 
                 Button {
-                    model.playing = false
+                    model.stopLoop()
                     model.lockedToNow = true
                     model.index = model.nowIndex
                 } label: {
@@ -783,9 +803,20 @@ struct RadarPanel: View {
     }
 
     private func replayChip(_ span: RadarSpan) -> some View {
-        let on = model.playing && model.span == span
+        let loading = model.buffering && model.span == span
+        let on = (model.playing || model.buffering) && model.span == span
         return Button { replay(span) } label: {
+            // While the loop's frames load, the glyph gives way to a small
+            // spinner in the same space, so nothing on the card moves.
             ReplayGlyph(span: span)
+                .opacity(loading ? 0 : 1)
+                .overlay {
+                    if loading {
+                        ProgressView()
+                            .controlSize(.mini)
+                            .tint(.white)
+                    }
+                }
         }
         .buttonStyle(ChipStyle(on: on))
         .accessibilityAddTraits(on ? .isSelected : [])

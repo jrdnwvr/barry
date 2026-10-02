@@ -91,7 +91,49 @@ final class RadarModel: ObservableObject {
     @Published private(set) var span: RadarSpan = .hour
     private var framesBySpan: [RadarSpan: [RadarFrame]] = [:]
     private var framesLoadedAt: [RadarSpan: Date] = [:]
-    @Published var playing = true
+    /// A loop has been asked for and is waiting for its frames to load, the
+    /// way a video buffers: the map holds on the newest frame meanwhile
+    /// (RadarMapView's `syncBuffer` reports back). The replay chip reads as
+    /// on from the tap, so the wait is not mistaken for a tap that missed.
+    @Published private(set) var buffering = false
+    private(set) var bufferID = 0
+
+    /// Ask for the span's loop: show now, load the loop's frames, then play.
+    func startLoop() {
+        guard !frames.isEmpty else { return }
+        playing = false
+        lockedToNow = false
+        index = nowIndex
+        bufferID += 1
+        buffering = true
+    }
+
+    /// The map's word that the frames are loaded (or the wait ran out).
+    func bufferReady(_ id: Int) {
+        guard buffering, id == bufferID else { return }
+        buffering = false
+        restartLoop()
+        playing = true
+    }
+
+    /// Stop a loop, playing or still loading.
+    func stopLoop() {
+        buffering = false
+        playing = false
+    }
+
+    @Published var playing = false {
+        didSet {
+            guard playing != oldValue else { return }
+            if playing {
+                // Pick the clock up where the slider is.
+                dwellLeft = 0
+                playClock = Double(playheadTime)
+            } else {
+                updateFrontState(force: true)
+            }
+        }
+    }
     /// The Now pill: the map stays on the freshest observed frame, through
     /// reloads, until the loop or a scrub moves it.
     @Published var lockedToNow = false
@@ -282,14 +324,14 @@ final class RadarModel: ObservableObject {
     private(set) var frontHistory: [FrontFrame] = []
     @Published var frontState: FrontRenderState = .empty
     private var frontVersion = 0
-    private var frontPick: RadarTimeline.FrontPick = .none
+    private var shownFrontPick: RadarTimeline.FrontPick = .none
 
-    /// The current analysis: what the map draws at now, and what the key
-    /// names. The timeline moves the chart from it: back through the earlier
-    /// analyses, ahead to WPC's forecast positions (RadarTimeline.fronts).
-    /// Until 2026-10-02 the forecast charts arrived unused, because a map
-    /// that carried its own clock separate from the radar's was a good way
-    /// to read tomorrow's front as today's; now there is one clock.
+    /// The current analysis: what the map draws at now. The timeline shows
+    /// the chart of the moment it is on instead: an earlier analysis behind
+    /// now, WPC's forecast chart ahead (RadarTimeline.fronts), each as
+    /// drawn. Until 2026-10-02 the forecast charts arrived unused, because
+    /// a map that carried its own clock separate from the radar's was a
+    /// good way to read tomorrow's front as today's; now there is one clock.
     var analysisFrame: FrontFrame? {
         frontFrames.first(where: { $0.hours == 0 }) ?? frontFrames.first
     }
@@ -307,23 +349,45 @@ final class RadarModel: ObservableObject {
         updateFrontState(force: true)
     }
 
-    /// The chart for the moment the slider is on.
+    /// The chart for the moment the slider is on. While a loop plays the
+    /// map reads `frontState(at:)` for the clock's own moment thirty times
+    /// a second instead, and this catches up when it stops.
     func updateFrontState(force: Bool = false) {
-        let pick = RadarTimeline.fronts(at: playheadTime, nowTime: nowTime, analysis: analysisFrame,
-                                        history: frontHistory, progs: frontFrames.filter { $0.hours > 0 })
-        guard force || pick != frontPick else { return }
-        frontPick = pick
+        let pick = frontPick(at: Double(playheadTime))
+        guard force || pick != shownFrontPick else { return }
+        shownFrontPick = pick
+        frontVersion += 1
+        var next = render(pick)
+        next.version = frontVersion
+        frontState = next
+    }
+
+    private func frontPick(at t: Double) -> RadarTimeline.FrontPick {
+        RadarTimeline.fronts(at: t, nowTime: nowTime, analysis: analysisFrame,
+                             history: frontHistory, progs: frontFrames.filter { $0.hours > 0 })
+    }
+
+    private func render(_ pick: RadarTimeline.FrontPick) -> FrontRenderState {
         var next: FrontRenderState
         switch pick {
         case .none: next = .empty
         case .frame(let f): next = FrontMorph.state(for: f)
-        case .blend(let a, let b, let t): next = FrontMorph.blend(a, b, t: t)
+        case .fade(let a, let b, let t): next = FrontMorph.crossfade(a, b, t: t)
         }
         next.style = frontStyle
         if !frontStyle.centers { next.centers = [] }
+        return next
+    }
+
+    /// The chart the map is showing, for the key to name.
+    var shownFrontChart: FrontFrame? { frontPick(at: lineTime).chart }
+
+    /// The chart at any moment, for the map's line clock.
+    func frontState(at t: Double) -> FrontRenderState {
         frontVersion += 1
+        var next = render(frontPick(at: t))
         next.version = frontVersion
-        frontState = next
+        return next
     }
 
     // MARK: The timeline
@@ -355,9 +419,43 @@ final class RadarModel: ObservableObject {
     }
 
     private func playheadMoved() {
-        updateFrontState()
+        // While a loop plays the lines follow its clock, not the frames.
+        if !playing { updateFrontState() }
         ensurePressureSeries()
     }
+
+    // MARK: The loop's clock
+
+    /// The moment the loop is on, in seconds, running evenly while it plays
+    /// (RadarTimeline.advance). Not published: thirty changes a second would
+    /// rebuild the whole panel each time. The radar follows it a frame at a
+    /// time through `index`; the map reads it directly for the lines.
+    private(set) var playClock: Double = 0
+    private var dwellLeft: Double = 0
+
+    /// One tick of the loop, `dt` seconds on.
+    func advance(by dt: Double) {
+        guard playing, !frames.isEmpty else { return }
+        let start = loopStart, last = nowIndex
+        let moved = RadarTimeline.advance(clock: playClock, dwellLeft: dwellLeft, by: dt, span: span,
+                                          start: Double(frames[start].time), end: Double(frames[last].time))
+        playClock = moved.clock
+        dwellLeft = moved.dwellLeft
+        let i = RadarTimeline.frameIndex(nearest: playClock, frames: frames, start: start, nowIndex: last)
+        if i != index { index = i }
+    }
+
+    /// Start the loop from its first frame.
+    func restartLoop() {
+        guard !frames.isEmpty else { return }
+        dwellLeft = 0
+        playClock = Double(frames[loopStart].time)
+        index = loopStart
+    }
+
+    /// The moment the lines are drawn for: the clock while a loop plays,
+    /// the slider's frame otherwise.
+    var lineTime: Double { playing ? playClock : Double(playheadTime) }
 
     /// A span's frame list goes stale as fast as the radar does.
     private static let framesFreshFor: TimeInterval = 5 * 60
@@ -427,61 +525,63 @@ final class RadarModel: ObservableObject {
 
     // MARK: Isobars on the radar's clock
 
-    /// Isobars for each hour of the day span over the current region. Only
-    /// asked for once the slider leaves now or the day span is up, and only
-    /// while a pressure layer is on.
-    @Published private(set) var pressureSeries: PressureSeriesResponse?
+    /// The pressure field over the current region at each hour of the day
+    /// span and at now, ready to be read at any moment (PressureTimeline).
+    /// Only asked for once the slider leaves now or the day span is up, and
+    /// only while a pressure layer is on.
+    @Published private(set) var pressureTimeline: PressureTimeline?
     private var seriesFetchedFor: MKCoordinateRegion?
-    private var seriesHasGrid = false
     private var seriesTask: Task<Void, Never>?
-    /// The view's say: is a pressure layer showing, and does it shade (so
-    /// each hour needs its grid as well as its lines).
+    /// The view's say: is a pressure layer showing, and does it shade.
     var wantsPressureSeries = false {
         didSet { if wantsPressureSeries && !oldValue { ensurePressureSeries() } }
     }
-    var wantsPressureGrid = false {
-        didSet { if wantsPressureGrid && !oldValue { ensurePressureSeries() } }
-    }
+    var wantsPressureGrid = false
 
     func ensurePressureSeries() {
         guard wantsPressureSeries, span == .day || !playheadIsNow, let region = lastRegion else { return }
-        if pressureSeries != nil, Self.nearEnough(region, to: seriesFetchedFor),
-           seriesHasGrid || !wantsPressureGrid { return }
-        let grid = wantsPressureGrid
+        if pressureTimeline != nil, Self.nearEnough(region, to: seriesFetchedFor) { return }
         seriesTask?.cancel()
         seriesTask = Task { [weak self] in
             guard let resp = try? await BarryAPI().pressureSeries(
                 lat: region.center.latitude, lon: region.center.longitude,
-                latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta, grid: grid)
+                latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta)
             else { return }
             guard let self, !Task.isCancelled else { return }
             self.seriesFetchedFor = region
-            self.seriesHasGrid = grid
-            self.pressureSeries = resp
+            self.pressureTimeline = PressureTimeline(resp)
         }
     }
 
-    /// The pressure hour that goes with the slider, nil at now or when the
-    /// series has nothing near it.
-    private var pressureFrame: PressureFrame? {
-        guard let series = pressureSeries else { return nil }
-        return RadarTimeline.pressureFrame(series.frames, time: playheadTime, nowTime: nowTime)
+    /// The live field with the isobars (and, when the shading wants it, the
+    /// grid) of a moment in place of its own: what the pressure overlay
+    /// draws away from now. The change field and its lines only know now
+    /// and stay as they are (the note says so). Nil when there is no
+    /// series to read the moment from.
+    ///
+    /// `pattern` draws the field's shape instead of its values (the area's
+    /// own rise or fall since then taken out, PressureTimeline.pattern):
+    /// what the six-hour loop plays, without labels.
+    func pressureField(at t: Double, pattern: Bool = false) -> PressureFieldResponse? {
+        guard let line = pressureTimeline, var field = pressureField else { return nil }
+        let values = pattern ? line.pattern(at: t) : line.values(at: t)
+        field.isobars = line.isobars(values)
+        if wantsPressureGrid { field.pressureGrid = line.grid(values) }
+        return field
     }
 
-    /// What the pressure overlay draws: the live field at now, and away from
-    /// now the same field with that hour's isobars and grid in place of its
-    /// own. The change field and its lines only know now and stay as they
-    /// are (the note line says so).
+    /// What the pressure overlay draws while nothing is playing: the live
+    /// field at now, the slider's moment away from it. While a loop plays
+    /// the map reads `pressureField(at:)` for the clock's own moment.
     var shownPressureField: PressureFieldResponse? {
-        guard let frame = pressureFrame, var field = pressureField else { return pressureField }
-        field.isobars = frame.isobars
-        if let grid = frame.pressureGrid { field.pressureGrid = grid }
-        return field
+        guard !playing, !playheadIsNow, let moved = pressureField(at: Double(playheadTime)) else { return pressureField }
+        return moved
     }
 
     /// Changes whenever what `shownPressureField` returns does.
     var shownPressureVersion: Int {
-        pressureVersion &* 100_003 &+ (pressureFrame?.time ?? 0)
+        let away = !playing && !playheadIsNow && pressureTimeline != nil
+        return pressureVersion &* 100_003 &+ (away ? playheadTime : 0) &+ (wantsPressureGrid ? 1 : 0)
     }
 
     // MARK: Field overlays (wind)

@@ -11,6 +11,28 @@ import MapKit
 
 // MARK: - Map (UIKit bridge)
 
+/// What the map draws the fronts and the isobars from while a loop plays:
+/// the loop's clock (nil when it is not running) and each layer at a moment
+/// on it (nil when that layer is off or has nothing for the moment). The map
+/// asks thirty times a second, so the lines glide between the charts and
+/// the hours instead of stepping once a radar frame.
+struct RadarLineSource {
+    let clock: () -> Double?
+    let fronts: (Double) -> FrontRenderState?
+    let pressure: (Double) -> PressureFieldResponse?
+    /// False when `pressure` gives the field's shape, not its values.
+    var labelIsobars = true
+}
+
+/// A loop waiting to play: the frames it needs and what to call when they
+/// are loaded for the view on screen (or the wait has run out). `id` names
+/// the request; the map acts on each id once.
+struct RadarBufferRequest {
+    let id: Int
+    let keys: Set<Int>
+    let ready: (Int) -> Void
+}
+
 /// MKMapView with one tile overlay per radar frame; scrubbing just flips renderer
 /// alphas, so already-loaded frames replay instantly.
 struct RadarMapView: UIViewRepresentable {
@@ -18,6 +40,10 @@ struct RadarMapView: UIViewRepresentable {
     let frames: [RadarFrame]
     /// The frames the loop plays; their tiles are asked for first.
     var loopKeys: Set<Int> = []
+    /// Set while a loop plays and fronts or isobars are showing.
+    var lines: RadarLineSource? = nil
+    /// Set while a loop is waiting for its frames to load.
+    var buffer: RadarBufferRequest? = nil
     let index: Int
     /// False when another base layer (pressure, change) replaces the radar:
     /// the tiles stay loaded but draw at zero alpha.
@@ -84,8 +110,17 @@ struct RadarMapView: UIViewRepresentable {
             return c
         }()
 
+        /// Tile loads MapKit has asked this frame for and not had back yet.
+        private let loads = Locked(0)
+        var loadsInFlight: Int { loads.value }
+
         override func loadTile(at path: MKTileOverlayPath,
-                               result: @escaping (Data?, Error?) -> Void) {
+                               result finish: @escaping (Data?, Error?) -> Void) {
+            loads.withLock { $0 += 1 }
+            let result: (Data?, Error?) -> Void = { [loads] data, error in
+                loads.withLock { $0 -= 1 }
+                finish(data, error)
+            }
             guard path.z > maxNativeZ else {
                 if recolor {
                     fetchCached(url(forTilePath: path)) { data in
@@ -217,7 +252,10 @@ struct RadarMapView: UIViewRepresentable {
         /// the next small pan finds its edge already there. Past the native
         /// zoom this resolves to the ancestor tile, which is what loadTile
         /// would crop from anyway.
-        func prefetch(_ path: MKTileOverlayPath) {
+        /// `done` is called once the tile is in the caches or has failed,
+        /// on whatever thread that happens on: what the loop's buffering
+        /// counts down (Coordinator.syncBuffer).
+        func prefetch(_ path: MKTileOverlayPath, done: (() -> Void)? = nil) {
             let z = min(path.z, maxNativeZ)
             let scale = 1 << max(0, path.z - z)
             let src = MKTileOverlayPath(x: path.x / scale, y: path.y / scale, z: z,
@@ -225,14 +263,18 @@ struct RadarMapView: UIViewRepresentable {
             let u = url(forTilePath: src)
             let key = u.absoluteString
             // Already repainted: nothing to warm.
-            if recolor, Self.recoloredCache.object(forKey: ("painted:" + key) as NSString) != nil { return }
+            if recolor, Self.recoloredCache.object(forKey: ("painted:" + key) as NSString) != nil {
+                done?()
+                return
+            }
             fetchCached(u) { [weak self] data in
-                guard let self, let data, self.recolor else { return }
+                guard let self, let data, self.recolor else { done?(); return }
                 // A cache hit calls back synchronously on the caller's thread,
                 // which for a prefetch is main. Repainting is a quarter of a
                 // million pixels; keep it off the main thread regardless.
                 DispatchQueue.global(qos: .utility).async {
                     _ = self.painted(data, key: key)
+                    done?()
                 }
             }
         }
@@ -405,6 +447,58 @@ struct RadarMapView: UIViewRepresentable {
         var frontOverlay: FrontFieldOverlay?
         var pressureOverlay: PressureFieldOverlay?
         var shownPressure: PressureFieldState?
+
+        // MARK: The line clock
+
+        private var lineSource: RadarLineSource?
+        private var lineLink: CADisplayLink?
+        private weak var lineMap: MKMapView?
+        private var lastLineClock = -Double.infinity
+        private var lineVersion = 0
+
+        /// Start or stop drawing the fronts and the isobars from the loop's
+        /// clock. While it runs, what SwiftUI hands `syncFronts` and
+        /// `syncPressure` still sets which layers exist and how they are
+        /// styled, but not where the lines are.
+        func syncLines(_ source: RadarLineSource?, on map: MKMapView) {
+            let was = lineSource != nil
+            lineSource = source
+            lineMap = map
+            guard source != nil else {
+                lineLink?.invalidate()
+                lineLink = nil
+                if was {
+                    // Whatever comes next from SwiftUI is drawn, even if it
+                    // equals what was shown before the loop started.
+                    shownPressure = nil
+                    lastFrontVersion = -1
+                    lastLineClock = -.infinity
+                }
+                return
+            }
+            if lineLink == nil {
+                let link = CADisplayLink(target: self, selector: #selector(stepLines))
+                link.preferredFrameRateRange = CAFrameRateRange(minimum: 20, maximum: 30, preferred: 30)
+                link.add(to: .main, forMode: .common)
+                lineLink = link
+            }
+        }
+
+        @objc private func stepLines() {
+            guard let source = lineSource, let map = lineMap, let t = source.clock(), t != lastLineClock else { return }
+            lastLineClock = t
+            if frontOverlay != nil, let state = source.fronts(t) {
+                applyFronts(state, on: map)
+            }
+            if var state = shownPressure, let overlay = pressureOverlay, let field = source.pressure(t) {
+                lineVersion -= 1
+                state.field = field
+                state.isobarLabels = source.labelIsobars
+                state.version = lineVersion
+                overlay.state = state
+                map.renderer(for: overlay)?.setNeedsDisplay()
+            }
+        }
 
         func syncPressure(_ state: PressureFieldState?, on map: MKMapView) {
             guard state != shownPressure else { return }
@@ -721,33 +815,109 @@ struct RadarMapView: UIViewRepresentable {
         /// once the map has settled. MapKit only asks for a tile the moment it
         /// is on screen; this asks a little earlier.
         private func prefetchRing(on map: MKMapView) {
-            guard !radarHidden, let overlay = overlays[currentTime],
-                  map.bounds.width > 0, map.visibleMapRect.size.width > 0 else { return }
+            guard !radarHidden, let overlay = overlays[currentTime] else { return }
+            for path in tiles(on: map, for: overlay, ring: true).prefix(48) {
+                overlay.prefetch(path)
+            }
+        }
+
+        /// The source tiles a frame needs for what is on screen, or (`ring`)
+        /// the one ring of tiles around those.
+        private func tiles(on map: MKMapView, for overlay: RadarTileOverlay, ring: Bool) -> [MKTileOverlayPath] {
+            guard map.bounds.width > 0, map.visibleMapRect.size.width > 0 else { return [] }
             let rect = map.visibleMapRect
             let world = MKMapSize.world.width
             let displayScale = Double(max(1, map.traitCollection.displayScale))
             // The zoom MapKit will pick for a 512 px tile at this scale, then
             // clamped to the source's native zoom: past it every child maps to
-            // the same few ancestors, so the ring is computed there directly.
+            // the same few ancestors, so the tiles are computed there directly.
             let pixelsPerMapPoint = Double(map.bounds.width) * displayScale / rect.size.width
             let raw = log2(pixelsPerMapPoint * world / Double(overlay.tileSize.width))
-            guard raw.isFinite else { return }
+            guard raw.isFinite else { return [] }
             let z = max(1, min(overlay.maxNativeZ, Int(raw.rounded())))
             let span = world / Double(1 << z)
             let n = 1 << z
             let fx0 = floor(rect.minX / span), fx1 = floor(rect.maxX / span)
             let fy0 = floor(rect.minY / span), fy1 = floor(rect.maxY / span)
-            guard fx0.isFinite, fx1.isFinite, fy0.isFinite, fy1.isFinite else { return }
+            guard fx0.isFinite, fx1.isFinite, fy0.isFinite, fy1.isFinite else { return [] }
             let x0 = Int(fx0), x1 = Int(fx1), y0 = Int(fy0), y1 = Int(fy1)
-            var count = 0
+            var out: [MKTileOverlayPath] = []
             for x in (x0 - 1)...(x1 + 1) {
                 for y in (y0 - 1)...(y1 + 1) {
                     let inside = x >= x0 && x <= x1 && y >= y0 && y <= y1
-                    guard !inside, x >= 0, y >= 0, x < n, y < n, count < 48 else { continue }
-                    overlay.prefetch(MKTileOverlayPath(x: x, y: y, z: z,
-                                                       contentScaleFactor: CGFloat(displayScale)))
-                    count += 1
+                    guard inside != ring, x >= 0, y >= 0, x < n, y < n else { continue }
+                    out.append(MKTileOverlayPath(x: x, y: y, z: z, contentScaleFactor: CGFloat(displayScale)))
                 }
+            }
+            return out
+        }
+
+        // MARK: Buffering a loop
+
+        private var bufferID = -1
+        /// The longest a loop waits for its frames: on a slow connection it
+        /// starts anyway and fills in as it plays, as it did before.
+        private static let bufferTimeout: TimeInterval = 10
+
+        /// Load a loop's frames for the view on screen before it plays, the
+        /// way a video buffers: every tile each frame needs is fetched and
+        /// repainted into the caches, MapKit's own loads of them are waited
+        /// out, and then `ready` is called, once. Until then the map holds
+        /// on the frame it is showing. A request with the id of the last one
+        /// is the same request; nil cancels.
+        func syncBuffer(_ request: RadarBufferRequest?, on map: MKMapView) {
+            guard let request else { bufferID = -1; return }
+            guard request.id != bufferID else { return }
+            bufferID = request.id
+            let id = request.id
+            var finished = false
+            let finish = { [weak self] in
+                guard let self, !finished, self.bufferID == id else { return }
+                finished = true
+                request.ready(id)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.bufferTimeout, execute: finish)
+            startBuffer(request, on: map, attempt: 0, finish: finish)
+        }
+
+        private func startBuffer(_ request: RadarBufferRequest, on map: MKMapView, attempt: Int,
+                                 finish: @escaping () -> Void) {
+            guard bufferID == request.id else { return }
+            let frames = request.keys.compactMap { overlays[$0] }
+            // The map has no size for a moment after it is made; ask again.
+            guard let first = frames.first, !tiles(on: map, for: first, ring: false).isEmpty else {
+                guard attempt < 20 else { finish(); return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self, weak map] in
+                    guard let self, let map else { return }
+                    self.startBuffer(request, on: map, attempt: attempt + 1, finish: finish)
+                }
+                return
+            }
+            let left = Locked(0)
+            let settle = { [weak self] in
+                DispatchQueue.main.async { self?.settleBuffer(frames, tries: 0, finish: finish) }
+            }
+            var wanted: [(RadarTileOverlay, MKTileOverlayPath)] = []
+            for frame in frames {
+                for path in tiles(on: map, for: frame, ring: false) { wanted.append((frame, path)) }
+            }
+            left.value = wanted.count
+            for (frame, path) in wanted {
+                frame.prefetch(path) {
+                    if left.withLock({ $0 -= 1; return $0 }) == 0 { settle() }
+                }
+            }
+        }
+
+        /// The tiles are in the caches; give MapKit a moment to finish
+        /// reading them into the frames (two seconds at most).
+        private func settleBuffer(_ frames: [RadarTileOverlay], tries: Int, finish: @escaping () -> Void) {
+            if tries >= 20 || frames.allSatisfy({ $0.loadsInFlight == 0 }) {
+                finish()
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.settleBuffer(frames, tries: tries + 1, finish: finish)
             }
         }
 
@@ -931,6 +1101,12 @@ struct RadarMapView: UIViewRepresentable {
             fadeTo = nil
             warmToken += 1
             flowView?.stop()
+            lineLink?.invalidate()
+            lineLink = nil
+            lineSource = nil
+            bufferID = -1
+            pulseLink?.invalidate()
+            pulseLink = nil
         }
 
         /// The fronts layer: one world-sized overlay whose renderer reads a state
@@ -953,7 +1129,12 @@ struct RadarMapView: UIViewRepresentable {
                 frontOverlay = o
                 map.addOverlay(o, level: .aboveLabels)
             }
-            guard state.version != lastFrontVersion else { return }
+            // While the loop's clock is drawing the fronts, it has the say.
+            guard lineSource == nil, state.version != lastFrontVersion else { return }
+            applyFronts(state, on: map)
+        }
+
+        private func applyFronts(_ state: FrontRenderState, on map: MKMapView) {
             lastFrontVersion = state.version
             frontOverlay?.state = state
             frontRenderer?.setNeedsDisplay()
@@ -1086,6 +1267,7 @@ struct RadarMapView: UIViewRepresentable {
             map.addOverlay(tile, level: .aboveRoads)
         }
         context.coordinator.setActive(Set(frames.map(\.key)), first: loopKeys)
+        context.coordinator.syncBuffer(buffer, on: map)
         if recenterToken != context.coordinator.lastRecenterToken {
             context.coordinator.lastRecenterToken = recenterToken
             map.setRegion(MKCoordinateRegion(
@@ -1098,6 +1280,7 @@ struct RadarMapView: UIViewRepresentable {
         context.coordinator.syncAdvisories(advisories, on: map)
         context.coordinator.syncHome(home, center: center, on: map)
         context.coordinator.syncArrows(showWind ? windArrows : [], on: map)
+        context.coordinator.syncLines(lines, on: map)
         context.coordinator.syncFronts(frontState, on: map)
         context.coordinator.syncPressure(pressureState, on: map)
         context.coordinator.syncFlow(windFlow, on: map, embedded: embedded, animating: animating, ramp: windRampKmh)

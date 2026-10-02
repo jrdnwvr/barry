@@ -694,18 +694,20 @@ struct RadarFrameOut: Codable, Hashable {
     var kind: String?
 }
 
-/// The isobars of one hour on the radar's timeline: gridded from the
-/// stations' reports then (observed), or the field now plus the model's
-/// change from now (model).
+/// Sea-level pressure over a map region at one moment on the radar's
+/// timeline, gridded: from the stations' reports then (observed), from the
+/// reports held now (now), or the field now plus the model's change from
+/// now (model). Every frame of a series is on the same lattice, so the app
+/// slides between two of them and draws the isobars of any moment between.
 struct PressureFrame: Codable, Hashable {
     let time: Int
     let kind: String
-    var isobars: [ContourLine] = []
-    var pressureGrid: GridOut?
+    let pressureGrid: GridOut
 }
 
 struct PressureSeriesResponse: Codable, Hashable {
     var frames: [PressureFrame] = []
+    /// The isobar spacing every frame is drawn at.
     let stepHPa: Double
     var run: Date?
     let cachedAt: Date

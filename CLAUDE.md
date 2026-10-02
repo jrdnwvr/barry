@@ -224,6 +224,11 @@ reporting failure, looped at thousands of requests a minute when the radar
 opened in the first moments after launch. Hang a view's one task on a real
 container, and let a cancelled load say nothing.
 
+And a MapKit one: an `MKOverlayRenderer` draws on MapKit's own queue, so
+whatever the main thread hands an overlay must be behind a lock (`Locked`)
+and read once per draw. The race is invisible at a few writes a second and
+a crash within a minute at thirty.
+
 **docs/PRODUCTION.md (2026-09-21)** is the hardening plan: an independent
 review of everything since build 86 plus the backend, what was fixed the same
 day, and the ranked open items (backend fan-out and registry validation are the
@@ -336,7 +341,9 @@ says so. The level is not remembered between opens.
   tester's) is installed as "iPhone 15 iOS 17.0" since 2026-09-26: run the
   suite there before a build that touches decoding or navigation. With that
   runtime `xcodebuild test` finishes the tests and then never exits; read
-  the log and stop it. The simulator control tool's taps do not reach an
+  the log and stop it (since 2026-10-02 it sometimes does the same on the
+  iOS 26.5 runtime: run it in the background, wait for the result line in
+  the log, then kill it). The simulator control tool's taps do not reach an
   iOS 17 simulator; drive it with the UI tests. Boot the simulator first
   (`xcrun simctl bootstatus <udid> -b`): when xcodebuild cold-boots it, the
   first UI test can fail with "Error getting main window

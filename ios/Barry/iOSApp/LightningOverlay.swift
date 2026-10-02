@@ -20,7 +20,12 @@ struct LightningState: Equatable {
 }
 
 final class LightningOverlay: NSObject, MKOverlay {
-    var state = LightningState()
+    /// Written on the main thread, read by the renderer on MapKit's.
+    private let box = Locked(LightningState())
+    var state: LightningState {
+        get { box.value }
+        set { box.value = newValue }
+    }
     var coordinate: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: 0, longitude: 0) }
     var boundingMapRect: MKMapRect { .world }
 }
@@ -32,11 +37,14 @@ final class LightningRenderer: MKOverlayRenderer {
     static let pulseDuration: TimeInterval = 1.0
 
     override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in ctx: CGContext) {
-        guard let overlay = overlay as? LightningOverlay, let resp = overlay.state.response else { return }
+        // One read: the main thread may replace the state mid-draw.
+        guard let overlay = overlay as? LightningOverlay else { return }
+        let state = overlay.state
+        guard let resp = state.response else { return }
         let scale = 1 / zoomScale
         let visible = mapRect.insetBy(dx: -60 * scale, dy: -60 * scale)
         let window = Double(max(60, resp.windowSec))
-        let pulseT = Date().timeIntervalSince(overlay.state.receivedAt) / Self.pulseDuration
+        let pulseT = Date().timeIntervalSince(state.receivedAt) / Self.pulseDuration
         // Oldest first so the fresh ones paint on top.
         for cell in resp.cells.sorted(by: { $0.ageSec > $1.ageSec }) {
             let p = MKMapPoint(CLLocationCoordinate2D(latitude: cell.lat, longitude: cell.lon))

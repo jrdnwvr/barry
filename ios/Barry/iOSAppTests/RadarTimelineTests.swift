@@ -269,6 +269,28 @@ struct RadarTimelineTests {
         #expect(FrontMorph.crossfade(a, b, t: 3).fronts[0].alpha == 0)
     }
 
+    @Test func onlyTheFramesAboutToBeShownStayWarm() {
+        let order = Array(0..<16)                        // thirteen observed, three nowcast
+        let loop = Array(6...12)                         // the last hour
+        func near(_ key: Int) -> Set<Int> {
+            RadarMapView.Coordinator.framesNear(key, order: order, loop: loop)
+        }
+        // Mid loop: the next two it will show, and the one behind for a scrub.
+        #expect(near(8) == [7, 9, 10])
+        // At now: the loop goes round to its start; the nowcast is a scrub away.
+        #expect(near(12) == [6, 7, 11, 13])
+        #expect(near(11) == [10, 12, 6])
+        // Scrubbed outside the loop: just the neighbours.
+        #expect(near(2) == [1, 3])
+        #expect(near(15) == [14])
+        // Never the frame itself, and nothing for a frame that is not there.
+        #expect(RadarMapView.Coordinator.framesNear(4, order: [4], loop: [4]).isEmpty)
+        #expect(near(99).isEmpty)
+        // Thirty frames on the six-hour span: still at most four warm.
+        let day = Array(0..<30), dayLoop = Array(0...18)
+        #expect((0..<30).allSatisfy { RadarMapView.Coordinator.framesNear($0, order: day, loop: dayLoop).count <= 4 })
+    }
+
     @Test func theNoteNamesTheLayersThatStayedAtNow() {
         func note(wind: Bool = false, stations: Bool = false, lightning: Bool = false,
                   advisories: Bool = false, change: Bool = false) -> String? {

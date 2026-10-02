@@ -127,9 +127,11 @@ final class RadarModel: ObservableObject {
             guard playing != oldValue else { return }
             if playing {
                 // Pick the clock up where the slider is.
+                clockFrontPick = nil
                 dwellLeft = 0
                 playClock = Double(playheadTime)
             } else {
+                clockFrontPick = nil
                 updateFrontState(force: true)
             }
         }
@@ -339,13 +341,14 @@ final class RadarModel: ObservableObject {
     /// Which parts of the chart to draw (map options). Changing it
     /// re-renders the field in place.
     var frontStyle = FrontStyle() {
-        didSet { if frontStyle != oldValue { updateFrontState(force: true) } }
+        didSet { if frontStyle != oldValue { clockFrontPick = nil; updateFrontState(force: true) } }
     }
 
     func fetchFronts() async {
         guard let resp = try? await BarryAPI().fronts() else { return }
         frontFrames = resp.frames.sorted { $0.hours < $1.hours }
         frontHistory = resp.history ?? []
+        clockFrontPick = nil
         updateFrontState(force: true)
     }
 
@@ -382,13 +385,20 @@ final class RadarModel: ObservableObject {
     /// The chart the map is showing, for the key to name.
     var shownFrontChart: FrontFrame? { frontPick(at: lineTime).chart }
 
-    /// The chart at any moment, for the map's line clock.
-    func frontState(at t: Double) -> FrontRenderState {
+    /// The chart at a moment, for the map's line clock: nil while it is
+    /// the chart the clock was last given (a chart stands for hours of the
+    /// loop, and redrawing it twenty times a second for nothing was part
+    /// of what the frame rate paid for).
+    func frontState(at t: Double) -> FrontRenderState? {
+        let pick = frontPick(at: t)
+        guard pick != clockFrontPick else { return nil }
+        clockFrontPick = pick
         frontVersion += 1
-        var next = render(frontPick(at: t))
+        var next = render(pick)
         next.version = frontVersion
         return next
     }
+    private var clockFrontPick: RadarTimeline.FrontPick?
 
     // MARK: The timeline
 
@@ -412,10 +422,10 @@ final class RadarModel: ObservableObject {
     /// Where the current span's loop starts.
     var loopStart: Int { RadarTimeline.loopStart(frames: frames, nowIndex: nowIndex, span: span) }
 
-    /// The frames the loop plays: their tiles are wanted first.
-    var loopKeys: Set<Int> {
+    /// The frames the loop plays, in order.
+    var loopKeys: [Int] {
         guard !frames.isEmpty else { return [] }
-        return Set(frames[loopStart...max(loopStart, nowIndex)].map(\.key))
+        return frames[loopStart...max(loopStart, nowIndex)].map(\.key)
     }
 
     private func playheadMoved() {
@@ -562,10 +572,12 @@ final class RadarModel: ObservableObject {
     /// `pattern` draws the field's shape instead of its values (the area's
     /// own rise or fall since then taken out, PressureTimeline.pattern):
     /// what the six-hour loop plays, without labels.
-    func pressureField(at t: Double, pattern: Bool = false) -> PressureFieldResponse? {
-        guard let line = pressureTimeline, var field = pressureField else { return nil }
+    /// `lines` false leaves the isobars out (the Metal layer is drawing
+    /// them) and returns nil when the shading does not want the grid either.
+    func pressureField(at t: Double, pattern: Bool = false, lines: Bool = true) -> PressureFieldResponse? {
+        guard let line = pressureTimeline, var field = pressureField, lines || wantsPressureGrid else { return nil }
         let values = pattern ? line.pattern(at: t) : line.values(at: t)
-        field.isobars = line.isobars(values)
+        field.isobars = lines ? line.isobars(values) : []
         if wantsPressureGrid { field.pressureGrid = line.grid(values) }
         return field
     }

@@ -28,6 +28,7 @@
 		1499AE344651937BC57A3E81 /* FieldConditionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52B4C35AC0CE61C4C1CCE6D5 /* FieldConditionsView.swift */; };
 		161F54967F58CB6AF2EAE650 /* WindUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E3203C0CBC7B1D5F0A57759 /* WindUnit.swift */; };
 		17B2F3F6A33ED2C6DB766640 /* ForecastCaveatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031482E889A2274CBD689E88 /* ForecastCaveatView.swift */; };
+		19882CAFAEC4F901CE7AACC6 /* IsolineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74FC382C619D5CF6C4752C86 /* IsolineView.swift */; };
 		20AD2A1B5CC1C7738EAEF8F5 /* StormAlerter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E569F3B3B9FAB65C07970B1A /* StormAlerter.swift */; };
 		22A7600022D22A39FD198199 /* FieldsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ED260902ADE48C188706FA8 /* FieldsCard.swift */; };
 		24639CCA46A741907995AEE2 /* PressureTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ACEEEDBA1016668540F610C /* PressureTimeline.swift */; };
@@ -329,6 +330,7 @@
 		726AB15B448612548C2CCCCD /* BarryComplication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarryComplication.swift; sourceTree = "<group>"; };
 		72812DF1800A9DF0CF5EF2C3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		72EC9A1E421849C76710D333 /* TafTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TafTimeline.swift; sourceTree = "<group>"; };
+		74FC382C619D5CF6C4752C86 /* IsolineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IsolineView.swift; sourceTree = "<group>"; };
 		75CA082BD890DE5E1469223E /* CardRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardRenderTests.swift; sourceTree = "<group>"; };
 		763CE62FEE3C1CA173ABA1C3 /* PressureFieldOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureFieldOverlay.swift; sourceTree = "<group>"; };
 		778E430DEB72ECE6B1DB5CCA /* PressureChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureChartView.swift; sourceTree = "<group>"; };
@@ -603,6 +605,7 @@
 				14751C812932452AF8884F79 /* HomeLayout.swift */,
 				EB906A0DF0FCEFBE609EBF06 /* HorizontalDragGesture.swift */,
 				F4C5676D3E1E52D59CDFED12 /* Info.plist */,
+				74FC382C619D5CF6C4752C86 /* IsolineView.swift */,
 				BB955C8C1263A03BA2C97A2F /* LightningBanner.swift */,
 				252EE81999FF16293FA0CF7A /* LightningOverlay.swift */,
 				7E7AD448DB8DDD1CE1C73553 /* LiveActivityManager.swift */,
@@ -1004,6 +1007,7 @@
 				4ED2D56EC1DA59D7FBBD779D /* HeroView.swift in Sources */,
 				7DDE0AE0EEA91898EC721A08 /* HomeLayout.swift in Sources */,
 				69FA11493C9F04A3A79384A3 /* HorizontalDragGesture.swift in Sources */,
+				19882CAFAEC4F901CE7AACC6 /* IsolineView.swift in Sources */,
 				9B711DD69DC404927EE59946 /* LightningBanner.swift in Sources */,
 				9267F000F0820CEB0BF3D9CC /* LightningOverlay.swift in Sources */,
 				7D4E858B190A8B961B283BE6 /* LiveActivityManager.swift in Sources */,

@@ -27,7 +27,9 @@ next: sliding them between charts was tried and flew them across the map,
 because WPC redraws and re-segments every front on every chart. Over six hours the isobars
 are the field's shape with the area-wide rise or fall taken out, unlabelled:
 the true lines of a flat field that is rising everywhere march across the
-map and, when the loop goes round, look like a belt. What a Metal radar would add
+map and, when the loop goes round, look like a belt. Those lines are drawn
+by the GPU from the pressure grids (`IsolineView`): the tiled renderer broke
+a moving line at its tile edges. What a Metal radar would add
 (rain sliding along its motion instead of crossfading) is not built: it
 has to sit above Apple's labels. To be judged against this.
 

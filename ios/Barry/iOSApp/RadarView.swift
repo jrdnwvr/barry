@@ -283,11 +283,18 @@ struct RadarPanel: View {
         // Over six hours the lines show the field's shape (and no values);
         // over one they are the isobars of the moment.
         let shape = model.span == .day
+        // The shape's lines are the GPU's (IsolineView): one picture of
+        // the whole screen at one moment, smooth, where the tiled renderer
+        // broke a moving line at its tile edges.
+        let gpuLines = shape && showIsobars && IsolineView.isAvailable ? model.pressureTimeline : nil
         return RadarLineSource(
             clock: { [model] in model.playing ? model.playClock : nil },
             fronts: { [model] t in fronts ? model.frontState(at: t) : nil },
-            pressure: { [model] t in pressure ? model.pressureField(at: t, pattern: shape) : nil },
-            labelIsobars: !shape)
+            pressure: { [model] t in
+                pressure ? model.pressureField(at: t, pattern: shape, lines: gpuLines == nil) : nil
+            },
+            labelIsobars: !shape,
+            shape: gpuLines)
     }
 
     /// Tap a replay chip: play its span, or pause if it is the one playing.
@@ -305,7 +312,7 @@ struct RadarPanel: View {
     /// The loop waiting for its frames, for the map to load them.
     private var bufferRequest: RadarBufferRequest? {
         guard model.buffering, showRadar else { return nil }
-        return RadarBufferRequest(id: model.bufferID, keys: model.loopKeys) { [model] id in
+        return RadarBufferRequest(id: model.bufferID, keys: Set(model.loopKeys)) { [model] id in
             model.bufferReady(id)
         }
     }

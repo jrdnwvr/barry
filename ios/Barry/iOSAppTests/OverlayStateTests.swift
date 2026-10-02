@@ -7,6 +7,7 @@
 
 import Foundation
 import MapKit
+import Metal
 import Testing
 @testable import Barry
 
@@ -60,5 +61,13 @@ struct OverlayStateTests {
             }
         }
         #expect(n.value == 40_000)
+    }
+
+    /// When its shaders do not compile the six-hour loop's isobars fall
+    /// back to the tiled renderer without a word, so a slip in them would
+    /// only show as the broken lines coming back.
+    @Test func theIsolineShadersCompile() {
+        guard MTLCreateSystemDefaultDevice() != nil else { return }
+        #expect(IsolineView.isAvailable)
     }
 }

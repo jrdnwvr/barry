@@ -133,6 +133,33 @@ struct PressureTimeline {
         stepHPa = resp.stepHPa
     }
 
+    /// Names this series: a view holding textures made from one knows
+    /// when it has been handed another.
+    let id = UUID()
+
+    var frameCount: Int { frames.count }
+
+    /// One frame's field as the difference from the mean now, which is what
+    /// fits in a half-float texture with room to spare (a hectopascal in a
+    /// thousand does not).
+    func offsets(_ i: Int) -> [Double] { frames[i].values.map { $0 - nowMean } }
+
+    /// The mean the offsets are taken from.
+    var base: Double { nowMean }
+
+    /// The two frames either side of a moment, how far between them it is,
+    /// and the area's rise since then that `pattern(at:)` takes out.
+    func bracket(at t: Double) -> (a: Int, b: Int, f: Double, shift: Double) {
+        guard let hi = frames.firstIndex(where: { $0.time >= t }) else {
+            let last = frames.count - 1
+            return (last, last, 0, frames[last].mean - nowMean)
+        }
+        guard hi > 0 else { return (0, 0, 0, frames[0].mean - nowMean) }
+        let a = frames[hi - 1], b = frames[hi]
+        let f = b.time > a.time ? (t - a.time) / (b.time - a.time) : 1
+        return (hi - 1, hi, f, a.mean + (b.mean - a.mean) * f - nowMean)
+    }
+
     /// The first and last moments the series covers.
     var range: ClosedRange<Double> { frames[0].time...frames[frames.count - 1].time }
 

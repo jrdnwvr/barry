@@ -22,6 +22,10 @@ struct RadarLineSource {
     let pressure: (Double) -> PressureFieldResponse?
     /// False when `pressure` gives the field's shape, not its values.
     var labelIsobars = true
+    /// Set when the isobars are the field's shape and the GPU is drawing
+    /// them (IsolineView): `pressure` then carries no lines, only the grid
+    /// for the shading when that is on.
+    var shape: PressureTimeline? = nil
 }
 
 /// A loop waiting to play: the frames it needs and what to call when they
@@ -38,8 +42,8 @@ struct RadarBufferRequest {
 struct RadarMapView: UIViewRepresentable {
     let host: String
     let frames: [RadarFrame]
-    /// The frames the loop plays; their tiles are asked for first.
-    var loopKeys: Set<Int> = []
+    /// The frames the loop plays, in order.
+    var loopKeys: [Int] = []
     /// Set while a loop plays and fronts or isobars are showing.
     var lines: RadarLineSource? = nil
     /// Set while a loop is waiting for its frames to load.
@@ -109,6 +113,23 @@ struct RadarMapView: UIViewRepresentable {
             c.totalCostLimit = 24 << 20
             return c
         }()
+
+        /// Host and frame path, for `url(forTilePath:)`.
+        var base: String?
+        /// Zoomed out past the source's native zoom, a tile is asked for at
+        /// half size and drawn over the same ground: a quarter of the
+        /// pixels to download, repaint (6 ms a tile down to 2) and hold on
+        /// the GPU, for a frame that at that zoom is many storms to the
+        /// inch. The server draws either size from the copy of the frame
+        /// that keeps the strongest echo in each block, so nothing drops out.
+        static let wideTilePx = 256
+
+        override func url(forTilePath path: MKTileOverlayPath) -> URL {
+            guard let base, path.z < maxNativeZ,
+                  let u = URL(string: "\(base)/\(Self.wideTilePx)/\(path.z)/\(path.x)/\(path.y)/2/0_1.png")
+            else { return super.url(forTilePath: path) }
+            return u
+        }
 
         /// Tile loads MapKit has asked this frame for and not had back yet.
         private let loads = Locked(0)
@@ -372,39 +393,53 @@ struct RadarMapView: UIViewRepresentable {
             if !radarHidden, displayLink == nil, let r = renderers[currentTime] { r.alpha = target }
         }
 
-        /// The frames of the span on the timeline. Only these sit a hair
-        /// above zero and keep their tiles warm; the other span's overlays
-        /// stay on the map at true zero, where MapKit asks for nothing.
-        private var active: Set<Int> = []
-        private var wanted: Set<Int> = []
-        private var warmToken = 0
-        /// How long the frames outside the loop wait before they start
-        /// asking for tiles: the loop's own come first on a cold open.
-        private static let warmDelay: TimeInterval = 2.5
+        /// The span's frames in timeline order, and the loop's. Only the
+        /// frames about to be shown sit a hair above zero (`near`); the rest
+        /// are at true zero, where MapKit neither fetches nor draws them.
+        ///
+        /// Until 2026-10-02 every frame of the span sat at 0.02 so its
+        /// tiles stayed loaded. That was ten layers when the timeline was
+        /// an hour; with the six-hour span it was thirty, each blended over
+        /// the whole screen on every refresh, and Xcode showed 14 fps. The
+        /// tiles are kept warm in the app's own caches instead
+        /// (`syncBuffer`, `prefetchFrames`), so a frame coming up reads
+        /// them back in a blink.
+        private var order: [Int] = []
+        private var loopOrder: [Int] = []
+        private var near: Set<Int> = []
 
         /// The alpha a frame that is not on screen rests at.
         private func idle(_ key: Int) -> CGFloat {
-            !panning && active.contains(key) ? Self.idleAlpha : 0
+            !panning && near.contains(key) ? Self.idleAlpha : 0
         }
 
-        /// Set the span's frames. `first` (the loop) warm at once; the rest
-        /// (older frames, the forecast) join after a moment.
-        func setActive(_ keys: Set<Int>, first: Set<Int>) {
-            guard keys != wanted else { return }
-            wanted = keys
-            warmToken += 1
-            let token = warmToken
-            let soon = keys.intersection(first)
-            applyActive(soon.isEmpty ? keys : soon)
-            guard !soon.isEmpty, soon != keys else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + Self.warmDelay) { [weak self] in
-                guard let self, self.warmToken == token else { return }
-                self.applyActive(keys)
+        /// The next two frames the loop will show after `key` (going round
+        /// from its end to its start), and the frame either side of it on
+        /// the slider for a scrub.
+        static func framesNear(_ key: Int, order: [Int], loop: [Int]) -> Set<Int> {
+            var out: Set<Int> = []
+            if let i = loop.firstIndex(of: key), loop.count > 1 {
+                out.insert(loop[(i + 1) % loop.count])
+                out.insert(loop[(i + 2) % loop.count])
             }
+            if let i = order.firstIndex(of: key) {
+                if i > 0 { out.insert(order[i - 1]) }
+                if i + 1 < order.count { out.insert(order[i + 1]) }
+            }
+            out.remove(key)
+            return out
         }
 
-        private func applyActive(_ keys: Set<Int>) {
-            active = keys
+        /// Set the span's frames and its loop's, both in timeline order.
+        func setFrames(_ keys: [Int], loop: [Int]) {
+            guard keys != order || loop != loopOrder else { return }
+            order = keys
+            loopOrder = loop
+            refreshNear()
+        }
+
+        private func refreshNear() {
+            near = Self.framesNear(currentTime, order: order, loop: loopOrder)
             guard !radarHidden else { return }
             for (t, r) in renderers where t != currentTime && r !== fadeFrom && r !== fadeTo {
                 r.alpha = idle(t)
@@ -464,6 +499,7 @@ struct RadarMapView: UIViewRepresentable {
             let was = lineSource != nil
             lineSource = source
             lineMap = map
+            syncIsolines(source, on: map)
             guard source != nil else {
                 lineLink?.invalidate()
                 lineLink = nil
@@ -478,7 +514,7 @@ struct RadarMapView: UIViewRepresentable {
             }
             if lineLink == nil {
                 let link = CADisplayLink(target: self, selector: #selector(stepLines))
-                link.preferredFrameRateRange = CAFrameRateRange(minimum: 20, maximum: 30, preferred: 30)
+                link.preferredFrameRateRange = CAFrameRateRange(minimum: 15, maximum: 30, preferred: 20)
                 link.add(to: .main, forMode: .common)
                 lineLink = link
             }
@@ -490,14 +526,46 @@ struct RadarMapView: UIViewRepresentable {
             if frontOverlay != nil, let state = source.fronts(t) {
                 applyFronts(state, on: map)
             }
-            if var state = shownPressure, let overlay = pressureOverlay, let field = source.pressure(t) {
-                lineVersion -= 1
-                state.field = field
-                state.isobarLabels = source.labelIsobars
-                state.version = lineVersion
-                overlay.state = state
-                map.renderer(for: overlay)?.setNeedsDisplay()
+            guard var state = shownPressure, let overlay = pressureOverlay else { return }
+            let gpuLines = isolineView != nil
+            let field = source.pressure(t)
+            // With the GPU drawing the lines, this overlay keeps only its
+            // shading: its own lines are taken off once, and it is redrawn
+            // after that only when there is a grid to shade.
+            guard field != nil || (gpuLines && !linesHandedOver) else { return }
+            linesHandedOver = gpuLines
+            lineVersion -= 1
+            if let field { state.field = field }
+            if gpuLines { state.showIsobars = false }
+            state.isobarLabels = source.labelIsobars
+            state.version = lineVersion
+            overlay.state = state
+            map.renderer(for: overlay)?.setNeedsDisplay()
+        }
+
+        // MARK: The isobars' shape, on the GPU
+
+        private var isolineView: IsolineView?
+        private var linesHandedOver = false
+
+        private func syncIsolines(_ source: RadarLineSource?, on map: MKMapView) {
+            guard let source, let line = source.shape else {
+                isolineView?.stop()
+                isolineView?.removeFromSuperview()
+                isolineView = nil
+                linesHandedOver = false
+                return
             }
+            if isolineView == nil {
+                let v = IsolineView(frame: map.bounds)
+                v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                v.mapView = map
+                // Under the wind's streaks, over everything the map draws.
+                if let flow = flowView { map.insertSubview(v, belowSubview: flow) } else { map.addSubview(v) }
+                isolineView = v
+            }
+            isolineView?.clock = source.clock
+            isolineView?.show(line)
         }
 
         func syncPressure(_ state: PressureFieldState?, on map: MKMapView) {
@@ -807,6 +875,7 @@ struct RadarMapView: UIViewRepresentable {
             applyDeclutter(on: mapView)
             flowView?.mapDidMove()
             prefetchRing(on: mapView)
+            prefetchFrames(loopOrder, on: mapView)
             // A zoom changes how many of the grid's arrows fit.
             syncArrows(allArrows, on: mapView)
         }
@@ -852,6 +921,17 @@ struct RadarMapView: UIViewRepresentable {
             return out
         }
 
+        /// Fetch and repaint, into the app's own caches, the tiles some
+        /// frames need for the view on screen, without showing them: when
+        /// one comes up, MapKit's own load of it is a cache read.
+        private func prefetchFrames(_ keys: [Int], on map: MKMapView) {
+            guard !radarHidden else { return }
+            for key in keys {
+                guard let frame = overlays[key] else { continue }
+                for path in tiles(on: map, for: frame, ring: false) { frame.prefetch(path) }
+            }
+        }
+
         // MARK: Buffering a loop
 
         private var bufferID = -1
@@ -871,10 +951,12 @@ struct RadarMapView: UIViewRepresentable {
             bufferID = request.id
             let id = request.id
             var finished = false
-            let finish = { [weak self] in
+            let finish = { [weak self, weak map] in
                 guard let self, !finished, self.bufferID == id else { return }
                 finished = true
                 request.ready(id)
+                // The loop is on its way; now the frames a scrub could reach.
+                if let map { self.prefetchFrames(self.order.filter { !request.keys.contains($0) }, on: map) }
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.bufferTimeout, execute: finish)
             startBuffer(request, on: map, attempt: 0, finish: finish)
@@ -1099,11 +1181,11 @@ struct RadarMapView: UIViewRepresentable {
             displayLink = nil
             fadeFrom = nil
             fadeTo = nil
-            warmToken += 1
             flowView?.stop()
             lineLink?.invalidate()
             lineLink = nil
             lineSource = nil
+            isolineView?.stop()
             bufferID = -1
             pulseLink?.invalidate()
             pulseLink = nil
@@ -1168,6 +1250,7 @@ struct RadarMapView: UIViewRepresentable {
             let old = renderers[currentTime]
             let oldKey = currentTime
             currentTime = time
+            near = Self.framesNear(time, order: order, loop: loopOrder)
             guard !radarHidden else { return }
             displayLink?.invalidate()
             displayLink = nil
@@ -1258,6 +1341,7 @@ struct RadarMapView: UIViewRepresentable {
         for f in frames where context.coordinator.overlays[f.key] == nil {
             // Observed, nowcast and model frames all come in the one shape.
             let tile = RadarTileOverlay(urlTemplate: host + f.path + "/512/{z}/{x}/{y}/2/0_1.png")
+            tile.base = host + f.path
             tile.tileSize = CGSize(width: 512, height: 512)
             tile.recolor = true
             tile.frameTime = f.key
@@ -1266,7 +1350,7 @@ struct RadarMapView: UIViewRepresentable {
             context.coordinator.overlays[f.key] = tile
             map.addOverlay(tile, level: .aboveRoads)
         }
-        context.coordinator.setActive(Set(frames.map(\.key)), first: loopKeys)
+        context.coordinator.setFrames(frames.map(\.key), loop: loopKeys)
         context.coordinator.syncBuffer(buffer, on: map)
         if recenterToken != context.coordinator.lastRecenterToken {
             context.coordinator.lastRecenterToken = recenterToken

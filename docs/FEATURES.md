@@ -712,11 +712,21 @@ stored keys, but each has its own model, so they fetch separately.
   around the radar sites are gone.
 - Settings: `radarShowRadar` true.
 - Rules: alpha 0.75 full, 0.55 dimmed under Lightning, 0.02 for the
-  span's other frames so their tiles stay warm, 0 while the map moves
-  and for the frames of the span that is not on the timeline (MapKit
-  asks for nothing at zero). On a cold open or a span switch the loop's
-  frames warm at once and the rest (older frames, the forecast) 2.5 s
-  later. Overlays are kept by the frame's `key` (the number its path ends
+  frames about to be shown (the next two of the loop, going round, and
+  the one either side on the slider; `Coordinator.framesNear`), 0 for
+  every other frame and for all of them while the map moves (MapKit
+  neither fetches nor draws at zero). Until 2026-10-02 every frame of the
+  span sat at 0.02 to keep its tiles loaded: ten layers on the old
+  one-hour timeline, thirty on the six-hour span, each blended over the
+  whole screen on every refresh, and Xcode showed 14 fps on the phone.
+  The tiles are kept in the app's own caches instead: fetched and
+  repainted for the view on screen when a loop buffers, when the map
+  settles after a move, and for the rest of the span once the loop is
+  under way (`prefetchFrames`), so a frame coming up is a cache read.
+  Zoomed out past the source's native zoom (tile z under 7) a tile is
+  asked for at 256 px and drawn over the same ground: a quarter of the
+  pixels to download (a 62 KB tile is 19), repaint (5.9 ms a tile down to
+  1.8, release build on a Mac) and hold on the GPU. Overlays are kept by the frame's `key` (the number its path ends
   in; a model frame's negated), not its time: the hour span's nowcast and
   the day span's model frame can share a valid time. Crossfade 0.3 s.
   Only a PNG is a tile: a 429 or 503 (Cloudflare's rate rule on the
@@ -804,7 +814,7 @@ stored keys, but each has its own model, so they fetch separately.
   most one note (`radar.note`): the wind altitude first, then a stale
   lightning feed, then a calm map with Wind on; usually none.
 - Tests: `RadarTimelineTests` (loop starts, the clock, the frame nearest
-  it, the time line's words, frame keys, contours, the field between two
+  it, the frames kept warm, the time line's words, frame keys, contours, the field between two
   hours and its shape with the rise taken out); `OverlayStateTests`; the UI test checks Now, scrub and both loops' selection
   states.
 
@@ -843,6 +853,18 @@ stored keys, but each has its own model, so they fetch separately.
   two frames is the two slid together. One spacing throughout, the field
   now's. Off the model's grid there are no hours ahead. The Pressure
   shading follows the same field; the Change field does not.
+- In the six-hour loop the lines are drawn by the GPU (`IsolineView`,
+  Metal, a view over the map like the wind's): every pixel reads the
+  pressure under it from the two grids either side of the moment, each
+  through a cubic filter, slid together, and is on a line where that
+  value crosses a multiple of the spacing. One draw of the whole screen
+  at one moment, smooth by construction. The overlay renderer it replaces
+  there is redrawn by MapKit a tile at a time, each on its own schedule,
+  so a moving line was at two moments either side of a tile's edge and
+  broke there; and its contours were straight between grid squares. The
+  hour loop and a paused slider keep the renderer, where the lines are
+  still or nearly, and labelled. Falls back to the renderer if the
+  shaders do not compile (`OverlayStateTests` checks that they do).
 - The six-hour loop draws the field's shape, not its values
   (`PressureTimeline.pattern`): each moment's field with the area's own
   rise or fall between then and now taken out, and no labels on the
@@ -856,11 +878,10 @@ stored keys, but each has its own model, so they fetch separately.
   moment, labelled.
 - Rules: the series is fetched only while Isobars or Pressure is on and
   the day span is up or the slider has left now, and again when the map
-  moves to another region. While a loop plays the map redraws the lines
-  from the loop's clock 20 to 30 times a second (`RadarLineSource`,
-  `Coordinator.stepLines`), outside SwiftUI; the same overlay and
-  renderer, as the lightning pulse does. No measurable cost over the loop
-  without them in the simulator.
+  moves to another region. While the hour loop plays the map redraws the
+  lines from the loop's clock 20 times a second (`RadarLineSource`,
+  `Coordinator.stepLines`), outside SwiftUI; the fronts only when the
+  chart changes.
 - Settings: `radarIsobars` false; `radarIsobarsSplit` migration gives
   isobars to anyone who had Pressure on.
 - Tests: `PressureLabelTests`.

@@ -310,3 +310,48 @@ def test_model_frames_cover_the_models_domain_at_three_hundredths_of_a_degree():
     # The last row and column's centres: just inside 21 N and 60.5 W.
     assert g["lat0"] - (ny - 1) * g["dlat"] == pytest.approx(21.005)
     assert g["lon0"] + (nx - 1) * g["dlon"] == pytest.approx(-60.505)
+
+
+# ---- the wind grid past the view's edges ---------------------------------------------
+
+@pytest.mark.asyncio
+async def test_a_padded_wind_grid_is_on_a_lattice_every_region_shares(client, upstream, hrrr_on):
+    s = PressureService(client)
+    await s.poll_hrrr()
+    # The fixture's grid runs about 37 to 40.4 N and 88 to 81.5 W.
+    a = await s.get_field_grid(38.6, -85.0, 1.0, 2.0, pad=0.5)
+    key = lambda r: {(p.lat, p.lon) for p in r.points}
+    lats, lons = sorted({p.lat for p in a.points}), sorted({p.lon for p in a.points})
+    # A degree down in eight rows is an eighth of a degree; two across in eleven, a fifth.
+    assert all(abs(y - x - 0.125) < 1e-6 for x, y in zip(lats, lats[1:]))
+    assert all(abs(y - x - 0.2) < 1e-6 for x, y in zip(lons, lons[1:]))
+    assert all(abs(v / 0.125 - round(v / 0.125)) < 1e-6 for v in lats)
+    # Half a span past each edge: 37.6 to 39.6 N and 87 to 83 W, the lattice points inside.
+    assert (lats[0], lats[-1]) == (37.625, 39.5) and (lons[0], lons[-1]) == (-87.0, -83.0)
+    # The view moved a third of its width east: every point the two cover is the same point.
+    b = await s.get_field_grid(38.6, -84.35, 1.0, 2.0, pad=0.5)
+    shared = key(a) & key(b)
+    assert len(shared) > len(a.points) / 2 and key(b) - key(a)
+    west_edge = min(p.lon for p in b.points)
+    assert {k for k in key(a) if k[1] >= west_edge} <= key(b)
+    # Winds aloft come on the same lattice.
+    lv = await s.get_field_levels(38.6, -85.0, 1.0, 2.0, pad=0.5)
+    assert {(p.lat, p.lon) for p in lv.points} <= key(a) and lv.points
+    # Without the pad: the eleven by eight inside the view, as before.
+    plain = await s.get_field_grid(38.6, -85.0, 1.0, 2.0)
+    assert len(plain.points) == s.HRRR_COLS * s.HRRR_ROWS
+    assert max(p.lon for p in plain.points) < -84.0
+
+    from app.main import app
+    app.state.service = s
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+        r = await c.get("/radar/field?lat=38.6&lon=-85&latSpan=1&lonSpan=2&pad=0.5")
+        assert r.status_code == 200 and len(r.json()["points"]) == len(a.points)
+        assert (await c.get("/radar/field?lat=38.6&lon=-85&latSpan=1&lonSpan=2&pad=2")).status_code == 422
+
+
+def test_the_lattice_step_is_the_smallest_that_keeps_the_view_to_its_rows():
+    step = PressureService.lattice_step
+    assert step(1.0, 8) == 0.125 and step(3.2, 8) == 0.4 and step(3.0, 8) == 0.4
+    assert step(0.1, 8) == 0.05                     # never finer than the first step
+    assert step(200.0, 8) == 8.0                    # nor coarser than the last

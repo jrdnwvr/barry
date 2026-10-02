@@ -1309,8 +1309,8 @@ without blocking the response.
 - Radar loop every 120 s: lists the MRMS composite on the bucket, fetches
   the file nearest each mark that isn't held (1.2 MB, 0.2 s to decode;
   newest first): every ten minutes of the last two hours and, since
-  2026-10-02, every hour of the last six, about 550 MB with the pooled
-  copies under `state/radar`. Then the nowcast for a new newest frame
+  2026-10-02, every hour of the last six: with the six nowcast frames
+  and the pooled copies, 720 MB under `state/radar` (measured). Then the nowcast for a new newest frame
   (motion by block matching on the 0.04 degree copy, 0.3 s, averaged with
   the step before's; six frames advected, under a second each; the motion
   is kept for the rain line), then every lead scored against the new
@@ -1327,7 +1327,7 @@ without blocking the response.
   it.
 - The model loop also pulls `hrrr-refc`: composite reflectivity for f01
   to f16 of every cycle at full resolution (half a megabyte a field on
-  the bucket, one run kept, about 60 MB). Each hour not yet past is read
+  the bucket, one run kept, 59 MB; the frames made from it 51 MB). Each hour not yet past is read
   onto a 0.03 degree grid as the radar's own dBZ codes
   (`modelradar.py`, 0.1 s a field) and kept in `state/radarmodel` under
   its valid time plus its forecast hour, the newest two runs' worth, an

@@ -504,12 +504,13 @@ async def radar_field_levels(
     lon: float = Query(..., ge=-180, le=180),
     latSpan: float = Query(..., gt=0, le=180),
     lonSpan: float = Query(..., gt=0, le=360),
+    pad: float = Query(0.0, ge=0, le=0.75),
 ):
     """Model wind at each altitude stop on the radar's sample grid. Asked
     for only when the altitude slider leaves the surface; one upstream call
-    per region cell per half hour."""
+    per region cell per half hour. `pad` as for /radar/field."""
     try:
-        resp = await get_service().get_field_levels(lat, lon, latSpan, lonSpan)
+        resp = await get_service().get_field_levels(lat, lon, latSpan, lonSpan, pad)
     except Exception as exc:
         log.warning("winds aloft unavailable: %s: %s", type(exc).__name__, exc)
         raise HTTPException(status_code=503, detail="winds aloft unavailable")
@@ -543,12 +544,16 @@ async def radar_field(
     lon: float = Query(..., ge=-180, le=180),
     latSpan: float = Query(..., gt=0, le=180),   # le: inf is not a span
     lonSpan: float = Query(..., gt=0, le=360),
+    pad: float = Query(0.0, ge=0, le=0.75),
 ):
     """Model wind + boundary-layer top on the radar's sample grid for a map
     region. One upstream call per region cell per ten minutes, shared by
-    every user looking there."""
+    every user looking there. `pad` (a fraction of the span, from the HRRR
+    store only) reaches that far past each edge on a lattice every region
+    shares, so a pan finds wind already there and the points it had stay
+    where they were."""
     try:
-        resp = await get_service().get_field_grid(lat, lon, latSpan, lonSpan)
+        resp = await get_service().get_field_grid(lat, lon, latSpan, lonSpan, pad)
     except Exception as exc:
         log.warning("field grid unavailable: %s: %s", type(exc).__name__, exc)
         raise HTTPException(status_code=503, detail="field grid unavailable")

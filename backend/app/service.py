@@ -1727,7 +1727,7 @@ class PressureService:
     HRRR_COLS, HRRR_ROWS = 11, 8
 
     async def get_field_grid(self, lat: float, lon: float,
-                             lat_span: float, lon_span: float) -> FieldGridResponse:
+                             lat_span: float, lon_span: float, pad: float = 0.0) -> FieldGridResponse:
         """The radar's 7x5 sample grid of model wind + boundary-layer top for
         a map region, from ONE Open-Meteo multi-point call. The region is
         quantized (center to 0.05°, spans to 0.5°) so users
@@ -1744,8 +1744,14 @@ class PressureService:
         key = f"field:{q_lat}:{q_lon}:{q_lat_span}:{q_lon_span}"
 
         if self.hrrr_enabled:
-            lats, lons = self._field_points(q_lat, q_lon, q_lat_span, q_lon_span,
-                                            self.HRRR_COLS, self.HRRR_ROWS)
+            # With `pad` (builds from 94): the shared lattice, out past the
+            # view's edges, so a pan finds wind already there. Without: the
+            # 11 by 8 inside the view that earlier builds lay out.
+            if pad > 0:
+                lats, lons = self._lattice_points(q_lat, q_lon, q_lat_span, q_lon_span, pad)
+            else:
+                lats, lons = self._field_points(q_lat, q_lon, q_lat_span, q_lon_span,
+                                                self.HRRR_COLS, self.HRRR_ROWS)
             now = _now()
             points = await asyncio.to_thread(modelfields.field_points, self.models, lats, lons, now)
             if points:
@@ -1834,6 +1840,31 @@ class PressureService:
         ahead = [h for h in resp.hours if h.t >= hour]
         return resp if len(ahead) == len(resp.hours) else resp.model_copy(update={"hours": ahead})
 
+    # The padded wind grid: points on one lattice the whole map shares, so a
+    # pan asks for the same points it already has plus the ones beyond, and
+    # nothing drawn from them moves. The step is the smallest of these that
+    # gives the view no more than HRRR_COLS across and HRRR_ROWS down.
+    LATTICE_STEPS = (0.05, 0.0625, 0.08, 0.1, 0.125, 0.16, 0.2, 0.25, 0.32, 0.4, 0.5,
+                     0.64, 0.8, 1.0, 1.25, 1.6, 2.0, 2.5, 3.2, 4.0, 5.0, 6.4, 8.0)
+
+    @classmethod
+    def lattice_step(cls, span: float, n: int) -> float:
+        want = span / n
+        return next((s for s in cls.LATTICE_STEPS if s >= want - 1e-9), cls.LATTICE_STEPS[-1])
+
+    def _lattice_points(self, q_lat: float, q_lon: float, q_lat_span: float, q_lon_span: float,
+                        pad: float):
+        """Every lattice point inside the region grown by `pad` of its span
+        on each side, rows south to north."""
+        d_lat = self.lattice_step(q_lat_span, self.HRRR_ROWS)
+        d_lon = self.lattice_step(q_lon_span, self.HRRR_COLS)
+        half_lat, half_lon = q_lat_span * (0.5 + pad), q_lon_span * (0.5 + pad)
+        rows = range(math.ceil((q_lat - half_lat) / d_lat - 1e-9), math.floor((q_lat + half_lat) / d_lat + 1e-9) + 1)
+        cols = range(math.ceil((q_lon - half_lon) / d_lon - 1e-9), math.floor((q_lon + half_lon) / d_lon + 1e-9) + 1)
+        lats = [round(r * d_lat, 4) for r in rows for _ in cols]
+        lons = [round(c * d_lon, 4) for _ in rows for c in cols]
+        return lats, lons
+
     def _field_points(self, q_lat: float, q_lon: float, q_lat_span: float, q_lon_span: float,
                       cols: Optional[int] = None, rows: Optional[int] = None):
         """The sample grid for a quantized map region: 7x5 from Open-Meteo,
@@ -1847,7 +1878,7 @@ class PressureService:
         return lats, lons
 
     async def get_field_levels(self, lat: float, lon: float,
-                               lat_span: float, lon_span: float) -> FieldLevelsResponse:
+                               lat_span: float, lon_span: float, pad: float = 0.0) -> FieldLevelsResponse:
         """The radar's wind grid at every altitude stop, for the same
         quantized region as get_field_grid. Only asked for when someone
         moves the altitude slider off the surface; winds aloft change
@@ -1863,8 +1894,11 @@ class PressureService:
         key = f"fieldlv:{q_lat}:{q_lon}:{q_lat_span}:{q_lon_span}"
 
         if self.hrrr_enabled:
-            lats, lons = self._field_points(q_lat, q_lon, q_lat_span, q_lon_span,
-                                            self.HRRR_COLS, self.HRRR_ROWS)
+            if pad > 0:
+                lats, lons = self._lattice_points(q_lat, q_lon, q_lat_span, q_lon_span, pad)
+            else:
+                lats, lons = self._field_points(q_lat, q_lon, q_lat_span, q_lon_span,
+                                                self.HRRR_COLS, self.HRRR_ROWS)
             now = _now()
             points = await asyncio.to_thread(modelfields.level_points, self.models, lats, lons, now)
             if points:

@@ -518,8 +518,8 @@ struct RadarMapView: UIViewRepresentable {
             }
         }
 
-        private func syncAttached() {
-            guard let map = hostMap else { return }
+        /// The frames' overlays the map should have right now.
+        private func wantedAttached() -> Set<Int> {
             var wanted: Set<Int> = []
             if !gliding {
                 if overlays[currentTime] != nil { wanted.insert(currentTime) }
@@ -537,19 +537,52 @@ struct RadarMapView: UIViewRepresentable {
                 // loaded and is the GPU's to draw.
                 wanted = attached
             }
-            for key in attached.subtracting(wanted) {
-                if let o = overlays[key] { map.removeOverlay(o) }
-                renderers[key] = nil
-                attached.remove(key)
-            }
-            for key in wanted.subtracting(attached) {
+            return wanted
+        }
+
+        /// Put on the map the overlays wanted and not there. Taking any
+        /// off waits for a quiet second (`pruneAttached`): MapKit
+        /// re-composites its overlays when one goes, and during a scrub
+        /// that showed as frames vanishing and overlapping for a tick
+        /// (Jordan, 2026-10-02).
+        private func syncAttached() {
+            guard let map = hostMap else { return }
+            for key in wantedAttached().subtracting(attached) {
                 guard let o = overlays[key] else { continue }
                 // At the bottom of its level: under the pressure shading
                 // and the lines, as the frames always were.
                 map.insertOverlay(o, at: 0, level: .aboveRoads)
                 attached.insert(key)
             }
+            schedulePrune()
         }
+
+        private var pruneScheduled = false
+
+        private func schedulePrune() {
+            guard !pruneScheduled else { return }
+            pruneScheduled = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                guard let self else { return }
+                self.pruneScheduled = false
+                self.pruneAttached()
+            }
+        }
+
+        /// Take off the map the overlays no longer wanted, once nothing has
+        /// changed for a second. While the GPU's picture is up its layers
+        /// go at once: the picture covers whatever MapKit does.
+        private func pruneAttached(now: Bool = false) {
+            guard let map = hostMap else { return }
+            if !now, CACurrentMediaTime() - lastAttachChange < 0.9 { schedulePrune(); return }
+            for key in attached.subtracting(wantedAttached()) {
+                if let o = overlays[key] { map.removeOverlay(o) }
+                renderers[key] = nil
+                attached.remove(key)
+            }
+        }
+
+        private var lastAttachChange: CFTimeInterval = 0
 
         /// Hidden frames sit at a hair above zero instead of zero — MapKit still
         /// draws them, so every frame's tiles load and cache up front. Kills the
@@ -816,8 +849,13 @@ struct RadarMapView: UIViewRepresentable {
                 view.clock = nil
                 view.freeze(at: currentTime)
                 syncAttached()
+                // The frame's layer loads a hair above zero under the GPU's
+                // picture of the same frame and is shown once its tiles are
+                // in, as the picture goes: shown at once, the two were
+                // painted over each other at full strength for as long as
+                // the tiles took, and the rain read twice as deep.
                 if !radarHidden {
-                    for (t, r) in renderers { r.alpha = t == currentTime ? visibleAlpha : idle(t) }
+                    for (t, r) in renderers { r.alpha = t == currentTime ? Self.idleAlpha : idle(t) }
                 }
                 glideStopTries = 0
                 settleGlideStop(view)
@@ -842,7 +880,7 @@ struct RadarMapView: UIViewRepresentable {
                     self.displayLink = nil
                     self.fadeFrom = nil
                     self.fadeTo = nil
-                    self.syncAttached()
+                    self.pruneAttached(now: true)
                 }
                 // Under the lines and the wind, over the map's own tiles.
                 if let line = isolineView { map.insertSubview(v, belowSubview: line) }
@@ -865,12 +903,19 @@ struct RadarMapView: UIViewRepresentable {
             glideStopTries += 1
             let loaded = overlays[currentTime]?.loadsInFlight == 0
             if gliding { return }
-            if (glideStopTries > 2 && loaded) || glideStopTries > 12 {
-                view.stop()
-                view.removeFromSuperview()
-                if glideView === view {
-                    glideView = nil
-                    glideShowing = false
+            if (glideStopTries > 2 && loaded) || glideStopTries > 30 {
+                if !radarHidden, let r = renderers[currentTime] { r.alpha = visibleAlpha }
+                // A frame or two for MapKit to draw what it read, then the
+                // picture goes.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self, weak view] in
+                    // Unless a loop has started again on it meanwhile.
+                    guard let self, let view, !self.gliding else { return }
+                    view.stop()
+                    view.removeFromSuperview()
+                    if self.glideView === view {
+                        self.glideView = nil
+                        self.glideShowing = false
+                    }
                 }
                 return
             }
@@ -1595,6 +1640,7 @@ struct RadarMapView: UIViewRepresentable {
             let oldKey = currentTime
             currentTime = time
             near = Self.framesNear(time, order: order, loop: loopOrder)
+            lastAttachChange = CACurrentMediaTime()
             syncAttached()
             guard !radarHidden, !gliding else { return }
             displayLink?.invalidate()
@@ -1616,6 +1662,11 @@ struct RadarMapView: UIViewRepresentable {
                 new.alpha = visibleAlpha
                 return
             }
+            // A layer made just now for this frame was born at full
+            // strength (it is the frame on screen): start it from nothing
+            // like any other, or for a frame it is painted over the old
+            // one at full strength, and the rain reads twice as deep.
+            if new.alpha > Self.idleAlpha { new.alpha = Self.idleAlpha }
             fadeRest = idle(oldKey)
             fadeFrom = old
             fadeTo = new

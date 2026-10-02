@@ -718,7 +718,14 @@ stored keys, but each has its own model, so they fetch separately.
   the map moves. Only those frames' overlays are on the map at all
   (`Coordinator.syncAttached`): the one on screen, the near ones, and
   whichever is fading out; none while the GPU draws the loop. An overlay
-  goes on when its frame is wanted and comes off when it is not. Until
+  goes on when its frame is wanted and comes off once nothing has
+  changed for a second (`pruneAttached`): MapKit re-composites its
+  overlays when one goes, and taking them off mid-scrub showed as frames
+  vanishing and overlapping for a tick (Jordan, 2026-10-02). A frame
+  scrubbed to starts its crossfade from nothing even when its layer was
+  just made, and a loop stopped by a scrub hands back to the frame's
+  layer only once its tiles are in, under the GPU's picture, so the two
+  are never painted over each other at full strength. Until
   2026-10-02 every frame of the span sat on the map at 0.02 to keep its
   tiles loaded: ten layers on the old one-hour timeline, thirty on the
   six-hour span, each blended over the whole screen on every refresh, and

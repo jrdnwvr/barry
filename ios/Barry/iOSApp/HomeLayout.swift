@@ -283,7 +283,7 @@ struct HomeLayoutView: View {
     var body: some View {
         List {
             Section {
-                ForEach(store.layout.order.filter { $0 != .sources }) { card in
+                ForEach(store.layout.order.filter { $0 != .sources && ($0 != .route || RouteSettings.enabled) }) { card in
                     Toggle(card.title, isOn: Binding(
                         get: { store.isVisible(card) },
                         set: { store.setHidden(card, !$0) }))

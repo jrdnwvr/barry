@@ -191,9 +191,11 @@ struct SettingsView: View {
                             Text("\(ft.formatted()) ft").tag(ft)
                         }
                     }
-                    Picker("Cruise speed", selection: $cruiseSpeedKt) {
-                        ForEach(Array(stride(from: 60, through: 200, by: 20)), id: \.self) { kt in
-                            Text("\(kt) kt").tag(kt)
+                    if RouteSettings.enabled {
+                        Picker("Cruise speed", selection: $cruiseSpeedKt) {
+                            ForEach(Array(stride(from: 60, through: 200, by: 20)), id: \.self) { kt in
+                                Text("\(kt) kt").tag(kt)
+                            }
                         }
                     }
                     Picker("Boundary layer", selection: $blReference) {

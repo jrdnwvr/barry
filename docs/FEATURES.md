@@ -277,6 +277,13 @@ hidden). A card shows only when it is not hidden and has something to say.
 - For: P S.
 
 ### card.route, route.screen and route.planner
+- Hidden since 2026-10-02 behind `RouteSettings.enabled = false` (Jordan:
+  unfinished, and what it would take to finish it unclear; hide it until
+  it can be worked on, do not remove it). With it off nothing offers a
+  route, the card is left out of the home layout and its settings list,
+  the cruise speed setting is not shown, and a route already set is not
+  drawn. The code, its tests and `/route` stay as they are; flipping the
+  flag brings it all back.
 - Seen: "KLUK → KDAY" and "49 NM · 29 min", then three lines: "Depart"
   with the category, wind as "050@9" and the altimeter; the way ("MVFR at
   KI69", "VFR along the line", "lightning 12 NM off the line", "cold

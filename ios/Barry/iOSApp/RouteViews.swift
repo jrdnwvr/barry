@@ -10,6 +10,14 @@ import SwiftUI
 
 /// The route the user set, kept in the shared store: from, to, recent pairs.
 enum RouteSettings {
+    /// Off since 2026-10-02 (Jordan: unfinished, and what it would take to
+    /// finish it unclear), until it can be worked on. With it off nothing
+    /// offers a route: the station menu's "Plan a route", the Fields
+    /// line's "Route to", the card in the home layout and the cruise speed
+    /// setting all stay out of sight, and a route already set is not
+    /// shown. The code and the server's `/route` stay as they are.
+    static let enabled = false
+
     static let fromKey = "route.from"
     static let toKey = "route.to"
     static let recentKey = "route.recent"

@@ -228,13 +228,13 @@ struct ContentView: View {
                  onSelectLocation: { savedLocations.selectedID = $0 },
                  isFollowing: LiveActivityManager.shared.isFollowing,
                  onFollow: { Task { await LiveActivityManager.shared.toggleFollow(combined, atAirport: isAtAirport(combined)) } },
-                 onPlanRoute: { showRoutePlanner = true },
+                 onPlanRoute: RouteSettings.enabled ? { showRoutePlanner = true } : nil,
                  stale: store.isStale, staleReason: store.refreshError)
 
         // The cards, in the user's order (Settings > Home screen). Each one
         // still decides whether it has anything to say.
         ForEach(homeLayout.layout.order) { card in
-            if homeLayout.isVisible(card) {
+            if homeLayout.isVisible(card), card != .route || RouteSettings.enabled {
                 if card.hasMenu {
                     homeCard(card, combined, layout: layout)
                         .contextMenu { cardMenu(card) }
@@ -395,12 +395,13 @@ struct ContentView: View {
                 FieldsCard(fields: airports, selectedID: savedLocations.selectedID, unit: unit,
                            reloadToken: combined.pressure.cachedAt,
                            onSelect: { savedLocations.selectedID = $0 },
-                           onRouteTo: { icao in RouteSettings.set(from: combined.pressure.station, to: icao) })
+                           onRouteTo: RouteSettings.enabled
+                               ? { icao in RouteSettings.set(from: combined.pressure.station, to: icao) } : nil)
             }
         case .route:
             // Only while a route is set; routes start from the station menu,
             // a long press on a Fields line, or the planner.
-            if !routeFrom.isEmpty, !routeTo.isEmpty {
+            if RouteSettings.enabled, !routeFrom.isEmpty, !routeTo.isEmpty {
                 RouteCard(from: routeFrom, to: routeTo, speedKt: cruiseSpeedKt, unit: unit,
                           reloadToken: combined.pressure.cachedAt)
             }

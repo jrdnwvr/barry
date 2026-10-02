@@ -99,7 +99,7 @@ async def _request_context(request: Request, call_next):
         if request.url.path != "/healthz":
             # Tiles come in dozens per map view and cost next to nothing,
             # so they have their own, larger budget.
-            tiles = request.url.path.startswith(("/radar/tiles/", "/radar/lightning/", "/radar/model/"))
+            tiles = request.url.path.startswith(("/radar/tiles/", "/radar/lightning/", "/radar/model/", "/radar/stack/"))
             limiter: IPLimiter = request.app.state.tile_limiter if tiles else request.app.state.ip_limiter
             key = client_key(request.client.host if request.client else None,
                              request.headers.get("cf-connecting-ip"))
@@ -439,6 +439,25 @@ async def radar_tile(t: int, size: int, z: int, x: int, y: int, color: str, opts
     png = await _render(get_service().radar.tile, t, z, x, y, size)
     if png is None:
         raise HTTPException(status_code=404, detail="no such frame", headers=miss)
+    return Response(content=png, media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=604800, immutable"})
+
+
+@app.get("/radar/stack/{t0}/{step}/{n}/{size}/{z}/{x}/{y}.png", include_in_schema=False)
+async def radar_stack(t0: int, step: int, n: int, size: int, z: int, x: int, y: int):
+    """One tile of `n` frames at once, `step` seconds apart from `t0`,
+    stacked top to bottom in one greyscale PNG of codes (dBZ plus 32,
+    zero for no echo): a whole loop in one request a tile for the app's
+    GPU loop, instead of one a frame. The frames' times are in the URL,
+    so the answer never changes and the edge keeps it."""
+    miss = {"Cache-Control": "no-store"}
+    if (step not in (600, 1200) or not (1 <= n <= 8) or size not in (256, 512)
+            or not (0 <= z <= 7) or not (0 <= x < 2 ** z) or not (0 <= y < 2 ** z)):
+        raise HTTPException(status_code=404, detail="no such stack", headers=miss)
+    times = [t0 + k * step for k in range(n)]
+    png = await _render(get_service().radar.stack, times, z, x, y, size)
+    if png is None:
+        raise HTTPException(status_code=404, detail="no such frames", headers=miss)
     return Response(content=png, media_type="image/png",
                     headers={"Cache-Control": "public, max-age=604800, immutable"})
 

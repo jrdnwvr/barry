@@ -72,20 +72,31 @@ def _ltg_lut() -> np.ndarray:
 LUT_LTG = _ltg_lut()
 
 
+def _png(raw: np.ndarray, w: int, h: int, colour_type: int, level: int) -> bytes:
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+
+    return (b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, colour_type, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw.tobytes(), level))
+            + chunk(b"IEND", b""))
+
+
 def png_rgba(img: np.ndarray, level: int = 3) -> bytes:
     """A (h, w, 4) uint8 image as an RGBA PNG, no filtering (rows of
     nothing compress to almost nothing anyway)."""
     h, w, _ = img.shape
     raw = np.zeros((h, w * 4 + 1), dtype=np.uint8)
     raw[:, 1:] = img.reshape(h, w * 4)
+    return _png(raw, w, h, 6, level)
 
-    def chunk(kind: bytes, data: bytes) -> bytes:
-        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
 
-    return (b"\x89PNG\r\n\x1a\n"
-            + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0))
-            + chunk(b"IDAT", zlib.compress(raw.tobytes(), level))
-            + chunk(b"IEND", b""))
+def png_gray(img: np.ndarray, level: int = 3) -> bytes:
+    """A (h, w) uint8 image as an 8-bit greyscale PNG, no filtering."""
+    h, w = img.shape
+    raw = np.zeros((h, w + 1), dtype=np.uint8)
+    raw[:, 1:] = img
+    return _png(raw, w, h, 0, level)
 
 
 _EMPTY: Dict[int, bytes] = {}
@@ -174,7 +185,9 @@ class RadarStore:
                             (self.root / f"{t}.l{i}.npy").unlink()
                         except OSError:
                             pass
-            for k in [k for k in self._tiles if k[0] in set(keys)]:
+            gone = set(keys)
+            for k in [k for k in self._tiles
+                      if (k[0] == "stack" and gone.intersection(k[1])) or (k[0] != "stack" and k[0] in gone)]:
                 self._tile_bytes -= len(self._tiles.pop(k))
 
     def level(self, t: int, i: int) -> Optional[np.ndarray]:
@@ -210,16 +223,43 @@ class RadarStore:
     def tile(self, t: int, z: int, x: int, y: int, size: int = 512) -> Optional[bytes]:
         """The PNG for one tile of one frame, None when the frame is not held."""
         key = (t, z, x, y, size)
+        hit = self._cached(key)
+        if hit is not None:
+            return hit
         with self._lock:
-            hit = self._tiles.get(key)
-            if hit is not None:
-                self._tiles.move_to_end(key)
-                return hit
             levels = self._frames.get(t)
             grid = self.grid
         if levels is None or grid is None:
             return None
-        png = render(levels, grid, z, x, y, size, self.lut)
+        return self._keep(key, render(levels, grid, z, x, y, size, self.lut))
+
+    def stack(self, times: List[int], z: int, x: int, y: int, size: int = 512) -> Optional[bytes]:
+        """One tile of several frames as one greyscale PNG, the frames
+        stacked top to bottom in the order given, a byte a pixel: dBZ plus
+        32 where there is echo (the code the app's palette is indexed by),
+        zero where there is none. What the app's GPU loop reads a whole
+        loop from in one request a tile. None when any frame is not held."""
+        key = ("stack", tuple(times), z, x, y, size)
+        hit = self._cached(key)
+        if hit is not None:
+            return hit
+        with self._lock:
+            frames = [self._frames.get(t) for t in times]
+            grid = self.grid
+        if grid is None or any(f is None for f in frames):
+            return None
+        codes = np.concatenate([render_codes(f, grid, z, x, y, size) for f in frames], axis=0)
+        app = np.where(codes > 0, np.minimum((codes.astype(np.int16) + 1) // 2, 127), 0).astype(np.uint8)
+        return self._keep(key, png_gray(app))
+
+    def _cached(self, key) -> Optional[bytes]:
+        with self._lock:
+            hit = self._tiles.get(key)
+            if hit is not None:
+                self._tiles.move_to_end(key)
+            return hit
+
+    def _keep(self, key, png: bytes) -> bytes:
         with self._lock:
             self._tiles[key] = png
             self._tile_bytes += len(png)
@@ -257,6 +297,15 @@ class RadarStore:
 
 def render(levels: List[np.ndarray], grid: dict, z: int, x: int, y: int, size: int,
            lut: Optional[np.ndarray] = None) -> bytes:
+    codes = render_codes(levels, grid, z, x, y, size)
+    if not codes.any():
+        return empty_png(size)
+    return png_rgba((LUT if lut is None else lut)[codes])
+
+
+def render_codes(levels: List[np.ndarray], grid: dict, z: int, x: int, y: int, size: int) -> np.ndarray:
+    """One tile of one frame as its codes, (size, size) uint8, from the
+    copy of the frame that suits the zoom."""
     n = 2 ** z
     px_deg = 360.0 / (n * size)
     lvl = 0
@@ -274,13 +323,10 @@ def render(levels: List[np.ndarray], grid: dict, z: int, x: int, y: int, size: i
     row = np.floor((top - lat) / dlat).astype(np.int64)
     rok = (row >= 0) & (row < arr.shape[0])
     cok = (col >= 0) & (col < arr.shape[1])
-    if not rok.any() or not cok.any():
-        return empty_png(size)
     codes = np.zeros((size, size), dtype=np.uint8)
-    codes[np.ix_(rok, cok)] = arr[np.ix_(row[rok], col[cok])]
-    if not codes.any():
-        return empty_png(size)
-    return png_rgba((LUT if lut is None else lut)[codes])
+    if rok.any() and cok.any():
+        codes[np.ix_(rok, cok)] = arr[np.ix_(row[rok], col[cok])]
+    return codes
 
 
 # ---- the next half hour ----------------------------------------------------------

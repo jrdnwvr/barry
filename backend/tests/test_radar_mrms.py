@@ -39,6 +39,23 @@ def read_png(data: bytes) -> np.ndarray:
     return raw[:, 1:].reshape(h, w, 4)
 
 
+def read_gray_png(data: bytes) -> np.ndarray:
+    """Pixels from the greyscale PNGs radar.png_gray writes."""
+    assert data[:8] == b"\x89PNG\r\n\x1a\n"
+    pos, w, h, idat = 8, 0, 0, b""
+    while pos < len(data):
+        n = struct.unpack(">I", data[pos:pos + 4])[0]
+        kind, body = data[pos + 4:pos + 8], data[pos + 8:pos + 8 + n]
+        if kind == b"IHDR":
+            w, h = struct.unpack(">II", body[:8])
+            assert body[8:10] == b"\x08\x00", "8-bit greyscale"
+        elif kind == b"IDAT":
+            idat += body
+        pos += 12 + n
+    raw = np.frombuffer(zlib.decompress(idat), dtype=np.uint8).reshape(h, w + 1)
+    return raw[:, 1:]
+
+
 def tile_of(lat, lon, z):
     n = 2 ** z
     xf = (lon + 180) / 360 * n
@@ -94,6 +111,43 @@ async def test_a_tile_draws_the_storm_in_universal_blue(client, upstream, mrms_o
         ex, ey, _, _ = tile_of(20.0, -150.0, 7)
         empty = await c.get(f"/radar/tiles/{t}/512/7/{ex}/{ey}/2/0_1.png")
         assert empty.status_code == 200 and len(empty.content) < 3000 and not read_png(empty.content).any()
+
+
+@pytest.mark.asyncio
+async def test_a_stack_is_several_frames_of_one_tile_as_codes(client, upstream, mrms_on):
+    """Three frames ten minutes apart come as one greyscale picture three
+    tiles tall, a byte a pixel: the 45 dBZ cell reads 77 (dBZ plus 32) in
+    each, nothing elsewhere. A frame not held is a miss; a wrong step
+    or too many frames is not a stack at all."""
+    from app.main import app
+    s = PressureService(client)
+    await s.poll_radar()
+    app.state.service = s
+    times = s.radar.observed()[-3:]
+    x, y, px, py = tile_of(39.1, -84.5, 7)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+        r = await c.get(f"/radar/stack/{times[0]}/600/3/512/7/{x}/{y}.png")
+        assert r.status_code == 200 and r.headers["content-type"] == "image/png"
+        assert "immutable" in r.headers["cache-control"]
+        img = read_gray_png(r.content)
+        assert img.shape == (3 * 512, 512)
+        for k in range(3):
+            assert img[k * 512 + py, px] == 45 + 32
+        assert img[0:512][img[0:512] > 0].min() >= 1 and (img[0:512] == 0).sum() > 512 * 512 * 0.9
+        # The same codes the app reads back from the painted tile.
+        painted = read_png((await c.get(f"/radar/tiles/{times[0]}/512/7/{x}/{y}/2/0_1.png")).content)
+        assert painted[py, px].tolist() == ub(45)
+        # Half size, for the wide view.
+        small = read_gray_png((await c.get(f"/radar/stack/{times[0]}/600/3/256/7/{x}/{y}.png")).content)
+        assert small.shape == (3 * 256, 256) and small.max() == 45 + 32
+        miss = await c.get(f"/radar/stack/{times[0] - 600 * 40}/600/3/512/7/{x}/{y}.png")
+        assert miss.status_code == 404 and miss.headers["cache-control"] == "no-store"
+        assert (await c.get(f"/radar/stack/{times[0]}/300/3/512/7/{x}/{y}.png")).status_code == 404
+        assert (await c.get(f"/radar/stack/{times[0]}/600/9/512/7/{x}/{y}.png")).status_code == 404
+    # Dropping a frame drops the stacks that held it.
+    assert any(k[0] == "stack" for k in s.radar._tiles)
+    s.radar.drop([times[1]])
+    assert not any(k[0] == "stack" for k in s.radar._tiles)
 
 
 @pytest.mark.asyncio

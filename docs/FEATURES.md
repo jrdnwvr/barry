@@ -765,7 +765,18 @@ stored keys, but each has its own model, so they fetch separately.
   side into one texture a frame for the tiles on screen
   (`RadarGlide.stitch`); Barry's colours are a lookup in the shader.
   Only the two frames of the moment and the next two are held
-  (`RadarGlide.wanted`). The motion is asked for when a loop starts and
+  (`RadarGlide.wanted`). The loop's frames come as stacks
+  (`/radar/stack`, `RadarGlide.stackParts`, `RadarStackLoader`): the
+  observed frames but the newest (which is on screen from its own tile),
+  in runs of four, one request a tile for each run, read straight into
+  the codes cache; a loop that is not evenly spaced falls back to a tile
+  a frame. Buffering waits for the first run only, for every tile on
+  screen, and the loop starts on those frames; the rest are fetched
+  behind the clock. Since 2026-10-02 the hour loop is 12 requests for the
+  view where it was about 42, the six-hour loop 30 where it was about
+  115, and nothing else is fetched for the span when a loop starts (the
+  frames a scrub could reach used to be, a tile each; a scrub now fetches
+  as it goes). The motion is asked for when a loop starts and
   again when the newest frame or the region changes
   (`RadarModel.ensureMotion`); until it arrives, or for a pair it does
   not give, the frames crossfade in place. Starting, the tile layers go
@@ -1403,6 +1414,7 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 | `GET /fronts` | none | WPC analysis plus the progs, and `history`: the analyses of the nine hours before, oldest first | IEM AFOS (CODSUS, the last twelve products; CODSRP) | 30 min, one entry | the radar |
 | `GET /radar/hrrr` | none | run time | IEM tile probe | 10 min | nobody (the model frames it served are Barry's own since 2026-10-02) |
 | `GET /radar/model/{t}/{size}/{z}/{x}/{y}/{color}/{opts}.png` | the frame's key (valid time plus forecast hour), 256 or 512, zoom to 12 | an RGBA PNG in the radar's colours | the model radar store (`state/radarmodel`, HRRR REFC on a 0.03 degree grid) | a week, immutable; a miss is never cached | the radar's day span |
+| `GET /radar/stack/{t0}/{step}/{n}/{size}/{z}/{x}/{y}.png` | up to 8 frames `step` (600 or 1200) seconds apart from `t0`; 256 or 512; zoom to 7 | one greyscale PNG, the frames' tiles stacked top to bottom, a byte a pixel: dBZ plus 32 where there is echo, zero where none (the code the app's palette is indexed by) | the radar store, rendered on the tile pool and kept in the tile cache | immutable, a week | the GPU loop: a loop's frames in one request a tile instead of one a frame |
 | `GET /radar/motion` | `span` (hour or day), `lat`, `lon`, spans | how the rain moved between each pair of frames the span's loop plays: east and north speeds in degrees per hour on a lattice of blocks about 50 km across (`lat0`, `lon0` the north-west block's centre, rows going south), for the region and half a span past each edge; a pair not found is left out (about 2 KB a pair) | the block matching the nowcast is built on (`radar.motion`), found at each poll for every pair either loop plays and kept; twenty-minute pairs on the copy pooled once more | none; a pair never changes | the radar loop gliding (`radar.layer.radar`) |
 | `GET /radar/pressure/series` | `lat`, `lon`, spans | per hour from seven back to twelve ahead, and now: unix time, `kind` (observed, now or model) and the field's grid to a hundredth of a hectopascal, every frame on one lattice (about 260 KB before compression at 20 frames); `stepHPa`, the spacing to contour at; the model `run` | the station snapshots and the HRRR forecast feed's MSLP, no upstream | 5 min; quantized like `/radar/pressure`; a past hour's grid is kept as long as its snapshot | the radar's isobars away from now |
 | `GET /metars` | `lat`, `lon`, `half`, `buoys` | stations with wind, category, visibility, ceiling, altimeter, lightning, raw; with `buoys=1` also NDBC buoys and coastal stations (`kind` "buoy", waves, water temperature, pressure and its 3 h change) | bulk table (AWC box fallback); NDBC `latest_obs.txt` | 2 min; centre 0.2°, half 0.5°; 350 stations plus up to 120 buoys nearest first; NDBC once per 10 min for everyone, failures remembered 60 s and never block the stations | the radar station layer |

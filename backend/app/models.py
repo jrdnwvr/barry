@@ -593,6 +593,33 @@ class RadarFramesResponse(BaseModel):
     cachedAt: datetime
 
 
+class RadarMotionPair(BaseModel):
+    """How the rain moved between two frames of the loop: east and north
+    speeds in degrees per hour, one per block of the lattice, row-major
+    from the north-west corner. Zero where nothing was tracked."""
+
+    start: int
+    end: int
+    u: List[float]
+    v: List[float]
+
+
+class RadarMotionResponse(BaseModel):
+    """The rain's motion over a map region between each pair of frames the
+    loop plays, on a lattice of blocks about fifty kilometres across
+    (`lat0`, `lon0` is the centre of the north-west block; rows go south).
+    The app slides each frame along it to draw the moments between."""
+
+    lat0: float
+    lon0: float
+    dlat: float
+    dlon: float
+    ny: int
+    nx: int
+    pairs: List[RadarMotionPair] = Field(default_factory=list)
+    cachedAt: datetime
+
+
 class HrrrMeta(BaseModel):
     """Latest HRRR model run IEM is serving tiles for. Forecast minute F on the
     tile layer is valid at run + F — the client needs this to label forecast

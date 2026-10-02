@@ -58,6 +58,8 @@ from .models import (
     TrackRecordOut,
     TafOut,
     RadarFramesResponse,
+    RadarMotionPair,
+    RadarMotionResponse,
     RadarFrameOut,
     CombinedResponse,
     CurrentObs,
@@ -280,6 +282,8 @@ class PressureService:
         # Block motion per frame time (radar.motion), and the nowcast's
         # score by lead (see _score_nowcast).
         self._motions: Dict[int, tuple] = {}
+        # Motion between any two held frames (_pair_motion), for the loops.
+        self._pair_motions: Dict[tuple, tuple] = {}
         # Past hours' pressure grids for the timeline, by snapshot and region.
         self._series_grids: Dict[tuple, object] = {}
         self._nowcast_scores: Optional[dict] = None
@@ -1179,6 +1183,10 @@ class PressureService:
         except Exception as exc:
             log.warning("nowcast scoring failed: %s: %s", type(exc).__name__, exc)
         try:
+            await asyncio.to_thread(self._warm_motions)
+        except Exception as exc:
+            log.warning("radar motion failed: %s: %s", type(exc).__name__, exc)
+        try:
             await self._poll_lightning_next(now)
         except Exception as exc:
             log.warning("lightning probability failed: %s: %s", type(exc).__name__, exc)
@@ -1222,6 +1230,104 @@ class PressureService:
         if older is None:
             return newer[0], newer[1]
         return radar_mod.blend_motion(newer, older)
+
+    PAIR_MOTIONS_KEPT = 40
+
+    def _pair_motion(self, a: int, b: int):
+        """How the rain moved from the frame at `a` to the one at `b`:
+        (vy, vx) in points of the copy the motion is found on, per the
+        pair's own step, on that copy's block lattice. Ten minutes apart
+        it is the nowcast's own motion; further apart (the twenty-minute
+        frames of the six-hour loop) the search is run on the copy pooled
+        once more, where the same five-point reach covers twice the
+        distance, and the answer is put back on the finer lattice. None
+        when either frame is not held. Kept, as a pair never changes."""
+        hit = self._pair_motions.get((a, b))
+        if hit is not None:
+            return hit
+        if b - a == self.radar.STEP_S:
+            m = self._block_motion(b)
+            if m is None:
+                return None
+            found = (m[0], m[1])
+        else:
+            lvl = radar_mod.MOTION_LEVEL + 1
+            prev, cur = self.radar.level(a, lvl), self.radar.level(b, lvl)
+            if prev is None or cur is None:
+                return None
+            vy, vx, _ = radar_mod.motion(np.asarray(prev), np.asarray(cur))
+            fine = self.radar.level(b, radar_mod.MOTION_LEVEL)
+            shape = (fine.shape[0] // radar_mod.BLOCK, fine.shape[1] // radar_mod.BLOCK)
+            found = (radar_mod.upsample(vy, shape) * 2, radar_mod.upsample(vx, shape) * 2)
+        self._pair_motions[(a, b)] = found
+        for old in sorted(self._pair_motions)[:-self.PAIR_MOTIONS_KEPT]:
+            self._pair_motions.pop(old, None)
+        return found
+
+    def _loop_pairs(self, span: str) -> List[tuple]:
+        """The pairs of observed frames the span's loop plays, oldest first."""
+        resp = self._mrms_frames(span)
+        if resp is None:
+            return []
+        times = [f.time for f in resp.frames if f.kind == "observed"]
+        back = 3600 if span == "hour" else self.DAY_BACK_H * 3600
+        times = [t for t in times if t >= times[-1] - back]
+        return list(zip(times, times[1:]))
+
+    def _warm_motions(self) -> None:
+        """Find the motion for every pair either loop plays, so a request
+        for it is a read. One new pair a poll once the store is warm."""
+        for span in ("hour", "day"):
+            for a, b in self._loop_pairs(span):
+                self._pair_motion(a, b)
+
+    def get_radar_motion(self, span: str, lat: float, lon: float,
+                         lat_span: float, lon_span: float) -> RadarMotionResponse:
+        """The rain's motion between each pair of frames the span's loop
+        plays, over a map region and half a span past each edge of it (a
+        pan finds it already there), as east and north speeds in degrees
+        per hour on the block lattice (RadarMotionResponse). A pair whose
+        motion is not found is left out: the app then slides nothing."""
+        now = _now()
+        g = self.radar.grid
+        if g is None or not self.radar.observed():
+            return RadarMotionResponse(lat0=0, lon0=0, dlat=1, dlon=1, ny=0, nx=0, cachedAt=now)
+        cell = radar_mod.BLOCK * 2 ** radar_mod.MOTION_LEVEL
+        dlat, dlon = g["dlat"] * cell, g["dlon"] * cell
+        top = g["lat0"] + g["dlat"] / 2
+        west = g["lon0"] - g["dlon"] / 2
+        lat_span = max(0.5, min(30.0, lat_span)) * (1 + 2 * self.MOTION_PAD)
+        lon_span = max(0.5, min(60.0, lon_span)) * (1 + 2 * self.MOTION_PAD)
+        pairs = self._loop_pairs(span)
+        fine = self.radar.level(pairs[-1][1], radar_mod.MOTION_LEVEL) if pairs else None
+        if fine is None:
+            return RadarMotionResponse(lat0=top - dlat / 2, lon0=west + dlon / 2, dlat=dlat, dlon=dlon,
+                                       ny=0, nx=0, cachedAt=now)
+        nby, nbx = fine.shape[0] // radar_mod.BLOCK, fine.shape[1] // radar_mod.BLOCK
+        r0 = max(0, int(math.floor((top - (lat + lat_span / 2)) / dlat)))
+        r1 = min(nby, int(math.ceil((top - (lat - lat_span / 2)) / dlat)))
+        c0 = max(0, int(math.floor(((lon - lon_span / 2) - west) / dlon)))
+        c1 = min(nbx, int(math.ceil(((lon + lon_span / 2) - west) / dlon)))
+        out: List[RadarMotionPair] = []
+        if r1 > r0 and c1 > c0:
+            for a, b in pairs:
+                m = self._pair_motion(a, b)
+                if m is None:
+                    continue
+                hours = (b - a) / 3600
+                step = 2 ** radar_mod.MOTION_LEVEL
+                u = m[1][r0:r1, c0:c1] * (g["dlon"] * step) / hours
+                v = -m[0][r0:r1, c0:c1] * (g["dlat"] * step) / hours
+                out.append(RadarMotionPair(start=a, end=b,
+                                           u=[round(float(x), 4) for x in u.ravel()],
+                                           v=[round(float(x), 4) for x in v.ravel()]))
+        return RadarMotionResponse(lat0=top - (r0 + 0.5) * dlat, lon0=west + (c0 + 0.5) * dlon,
+                                   dlat=dlat, dlon=dlon, ny=max(0, r1 - r0), nx=max(0, c1 - c0),
+                                   pairs=out, cachedAt=now)
+
+    # How far past each edge of the view the motion is given, as a fraction
+    # of the span: the app's own reach for the wind grid.
+    MOTION_PAD = 0.5
 
     async def _nowcast(self) -> int:
         """The next hour from the newest frame: motion from it and the two

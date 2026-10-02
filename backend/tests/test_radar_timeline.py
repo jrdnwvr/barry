@@ -127,6 +127,57 @@ async def test_the_day_span_is_on_the_hour_from_six_back_to_twelve_ahead(client,
         assert (await c.get("/radar/frames?span=week")).status_code == 422
 
 
+@pytest.mark.asyncio
+async def test_the_rains_motion_between_loop_frames_is_served_for_a_region(client, upstream, mrms_on):
+    """A cell two degrees across moving east 0.2 degrees every ten minutes
+    (1.2 a hour) comes back as about that, east and not north, for every
+    pair of the hour loop and of the day loop, the latter from the
+    twenty-minute frames on the coarser copy."""
+    upstream.mrms_speed_deg = 0.2
+    upstream.mrms_half_deg = 1.0
+    upstream.mrms_origin = datetime(2026, 9, 25, 3, 0, tzinfo=timezone.utc)
+    s = PressureService(client)
+    await s.poll_radar()
+    m = s.get_radar_motion("hour", 39.1, -84.5, 3.2, 3.2)
+    # Blocks of 12 pooled points at 0.2 degrees: 2.4 degrees across, rows going south.
+    assert m.dlat == pytest.approx(2.4) and m.dlon == pytest.approx(2.4)
+    assert m.ny >= 2 and m.nx >= 2 and m.lat0 < 45 and m.lon0 > -95
+    assert [(p.start, p.end) for p in m.pairs] == [(T0 + 600 * k, T0 + 600 * (k + 1)) for k in range(-6, 0)]
+    for p in m.pairs:
+        assert len(p.u) == len(p.v) == m.ny * m.nx
+        moving = [u for u in p.u if u]
+        assert moving and all(0.9 <= u <= 1.5 for u in moving), p.u
+        assert all(abs(v) < 0.3 for v in p.v), p.v
+    # The six-hour loop: twenty-minute pairs, the same answer.
+    d = s.get_radar_motion("day", 39.1, -84.5, 3.2, 3.2)
+    assert [(p.start, p.end) for p in d.pairs][-2:] == [(T0 - 2400, T0 - 1200), (T0 - 1200, T0)]
+    assert len(d.pairs) >= 6 and (d.lat0, d.lon0, d.ny, d.nx) == (m.lat0, m.lon0, m.ny, m.nx)
+    moving = [u for u in d.pairs[-1].u if u]
+    assert moving and all(0.9 <= u <= 1.5 for u in moving), d.pairs[-1].u
+    # A pair is found once and kept.
+    before = dict(s._pair_motions)
+    s.get_radar_motion("day", 39.1, -84.5, 3.2, 3.2)
+    assert s._pair_motions.keys() == before.keys()
+    # Nowhere near the radar: the lattice, no blocks.
+    far = s.get_radar_motion("hour", 20.0, -150.0, 3.2, 3.2)
+    assert far.ny == 0 and far.pairs == []
+
+    from app.main import app
+    app.state.service = s
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+        r = await c.get("/radar/motion?span=hour&lat=39.1&lon=-84.5&latSpan=3.2&lonSpan=3.2")
+        assert r.status_code == 200 and len(r.json()["pairs"]) == 6
+        assert (await c.get("/radar/motion?span=week&lat=39.1&lon=-84.5&latSpan=3.2&lonSpan=3.2")).status_code == 422
+
+
+def test_a_block_field_is_doubled_onto_the_finer_lattice():
+    v = np.array([[1, 2], [3, 4]], np.float32)
+    up = radar.upsample(v, (4, 5))
+    assert up.shape == (4, 5)
+    assert up[0].tolist() == [1, 1, 2, 2, 2] and up[3].tolist() == [3, 3, 4, 4, 4]
+    assert radar.upsample(v, (3, 3)).tolist() == [[1, 1, 2], [1, 1, 2], [3, 3, 4]]
+
+
 def test_two_steps_of_motion_blend_into_one():
     z = np.zeros((2, 2), np.float32)
     newer = (np.array([[2, 0], [1, 0]], np.float32), np.array([[4, 0], [0, 0]], np.float32), None)

@@ -386,6 +386,16 @@ def advect(cur: np.ndarray, vy: np.ndarray, vx: np.ndarray, steps: float, chunk:
     return out
 
 
+def upsample(v: np.ndarray, shape: Tuple[int, int]) -> np.ndarray:
+    """A block field doubled in each direction and cut or padded (with its
+    edge) to `shape`: motion found on the copy pooled once more, put on
+    the finer copy's block lattice."""
+    d = np.repeat(np.repeat(v, 2, axis=0), 2, axis=1)
+    d = d[:shape[0], :shape[1]]
+    pad = ((0, shape[0] - d.shape[0]), (0, shape[1] - d.shape[1]))
+    return np.pad(d, pad, mode="edge").astype(np.float32)
+
+
 def blend_motion(newer, older):
     """Two motion fields a step apart as one: the mean where both found
     echo moving, either where only one did. One pair of frames gives a

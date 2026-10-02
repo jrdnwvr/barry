@@ -368,6 +368,23 @@ async def radar_pressure_series(
     return resp.model_dump(mode="json", by_alias=True, exclude_none=True)
 
 
+@app.get("/radar/motion")
+async def radar_motion(
+    span: str = Query("hour", pattern="^(hour|day)$"),
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    latSpan: float = Query(..., gt=0, le=180),
+    lonSpan: float = Query(..., gt=0, le=360),
+):
+    """How the rain moved between each pair of frames the span's loop
+    plays, over a map region: east and north speeds on a lattice of
+    fifty-kilometre blocks, from the same block matching the nowcast is
+    built on. The app slides each frame along it to draw the moments
+    between two frames. No upstream call."""
+    resp = get_service().get_radar_motion(span, lat, lon, latSpan, lonSpan)
+    return resp.model_dump(mode="json", by_alias=True)
+
+
 @app.get("/lightning")
 async def get_lightning(
     lat: float = Query(..., ge=-90, le=90),

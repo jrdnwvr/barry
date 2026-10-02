@@ -693,10 +693,11 @@ stored keys, but each has its own model, so they fetch separately.
   METAR bolt markers. The timeline shows only when Radar is on.
 
 ### radar.layer.radar
-- Seen: rain echoes in Barry's palette, crossfading between frames. Chip
+- Seen: rain echoes in Barry's palette. While a loop plays the rain
+  travels between frames; on the slider the frames crossfade. Chip
   "Radar".
 - Lives: `RadarMapView.swift` › `RadarTileOverlay`, `Coordinator`;
-  `RadarPalette.swift`.
+  `RadarPalette.swift`; `RadarGlideView.swift`, `RadarGlide.swift`.
 - Data: `/radar/frames?span=hour|day` (host and the span's frames, each
   with its `kind`; see `radar.timeline`). Since 2026-09-25 the host is
   Barry itself: MRMS frames every ten minutes,
@@ -739,7 +740,37 @@ stored keys, but each has its own model, so they fetch separately.
   colours; snow pixels pass through. Tile caches are sized in bytes (48 MB
   repainted, 24 MB source); `URLCache.shared` is 200 MB on disk; one ring of
   tiles is prefetched after each settle; in-flight requests are shared.
-- Tests: `RadarPaletteTests`; the UI test keeps Radar on.
+- The loop, on the GPU (`RadarGlideView`, since 2026-10-02): while a
+  loop plays the radar is one Metal view over the map, not the tile
+  layers, which sit at zero. For each pixel the shader asks where its
+  rain came from: the server says how the rain moved between the two
+  frames either side of the moment (`/radar/motion`, the nowcast's own
+  block matching), the earlier frame is read that far forward along the
+  motion, the later one that far back, and the two are blended, leaning
+  to the nearer. Where the motion is right one shape travels; where the
+  rain also grew or died, the blend fills it in or thins it out over the
+  gap. The tile layers could only crossfade: a storm was two ghosts for
+  half a second, then jumped. No more comes over the network: the
+  pictures are the same tiles the map downloads (the source cache), read
+  back to dBZ (`RadarPalette.codes`, kept 32 MB by URL) and laid side by
+  side into one texture a frame for the tiles on screen
+  (`RadarGlide.stitch`); Barry's colours are a lookup in the shader.
+  Only the two frames of the moment and the next two are held
+  (`RadarGlide.wanted`). The motion is asked for when a loop starts and
+  again when the newest frame or the region changes
+  (`RadarModel.ensureMotion`); until it arrives, or for a pair it does
+  not give, the frames crossfade in place. Starting, the tile layers go
+  to zero once the first picture is up; stopping, the frame the loop is
+  on comes back in its tile layer and the GPU holds that same frame until
+  the tiles have been read in (`Coordinator.syncGlide`), so nothing is
+  blank either way. A pan or zoom stretches the pictures held until the
+  map settles and they are laid out again. Like the wind and the
+  six-hour isobars the view sits above the map's own labels. Falls back
+  to the tile layers if the shaders do not compile.
+- Tests: `RadarPaletteTests` (colours, a tile read back to codes),
+  `RadarGlideTests` (which frames a moment sits between, the frames to
+  hold, the motion in map units, tiles stitched into place, the shaders
+  compile); the UI test keeps Radar on.
 
 ### radar.timeline
 - Seen: `[6h] [60] [slider] [Now]`, and the frame's time under them
@@ -1360,6 +1391,7 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 | `GET /fronts` | none | WPC analysis plus the progs, and `history`: the analyses of the nine hours before, oldest first | IEM AFOS (CODSUS, the last twelve products; CODSRP) | 30 min, one entry | the radar |
 | `GET /radar/hrrr` | none | run time | IEM tile probe | 10 min | nobody (the model frames it served are Barry's own since 2026-10-02) |
 | `GET /radar/model/{t}/{size}/{z}/{x}/{y}/{color}/{opts}.png` | the frame's key (valid time plus forecast hour), 256 or 512, zoom to 12 | an RGBA PNG in the radar's colours | the model radar store (`state/radarmodel`, HRRR REFC on a 0.03 degree grid) | a week, immutable; a miss is never cached | the radar's day span |
+| `GET /radar/motion` | `span` (hour or day), `lat`, `lon`, spans | how the rain moved between each pair of frames the span's loop plays: east and north speeds in degrees per hour on a lattice of blocks about 50 km across (`lat0`, `lon0` the north-west block's centre, rows going south), for the region and half a span past each edge; a pair not found is left out (about 2 KB a pair) | the block matching the nowcast is built on (`radar.motion`), found at each poll for every pair either loop plays and kept; twenty-minute pairs on the copy pooled once more | none; a pair never changes | the radar loop gliding (`radar.layer.radar`) |
 | `GET /radar/pressure/series` | `lat`, `lon`, spans | per hour from seven back to twelve ahead, and now: unix time, `kind` (observed, now or model) and the field's grid to a hundredth of a hectopascal, every frame on one lattice (about 260 KB before compression at 20 frames); `stepHPa`, the spacing to contour at; the model `run` | the station snapshots and the HRRR forecast feed's MSLP, no upstream | 5 min; quantized like `/radar/pressure`; a past hour's grid is kept as long as its snapshot | the radar's isobars away from now |
 | `GET /metars` | `lat`, `lon`, `half`, `buoys` | stations with wind, category, visibility, ceiling, altimeter, lightning, raw; with `buoys=1` also NDBC buoys and coastal stations (`kind` "buoy", waves, water temperature, pressure and its 3 h change) | bulk table (AWC box fallback); NDBC `latest_obs.txt` | 2 min; centre 0.2°, half 0.5°; 350 stations plus up to 120 buoys nearest first; NDBC once per 10 min for everyone, failures remembered 60 s and never block the stations | the radar station layer |
 | `GET /advisories` | `lat`, `lon`, `half` | SIGMET and G-AIRMET areas (kind, hazard, label, base and top, valid times, outline, bulletin) and PIREPs of turbulence and icing (position, time, altitude, aircraft, intensities, raw) that touch the box | AWC `airsigmet`, `gairmet` (current hour), `pirep` (lower 48, 2 h) | each feed 10 min for everyone, failures 60 s; a failed feed is left out | the radar Advisories layer |

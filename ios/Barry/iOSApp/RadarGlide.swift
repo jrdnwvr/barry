@@ -1,0 +1,166 @@
+//  RadarGlide.swift
+//  Barry — iOS
+//
+//  The sums behind the radar gliding between frames (RadarGlideView): which
+//  two frames a moment sits between, the rain's motion between them turned
+//  into map units, and how a frame's tiles are laid into one picture. Pure
+//  functions, so the rules are tested without a GPU.
+
+import Foundation
+import MapKit
+
+/// The rain's motion between each pair of frames a loop plays, over the
+/// region it was asked for (`/radar/motion`), ready to read for a pair.
+struct RadarMotionField: Equatable {
+    let id = UUID()
+    let lat0: Double
+    let lon0: Double
+    let dlat: Double
+    let dlon: Double
+    let ny: Int
+    let nx: Int
+    /// By (start, end) frame time.
+    let pairs: [Pair: RadarMotionPair]
+    /// The newest observed frame when it was fetched: the pairs change
+    /// with every new frame.
+    let nowTime: Int
+
+    struct Pair: Hashable {
+        let start: Int
+        let end: Int
+    }
+
+    init?(_ resp: RadarMotionResponse, nowTime: Int) {
+        guard resp.nx > 0, resp.ny > 0 else { return nil }
+        lat0 = resp.lat0
+        lon0 = resp.lon0
+        dlat = resp.dlat
+        dlon = resp.dlon
+        ny = resp.ny
+        nx = resp.nx
+        var byPair: [Pair: RadarMotionPair] = [:]
+        for p in resp.pairs where p.u.count == resp.nx * resp.ny && p.v.count == p.u.count {
+            byPair[Pair(start: p.start, end: p.end)] = p
+        }
+        pairs = byPair
+        self.nowTime = nowTime
+    }
+
+    func pair(from start: Int, to end: Int) -> RadarMotionPair? {
+        pairs[Pair(start: start, end: end)]
+    }
+
+    /// The pair's motion as the map's own units per hour: how far east
+    /// and how far down the map (Web Mercator, the world one unit across)
+    /// the rain in each block moves in an hour. A degree of latitude is
+    /// more map at higher latitudes, which is why this is worked out per
+    /// row rather than in the shader. Row-major, two values a block.
+    func texels(for pair: RadarMotionPair) -> [Float] {
+        var out = [Float](repeating: 0, count: nx * ny * 2)
+        for r in 0..<ny {
+            let lat = lat0 - Double(r) * dlat
+            let cosLat = max(0.05, cos(lat * .pi / 180))
+            for c in 0..<nx {
+                let i = r * nx + c
+                out[i * 2] = Float(pair.u[i] / 360)
+                out[i * 2 + 1] = Float(-pair.v[i] / (360 * cosLat))
+            }
+        }
+        return out
+    }
+}
+
+enum RadarGlide {
+    /// Which two frames a moment sits between, and how far from the first
+    /// to the second. Before the first or past the last frame, or on one
+    /// exactly, both are that frame.
+    static func bracket(at t: Double, times: [Int]) -> (a: Int, b: Int, f: Double) {
+        guard let last = times.indices.last else { return (0, 0, 0) }
+        guard t > Double(times[0]) else { return (0, 0, 0) }
+        guard t < Double(times[last]) else { return (last, last, 0) }
+        var b = 1
+        while b < last, Double(times[b]) <= t { b += 1 }
+        let a = b - 1
+        let span = Double(times[b] - times[a])
+        guard span > 0 else { return (a, a, 0) }
+        return (a, b, (t - Double(times[a])) / span)
+    }
+
+    /// The frames to have ready for a moment: the two it sits between and
+    /// the next two the loop will reach, going round.
+    static func wanted(a: Int, b: Int, count: Int) -> [Int] {
+        guard count > 0 else { return [] }
+        var out = [a, b]
+        for k in 1...2 { out.append((b + k) % count) }
+        var seen: Set<Int> = []
+        return out.filter { seen.insert($0).inserted }
+    }
+
+    /// The tiles a frame's picture is stitched from: one zoom, a rectangle
+    /// of columns and rows, and where that sits in the world (Web
+    /// Mercator, the world one unit across, y down from the north).
+    struct TileSet: Hashable {
+        let z: Int
+        let x0: Int, x1: Int
+        let y0: Int, y1: Int
+
+        init?(_ paths: [MKTileOverlayPath]) {
+            guard let first = paths.first, paths.allSatisfy({ $0.z == first.z }) else { return nil }
+            z = first.z
+            x0 = paths.map(\.x).min()!
+            x1 = paths.map(\.x).max()!
+            y0 = paths.map(\.y).min()!
+            y1 = paths.map(\.y).max()!
+        }
+
+        var columns: Int { x1 - x0 + 1 }
+        var rows: Int { y1 - y0 + 1 }
+        var paths: [MKTileOverlayPath] {
+            var out: [MKTileOverlayPath] = []
+            for y in y0...y1 { for x in x0...x1 { out.append(MKTileOverlayPath(x: x, y: y, z: z, contentScaleFactor: 1)) } }
+            return out
+        }
+        /// Where the picture's north-west corner is, and how much of the
+        /// world it covers.
+        var origin: SIMD2<Double> {
+            let n = Double(1 << z)
+            return SIMD2(Double(x0) / n, Double(y0) / n)
+        }
+        var size: SIMD2<Double> {
+            let n = Double(1 << z)
+            return SIMD2(Double(columns) / n, Double(rows) / n)
+        }
+    }
+
+    /// One tile's codes read back from its picture: a byte a pixel, dBZ
+    /// plus 32 where there is echo, zero where there is none.
+    struct TileCodes {
+        let side: Int
+        let bytes: Data
+    }
+
+    /// The tiles of a set laid side by side into one picture, `side`
+    /// pixels a tile, row-major; a tile that is missing is clear. Nil when
+    /// no tile came or they are not all one size.
+    static func stitch(_ set: TileSet, tiles: [(x: Int, y: Int, codes: TileCodes?)], side: Int) -> [UInt8]? {
+        guard side > 0, tiles.contains(where: { $0.codes != nil }) else { return nil }
+        let width = set.columns * side, height = set.rows * side
+        var out = [UInt8](repeating: 0, count: width * height)
+        for tile in tiles {
+            guard let codes = tile.codes else { continue }
+            guard codes.side == side, codes.bytes.count == side * side else { return nil }
+            let col = tile.x - set.x0, row = tile.y - set.y0
+            guard col >= 0, col < set.columns, row >= 0, row < set.rows else { continue }
+            codes.bytes.withUnsafeBytes { src in
+                for r in 0..<side {
+                    let from = src.baseAddress!.advanced(by: r * side)
+                    let to = (row * side + r) * width + col * side
+                    out.withUnsafeMutableBytes { dst in
+                        dst.baseAddress!.advanced(by: to).copyMemory(from: from, byteCount: side)
+                    }
+                }
+            }
+        }
+        return out
+    }
+}

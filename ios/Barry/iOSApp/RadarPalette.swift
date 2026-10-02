@@ -70,31 +70,64 @@ enum RadarPalette {
         return (best?.0 ?? 999) <= 12 ? best?.1 : nil
     }
 
-    /// Repaint a RainViewer tile. Returns the original data when the image
-    /// cannot be read, so the map never goes blank.
-    static func recolor(_ png: Data) -> Data {
+    /// A tile's pixels as red, green, blue, alpha bytes in that order,
+    /// whatever order the decoder laid them in, and whether the colours are
+    /// premultiplied. Nil when the image cannot be read.
+    private static func unpack(_ png: Data) -> (w: Int, h: Int, premultiplied: Bool, rgba: [UInt8])? {
         guard let src = UIImage(data: png)?.cgImage, let provider = src.dataProvider,
-              let raw = provider.data, src.bitsPerPixel == 32, src.bitsPerComponent == 8 else { return png }
+              let raw = provider.data, src.bitsPerPixel == 32, src.bitsPerComponent == 8 else { return nil }
         let w = src.width, h = src.height, rowBytes = src.bytesPerRow
         let alphaInfo = src.alphaInfo
         let premultiplied = alphaInfo == .premultipliedLast || alphaInfo == .premultipliedFirst
         let alphaFirst = alphaInfo == .first || alphaInfo == .premultipliedFirst || alphaInfo == .noneSkipFirst
         let littleEndian = src.bitmapInfo.contains(.byteOrder32Little)
-        guard let base = CFDataGetBytePtr(raw) else { return png }
+        guard let base = CFDataGetBytePtr(raw) else { return nil }
+        // Memory order for the common PNG cases.
+        let order: (r: Int, g: Int, b: Int, a: Int) = littleEndian
+            ? (alphaFirst ? (2, 1, 0, 3) : (3, 2, 1, 0))
+            : (alphaFirst ? (1, 2, 3, 0) : (0, 1, 2, 3))
         var out = [UInt8](repeating: 0, count: w * h * 4)
         out.withUnsafeMutableBufferPointer { dst in
             for y in 0..<h {
                 let row = base + y * rowBytes
                 for x in 0..<w {
-                    let p = row + x * 4
-                    var r: UInt8, g: UInt8, b: UInt8, a: UInt8
-                    // Memory order for the common PNG cases.
-                    if littleEndian {
-                        if alphaFirst { b = p[0]; g = p[1]; r = p[2]; a = p[3] } else { a = p[0]; b = p[1]; g = p[2]; r = p[3] }
-                    } else {
-                        if alphaFirst { a = p[0]; r = p[1]; g = p[2]; b = p[3] } else { r = p[0]; g = p[1]; b = p[2]; a = p[3] }
-                    }
-                    let o = (y * w + x) * 4
+                    let p = row + x * 4, o = (y * w + x) * 4
+                    dst[o] = p[order.r]; dst[o + 1] = p[order.g]; dst[o + 2] = p[order.b]; dst[o + 3] = p[order.a]
+                }
+            }
+        }
+        return (w, h, premultiplied, out)
+    }
+
+    /// A tile read back to one byte a pixel: dBZ plus 32 (1 to 127) where
+    /// there is rain, zero where there is none or the colour is not in the
+    /// table. What the GPU draws the gliding loop from (RadarGlideView).
+    /// Nil when the image cannot be read or is not square.
+    static func codes(_ png: Data) -> RadarGlide.TileCodes? {
+        guard let img = unpack(png), img.w == img.h else { return nil }
+        var out = [UInt8](repeating: 0, count: img.w * img.h)
+        img.rgba.withUnsafeBufferPointer { px in
+            for i in 0..<(img.w * img.h) {
+                let o = i * 4
+                if let d = dBZ(r: px[o], g: px[o + 1], b: px[o + 2], a: px[o + 3], premultiplied: img.premultiplied) {
+                    out[i] = UInt8(max(1, min(127, d + 32)))
+                }
+            }
+        }
+        return RadarGlide.TileCodes(side: img.w, bytes: Data(out))
+    }
+
+    /// Repaint a RainViewer tile. Returns the original data when the image
+    /// cannot be read, so the map never goes blank.
+    static func recolor(_ png: Data) -> Data {
+        guard let img = unpack(png) else { return png }
+        let w = img.w, h = img.h, premultiplied = img.premultiplied
+        var out = [UInt8](repeating: 0, count: w * h * 4)
+        img.rgba.withUnsafeBufferPointer { px in
+            out.withUnsafeMutableBufferPointer { dst in
+                for i in 0..<(w * h) {
+                    let o = i * 4
+                    let r = px[o], g = px[o + 1], b = px[o + 2], a = px[o + 3]
                     if let d = dBZ(r: r, g: g, b: b, a: a, premultiplied: premultiplied) {
                         let v = lut[max(0, min(127, d + 32))]
                         dst[o] = UInt8(v >> 24); dst[o + 1] = UInt8((v >> 16) & 0xFF); dst[o + 2] = UInt8((v >> 8) & 0xFF); dst[o + 3] = UInt8(v & 0xFF)

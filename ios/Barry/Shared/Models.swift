@@ -713,6 +713,30 @@ struct PressureSeriesResponse: Codable, Hashable {
     let cachedAt: Date
 }
 
+/// How the rain moved between two frames of the loop: east and north
+/// speeds in degrees per hour, one per block of the lattice, row-major
+/// from the north-west corner. Zero where nothing was tracked.
+struct RadarMotionPair: Codable, Hashable {
+    let start: Int
+    let end: Int
+    let u: [Double]
+    let v: [Double]
+}
+
+/// The rain's motion over a map region between each pair of frames the
+/// loop plays, on a lattice of blocks about fifty kilometres across
+/// (`lat0`, `lon0` is the centre of the north-west block; rows go south).
+struct RadarMotionResponse: Codable, Hashable {
+    let lat0: Double
+    let lon0: Double
+    let dlat: Double
+    let dlon: Double
+    let ny: Int
+    let nx: Int
+    var pairs: [RadarMotionPair] = []
+    let cachedAt: Date
+}
+
 struct RadarFramesResponse: Codable, Hashable {
     let host: String
     let frames: [RadarFrameOut]

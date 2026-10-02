@@ -45,6 +45,7 @@
 		2FC7F63C72023A1812F99D63 /* RangeAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EBD287C6CB46A536198173F /* RangeAnalysis.swift */; };
 		2FF2F39288A0E15C1D7C4E43 /* BarryComplication.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5B1CE5EDD6706AFE35F1B6D9 /* BarryComplication.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		30107468C2B3DA9A60DEE0D1 /* TafStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D63A9351C0871620CA4A195 /* TafStrip.swift */; };
+		30205F4C6873E293309C3D7F /* RadarGlide.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2E7EAF53F0D3AC435A79014 /* RadarGlide.swift */; };
 		311D6022468091383C78CE7C /* TafStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D63A9351C0871620CA4A195 /* TafStrip.swift */; };
 		31549614253BF1B636E51ED3 /* BarryComplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 726AB15B448612548C2CCCCD /* BarryComplication.swift */; };
 		316A4B6AE3D7881F77DC672C /* RunwayWindDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD313083D4B2A9BAD12BAB92 /* RunwayWindDial.swift */; };
@@ -114,6 +115,7 @@
 		7D0122F48329169FE2A913E7 /* RangeAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EBD287C6CB46A536198173F /* RangeAnalysis.swift */; };
 		7D4E858B190A8B961B283BE6 /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E7AD448DB8DDD1CE1C73553 /* LiveActivityManager.swift */; };
 		7DDE0AE0EEA91898EC721A08 /* HomeLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14751C812932452AF8884F79 /* HomeLayout.swift */; };
+		7EF2032092EABA2EA3C3A79A /* RadarGlideTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEABDCDDA9FC50C41292ED22 /* RadarGlideTests.swift */; };
 		803013AB14E6B43C770397EE /* TemperatureUnitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ED4E8ACC4DA64C6E1076B59 /* TemperatureUnitTests.swift */; };
 		811727C7296B6B80F9E3F81C /* BarryPhoneWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 830E6CE85533F8C3169A8E97 /* BarryPhoneWidget.swift */; };
 		81C789D5AD14654F306BDA4C /* SharedSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B1FFE586194CC516A637A6 /* SharedSnapshot.swift */; };
@@ -168,6 +170,7 @@
 		D25C2FA5C3B9D0F9937DCC60 /* FlightCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB485493ACD08C4C6CD5804F /* FlightCategory.swift */; };
 		D3C402CAC4DD221E088344E1 /* TafTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72EC9A1E421849C76710D333 /* TafTimeline.swift */; };
 		D3CCE6CB0DB066A238922179 /* BarryAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77F57F70EF9FB821F18B91C0 /* BarryAPI.swift */; };
+		D46D413A4CA3DF4CA05D0192 /* RadarGlideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A70EDA6CFAA2A375E3626554 /* RadarGlideView.swift */; };
 		D6D685CBFD1BD430889413FC /* RunwayWindDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD313083D4B2A9BAD12BAB92 /* RunwayWindDial.swift */; };
 		D6FF8AA397153E989437EDAB /* UITestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B661E997E72021B37CCFFD4 /* UITestSupport.swift */; };
 		DACD1A75954EE1A27EDEC976 /* BarryApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B8FF4A39677C2C8F46B98F7 /* BarryApp.swift */; };
@@ -363,7 +366,9 @@
 		A376D4EE445D8849427A861E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A59F4AD2D2CF0AC8FB31B534 /* ConfirmationOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmationOverlayView.swift; sourceTree = "<group>"; };
 		A66F315CBE5FF869D4A502BD /* aloft_hrrr.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = aloft_hrrr.json; sourceTree = "<group>"; };
+		A70EDA6CFAA2A375E3626554 /* RadarGlideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarGlideView.swift; sourceTree = "<group>"; };
 		AD313083D4B2A9BAD12BAB92 /* RunwayWindDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayWindDial.swift; sourceTree = "<group>"; };
+		AEABDCDDA9FC50C41292ED22 /* RadarGlideTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarGlideTests.swift; sourceTree = "<group>"; };
 		B6858331167EFEA8CE241D78 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		B6D7E548BFF9B58876E626A9 /* PressureHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureHistory.swift; sourceTree = "<group>"; };
 		B98E77604746429DE78EF9C4 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
@@ -380,6 +385,7 @@
 		CFA4A69E8BBEEF268407FC68 /* WatchSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSync.swift; sourceTree = "<group>"; };
 		DA12AC45B8A41856114FD9A7 /* SensorComparisonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorComparisonView.swift; sourceTree = "<group>"; };
 		DEDAB3CFD369F1E384B6983A /* ClockText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClockText.swift; sourceTree = "<group>"; };
+		E2E7EAF53F0D3AC435A79014 /* RadarGlide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarGlide.swift; sourceTree = "<group>"; };
 		E569F3B3B9FAB65C07970B1A /* StormAlerter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StormAlerter.swift; sourceTree = "<group>"; };
 		E5A4A8464736F548F6F72A42 /* WatchContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchContentView.swift; sourceTree = "<group>"; };
 		EB906A0DF0FCEFBE609EBF06 /* HorizontalDragGesture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorizontalDragGesture.swift; sourceTree = "<group>"; };
@@ -433,6 +439,7 @@
 				75CA082BD890DE5E1469223E /* CardRenderTests.swift */,
 				024F41291A68B29C57129A86 /* Fixtures.swift */,
 				99B142B11B0066C052A704B8 /* OverlayStateTests.swift */,
+				AEABDCDDA9FC50C41292ED22 /* RadarGlideTests.swift */,
 				C4258044D160E9F49F088BAF /* RadarPaletteTests.swift */,
 				3D282C03A772B222AD65EB77 /* RadarTimelineTests.swift */,
 				28FD6CF786038D6B942CA43E /* RainLineTests.swift */,
@@ -616,6 +623,8 @@
 				6978CE026B8EEE1A560877C0 /* PressureGuideView.swift */,
 				9ACEEEDBA1016668540F610C /* PressureTimeline.swift */,
 				F07D88A5BEA3FC7C9BD42D68 /* PrivacyInfo.xcprivacy */,
+				E2E7EAF53F0D3AC435A79014 /* RadarGlide.swift */,
+				A70EDA6CFAA2A375E3626554 /* RadarGlideView.swift */,
 				6662DFD4A743261C8134B535 /* RadarMapView.swift */,
 				8C448DCCFE61D866C777918A /* RadarModel.swift */,
 				C6BB37965D5198DB8A9DCE65 /* RadarPalette.swift */,
@@ -888,6 +897,7 @@
 				5B4110D0966F6475A5E665D5 /* CardRenderTests.swift in Sources */,
 				9A3EF5B92F7E694E33F31FFC /* Fixtures.swift in Sources */,
 				6063D8840765B09C88E284DC /* OverlayStateTests.swift in Sources */,
+				7EF2032092EABA2EA3C3A79A /* RadarGlideTests.swift in Sources */,
 				DE9BEC621A1206759924685E /* RadarPaletteTests.swift in Sources */,
 				52FA8AAA2D8E9F088CE7C12B /* RadarTimelineTests.swift in Sources */,
 				2AD8EC369D496BFBE30DFC88 /* RainLineTests.swift in Sources */,
@@ -1023,6 +1033,8 @@
 				094EEF5E8D649C8E37BEB643 /* PressureStore.swift in Sources */,
 				24639CCA46A741907995AEE2 /* PressureTimeline.swift in Sources */,
 				0F22D62C5D40785243A56CD0 /* PressureUnit.swift in Sources */,
+				30205F4C6873E293309C3D7F /* RadarGlide.swift in Sources */,
+				D46D413A4CA3DF4CA05D0192 /* RadarGlideView.swift in Sources */,
 				1440BAB18BF4B5F3EE776457 /* RadarMapView.swift in Sources */,
 				5204621388C2B94B99BE1CCF /* RadarModel.swift in Sources */,
 				54FC2F6A3476132FE681E5E6 /* RadarPalette.swift in Sources */,

@@ -286,6 +286,21 @@ struct BarryAPI {
         return try await get(comps?.url)
     }
 
+    /// How the rain moved between the frames a span's loop plays, over a
+    /// region (`/radar/motion`).
+    func radarMotion(span: String, lat: Double, lon: Double, latSpan: Double, lonSpan: Double) async throws -> RadarMotionResponse {
+        var comps = URLComponents(url: baseURL.appendingPathComponent("radar/motion"),
+                                  resolvingAgainstBaseURL: false)
+        comps?.queryItems = [
+            URLQueryItem(name: "span", value: span),
+            URLQueryItem(name: "lat", value: String(lat)),
+            URLQueryItem(name: "lon", value: String(lon)),
+            URLQueryItem(name: "latSpan", value: String(latSpan)),
+            URLQueryItem(name: "lonSpan", value: String(lonSpan)),
+        ]
+        return try await get(comps?.url)
+    }
+
     /// Station search by ICAO prefix or name (METAR-issuing sites only).
     func searchStations(_ q: String) async throws -> [StationSearchResult] {
         var comps = URLComponents(url: baseURL.appendingPathComponent("stations/search"),

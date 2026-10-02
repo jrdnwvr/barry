@@ -138,8 +138,17 @@ final class RadarUITests: XCTestCase {
         expectation(for: playing, evaluatedWith: loop6)
         waitForExpectations(timeout: 15)
         XCTAssertFalse(loop.isSelected, "both replay chips read as playing")
+        // While a loop plays the radar is the GPU's picture; a scrub hands
+        // it back to the tile layers.
+        // The chip reads as on while the loop buffers, which can take a
+        // while on cold caches; the picture comes once it plays.
+        let glide = app.descendants(matching: .any)["radar.glide"].firstMatch
+        XCTAssertTrue(glide.waitForExistence(timeout: 25), "the loop should be drawn by the GPU")
         let slider = app.sliders.allElementsBoundByIndex.first(where: { $0.isHittable }) ?? app.sliders.firstMatch
         slider.adjust(toNormalizedSliderPosition: 0.0)
+        let gone = NSPredicate(format: "exists == false")
+        expectation(for: gone, evaluatedWith: glide)
+        waitForExpectations(timeout: 5)
         XCTAssertTrue(frameTime.label.contains("h ago"), "the day span should reach back hours: \(frameTime.label)")
         slider.adjust(toNormalizedSliderPosition: 1.0)
         XCTAssertTrue(frameTime.label.contains("model") || frameTime.label.contains("nowcast"),

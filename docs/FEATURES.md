@@ -714,16 +714,25 @@ stored keys, but each has its own model, so they fetch separately.
 - Settings: `radarShowRadar` true.
 - Rules: alpha 0.75 full, 0.55 dimmed under Lightning, 0.02 for the
   frames about to be shown (the next two of the loop, going round, and
-  the one either side on the slider; `Coordinator.framesNear`), 0 for
-  every other frame and for all of them while the map moves (MapKit
-  neither fetches nor draws at zero). Until 2026-10-02 every frame of the
-  span sat at 0.02 to keep its tiles loaded: ten layers on the old
-  one-hour timeline, thirty on the six-hour span, each blended over the
-  whole screen on every refresh, and Xcode showed 14 fps on the phone.
-  The tiles are kept in the app's own caches instead: fetched and
-  repainted for the view on screen when a loop buffers, when the map
-  settles after a move, and for the rest of the span once the loop is
-  under way (`prefetchFrames`), so a frame coming up is a cache read.
+  the one either side on the slider; `Coordinator.framesNear`), 0 while
+  the map moves. Only those frames' overlays are on the map at all
+  (`Coordinator.syncAttached`): the one on screen, the near ones, and
+  whichever is fading out; none while the GPU draws the loop. An overlay
+  goes on when its frame is wanted and comes off when it is not. Until
+  2026-10-02 every frame of the span sat on the map at 0.02 to keep its
+  tiles loaded: ten layers on the old one-hour timeline, thirty on the
+  six-hour span, each blended over the whole screen on every refresh, and
+  Xcode showed 14 fps on the phone; and with the rest then parked at
+  true zero, seventeen layers all loading at once, MapKit drew the first
+  tile it handed the frame on screen and none of the rest on about one
+  cold open in ten (found 2026-10-02; 36 clean opens after the change).
+  The near frames go on 0.8 s after the one on screen has its tiles, so
+  it loads alone, and a frame with nothing to fade from (a cold open,
+  the radar coming back) is shown outright rather than faded in. The
+  tiles are kept in the app's own caches: fetched and repainted for the
+  view on screen when a loop buffers, when the map settles after a move,
+  and for the rest of the span once the loop is under way
+  (`prefetchFrames`), so a frame going on the map is a cache read.
   Zoomed out past the source's native zoom (tile z under 7) a tile is
   asked for at 256 px and drawn over the same ground: a quarter of the
   pixels to download (a 62 KB tile is 19), repaint (5.9 ms a tile down to
@@ -914,7 +923,10 @@ stored keys, but each has its own model, so they fetch separately.
   `Coordinator.stepLines`), outside SwiftUI; the fronts only when the
   chart changes.
 - Settings: `radarIsobars` false; `radarIsobarsSplit` migration gives
-  isobars to anyone who had Pressure on.
+  isobars to anyone who had Pressure on. `radarIsobarLabels` true: the
+  pressure written on each line; off (More sheet, "Pressure on each
+  line", asked for by Jordan 2026-10-02) the lines alone, in the unit
+  the key still names. The six-hour loop never labels.
 - Tests: `PressureLabelTests`.
 
 ### radar.layer.wind
@@ -1555,6 +1567,7 @@ each device (the watch keeps its own copies).
 | `radarWindStyle` | flow | flow, arrows | radar More sheet |
 | `radarFronts` | true | | radar |
 | `radarFrontLines`, `radarFrontPips`, `radarFrontWeak`, `radarFrontCenters` | true | | radar More sheet |
+| `radarIsobarLabels` | true | | radar More sheet |
 | `radarStations` | off | off, barbs, speeds | radar |
 | `radarStationStyleLast` | barbs | style restored when the chip turns on | radar More sheet |
 | `radarAdvisories` | false | SIGMETs, G-AIRMETs and PIREPs on the radar | radar chip |

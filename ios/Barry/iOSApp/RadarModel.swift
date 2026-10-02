@@ -106,6 +106,7 @@ final class RadarModel: ObservableObject {
         index = nowIndex
         bufferID += 1
         buffering = true
+        ensureMotion()
     }
 
     /// The map's word that the frames are loaded (or the wait ran out).
@@ -467,6 +468,41 @@ final class RadarModel: ObservableObject {
     /// the slider's frame otherwise.
     var lineTime: Double { playing ? playClock : Double(playheadTime) }
 
+    /// The frames the loop plays.
+    var loopFrames: [RadarFrame] {
+        guard !frames.isEmpty else { return [] }
+        return Array(frames[loopStart...max(loopStart, nowIndex)])
+    }
+
+    // MARK: The rain's motion
+
+    /// How the rain moved between the loop's frames over the region on
+    /// screen (`/radar/motion`), for the GPU to slide the frames along
+    /// (RadarGlideView). Asked for when a loop starts and again when the
+    /// newest frame or the region changes; until it arrives, or where it
+    /// is not given, the frames crossfade in place as they always did.
+    @Published private(set) var motionField: RadarMotionField?
+    private var motionFetchedFor: (span: RadarSpan, region: MKCoordinateRegion)?
+    private var motionTask: Task<Void, Never>?
+
+    func ensureMotion() {
+        guard playing || buffering, let region = lastRegion, !frames.isEmpty else { return }
+        let now = nowTime
+        if let held = motionField, held.nowTime == now, let was = motionFetchedFor, was.span == span,
+           Self.nearEnough(region, to: was.region) { return }
+        motionTask?.cancel()
+        let span = span
+        motionTask = Task { [weak self] in
+            guard let resp = try? await BarryAPI().radarMotion(
+                span: span.rawValue, lat: region.center.latitude, lon: region.center.longitude,
+                latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta)
+            else { return }
+            guard let self, !Task.isCancelled else { return }
+            self.motionFetchedFor = (span, region)
+            self.motionField = RadarMotionField(resp, nowTime: now)
+        }
+    }
+
     /// A span's frame list goes stale as fast as the radar does.
     private static let framesFreshFor: TimeInterval = 5 * 60
 
@@ -510,7 +546,10 @@ final class RadarModel: ObservableObject {
         let list = resp.frames.map(RadarFrame.init)
         framesBySpan[target] = list
         framesLoadedAt[target] = Date()
-        if target == span { frames = list }
+        if target == span {
+            frames = list
+            ensureMotion()
+        }
     }
 
     /// Put the timeline on a span, parked on now. The other span's list is
@@ -603,6 +642,7 @@ final class RadarModel: ObservableObject {
                              stations: Bool = false, pressure: Bool = false,
                              storms: Bool = false, advisories: Bool = false) {
         lastRegion = region
+        ensureMotion()
         if advisories {
             advisoriesTask?.cancel()
             advisoriesTask = Task {

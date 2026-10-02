@@ -29,9 +29,11 @@ are the field's shape with the area-wide rise or fall taken out, unlabelled:
 the true lines of a flat field that is rising everywhere march across the
 map and, when the loop goes round, look like a belt. Those lines are drawn
 by the GPU from the pressure grids (`IsolineView`): the tiled renderer broke
-a moving line at its tile edges. What a Metal radar would add
-(rain sliding along its motion instead of crossfading) is not built: it
-has to sit above Apple's labels. To be judged against this.
+a moving line at its tile edges. The radar itself is the GPU's too while a
+loop plays (`RadarGlideView`): the rain slides between frames along the
+motion the server found between them (`/radar/motion`), instead of
+crossfading in place. Both sit above Apple's labels, which Jordan accepted
+(2026-10-02).
 
 ## Where each layer's picture comes from
 

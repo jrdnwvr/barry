@@ -75,6 +75,9 @@ struct RadarPanel: View {
     /// or beside a trough, without a wash of colour under them.
     @AppStorage("radarIsobars", store: AppConfig.sharedDefaults)
     private var showIsobars: Bool = false
+    /// The pressure written on each isobar; off, the lines alone.
+    @AppStorage("radarIsobarLabels", store: AppConfig.sharedDefaults)
+    private var isobarLabels: Bool = true
     /// WPC trough lines on their own chip: a trough is worth seeing on the
     /// plain radar without the rest of the surface chart.
     @AppStorage("radarTroughs", store: AppConfig.sharedDefaults)
@@ -169,14 +172,16 @@ struct RadarPanel: View {
         case .change: shade = .change
         }
         // Isallobars belong to the change field; they mean nothing without it.
-        return PressureFieldState(field: model.shownPressureField,
-                                  showIsobars: showIsobars,
-                                  showIsallobars: field == .change,
-                                  shade: shade, shadeOpacity: opacity,
-                                  unit: PressureUnit(rawValue: pressureUnitRaw) ?? .inHg,
-                                  heights: heights,
-                                  aloft: aloft,
-                                  version: model.shownPressureVersion)
+        var state = PressureFieldState(field: model.shownPressureField,
+                                       showIsobars: showIsobars,
+                                       showIsallobars: field == .change,
+                                       shade: shade, shadeOpacity: opacity,
+                                       unit: PressureUnit(rawValue: pressureUnitRaw) ?? .inHg,
+                                       heights: heights,
+                                       aloft: aloft,
+                                       version: model.shownPressureVersion)
+        state.isobarLabels = isobarLabels
+        return state
     }
 
     private var initialRegion: MKCoordinateRegion {
@@ -293,8 +298,20 @@ struct RadarPanel: View {
             pressure: { [model] t in
                 pressure ? model.pressureField(at: t, pattern: shape, lines: gpuLines == nil) : nil
             },
-            labelIsobars: !shape,
+            labelIsobars: !shape && isobarLabels,
             shape: gpuLines)
+    }
+
+    /// What the GPU draws the radar from while a loop plays: the loop's
+    /// clock, its frames and the rain's motion between them, so the rain
+    /// travels between frames instead of crossfading (RadarGlideView). Nil
+    /// when nothing is playing, or the device cannot.
+    private var glideSource: RadarGlideSource? {
+        guard showRadar, active, model.playing, RadarGlideView.isAvailable else { return nil }
+        return RadarGlideSource(
+            clock: { [model] in model.playing ? model.playClock : nil },
+            frames: model.loopFrames,
+            motion: { [model] in model.motionField })
     }
 
     /// Tap a replay chip: play its span, or pause if it is the one playing.
@@ -358,6 +375,7 @@ struct RadarPanel: View {
                            },
                            frontLines: $frontLines, frontPips: $frontPips,
                            frontWeak: $frontWeak, frontCenters: $frontCenters,
+                           isobarLabels: $isobarLabels,
                            buoys: $showBuoys)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -414,6 +432,7 @@ struct RadarPanel: View {
                      frames: model.frames,
                      loopKeys: model.loopKeys,
                      lines: lineSource,
+                     glide: glideSource,
                      buffer: bufferRequest,
                      index: model.index,
                      radarVisible: showRadar,

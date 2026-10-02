@@ -239,6 +239,7 @@ struct RadarMoreSheet: View {
     @Binding var frontPips: Bool
     @Binding var frontWeak: Bool
     @Binding var frontCenters: Bool
+    @Binding var isobarLabels: Bool
     @Binding var buoys: Bool
     @Environment(\.dismiss) private var dismiss
 
@@ -301,6 +302,13 @@ struct RadarMoreSheet: View {
                 Text("Symbols sit on the side the front is moving toward.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+            .font(.subheadline)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Isobars", systemImage: "circle.dashed")
+                    .font(.subheadline.weight(.semibold))
+                Toggle("Pressure on each line", isOn: $isobarLabels)
             }
             .font(.subheadline)
 

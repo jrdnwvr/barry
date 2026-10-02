@@ -31,6 +31,15 @@ struct RadarLineSource {
 /// A loop waiting to play: the frames it needs and what to call when they
 /// are loaded for the view on screen (or the wait has run out). `id` names
 /// the request; the map acts on each id once.
+/// What the GPU draws the radar loop from while it plays (RadarGlideView):
+/// the loop's clock, its frames, and the rain's motion between them once it
+/// has arrived. Nil when nothing is playing.
+struct RadarGlideSource {
+    let clock: () -> Double?
+    let frames: [RadarFrame]
+    let motion: () -> RadarMotionField?
+}
+
 struct RadarBufferRequest {
     let id: Int
     let keys: Set<Int>
@@ -46,6 +55,8 @@ struct RadarMapView: UIViewRepresentable {
     var loopKeys: [Int] = []
     /// Set while a loop plays and fronts or isobars are showing.
     var lines: RadarLineSource? = nil
+    /// The GPU's radar loop, while one plays (RadarGlideView).
+    var glide: RadarGlideSource? = nil
     /// Set while a loop is waiting for its frames to load.
     var buffer: RadarBufferRequest? = nil
     let index: Int
@@ -267,7 +278,43 @@ struct RadarMapView: UIViewRepresentable {
             }.resume()
         }
 
-        // ---- 4. prefetch ---------------------------------------------------
+        // ---- 4. codes --------------------------------------------------------
+
+        /// A tile read back to dBZ codes (RadarPalette.codes), what the GPU
+        /// draws the gliding loop from, kept by URL so a loop going round
+        /// reads each tile back once.
+        private static let codesCache: NSCache<NSString, NSData> = {
+            let c = NSCache<NSString, NSData>()
+            c.totalCostLimit = 32 << 20
+            return c
+        }()
+
+        /// One tile's codes, from the caches or the network, for the tile
+        /// the source serves at this path (the ancestor past the native
+        /// zoom). `done` is called once, on whatever thread, with nil when
+        /// the tile cannot be had.
+        func codes(for path: MKTileOverlayPath, done: @escaping (RadarGlide.TileCodes?) -> Void) {
+            let z = min(path.z, maxNativeZ)
+            let scale = 1 << max(0, path.z - z)
+            let src = MKTileOverlayPath(x: path.x / scale, y: path.y / scale, z: z,
+                                        contentScaleFactor: path.contentScaleFactor)
+            let key = ("codes:" + url(forTilePath: src).absoluteString) as NSString
+            if let hit = Self.codesCache.object(forKey: key) as Data? {
+                let side = Int(Double(hit.count).squareRoot().rounded())
+                done(RadarGlide.TileCodes(side: side, bytes: hit))
+                return
+            }
+            fetchCached(url(forTilePath: src)) { data in
+                guard let data else { done(nil); return }
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let codes = RadarPalette.codes(data)
+                    if let codes { Self.codesCache.setObject(codes.bytes as NSData, forKey: key, cost: codes.bytes.count) }
+                    done(codes)
+                }
+            }
+        }
+
+        // ---- 5. prefetch ---------------------------------------------------
 
         /// Warm both caches for a tile without handing anything to MapKit, so
         /// the next small pan finds its edge already there. Past the native
@@ -373,6 +420,63 @@ struct RadarMapView: UIViewRepresentable {
         /// Ask MapKit for the tiles again, after a block on fetching them.
         func reloadTiles() {
             for r in renderers.values { r.reloadData() }
+            glideView?.mapDidMove()
+        }
+
+        /// Which frames' overlays are on the map: the one on screen, the
+        /// ones about to be (`near`) and whichever is fading out; none
+        /// while the GPU draws the loop. Until 2026-10-02 every frame's
+        /// overlay was on the map at once, seventeen to thirty tile layers
+        /// each loading and holding the view's tiles, and on about one cold
+        /// open in eight MapKit drew the first tile it handed the frame on
+        /// screen and none of the rest. An overlay goes on the map when its
+        /// frame is wanted and comes off when it is not; its tiles are in
+        /// the app's own caches either way (`prefetchFrames`), so going
+        /// back on is a cache read.
+        private var attached: Set<Int> = []
+        weak var hostMap: MKMapView?
+        private var nearScheduled = false
+
+        private func scheduleNear() {
+            guard !nearScheduled else { return }
+            nearScheduled = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                guard let self else { return }
+                self.nearScheduled = false
+                self.syncAttached()
+                if !self.radarHidden, !self.gliding {
+                    for (t, r) in self.renderers where t != self.currentTime && r !== self.fadeFrom && r !== self.fadeTo {
+                        r.alpha = self.idle(t)
+                    }
+                }
+            }
+        }
+
+        private func syncAttached() {
+            guard let map = hostMap else { return }
+            var wanted: Set<Int> = []
+            if !gliding {
+                if overlays[currentTime] != nil { wanted.insert(currentTime) }
+                // The frames about to show go on a moment after the one on
+                // screen has its tiles, so it loads alone.
+                if attached.contains(currentTime) { wanted.formUnion(near) } else { scheduleNear() }
+                for (t, r) in renderers where r === fadeFrom || r === fadeTo { wanted.insert(t) }
+            } else if !glideShowing, overlays[currentTime] != nil {
+                // Until the GPU's first picture is up, the frame on screen stays.
+                wanted.insert(currentTime)
+            }
+            for key in attached.subtracting(wanted) {
+                if let o = overlays[key] { map.removeOverlay(o) }
+                renderers[key] = nil
+                attached.remove(key)
+            }
+            for key in wanted.subtracting(attached) {
+                guard let o = overlays[key] else { continue }
+                // At the bottom of its level: under the pressure shading
+                // and the lines, as the frames always were.
+                map.insertOverlay(o, at: 0, level: .aboveRoads)
+                attached.insert(key)
+            }
         }
 
         /// Hidden frames sit at a hair above zero instead of zero — MapKit still
@@ -390,7 +494,8 @@ struct RadarMapView: UIViewRepresentable {
             let target = dimmed ? Self.dimmedAlpha : Self.fullAlpha
             guard target != visibleAlpha else { return }
             visibleAlpha = target
-            if !radarHidden, displayLink == nil, let r = renderers[currentTime] { r.alpha = target }
+            glideView?.rainAlpha = Float(target)
+            if !radarHidden, !gliding, displayLink == nil, let r = renderers[currentTime] { r.alpha = target }
         }
 
         /// The span's frames in timeline order, and the loop's. Only the
@@ -410,7 +515,7 @@ struct RadarMapView: UIViewRepresentable {
 
         /// The alpha a frame that is not on screen rests at.
         private func idle(_ key: Int) -> CGFloat {
-            !panning && near.contains(key) ? Self.idleAlpha : 0
+            !panning && !gliding && near.contains(key) ? Self.idleAlpha : 0
         }
 
         /// The next two frames the loop will show after `key` (going round
@@ -440,7 +545,8 @@ struct RadarMapView: UIViewRepresentable {
 
         private func refreshNear() {
             near = Self.framesNear(currentTime, order: order, loop: loopOrder)
-            guard !radarHidden else { return }
+            syncAttached()
+            guard !radarHidden, !gliding else { return }
             for (t, r) in renderers where t != currentTime && r !== fadeFrom && r !== fadeTo {
                 r.alpha = idle(t)
             }
@@ -566,6 +672,91 @@ struct RadarMapView: UIViewRepresentable {
             }
             isolineView?.clock = source.clock
             isolineView?.show(line)
+        }
+
+        // MARK: The radar loop, on the GPU
+
+        private var glideView: RadarGlideView?
+        /// True while the GPU draws the radar: no tile layer is on the map.
+        private var gliding = false
+        /// The GPU's first picture is up.
+        private var glideShowing = false
+        private var glideStopTries = 0
+
+        /// Start or stop the GPU drawing the radar loop. Starting, the tile
+        /// layers go to zero once the first picture is up, so nothing is
+        /// ever blank. Stopping, the tile layer of the frame the loop is on
+        /// comes back first and the GPU's picture, held on that same frame,
+        /// goes once the tiles have been read in.
+        func syncGlide(_ source: RadarGlideSource?, on map: MKMapView) {
+            guard let source else {
+                guard gliding, let view = glideView else { return }
+                gliding = false
+                view.clock = nil
+                view.freeze(at: currentTime)
+                syncAttached()
+                if !radarHidden {
+                    for (t, r) in renderers { r.alpha = t == currentTime ? visibleAlpha : idle(t) }
+                }
+                glideStopTries = 0
+                settleGlideStop(view)
+                return
+            }
+            if glideView == nil {
+                let v = RadarGlideView(frame: map.bounds)
+                v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                v.mapView = map
+                v.tileSet = { [weak self, weak map] in
+                    guard let self, let map, let any = self.overlays.values.first else { return [] }
+                    return self.tiles(on: map, for: any, ring: false)
+                }
+                v.codes = { [weak self] key, path, done in
+                    guard let overlay = self?.overlays[key] else { done(nil); return }
+                    overlay.codes(for: path, done: done)
+                }
+                v.onFirstDraw = { [weak self] in
+                    guard let self, self.gliding else { return }
+                    self.glideShowing = true
+                    self.displayLink?.invalidate()
+                    self.displayLink = nil
+                    self.fadeFrom = nil
+                    self.fadeTo = nil
+                    self.syncAttached()
+                }
+                // Under the lines and the wind, over the map's own tiles.
+                if let line = isolineView { map.insertSubview(v, belowSubview: line) }
+                else if let flow = flowView { map.insertSubview(v, belowSubview: flow) }
+                else { map.addSubview(v) }
+                glideView = v
+            }
+            gliding = true
+            syncAttached()
+            glideView?.rainAlpha = Float(visibleAlpha)
+            glideView?.frames = source.frames
+            glideView?.clock = source.clock
+            glideView?.motion = source.motion
+            glideView?.isHidden = radarHidden
+        }
+
+        /// The tiles are back in the frame's layer (or a second has passed):
+        /// the GPU's picture can go.
+        private func settleGlideStop(_ view: RadarGlideView) {
+            glideStopTries += 1
+            let loaded = overlays[currentTime]?.loadsInFlight == 0
+            if gliding { return }
+            if (glideStopTries > 2 && loaded) || glideStopTries > 12 {
+                view.stop()
+                view.removeFromSuperview()
+                if glideView === view {
+                    glideView = nil
+                    glideShowing = false
+                }
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self, weak view] in
+                guard let self, let view else { return }
+                self.settleGlideStop(view)
+            }
         }
 
         func syncPressure(_ state: PressureFieldState?, on map: MKMapView) {
@@ -747,11 +938,14 @@ struct RadarMapView: UIViewRepresentable {
         func setRadarHidden(_ hidden: Bool) {
             guard hidden != radarHidden else { return }
             radarHidden = hidden
+            glideView?.isHidden = hidden
             if hidden {
                 displayLink?.invalidate()
                 displayLink = nil
                 fadeFrom = nil
                 fadeTo = nil
+                for r in renderers.values { r.alpha = 0 }
+            } else if gliding {
                 for r in renderers.values { r.alpha = 0 }
             } else {
                 let t = currentTime
@@ -857,7 +1051,7 @@ struct RadarMapView: UIViewRepresentable {
         /// nobody is looking at. A frame mid-crossfade is left alone.
         func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
             panning = true
-            guard !radarHidden else { return }
+            guard !radarHidden, !gliding else { return }
             for (t, r) in renderers where t != currentTime && r !== fadeFrom && r !== fadeTo {
                 r.alpha = 0
             }
@@ -865,7 +1059,8 @@ struct RadarMapView: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
             panning = false
-            if !radarHidden {
+            glideView?.mapDidMove()
+            if !radarHidden, !gliding {
                 // Back to a hair above zero, so the span's other frames warm up again.
                 for (t, r) in renderers where t != currentTime && r !== fadeFrom && r !== fadeTo {
                     r.alpha = idle(t)
@@ -1186,6 +1381,7 @@ struct RadarMapView: UIViewRepresentable {
             lineLink = nil
             lineSource = nil
             isolineView?.stop()
+            glideView?.stop()
             bufferID = -1
             pulseLink?.invalidate()
             pulseLink = nil
@@ -1251,7 +1447,8 @@ struct RadarMapView: UIViewRepresentable {
             let oldKey = currentTime
             currentTime = time
             near = Self.framesNear(time, order: order, loop: loopOrder)
-            guard !radarHidden else { return }
+            syncAttached()
+            guard !radarHidden, !gliding else { return }
             displayLink?.invalidate()
             displayLink = nil
             // Park everything that isn't part of this transition.
@@ -1263,6 +1460,12 @@ struct RadarMapView: UIViewRepresentable {
             }
             guard let new = renderers[time] else {
                 old?.alpha = idle(oldKey)
+                return
+            }
+            // Nothing to fade from (a cold open, the radar coming back):
+            // the frame is simply shown.
+            guard old != nil else {
+                new.alpha = visibleAlpha
                 return
             }
             fadeRest = idle(oldKey)
@@ -1284,6 +1487,7 @@ struct RadarMapView: UIViewRepresentable {
                 displayLink = nil
                 fadeFrom = nil
                 fadeTo = nil
+                syncAttached()
             }
         }
     }
@@ -1338,6 +1542,7 @@ struct RadarMapView: UIViewRepresentable {
         // RadarPalette repaints it. Past RainViewer's native z7 the overlay
         // crops + upscales ancestor tiles (see loadTile) — do NOT set maximumZ,
         // which would stop rendering entirely past z7.
+        context.coordinator.hostMap = map
         for f in frames where context.coordinator.overlays[f.key] == nil {
             // Observed, nowcast and model frames all come in the one shape.
             let tile = RadarTileOverlay(urlTemplate: host + f.path + "/512/{z}/{x}/{y}/2/0_1.png")
@@ -1348,7 +1553,6 @@ struct RadarMapView: UIViewRepresentable {
             tile.canReplaceMapContent = false
             tile.minimumZ = 1
             context.coordinator.overlays[f.key] = tile
-            map.addOverlay(tile, level: .aboveRoads)
         }
         context.coordinator.setFrames(frames.map(\.key), loop: loopKeys)
         context.coordinator.syncBuffer(buffer, on: map)
@@ -1365,6 +1569,7 @@ struct RadarMapView: UIViewRepresentable {
         context.coordinator.syncHome(home, center: center, on: map)
         context.coordinator.syncArrows(showWind ? windArrows : [], on: map)
         context.coordinator.syncLines(lines, on: map)
+        context.coordinator.syncGlide(glide, on: map)
         context.coordinator.syncFronts(frontState, on: map)
         context.coordinator.syncPressure(pressureState, on: map)
         context.coordinator.syncFlow(windFlow, on: map, embedded: embedded, animating: animating, ramp: windRampKmh)

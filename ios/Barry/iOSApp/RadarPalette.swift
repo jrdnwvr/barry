@@ -117,6 +117,24 @@ enum RadarPalette {
         return RadarGlide.TileCodes(side: img.w, bytes: Data(out))
     }
 
+    /// A greyscale picture's bytes, a byte a pixel, row-major: how the
+    /// server's stacked codes come (RadarGlide.slices). Nil when the image
+    /// cannot be read.
+    static func gray(_ png: Data) -> (w: Int, h: Int, bytes: [UInt8])? {
+        guard let src = UIImage(data: png)?.cgImage else { return nil }
+        let w = src.width, h = src.height
+        guard w > 0, h > 0, w * h <= 64 << 20 else { return nil }
+        var out = [UInt8](repeating: 0, count: w * h)
+        let ok = out.withUnsafeMutableBytes { raw -> Bool in
+            guard let ctx = CGContext(data: raw.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w,
+                                      space: CGColorSpaceCreateDeviceGray(),
+                                      bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return false }
+            ctx.draw(src, in: CGRect(x: 0, y: 0, width: w, height: h))
+            return true
+        }
+        return ok ? (w, h, out) : nil
+    }
+
     /// Repaint a RainViewer tile. Returns the original data when the image
     /// cannot be read, so the map never goes blank.
     static func recolor(_ png: Data) -> Data {

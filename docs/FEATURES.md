@@ -914,8 +914,12 @@ stored keys, but each has its own model, so they fetch separately.
   so a moving line was at two moments either side of a tile's edge and
   broke there; and its contours were straight between grid squares. The
   hour loop and a paused slider keep the renderer, where the lines are
-  still or nearly, and labelled. Falls back to the renderer if the
-  shaders do not compile (`OverlayStateTests` checks that they do).
+  still or nearly, and labelled. While the GPU draws, whatever field
+  SwiftUI hands the renderer is stripped of its lines first
+  (`Coordinator.syncPressure`): a pan mid-loop brings a fresh field for
+  the new area with its lines on, and until 2026-10-02 those were drawn
+  under the GPU's (Jordan saw both sets). Falls back to the renderer if
+  the shaders do not compile (`OverlayStateTests` checks that they do).
 - The six-hour loop draws the field's shape, not its values
   (`PressureTimeline.pattern`): each moment's field with the area's own
   rise or fall between then and now taken out, and no labels on the

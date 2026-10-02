@@ -224,18 +224,18 @@ struct RadarMapView: UIViewRepresentable {
         /// is a miss and is never cached; a 429 or 503 pauses every fetch
         /// for the Retry-After (ten seconds at Cloudflare) so the burst does
         /// not extend the block, and the map reloads its tiles once it lifts.
-        private static let pngSignature = Data([0x89, 0x50, 0x4E, 0x47])
+        fileprivate static let pngSignature = Data([0x89, 0x50, 0x4E, 0x47])
         private static var blockedUntil = Date.distantPast
         private static let blockLock = NSLock()
         /// Told the wait, once per block, so the renderers can reload after it.
         static var onBlocked: ((TimeInterval) -> Void)?
 
-        private static func isBlocked() -> Bool {
+        fileprivate static func isBlocked() -> Bool {
             blockLock.lock(); defer { blockLock.unlock() }
             return blockedUntil > Date()
         }
 
-        private static func block(for seconds: TimeInterval) {
+        fileprivate static func block(for seconds: TimeInterval) {
             blockLock.lock()
             let fresh = blockedUntil <= Date()
             blockedUntil = max(blockedUntil, Date().addingTimeInterval(seconds))
@@ -289,21 +289,36 @@ struct RadarMapView: UIViewRepresentable {
             return c
         }()
 
-        /// One tile's codes, from the caches or the network, for the tile
-        /// the source serves at this path (the ancestor past the native
-        /// zoom). `done` is called once, on whatever thread, with nil when
-        /// the tile cannot be had.
-        func codes(for path: MKTileOverlayPath, done: @escaping (RadarGlide.TileCodes?) -> Void) {
+        /// The tile the source serves for a path: itself up to the native
+        /// zoom, the ancestor past it.
+        func sourcePath(for path: MKTileOverlayPath) -> MKTileOverlayPath {
             let z = min(path.z, maxNativeZ)
             let scale = 1 << max(0, path.z - z)
-            let src = MKTileOverlayPath(x: path.x / scale, y: path.y / scale, z: z,
-                                        contentScaleFactor: path.contentScaleFactor)
-            let key = ("codes:" + url(forTilePath: src).absoluteString) as NSString
-            if let hit = Self.codesCache.object(forKey: key) as Data? {
-                let side = Int(Double(hit.count).squareRoot().rounded())
-                done(RadarGlide.TileCodes(side: side, bytes: hit))
-                return
-            }
+            return MKTileOverlayPath(x: path.x / scale, y: path.y / scale, z: z,
+                                     contentScaleFactor: path.contentScaleFactor)
+        }
+
+        /// What a tile's codes are kept under.
+        func codesKey(for path: MKTileOverlayPath) -> NSString {
+            ("codes:" + url(forTilePath: sourcePath(for: path)).absoluteString) as NSString
+        }
+
+        func cachedCodes(for path: MKTileOverlayPath) -> RadarGlide.TileCodes? {
+            guard let hit = Self.codesCache.object(forKey: codesKey(for: path)) as Data? else { return nil }
+            return RadarGlide.TileCodes(side: Int(Double(hit.count).squareRoot().rounded()), bytes: hit)
+        }
+
+        static func putCodes(_ codes: RadarGlide.TileCodes, key: NSString) {
+            codesCache.setObject(codes.bytes as NSData, forKey: key, cost: codes.bytes.count)
+        }
+
+        /// One tile's codes, from the caches or the frame's own tile, for
+        /// the tile the source serves at this path. `done` is called once,
+        /// on whatever thread, with nil when the tile cannot be had.
+        func codes(for path: MKTileOverlayPath, done: @escaping (RadarGlide.TileCodes?) -> Void) {
+            if let hit = cachedCodes(for: path) { done(hit); return }
+            let src = sourcePath(for: path)
+            let key = codesKey(for: path)
             fetchCached(url(forTilePath: src)) { data in
                 guard let data else { done(nil); return }
                 DispatchQueue.global(qos: .userInitiated).async {
@@ -345,6 +360,57 @@ struct RadarMapView: UIViewRepresentable {
                     done?()
                 }
             }
+        }
+    }
+
+    /// Fetches a run of a loop's frames as one picture a tile
+    /// (`/radar/stack`, RadarGlide.StackPart) and puts each frame's tile
+    /// into the codes cache the GPU loop reads from: one request a tile
+    /// for four frames, where the frames' own tiles were one each. The
+    /// same picture asked for twice at once is fetched once.
+    final class RadarStackLoader {
+        static let shared = RadarStackLoader()
+        private let lock = NSLock()
+        private var inflight: [String: [(Bool) -> Void]] = [:]
+
+        /// `keys` says what each frame's tile is kept under. `done` is
+        /// called once, on whatever thread, true when every frame's tile is
+        /// in the cache.
+        func load(_ part: RadarGlide.StackPart, host: String, px: Int, path: MKTileOverlayPath,
+                  keys: [Int: NSString], done: @escaping (Bool) -> Void) {
+            guard let url = part.url(host: host, px: px, path: path), !RadarTileOverlay.isBlocked() else {
+                done(false)
+                return
+            }
+            let id = url.absoluteString
+            lock.lock()
+            if inflight[id] != nil {
+                inflight[id]!.append(done)
+                lock.unlock()
+                return
+            }
+            inflight[id] = [done]
+            lock.unlock()
+            URLSession.shared.dataTask(with: url) { [weak self] data, response, _ in
+                let http = response as? HTTPURLResponse
+                var ok = false
+                if http?.statusCode == 200, let data, data.starts(with: RadarTileOverlay.pngSignature),
+                   let img = RadarPalette.gray(data),
+                   let tiles = RadarGlide.slices(img.bytes, width: img.w, height: img.h, count: part.count) {
+                    for (k, codes) in zip(part.keys, tiles) {
+                        if let key = keys[k] { RadarTileOverlay.putCodes(codes, key: key) }
+                    }
+                    ok = true
+                } else if let status = http?.statusCode, status == 429 || status == 503 {
+                    let retry = http?.value(forHTTPHeaderField: "Retry-After").flatMap(Double.init) ?? 10
+                    RadarTileOverlay.block(for: min(max(retry, 2), 60))
+                }
+                guard let self else { return }
+                self.lock.lock()
+                let waiters = self.inflight.removeValue(forKey: id) ?? []
+                self.lock.unlock()
+                for w in waiters { w(ok) }
+            }.resume()
         }
     }
 
@@ -458,12 +524,18 @@ struct RadarMapView: UIViewRepresentable {
             if !gliding {
                 if overlays[currentTime] != nil { wanted.insert(currentTime) }
                 // The frames about to show go on a moment after the one on
-                // screen has its tiles, so it loads alone.
-                if attached.contains(currentTime) { wanted.formUnion(near) } else { scheduleNear() }
+                // screen has its tiles, so it loads alone; not while a loop
+                // buffers for the GPU, which takes over from the frame on
+                // screen and needs none of them.
+                if bufferID >= 0, !stackParts.isEmpty {
+                } else if attached.contains(currentTime) { wanted.formUnion(near) } else { scheduleNear() }
                 for (t, r) in renderers where r === fadeFrom || r === fadeTo { wanted.insert(t) }
-            } else if !glideShowing, overlays[currentTime] != nil {
-                // Until the GPU's first picture is up, the frame on screen stays.
-                wanted.insert(currentTime)
+            } else if !glideShowing {
+                // Until the GPU's first picture is up, whatever is on the
+                // map stays as it is: the loop's clock has already moved
+                // the frame on screen to the loop's start, which is not
+                // loaded and is the GPU's to draw.
+                wanted = attached
             }
             for key in attached.subtracting(wanted) {
                 if let o = overlays[key] { map.removeOverlay(o) }
@@ -541,6 +613,55 @@ struct RadarMapView: UIViewRepresentable {
             order = keys
             loopOrder = loop
             refreshNear()
+        }
+
+        /// The tile host, for the stacks.
+        var host = ""
+        /// The loop's frames in runs the GPU fetches as one picture a tile
+        /// (RadarGlide.stackParts); empty when the loop has to be fetched
+        /// a tile a frame.
+        private var stackParts: [RadarGlide.StackPart] = []
+
+        func setLoop(_ frames: [RadarFrame]) {
+            let parts = RadarGlideView.isAvailable ? (RadarGlide.stackParts(frames) ?? []) : []
+            if parts != stackParts { stackParts = parts }
+        }
+
+        /// One frame's codes for a tile, for the GPU: from the cache, else
+        /// from the stack its frame is part of (which fills the cache for
+        /// the frames around it too), else from the frame's own tile.
+        func codes(frame key: Int, path: MKTileOverlayPath, done: @escaping (RadarGlide.TileCodes?) -> Void) {
+            guard let overlay = overlays[key] else { done(nil); return }
+            if let hit = overlay.cachedCodes(for: path) { done(hit); return }
+            guard let part = stackParts.first(where: { $0.keys.contains(key) }) else {
+                overlay.codes(for: path, done: done)
+                return
+            }
+            loadStack(part, path: path) { ok in
+                if ok, let hit = overlay.cachedCodes(for: path) { done(hit) } else {
+                    overlay.codes(for: path, done: done)
+                }
+            }
+        }
+
+        private func loadStack(_ part: RadarGlide.StackPart, path: MKTileOverlayPath, done: @escaping (Bool) -> Void) {
+            guard let any = overlays[part.keys[0]] else { done(false); return }
+            // Every frame of it already read: nothing to ask for.
+            if part.keys.allSatisfy({ overlays[$0]?.cachedCodes(for: path) != nil }) { done(true); return }
+            let src = any.sourcePath(for: path)
+            let px = src.z < any.maxNativeZ ? RadarTileOverlay.wideTilePx : 512
+            var keys: [Int: NSString] = [:]
+            for k in part.keys { keys[k] = overlays[k]?.codesKey(for: path) }
+            RadarStackLoader.shared.load(part, host: host, px: px, path: src, keys: keys, done: done)
+        }
+
+        /// Fetch a loop's remaining parts for the tiles on screen, behind
+        /// the one it started on.
+        private func prefetchStacks(_ parts: ArraySlice<RadarGlide.StackPart>, on map: MKMapView) {
+            guard let any = overlays.values.first else { return }
+            for path in tiles(on: map, for: any, ring: false) {
+                for part in parts { loadStack(part, path: path) { _ in } }
+            }
         }
 
         private func refreshNear() {
@@ -711,8 +832,8 @@ struct RadarMapView: UIViewRepresentable {
                     return self.tiles(on: map, for: any, ring: false)
                 }
                 v.codes = { [weak self] key, path, done in
-                    guard let overlay = self?.overlays[key] else { done(nil); return }
-                    overlay.codes(for: path, done: done)
+                    guard let self else { done(nil); return }
+                    self.codes(frame: key, path: path, done: done)
                 }
                 v.onFirstDraw = { [weak self] in
                     guard let self, self.gliding else { return }
@@ -760,6 +881,12 @@ struct RadarMapView: UIViewRepresentable {
         }
 
         func syncPressure(_ state: PressureFieldState?, on map: MKMapView) {
+            var state = state
+            // While the GPU draws the lines (IsolineView) this overlay keeps
+            // only its shading, whatever SwiftUI hands it: a pan brings a
+            // fresh field for the new area with its lines switched on, and
+            // until 2026-10-02 those were drawn under the GPU's.
+            if isolineView != nil { state?.showIsobars = false }
             guard state != shownPressure else { return }
             shownPressure = state
             guard let state, state.drawsAnything else {
@@ -1070,7 +1197,11 @@ struct RadarMapView: UIViewRepresentable {
             applyDeclutter(on: mapView)
             flowView?.mapDidMove()
             prefetchRing(on: mapView)
-            prefetchFrames(loopOrder, on: mapView)
+            // The loop's frames for the new view, while one is up: as
+            // stacks when the GPU is drawing it, a tile a frame otherwise.
+            if gliding || bufferID >= 0 {
+                if stackParts.isEmpty { prefetchFrames(loopOrder, on: mapView) } else { prefetchStacks(stackParts[...], on: mapView) }
+            }
             // A zoom changes how many of the grid's arrows fit.
             syncArrows(allArrows, on: mapView)
         }
@@ -1150,8 +1281,11 @@ struct RadarMapView: UIViewRepresentable {
                 guard let self, !finished, self.bufferID == id else { return }
                 finished = true
                 request.ready(id)
-                // The loop is on its way; now the frames a scrub could reach.
-                if let map { self.prefetchFrames(self.order.filter { !request.keys.contains($0) }, on: map) }
+                // The loop is on its way on its first frames; the rest
+                // follow behind the clock. (The frames a scrub could reach
+                // used to be fetched here too, a tile each: dropped
+                // 2026-10-02 to cut the burst; a scrub fetches as it goes.)
+                if let map, self.stackParts.count > 1 { self.prefetchStacks(self.stackParts[1...], on: map) }
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.bufferTimeout, execute: finish)
             startBuffer(request, on: map, attempt: 0, finish: finish)
@@ -1173,6 +1307,20 @@ struct RadarMapView: UIViewRepresentable {
             let left = Locked(0)
             let settle = { [weak self] in
                 DispatchQueue.main.async { self?.settleBuffer(frames, tries: 0, finish: finish) }
+            }
+            // With the GPU drawing the loop, the buffer is its first part
+            // for each tile on screen (one request a tile, four frames),
+            // and the loop starts on those; the frame on screen is up
+            // already. Otherwise every frame's tiles, as before.
+            if let part = stackParts.first {
+                let paths = tiles(on: map, for: first, ring: false)
+                left.value = paths.count
+                for path in paths {
+                    loadStack(part, path: path) { _ in
+                        if left.withLock({ $0 -= 1; return $0 }) == 0 { settle() }
+                    }
+                }
+                return
             }
             var wanted: [(RadarTileOverlay, MKTileOverlayPath)] = []
             for frame in frames {
@@ -1554,8 +1702,10 @@ struct RadarMapView: UIViewRepresentable {
             tile.minimumZ = 1
             context.coordinator.overlays[f.key] = tile
         }
-        context.coordinator.setFrames(frames.map(\.key), loop: loopKeys)
+        context.coordinator.host = host
+        context.coordinator.setLoop(frames.filter { loopKeys.contains($0.key) })
         context.coordinator.syncBuffer(buffer, on: map)
+        context.coordinator.setFrames(frames.map(\.key), loop: loopKeys)
         if recenterToken != context.coordinator.lastRecenterToken {
             context.coordinator.lastRecenterToken = recenterToken
             map.setRegion(MKCoordinateRegion(

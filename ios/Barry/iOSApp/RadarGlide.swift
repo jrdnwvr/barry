@@ -139,6 +139,54 @@ enum RadarGlide {
         let bytes: Data
     }
 
+    /// A run of a loop's frames fetched as one picture a tile
+    /// (`/radar/stack`): evenly spaced in time, up to `partFrames` of
+    /// them, by the keys the map holds them under.
+    struct StackPart: Equatable {
+        let start: Int
+        let step: Int
+        let keys: [Int]
+        var count: Int { keys.count }
+
+        func url(host: String, px: Int, path: MKTileOverlayPath) -> URL? {
+            URL(string: "\(host)/radar/stack/\(start)/\(step)/\(count)/\(px)/\(path.z)/\(path.x)/\(path.y).png")
+        }
+    }
+
+    /// How many frames one request carries. Small enough that the first
+    /// part of a loop is in quickly and the loop can start on it; the rest
+    /// stream in behind the clock.
+    static let partFrames = 4
+
+    /// The parts a loop is fetched in: its observed frames, evenly spaced,
+    /// all but the newest (which is on screen already, from its own
+    /// tile), in runs of `partFrames`. Nil when the frames are not evenly
+    /// spaced or there are too few, and the loop fetches a tile a frame.
+    static func stackParts(_ frames: [RadarFrame]) -> [StackPart]? {
+        let past = frames.dropLast().filter { $0.kind == .observed }
+        guard past.count >= 2, past.count == frames.count - 1 else { return nil }
+        let step = past[1].time - past[0].time
+        guard step == 600 || step == 1200 else { return nil }
+        for (a, b) in zip(past, past.dropFirst()) where b.time - a.time != step || b.key != b.time { return nil }
+        guard past[0].key == past[0].time else { return nil }
+        var out: [StackPart] = []
+        var i = past.startIndex
+        while i < past.endIndex {
+            let run = Array(past[i..<min(i + partFrames, past.endIndex)])
+            out.append(StackPart(start: run[0].time, step: step, keys: run.map(\.key)))
+            i += partFrames
+        }
+        return out
+    }
+
+    /// A stack picture cut into its frames' tiles: `count` tiles of
+    /// `side` pixels, top to bottom. Nil when the picture is not that shape.
+    static func slices(_ bytes: [UInt8], width: Int, height: Int, count: Int) -> [TileCodes]? {
+        guard width > 0, count > 0, height == width * count, bytes.count == width * height else { return nil }
+        let per = width * width
+        return (0..<count).map { k in TileCodes(side: width, bytes: Data(bytes[k * per..<(k + 1) * per])) }
+    }
+
     /// The tiles of a set laid side by side into one picture, `side`
     /// pixels a tile, row-major; a tile that is missing is clear. Nil when
     /// no tile came or they are not all one size.

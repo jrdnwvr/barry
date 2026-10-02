@@ -116,6 +116,50 @@ struct RadarGlideTests {
         #expect(RadarPalette.codes(Data([1, 2, 3])) == nil)
     }
 
+    @Test func aLoopIsFetchedInPartsOfFourFramesButTheNewest() throws {
+        func frame(_ t: Int, _ kind: RadarFrameKind = .observed) -> RadarFrame {
+            RadarFrame(time: t, path: "/radar/tiles/\(t)", kind: kind)
+        }
+        // The hour loop: seven frames ten minutes apart.
+        let hour = (0..<7).map { frame(600 * $0) }
+        let parts = try #require(RadarGlide.stackParts(hour))
+        #expect(parts.map(\.keys) == [[0, 600, 1200, 1800], [2400, 3000]])
+        #expect(parts[0].start == 0 && parts[0].step == 600 && parts[0].count == 4)
+        let path = MKTileOverlayPath(x: 33, y: 48, z: 7, contentScaleFactor: 3)
+        #expect(parts[1].url(host: "https://h", px: 512, path: path)?.absoluteString
+                == "https://h/radar/stack/2400/600/2/512/7/33/48.png")
+        // The day loop: twenty-minute frames and a newest frame off the step.
+        let day = (0..<18).map { frame(1200 * $0) } + [frame(1200 * 17 + 600)]
+        #expect(RadarGlide.stackParts(day)?.map(\.count) == [4, 4, 4, 4, 2])
+        // Unevenly spaced, a nowcast among them, or too few: a tile a frame.
+        #expect(RadarGlide.stackParts([frame(0), frame(600), frame(1800), frame(2400)]) == nil)
+        #expect(RadarGlide.stackParts([frame(0), frame(600), frame(1201, .nowcast), frame(1800)]) == nil)
+        #expect(RadarGlide.stackParts([frame(0), frame(600)]) == nil)
+        #expect(RadarGlide.stackParts([]) == nil)
+    }
+
+    @Test func aStackIsCutIntoItsFramesTiles() throws {
+        let bytes: [UInt8] = [1, 2, 3, 4,   5, 6, 7, 8,   9, 10, 11, 12]
+        let tiles = try #require(RadarGlide.slices(bytes, width: 2, height: 6, count: 3))
+        #expect(tiles.count == 3 && tiles.allSatisfy { $0.side == 2 })
+        #expect([UInt8](tiles[1].bytes) == [5, 6, 7, 8])
+        #expect(RadarGlide.slices(bytes, width: 2, height: 6, count: 2) == nil, "not that shape")
+        #expect(RadarGlide.slices(bytes, width: 3, height: 4, count: 2) == nil, "not square tiles")
+    }
+
+    @Test func aGreyscalePictureReadsBackByteForByte() throws {
+        let cs = CGColorSpaceCreateDeviceGray()
+        let ctx = try #require(CGContext(data: nil, width: 2, height: 3, bitsPerComponent: 8, bytesPerRow: 2, space: cs,
+                                         bitmapInfo: CGImageAlphaInfo.none.rawValue))
+        let px = try #require(ctx.data).assumingMemoryBound(to: UInt8.self)
+        for (i, v) in [0, 77, 52, 0, 127, 1].enumerated() { px[i] = UInt8(v) }
+        let image = try #require(ctx.makeImage())
+        let png = try #require(UIImage(cgImage: image).pngData())
+        let back = try #require(RadarPalette.gray(png))
+        #expect(back.w == 2 && back.h == 3 && back.bytes == [0, 77, 52, 0, 127, 1])
+        #expect(RadarPalette.gray(Data([1, 2, 3])) == nil)
+    }
+
     @Test func theGlideShadersCompile() {
         guard MTLCreateSystemDefaultDevice() != nil else { return }
         #expect(RadarGlideView.isAvailable)

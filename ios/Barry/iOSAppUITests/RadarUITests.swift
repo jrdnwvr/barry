@@ -73,6 +73,15 @@ final class RadarUITests: XCTestCase {
                 _ = expand.waitForExistence(timeout: 2)
             }
             XCTAssertTrue(expand.waitForExistence(timeout: 30), "the radar card never came on screen\n\(app.debugDescription)")
+            // Hittable is not enough at the very bottom of the screen: a
+            // tap under the home indicator goes nowhere (the iPhone 15).
+            // Nudge the content up until the button is well clear of it.
+            var nudges = 0
+            while expand.frame.maxY > app.frame.maxY - 60 && nudges < 4 {
+                let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75))
+                from.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55)))
+                nudges += 1
+            }
             expand.tap()
             if key.waitForExistence(timeout: 8) { break }
             XCTAssertLessThan(attempt, 2, "expand never opened the radar\n\(app.debugDescription)")

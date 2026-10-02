@@ -83,6 +83,15 @@ final class RadarGlideView: UIView {
 
     required init?(coder: NSCoder) { fatalError("unused") }
 
+    /// As an element it is a dot in the map's corner, not the whole map:
+    /// over the whole map it kept the test from reaching the buttons that
+    /// sit on the map (the dashboard card's Expand, once the loop started
+    /// quickly enough to be up when the test got there).
+    override var accessibilityFrame: CGRect {
+        get { UIAccessibility.convertToScreenCoordinates(CGRect(x: 2, y: 2, width: 2, height: 2), in: self) }
+        set {}
+    }
+
     /// Hold on one frame, exactly, until the clock runs again: what the
     /// tile layer shows once it is back.
     func freeze(at key: Int) {

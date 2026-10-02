@@ -427,6 +427,7 @@ def _nomads_unspaced(monkeypatch):
     monkeypatch.setattr("app.sources.hrrr.EXTENDED_LAST", 3)
     monkeypatch.setattr("app.sources.hrrr.FC_LAST", 3)
     monkeypatch.setattr("app.sources.hrrr.EXTENDED_FC_LAST", 3)
+    monkeypatch.setattr("app.sources.hrrr.REFC_LAST", 3)
     monkeypatch.setattr("app.sources.nbm.FHRS", (1, 2, 3))
     yield
 
@@ -479,10 +480,10 @@ def sample_mrms(lightning=False, rate=False, shift_deg=0.0, half_deg=0.2):
 
 def sample_mrms_listing(now, prefix):
     """ListObjectsV2 for the MRMS composite: a file 40 s past every even
-    minute over the last three hours, as far as the day in `prefix`."""
+    minute over the last seven hours, as far as the day in `prefix`."""
     day = prefix.rstrip("/").rsplit("/", 1)[-1]
     items = []
-    t = now.replace(second=0, microsecond=0) - timedelta(hours=3)
+    t = now.replace(second=0, microsecond=0) - timedelta(hours=7)
     while t <= now - timedelta(seconds=45):
         if t.minute % 2 == 0 and t.strftime("%Y%m%d") == day:
             ft = t + timedelta(seconds=40)
@@ -685,7 +686,9 @@ class FakeUpstream:
             if self.wpc_fail:
                 return httpx.Response(503, text="down")
             if pil == "CODSUS":
-                return httpx.Response(200, text=CODSUS_SAMPLE)
+                # `codsus_text`, when set, is what a `limit` of several
+                # products returns: a run of analyses, fine and coarse.
+                return httpx.Response(200, text=getattr(self, "codsus_text", None) or CODSUS_SAMPLE)
             if pil == "CODSRP":
                 return httpx.Response(200, text=CODSRP_SAMPLE)
             return httpx.Response(200, text="")

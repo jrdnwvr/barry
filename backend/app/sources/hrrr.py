@@ -182,7 +182,15 @@ FC = FeedSpec("hrrr-fc3", FC_FIELDS, FC_WIND_PAIRS, lambda c: tuple(range(0, FC_
               stride=2, dtype="float16", keep=3, pack=True)
 FCX = FeedSpec("hrrr-fcx3", FC_FIELDS, FC_WIND_PAIRS, lambda c: _extended_fc(c),
                stride=2, dtype="float16", keep=1, pack=True)
-FEEDS: Tuple[FeedSpec, ...] = (MAP, COL, COLX, FC, FCX)
+# The model's own radar picture, for the hours past the nowcast on the
+# radar's timeline: composite reflectivity for 16 hours of every cycle at
+# full resolution, a megabyte a field on the bucket and four in the store.
+# Sixteen because a cycle is the newest for an hour and is about an hour
+# and a half old when it lands, and the timeline reaches twelve ahead.
+REFC_LAST = 16
+REFC = FeedSpec("hrrr-refc", (Field("refc", "REFC", "entire atmosphere", "sfc"),), (),
+                lambda c: tuple(range(1, REFC_LAST + 1)), dtype="float16", keep=1)
+FEEDS: Tuple[FeedSpec, ...] = (MAP, COL, COLX, FC, FCX, REFC)
 # Feeds stored in a format since changed; the store deletes them on start.
 RETIRED = ("hrrr-fc", "hrrr-fcx",        # pressures in absolute hPa (2026-09-25)
            "hrrr-col", "hrrr-colx", "hrrr-fc2", "hrrr-fcx2")   # one file per field (2026-09-25)

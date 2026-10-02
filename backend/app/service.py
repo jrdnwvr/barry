@@ -22,6 +22,7 @@ from .guards import OMBudget, RateGate, RateLimited, check_station
 from . import explain
 from . import fallbacks as fallbacks_mod
 from . import modelfields
+from . import modelradar
 from .modelstore import ModelStore
 from . import radar as radar_mod
 from .radar import RadarStore
@@ -52,6 +53,8 @@ from .models import (
     FieldGridResponse,
     LightningResponse,
     PressureFieldResponse,
+    PressureFrameOut,
+    PressureSeriesResponse,
     TrackRecordOut,
     TafOut,
     RadarFramesResponse,
@@ -261,6 +264,9 @@ class PressureService:
         # loop; BARRY_MRMS=0 keeps the timeline on RainViewer.
         self.radar = RadarStore.from_env()
         self.ltg_next = RadarStore.from_env("ltgnext", radar_mod.LUT_LTG)
+        # Model reflectivity past the nowcast (see poll_model_radar), on
+        # its own coarser grid, a frame per forecast hour.
+        self.radar_model = RadarStore.from_env("radarmodel")
         self.mrms_enabled = os.environ.get("BARRY_MRMS", "1") != "0"
         # Pulled either way; served by default only when this says "mrms".
         # /radar/frames?source=mrms asks for Barry's frames regardless.
@@ -271,6 +277,12 @@ class PressureService:
         # vx), a short cache of outlooks, and the calls kept for scoring.
         self._rain_rate: Optional[tuple] = None
         self._radar_motion: Optional[tuple] = None
+        # Block motion per frame time (radar.motion), and the nowcast's
+        # score by lead (see _score_nowcast).
+        self._motions: Dict[int, tuple] = {}
+        # Past hours' pressure grids for the timeline, by snapshot and region.
+        self._series_grids: Dict[tuple, object] = {}
+        self._nowcast_scores: Optional[dict] = None
         self._rain_cache: Dict[tuple, tuple] = {}
         self._rain_calls: Optional[List[dict]] = None
         self._rain_calls_dirty = False
@@ -923,6 +935,8 @@ class PressureService:
                 self._warmed.add((spec.name, cycle))
                 if spec is hrrr_src.MAP:
                     self.hrrr_ok_at = _now()
+                if spec is hrrr_src.REFC:
+                    await asyncio.to_thread(self._build_model_radar, cycle)
                 log.info("hrrr: %s %s from %s, %d fields", spec.name, cycle.strftime("%Y%m%d%H"), source, n)
             except Exception as exc:
                 errors.append(exc)
@@ -942,6 +956,16 @@ class PressureService:
             await self._score_models()
         except Exception as exc:
             log.warning("model scores failed: %s: %s", type(exc).__name__, exc)
+        try:
+            # After a restart, or a first deploy, the reflectivity run is
+            # in the store with no frames made from it yet.
+            held = self.models.cycles(hrrr_src.REFC.name)[:1]
+            if held and not self._model_radar_keys(held[0]):
+                await asyncio.to_thread(self._build_model_radar, held[0])
+            self._purge_model_radar(_now())
+        except Exception as exc:
+            errors.append(exc)
+            log.warning("model radar failed: %s: %s", type(exc).__name__, exc)
         # After a restart the store is on disk but nothing is open yet.
         for name in [spec.name for spec in hrrr_src.FEEDS] + [nbm_src.FEED]:
             for cycle in self.models.cycles(name)[:1]:
@@ -951,6 +975,50 @@ class PressureService:
         if errors and not written:
             raise errors[0]
         return written
+
+    # ---- Model reflectivity as radar frames (modelradar.py) --------------------
+
+    MODEL_RADAR_PAST_S = 3600        # an hour gone is no forecast
+
+    def _model_radar_keys(self, cycle: datetime) -> List[int]:
+        """The frames held from a run. A frame's key is its valid time plus
+        its forecast hour, so the tile URL names the run that made it."""
+        c = int(cycle.timestamp())
+        return [k for k in self.radar_model.times() if (k - k % 3600) - (k % 3600) * 3600 == c]
+
+    def _build_model_radar(self, cycle: datetime) -> int:
+        """Frames from a reflectivity run for each of its hours not yet
+        past. Returns frames made. Runs in a worker thread."""
+        feed = hrrr_src.REFC.name
+        g = modelfields.grid(self.models, feed, cycle)
+        if g is None:
+            return 0
+        now = _now().timestamp()
+        todo = []
+        for fhr in sorted(self.models.hours(feed, cycle)):
+            valid = int(cycle.timestamp()) + fhr * 3600
+            arr = self.models.load(feed, cycle, fhr, "refc")
+            if arr is None or valid < now - self.MODEL_RADAR_PAST_S or self.radar_model.has(valid + fhr):
+                continue
+            todo.append((valid + fhr, arr))
+        if not todo:
+            return 0
+        frames = modelradar.to_codes(g, [a for _, a in todo])
+        grid = modelradar.grid()
+        for (key, _), codes in zip(todo, frames):
+            self.radar_model.put(key, codes, grid)
+        log.info("model radar: %d frames from %s", len(todo), cycle.strftime("%Y%m%d%H"))
+        return len(todo)
+
+    def _purge_model_radar(self, now: datetime) -> None:
+        """Drop the frames for hours gone, and every run's but the newest
+        two: a phone that listed the frames before a new run landed still
+        finds the tiles it was told about."""
+        keys = self.radar_model.times()
+        runs = sorted({(k - k % 3600) - (k % 3600) * 3600 for k in keys}, reverse=True)
+        cut = now.timestamp() - self.MODEL_RADAR_PAST_S
+        self.radar_model.drop([k for k in keys if k - k % 3600 < cut
+                                or (k - k % 3600) - (k % 3600) * 3600 not in runs[:2]])
 
     async def poll_hazards(self) -> int:
         """The newest GTG turbulence and CIP icing runs from NOMADS, each
@@ -1080,17 +1148,20 @@ class PressureService:
 
     # ---- Radar frames (RainViewer) -------------------------------------------
 
-    RADAR_FRAMES = 7             # the last hour at ten minutes, as RainViewer gave; two hours are held
+    RADAR_FRAMES = 7             # what builds to 93 are sent: the last hour at ten minutes, as RainViewer gave
     RADAR_STALE_S = 20 * 60.0
 
     async def poll_radar(self) -> int:
-        """Fetch the MRMS file nearest each ten-minute mark of the last two
-        hours that isn't held, and drop frames older than that."""
+        """Fetch the MRMS file nearest each mark that isn't held (every ten
+        minutes of the last two hours, every hour of the last six), and
+        drop the frames that are no longer on a mark."""
         now = _now()
-        keys = await mrms.recent_keys(self._client, now)
+        keys = await mrms.recent_keys(self._client, now, hours=mrms.HOURLY_KEEP_H)
         wanted = mrms.pick(keys, now)
         got = 0
-        for mark, key in sorted(wanted.items()):
+        # Newest first: after a cold start the map has its last hour before
+        # the six-hour replay has its first.
+        for mark, key in sorted(wanted.items(), reverse=True):
             t = int(mark.timestamp())
             if self.radar.has(t):
                 continue
@@ -1098,12 +1169,15 @@ class PressureService:
             codes, grid = await asyncio.to_thread(mrms.decode, gz)
             await asyncio.to_thread(self.radar.put, t, codes, grid)
             got += 1
-        oldest = min(wanted) if wanted else now - timedelta(hours=mrms.KEEP_H)
-        self.radar.purge(int(oldest.timestamp()))
+        self.radar.keep_observed(int(m.timestamp()) for m in mrms.marks(now))
         try:
             await self._nowcast()
         except Exception as exc:
             log.warning("radar nowcast failed: %s: %s", type(exc).__name__, exc)
+        try:
+            await asyncio.to_thread(self._score_nowcast)
+        except Exception as exc:
+            log.warning("nowcast scoring failed: %s: %s", type(exc).__name__, exc)
         try:
             await self._poll_lightning_next(now)
         except Exception as exc:
@@ -1120,35 +1194,188 @@ class PressureService:
             self.radar_ok_at = datetime.fromtimestamp(self.radar.times()[-1], tz=timezone.utc)
         return got
 
+    def _block_motion(self, t: int):
+        """radar.motion between the frame at `t` and the one ten minutes
+        before, None when either is not held. The last dozen are kept: the
+        nowcast and its scoring ask for the same ones."""
+        hit = self._motions.get(t)
+        if hit is not None:
+            return hit
+        prev = self.radar.level(t - self.radar.STEP_S, radar_mod.MOTION_LEVEL)
+        cur = self.radar.level(t, radar_mod.MOTION_LEVEL)
+        if prev is None or cur is None:
+            return None
+        m = radar_mod.motion(np.asarray(prev), np.asarray(cur))
+        self._motions[t] = m
+        for old in sorted(self._motions)[:-12]:
+            self._motions.pop(old, None)
+        return m
+
+    def _steady_motion(self, t: int):
+        """The motion carried forward from the frame at `t`: the last two
+        steps' motion as one (radar.blend_motion), or the last step's alone
+        when the frame twenty minutes back is not held. (vy, vx) or None."""
+        newer = self._block_motion(t)
+        if newer is None:
+            return None
+        older = self._block_motion(t - self.radar.STEP_S)
+        if older is None:
+            return newer[0], newer[1]
+        return radar_mod.blend_motion(newer, older)
+
     async def _nowcast(self) -> int:
-        """The next half hour from the newest frame: motion from it and the
-        one ten minutes before (radar.motion), the newest frame carried 10,
-        20 and 30 minutes forward. Made once per newest frame; older
-        nowcasts are dropped. The motion is kept for the rain line, and
-        found again after a restart even when the nowcast frames are on
-        disk. Returns frames made."""
+        """The next hour from the newest frame: motion from it and the two
+        ten-minute frames before (radar.motion, blend_motion), the newest
+        frame carried 10 to 60 minutes forward. Made once per newest frame;
+        older nowcasts are dropped. Which of the six the timeline lists is
+        the scoring's call (nowcast_leads). The motion is kept for the rain
+        line, and found again after a restart even when the nowcast frames
+        are on disk. Returns frames made."""
         obs = self.radar.observed()
         if len(obs) < 2 or obs[-1] - obs[-2] != self.radar.STEP_S:
             return 0
-        t0, tp = obs[-1], obs[-2]
-        have_casts = bool(self.radar.casts(t0))
+        t0 = obs[-1]
+        steps = self.radar.CAST_STEPS
+        have_casts = len(self.radar.casts(t0)) == steps
         if have_casts and self._radar_motion is not None and self._radar_motion[0] == t0:
             return 0
-        prev2, cur2 = self.radar.level(tp, radar_mod.MOTION_LEVEL), self.radar.level(t0, radar_mod.MOTION_LEVEL)
         cur0 = self.radar.level(t0, 0)
         grid = self.radar.grid
-        if prev2 is None or cur2 is None or cur0 is None or grid is None:
+        if cur0 is None or grid is None:
             return 0
-        vy, vx, _ = await asyncio.to_thread(radar_mod.motion, np.asarray(prev2), np.asarray(cur2))
+        found = await asyncio.to_thread(self._steady_motion, t0)
+        if found is None:
+            return 0
+        vy, vx = found
         self._radar_motion = (t0, vy, vx)
         self._rain_cache.clear()
         if have_casts:
             return 0
-        for k in (1, 2, 3):
+        made = 0
+        for k in range(1, steps + 1):
+            if self.radar.has(t0 + k):
+                continue
             frame = await asyncio.to_thread(radar_mod.advect, np.asarray(cur0), vy, vx, float(k))
             await asyncio.to_thread(self.radar.put, t0 + k, frame, grid)
+            made += 1
         self.radar.drop_casts_before(t0)
-        return 3
+        return made
+
+    # How the nowcast did, a lead at a time: when a frame arrives, the
+    # frames 10 to 60 minutes before it are each carried forward to it on
+    # the 0.04 degree copy and compared with it at 20 dBZ, point for point,
+    # beside the same frames left where they were (persistence). Counts are
+    # kept by UTC hour for 60 days. Measured on five hours of 2026-10-02:
+    # CSI 0.70 at 10 minutes, 0.55 at 30, 0.44 at 60, persistence 0.64,
+    # 0.47, 0.36.
+    NOWCAST_KEEP_DAYS = 60
+    NOWCAST_ALWAYS_MIN = 30          # what the timeline has always shown
+    NOWCAST_GATE_H = 3               # leads past that answer to the last three hours
+    NOWCAST_MIN_CSI = 0.40
+    NOWCAST_MIN_CHECKS = 6
+
+    def _load_nowcast_scores(self) -> dict:
+        if self._nowcast_scores is None:
+            got = persist.load("nowcast_scores")
+            self._nowcast_scores = got if isinstance(got, dict) and "hours" in got else {"last": 0, "hours": {}}
+        return self._nowcast_scores
+
+    def _score_nowcast(self) -> int:
+        """Score every lead against the newest frame, once per frame.
+        Returns the leads scored. Runs in a worker thread."""
+        obs = self.radar.observed()
+        state = self._load_nowcast_scores()
+        if not obs or obs[-1] <= state.get("last", 0):
+            return 0
+        v, step, lvl = obs[-1], self.radar.STEP_S, radar_mod.MOTION_LEVEL
+        truth = self.radar.level(v, lvl)
+        if truth is None:
+            return 0
+        truth = np.asarray(truth)
+        hour = datetime.fromtimestamp(v, tz=timezone.utc).strftime("%Y-%m-%dT%H")
+        bucket = state["hours"].setdefault(hour, {})
+        scored = 0
+        for k in range(1, self.radar.CAST_STEPS + 1):
+            base = v - k * step
+            start = self.radar.level(base, lvl)
+            mv = self._steady_motion(base) if start is not None else None
+            if mv is None:
+                continue
+            start = np.asarray(start)
+            cast = radar_mod.advect(start, mv[0], mv[1], float(k), level=lvl)
+            row = bucket.setdefault(str(k * step // 60), [0] * 7)
+            for i, n in enumerate(radar_mod.score_counts(cast, truth) + radar_mod.score_counts(start, truth)):
+                row[i] += n
+            row[6] += 1
+            scored += 1
+        state["last"] = v
+        cut = (datetime.fromtimestamp(v, tz=timezone.utc)
+               - timedelta(days=self.NOWCAST_KEEP_DAYS)).strftime("%Y-%m-%dT%H")
+        state["hours"] = {h: b for h, b in state["hours"].items() if h >= cut}
+        persist.save("nowcast_scores", state)
+        return scored
+
+    def _nowcast_sums(self, since: datetime) -> Dict[int, List[int]]:
+        """Per lead (minutes): hits, misses, false alarms, the same three
+        for persistence, and frames checked, over the hours from `since`."""
+        cut = since.strftime("%Y-%m-%dT%H")
+        out: Dict[int, List[int]] = {}
+        for h, bucket in self._load_nowcast_scores()["hours"].items():
+            if h < cut:
+                continue
+            for lead, row in bucket.items():
+                acc = out.setdefault(int(lead), [0] * 7)
+                for i, n in enumerate(row[:7]):
+                    acc[i] += n
+        return out
+
+    def nowcast_leads(self, now: Optional[datetime] = None) -> int:
+        """How many ten-minute nowcast frames the timeline lists: the first
+        three always, and each one after while the last three hours' score
+        for its lead is at least NOWCAST_MIN_CSI and better than leaving
+        the rain where it was. A stratiform day earns the hour; a day of
+        storms growing and dying stops at thirty minutes."""
+        sums = self._nowcast_sums((now or _now()) - timedelta(hours=self.NOWCAST_GATE_H))
+        step_min = self.radar.STEP_S // 60
+        n = self.NOWCAST_ALWAYS_MIN // step_min
+        for k in range(n + 1, self.radar.CAST_STEPS + 1):
+            row = sums.get(k * step_min)
+            if not row or row[6] < self.NOWCAST_MIN_CHECKS:
+                break
+            score, still = radar_mod.csi(*row[0:3]), radar_mod.csi(*row[3:6])
+            if score is None or score < self.NOWCAST_MIN_CSI or (still is not None and score <= still):
+                break
+            n = k
+        return n
+
+    def nowcast_scores(self, days: int = 14) -> dict:
+        """The nowcast against the radar that followed, by lead: over the
+        whole window, and by UTC day, newest first."""
+        def rows(sums: Dict[int, List[int]]) -> List[dict]:
+            out = []
+            for lead in sorted(sums):
+                r = sums[lead]
+                a, b = radar_mod.csi(*r[0:3]), radar_mod.csi(*r[3:6])
+                out.append({"leadMin": lead, "csi": None if a is None else round(a, 3),
+                            "persistence": None if b is None else round(b, 3), "frames": r[6]})
+            return out
+        now = _now()
+        by_day: Dict[str, Dict[int, List[int]]] = {}
+        cut = (now - timedelta(days=days)).strftime("%Y-%m-%dT%H")
+        for h, bucket in self._load_nowcast_scores()["hours"].items():
+            if h < cut:
+                continue
+            day = by_day.setdefault(h[:10], {})
+            for lead, row in bucket.items():
+                acc = day.setdefault(int(lead), [0] * 7)
+                for i, n in enumerate(row[:7]):
+                    acc[i] += n
+        return {
+            "thresholdDbz": 20, "minCsi": self.NOWCAST_MIN_CSI,
+            "shownMin": self.nowcast_leads(now) * (self.radar.STEP_S // 60),
+            "leads": rows(self._nowcast_sums(now - timedelta(days=days))),
+            "days": [{"day": d, "leads": rows(by_day[d])} for d in sorted(by_day, reverse=True)],
+        }
 
     LTG_NEXT_MAX_AGE_S = 15 * 60.0
 
@@ -1290,27 +1517,64 @@ class PressureService:
                      for d in sorted(by_day, reverse=True)[:days] for v in [by_day[d]]],
         }
 
-    def _mrms_frames(self) -> Optional[RadarFramesResponse]:
-        obs = self.radar.observed()
-        times = obs[-self.RADAR_FRAMES:]
-        if len(times) < 4 or _now().timestamp() - times[-1] > self.RADAR_STALE_S:
+    HOUR_SPAN_S = 2 * 3600       # the hour span reaches this far back, every ten minutes
+    DAY_BACK_H, DAY_AHEAD_H = 6, 12
+
+    def _cast_frames(self, base: int, steps: int) -> List[RadarFrameOut]:
+        return [RadarFrameOut(time=base + (key - base) * self.radar.STEP_S, path=f"/radar/tiles/{key}",
+                              nowcast=True, kind="nowcast") for key in self.radar.casts(base, steps)]
+
+    def _model_frame(self, valid: int) -> Optional[RadarFrameOut]:
+        """The model's reflectivity for an hour, from the newest run that
+        holds it (the smallest forecast hour)."""
+        keys = [k for k in self.radar_model.times() if k - k % 3600 == valid]
+        if not keys:
             return None
-        frames = [RadarFrameOut(time=t, path=f"/radar/tiles/{t}") for t in times]
-        # The next half hour, marked as forecast, the way RainViewer's
-        # nowcast frames were.
-        base = times[-1]
-        frames += [RadarFrameOut(time=base + (key - base) * self.radar.STEP_S, path=f"/radar/tiles/{key}",
-                                 nowcast=True) for key in self.radar.casts(base)]
+        return RadarFrameOut(time=valid, path=f"/radar/model/{min(keys)}", nowcast=True, kind="model")
+
+    def _mrms_frames(self, span: Optional[str] = None) -> Optional[RadarFramesResponse]:
+        """The timeline from Barry's own frames, None when they are too few
+        or stale. No `span`: what builds to 93 expect, the last hour and
+        thirty minutes of nowcast. `hour`: every ten minutes of the last
+        two hours, then the nowcast as far as its score allows. `day`: the
+        frame on each hour from six hours back, the newest, then each hour
+        to twelve ahead, from the nowcast while it reaches and the model
+        after."""
+        obs = self.radar.observed()
+        recent = obs[-self.RADAR_FRAMES:]
+        if len(recent) < 4 or _now().timestamp() - recent[-1] > self.RADAR_STALE_S:
+            return None
+        base = recent[-1]
+        if span == "hour":
+            times = [t for t in obs if t >= base - self.HOUR_SPAN_S]
+            frames = [RadarFrameOut(time=t, path=f"/radar/tiles/{t}") for t in times]
+            frames += self._cast_frames(base, self.nowcast_leads())
+        elif span == "day":
+            times = [t for t in obs if t % 3600 == 0 and base - self.DAY_BACK_H * 3600 <= t < base] + [base]
+            frames = [RadarFrameOut(time=t, path=f"/radar/tiles/{t}") for t in times]
+            casts = {f.time: f for f in self._cast_frames(base, self.nowcast_leads())}
+            hour = base - base % 3600 + 3600
+            while hour <= base + self.DAY_AHEAD_H * 3600:
+                f = casts.get(hour) or self._model_frame(hour)
+                if f is not None:
+                    frames.append(f)
+                hour += 3600
+        else:
+            frames = [RadarFrameOut(time=t, path=f"/radar/tiles/{t}") for t in recent]
+            # The next half hour, marked as forecast, the way RainViewer's
+            # nowcast frames were.
+            frames += self._cast_frames(base, 3)
         return RadarFramesResponse(host=self.public_url, frames=frames,
                                    lightningNext=self._lightning_next(), cachedAt=_now())
 
-    async def get_radar_frames(self, source: Optional[str] = None) -> RadarFramesResponse:
+    async def get_radar_frames(self, source: Optional[str] = None,
+                               span: Optional[str] = None) -> RadarFramesResponse:
         """The radar timeline: Barry's own MRMS frames when an hour of them
         is held and fresh (and they are the default, or asked for);
         otherwise RainViewer's last 7 observed frames and up to 3 nowcast,
-        from one call every two minutes for every user."""
+        from one call every two minutes for every user, whatever the span."""
         if self.mrms_enabled and (source or self.radar_default) == "mrms":
-            own = self._mrms_frames()
+            own = self._mrms_frames(span)
             if own is not None:
                 return own
             self._fell_back("radar", "radar", reason="stale" if self.radar.observed() else "no-data")
@@ -1352,6 +1616,103 @@ class PressureService:
                                          pressureGrid=pgrid, tendencyGrid=tgrid,
                                          tendencyExtrema=textrema,
                                          stations=len(table), cachedAt=_now())
+        return await self.cache.fetch(cache_key, _build, ttl=GRID_TTL)
+
+    # The timeline's isobars: an hour at a time from six back to twelve
+    # ahead, the same hours the radar's day span lists.
+    SERIES_SNAP_MAX_S = 20 * 60.0        # a past hour takes the snapshot nearest it, within this
+    SERIES_OBS_MAX_AGE_S = 2 * 3600.0    # and the reports in it no older than this
+
+    def _series_hours(self, now: datetime) -> Tuple[List[datetime], List[datetime]]:
+        top = now.replace(minute=0, second=0, microsecond=0)
+        back = [top - timedelta(hours=h) for h in range(self.DAY_BACK_H, -1, -1)]
+        ahead = [top + timedelta(hours=h) for h in range(1, self.DAY_AHEAD_H + 1)]
+        return ([t for t in back if now - timedelta(hours=self.DAY_BACK_H) <= t <= now],
+                [t for t in ahead if t <= now + timedelta(hours=self.DAY_AHEAD_H)])
+
+    def _snapshot_points(self, when: datetime) -> Optional[Tuple[datetime, List[tuple]]]:
+        """(snapshot time, [(lat, lon, sea-level hPa)]) from the snapshot
+        nearest `when`, None when none is near enough."""
+        best = None
+        for at, snap in self._bulk_history:
+            d = abs((at - when).total_seconds())
+            if d <= self.SERIES_SNAP_MAX_S and (best is None or d < best[0]):
+                best = (d, at, snap)
+        if best is None:
+            return None
+        _, at, snap = best
+        return at, [(la, lo, slp) for (t, slp, _alt, la, lo) in snap.values()
+                    if slp is not None and t is not None and (at - t).total_seconds() <= self.SERIES_OBS_MAX_AGE_S]
+
+    async def get_pressure_series(self, lat: float, lon: float, lat_span: float, lon_span: float,
+                                  with_grid: bool = False) -> PressureSeriesResponse:
+        """Isobars for a map region at each hour of the radar's day span.
+        Past hours are gridded from the station snapshot nearest the hour,
+        the way the field now is. Hours ahead are the field now plus the
+        model's own change from now (modelfields.mslp_change), so the lines
+        leave now where the stations put them and move as the model moves
+        them; off the model's grid there are none. One spacing for every
+        frame, the field now's, so lines do not come and go."""
+        lat_span = max(0.5, min(30.0, lat_span))
+        lon_span = max(0.5, min(60.0, lon_span))
+        q_lat, q_lon = round(lat * 10) / 10, round(lon * 10) / 10
+        def q_span(v):
+            return round(v * 2) / 2 if v >= 1 else round(v, 1)
+        q_lat_span, q_lon_span = q_span(lat_span), q_span(lon_span)
+        region = (q_lat, q_lon, q_lat_span, q_lon_span)
+        cache_key = f"pseries:{q_lat}:{q_lon}:{q_lat_span}:{q_lon_span}:{int(with_grid)}"
+
+        def frame(t: datetime, kind: str, g, step: float) -> PressureFrameOut:
+            return PressureFrameOut(time=int(t.timestamp()), kind=kind,
+                                    isobars=pressure_field.isobar_lines(g, step, digits=3),
+                                    pressureGrid=pressure_field.to_grid_out(g) if with_grid else None)
+
+        def _work(table: List[StationObs], now: datetime) -> PressureSeriesResponse:
+            g_now = pressure_field.pressure_grid([(s.lat, s.lon, s.slp) for s in table], *region)
+            step = pressure_field.isobar_step(g_now)
+            back, ahead = self._series_hours(now)
+            frames: List[PressureFrameOut] = []
+            for t in back:
+                found = self._snapshot_points(t)
+                if found is None:
+                    continue
+                at, pts = found
+                # A snapshot never changes: its grid for a region is kept
+                # for as long as the snapshot is.
+                gkey = (at, region)
+                g = self._series_grids.get(gkey)
+                if g is None:
+                    g = pressure_field.pressure_grid(pts, *region)
+                    self._series_grids[gkey] = g
+                if g is not None:
+                    frames.append(frame(t, "observed", g, step))
+            held = {h[0] for h in self._bulk_history}
+            for k in [k for k in self._series_grids if k[0] not in held]:
+                self._series_grids.pop(k, None)
+            run = None
+            if g_now is not None and self.hrrr_enabled:
+                lats = np.repeat(g_now.lat0 + np.arange(g_now.ny) * g_now.dlat, g_now.nx)
+                lons = np.tile(g_now.lon0 + np.arange(g_now.nx) * g_now.dlon, g_now.ny)
+                found = modelfields.mslp_change(self.models, lats, lons, now, ahead)
+                if found is not None:
+                    cycle, changes = found
+                    for t in ahead:
+                        d = changes.get(t)
+                        if d is None or not np.isfinite(d).any():       # off the model's grid
+                            continue
+                        run = cycle
+                        d = d.reshape(g_now.ny, g_now.nx)
+                        values = [[None if v is None or not math.isfinite(dv) else v + float(dv)
+                                   for v, dv in zip(row, drow)] for row, drow in zip(g_now.values, d)]
+                        g = pressure_field.Grid(lat0=g_now.lat0, lon0=g_now.lon0, dlat=g_now.dlat,
+                                                dlon=g_now.dlon, ny=g_now.ny, nx=g_now.nx, values=values)
+                        frames.append(frame(t, "model", g, step))
+            return PressureSeriesResponse(frames=frames, stepHPa=step, run=run, cachedAt=now)
+
+        async def _build() -> PressureSeriesResponse:
+            table = await self.metar_bulk() or []
+            async with self._grid_sem:
+                return await asyncio.to_thread(_work, table, _now())
         return await self.cache.fetch(cache_key, _build, ttl=GRID_TTL)
 
     # ---- Radar model field (wind + boundary layer) ------------------------
@@ -1618,7 +1979,7 @@ class PressureService:
         frames = got["analysis"] + sorted(got["progs"], key=lambda f: f.hours)
         if not frames:
             raise LookupError("no WPC front bulletins available")
-        return FrontsResponse(frames=frames, cachedAt=_now())
+        return FrontsResponse(frames=frames, history=got["history"], cachedAt=_now())
 
     # ---- combined (primary client endpoint) ---------------------------------
 

@@ -11,6 +11,8 @@ stored grid-relative the way HRRR stores them. Known values:
   the contours run east and west.
 - Sea-level pressure 1016 hPa at 38.5 N, 2 hPa less per degree north.
 - Gust 12 m/s, boundary layer 900 m, CAPE 500 J/kg.
+- Composite reflectivity 40 dBZ north of 39 N and east of 84 W, none
+  (-10) elsewhere.
 - Surface pressure 840 hPa west of 86 W (high ground at 1,600 m, so 850
   and 925 hPa are underground there) and 990 hPa east of it (200 m).
 - The Aloft column's 17 levels: temperature on the standard lapse rate,
@@ -102,6 +104,9 @@ def main():
         ("UGRD", "80 m above ground", u80),
         ("VGRD", "80 m above ground", v80),
         ("PRATE", "surface", np.zeros_like(lat)),
+        # The model's radar: no echo (-10 dBZ, as HRRR writes it) but a
+        # 40 dBZ block in the north-east corner.
+        ("REFC", "entire atmosphere", np.where((lat > 39.0) & (lon > -84.0), 40.0, -10.0)),
     ]
     prs = [("ABSV", "1000 mb", np.zeros_like(lat))]
     col_levels = (1000, 975, 950, 925, 900, 875, 850, 825, 800, 750, 700, 650, 600, 550, 500, 450, 400)

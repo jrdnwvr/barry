@@ -199,10 +199,10 @@ ContentView builds the phone stack and the iPad dashboard as two separate
 lists; every new card (I did it twice today) is added in two places and
 can drift. Extract a single `cards(for:)` builder both layouts consume.
 
-**E3. Decide the HRRR forecast radar.** (S)
-Fully built, parked behind `RadarModel.modelFramesEnabled = false`, with
-backend routes and tests. Either enable it (IEM courtesy email first) or
-delete the code path and its tests. Parked code is where bugs hide.
+**E3. Decide the HRRR forecast radar.** (S) DONE 2026-10-02: the model's
+reflectivity is Barry's own tiles on the radar's day span
+(`docs/RADAR_TIMELINE.md`); the IEM path is out of the app. `/radar/hrrr`
+and its probe are still on the server with nothing calling them: delete.
 
 **E4. BarometerManager.swift (1,024 lines).** (M) DONE 2026-09-15: pure types moved to BarometerEngine.swift (347 lines); the manager is 687 lines of Core Motion glue.
 The calibration engine, CoreMotion plumbing, and the comparison state live

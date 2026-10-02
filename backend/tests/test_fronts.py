@@ -79,3 +79,35 @@ async def test_service_raises_when_bulletins_down(client, upstream):
     service = PressureService(client)
     with pytest.raises(LookupError):
         await service.get_fronts()
+
+
+def _recent():
+    import os
+    with open(os.path.join(os.path.dirname(__file__), "fixtures", "codsus_recent.txt")) as fh:
+        return fh.read()
+
+
+def test_each_analysis_is_taken_from_its_fine_product():
+    # Twelve real products of 2026-10-02: five valid times, each sent to
+    # a tenth of a degree (ASUS02) and again in whole degrees (ASUS01).
+    got = wpc.analyses(_recent())
+    assert [f.valid.strftime("%d%H") for f in got] == ["0215", "0212", "0209", "0206", "0203"]
+    for f in got:
+        lats = [p[0] for line in f.fronts for p in line.points]
+        assert any(abs(v - round(v)) > 1e-6 for v in lats)          # tenths, not whole degrees
+    # The newest product for 15Z's first cold front, as sent: 49.6 N 127.3 W.
+    cold = next(l for l in got[0].fronts if l.type == "cold")
+    assert cold.points[0] == [49.6, -127.3]
+    # One coarse product alone is still an analysis.
+    assert len(wpc.analyses(CODSUS_SAMPLE)) == 1
+
+
+@pytest.mark.asyncio
+async def test_the_earlier_analyses_come_as_history_oldest_first(client, upstream):
+    upstream.codsus_text = _recent()
+    service = PressureService(client)
+    resp = await service.get_fronts()
+    assert resp.frames[0].hours == 0 and resp.frames[0].valid.hour == 15
+    # Nine hours back: 06Z, 09Z, 12Z. 03Z is twelve hours old and left out.
+    assert [(f.hours, f.valid.hour) for f in resp.history] == [(-9, 6), (-6, 9), (-3, 12)]
+    assert [f.hours for f in resp.frames[1:]] == [12, 24]

@@ -232,6 +232,53 @@ def heights(store: ModelStore, hpa: int, lat: float, lon: float, lat_span: float
     return lines, step, cycle, fhr
 
 
+# ---- sea-level pressure ahead, for the timeline's isobars ----------------------
+
+MSLP_FEED = "hrrr-fc3"
+# The feed keeps its pressures less 1,000 hPa (see sources/hrrr.py).
+MSLP_STORED_OFFSET = 1000.0
+
+
+def _mslp_hour(store: ModelStore, cycle: datetime, fhr: int, g: grib.LambertGrid,
+               la: np.ndarray, lo: np.ndarray) -> Optional[np.ndarray]:
+    names = (store.grid(MSLP_FEED, cycle) or {}).get("pack")
+    arr = store.load(MSLP_FEED, cycle, fhr, "pack")
+    if not names or arr is None or "mslp" not in names:
+        return None
+    return g.sample(arr[:, :, names.index("mslp")], la, lo) + MSLP_STORED_OFFSET
+
+
+def mslp_change(store: ModelStore, la: np.ndarray, lo: np.ndarray, now: datetime,
+                valids: Sequence[datetime]) -> Optional[Tuple[datetime, Dict[datetime, np.ndarray]]]:
+    """How far the model's sea-level pressure at each point moves between
+    `now` and each of `valids`, in hPa, all from the newest forecast run
+    that holds the hour before now: (cycle, {valid: change}). NaN off the
+    grid; a valid the run does not reach is left out. The value at `now`
+    is read between the two hours around it."""
+    for cycle in store.cycles(MSLP_FEED):
+        g = grid(store, MSLP_FEED, cycle)
+        hours = store.hours(MSLP_FEED, cycle)
+        age = (now - cycle).total_seconds() / 3600.0
+        f0 = int(math.floor(age))
+        if g is None or age < 0 or f0 not in hours or f0 + 1 not in hours:
+            continue
+        a = _mslp_hour(store, cycle, f0, g, la, lo)
+        b = _mslp_hour(store, cycle, f0 + 1, g, la, lo)
+        if a is None or b is None:
+            continue
+        base = a + (b - a) * (age - f0)
+        out: Dict[datetime, np.ndarray] = {}
+        for valid in valids:
+            fhr = (valid - cycle).total_seconds() / 3600.0
+            if fhr != int(fhr) or int(fhr) not in hours:
+                continue
+            v = _mslp_hour(store, cycle, int(fhr), g, la, lo)
+            if v is not None:
+                out[valid] = v - base
+        return cycle, out
+    return None
+
+
 # ---- the Aloft column ---------------------------------------------------------
 
 COL_FEEDS = ("hrrr-col2", "hrrr-colx2")

@@ -99,7 +99,7 @@ async def _request_context(request: Request, call_next):
         if request.url.path != "/healthz":
             # Tiles come in dozens per map view and cost next to nothing,
             # so they have their own, larger budget.
-            tiles = request.url.path.startswith(("/radar/tiles/", "/radar/lightning/"))
+            tiles = request.url.path.startswith(("/radar/tiles/", "/radar/lightning/", "/radar/model/"))
             limiter: IPLimiter = request.app.state.tile_limiter if tiles else request.app.state.ip_limiter
             key = client_key(request.client.host if request.client else None,
                              request.headers.get("cf-connecting-ip"))
@@ -353,6 +353,22 @@ async def radar_pressure(
     return resp.model_dump(mode="json", by_alias=True)
 
 
+@app.get("/radar/pressure/series")
+async def radar_pressure_series(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    latSpan: float = Query(..., gt=0, le=180),
+    lonSpan: float = Query(..., gt=0, le=360),
+    grid: bool = Query(False),
+):
+    """Isobars for a map region at each hour of the radar's day span: six
+    hours back from the station snapshots, twelve ahead from the field now
+    and the model's change. `grid=1` adds each hour's gridded field, for
+    the shading. No upstream call."""
+    resp = await get_service().get_pressure_series(lat, lon, latSpan, lonSpan, grid)
+    return resp.model_dump(mode="json", by_alias=True, exclude_none=True)
+
+
 @app.get("/lightning")
 async def get_lightning(
     lat: float = Query(..., ge=-90, le=90),
@@ -366,11 +382,16 @@ async def get_lightning(
 
 
 @app.get("/radar/frames")
-async def radar_frames(source: Optional[str] = Query(None, pattern="^(mrms|rainviewer)$")):
+async def radar_frames(source: Optional[str] = Query(None, pattern="^(mrms|rainviewer)$"),
+                       span: Optional[str] = Query(None, pattern="^(hour|day)$")):
     """The radar timeline: Barry's MRMS frames or RainViewer's, trimmed to
-    what the timeline shows and shared across users. `source` asks for one."""
+    what the timeline shows and shared across users. `source` asks for one.
+    `span=hour`: two hours back every ten minutes and the nowcast as far as
+    its score allows. `span=day`: on the hour from six hours back to twelve
+    ahead (nowcast, then model). Without it, the last hour and thirty
+    minutes of nowcast, as builds to 93 expect."""
     try:
-        resp = await get_service().get_radar_frames(source)
+        resp = await get_service().get_radar_frames(source, span)
     except Exception as exc:
         log.warning("radar frames unavailable: %s: %s", type(exc).__name__, exc)
         raise HTTPException(status_code=503, detail="radar frames unavailable")
@@ -406,6 +427,21 @@ async def radar_tile(t: int, size: int, z: int, x: int, y: int, color: str, opts
                     headers={"Cache-Control": "public, max-age=604800, immutable"})
 
 
+@app.get("/radar/model/{t}/{size}/{z}/{x}/{y}/{color}/{opts}.png", include_in_schema=False)
+async def radar_model_tile(t: int, size: int, z: int, x: int, y: int, color: str, opts: str):
+    """One tile of the model's reflectivity for one forecast hour of one
+    run (the key is the valid time plus the forecast hour), in the radar
+    tiles' shape and colours. Same caching."""
+    miss = {"Cache-Control": "no-store"}
+    if size not in (256, 512) or not (0 <= z <= 12) or not (0 <= x < 2 ** z) or not (0 <= y < 2 ** z):
+        raise HTTPException(status_code=404, detail="no such tile", headers=miss)
+    png = await _render(get_service().radar_model.tile, t, z, x, y, size)
+    if png is None:
+        raise HTTPException(status_code=404, detail="no such frame", headers=miss)
+    return Response(content=png, media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=604800, immutable"})
+
+
 @app.get("/radar/lightning/{t}/{size}/{z}/{x}/{y}.png", include_in_schema=False)
 async def lightning_next_tile(t: int, size: int, z: int, x: int, y: int):
     """One tile of NOAA's chance of lightning in the next hour, violet,
@@ -429,7 +465,8 @@ async def model_scores(days: int = Query(14, ge=1, le=60)):
     same cycle at the same lead. `rainStarts` is how the radar's "rain
     starts at" calls did against the frames that followed."""
     service = get_service()
-    return {"days": service.model_scores(days), "rainStarts": service.rain_scores(days)}
+    return {"days": service.model_scores(days), "rainStarts": service.rain_scores(days),
+            "nowcast": service.nowcast_scores(days)}
 
 
 @app.get("/fallbacks")

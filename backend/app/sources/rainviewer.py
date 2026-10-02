@@ -24,7 +24,7 @@ def parse_frames(data: dict) -> tuple[str, List[RadarFrameOut]]:
     radar = data.get("radar") or {}
     past = [RadarFrameOut(time=int(e["time"]), path=e["path"], nowcast=False)
             for e in (radar.get("past") or [])[-PAST_FRAMES:]]
-    cast = [RadarFrameOut(time=int(e["time"]), path=e["path"], nowcast=True)
+    cast = [RadarFrameOut(time=int(e["time"]), path=e["path"], nowcast=True, kind="nowcast")
             for e in (radar.get("nowcast") or [])[:NOWCAST_FRAMES]]
     return data.get("host") or "https://tilecache.rainviewer.com", past + cast
 

@@ -677,20 +677,28 @@ stored keys, but each has its own model, so they fetch separately.
   "Radar".
 - Lives: `RadarMapView.swift` › `RadarTileOverlay`, `Coordinator`;
   `RadarPalette.swift`.
-- Data: `/radar/frames` (host, 7 past frames, up to 3 nowcast). Since
-  2026-09-25 the host is Barry itself: MRMS frames every ten minutes,
+- Data: `/radar/frames?span=hour|day` (host and the span's frames, each
+  with its `kind`; see `radar.timeline`). Since 2026-09-25 the host is
+  Barry itself: MRMS frames every ten minutes,
   tiles at `/radar/tiles/<time>/512/{z}/{x}/{y}/2/0_1.png` drawn on Tower
   in RainViewer's Universal Blue colours, so the app reads them back
-  exactly as it read RainViewer's. RainViewer (same URL shape, with up to
-  3 nowcast frames) when Barry's frames are missing or over 20 minutes
-  old, or when `BARRY_RADAR_SOURCE=rainviewer`. Native zoom 7, ancestors
-  cropped and upscaled beyond it.
+  exactly as it read RainViewer's. Model frames come in the same shape
+  from `/radar/model/<key>/...`. RainViewer (same URL shape, 7 past
+  frames and up to 3 nowcast, whatever the span) when Barry's frames are
+  missing or over 20 minutes old, or when `BARRY_RADAR_SOURCE=rainviewer`.
+  Native zoom 7, ancestors cropped and upscaled beyond it.
 - Seen, differently: MRMS is quality-controlled, so the faint night-time
   returns from birds and insects that RainViewer showed as pale blobs
   around the radar sites are gone.
 - Settings: `radarShowRadar` true.
-- Rules: alpha 0.75 full, 0.55 dimmed under Lightning, 0.02 for hidden
-  frames so their tiles stay warm, 0 while the map moves. Crossfade 0.3 s.
+- Rules: alpha 0.75 full, 0.55 dimmed under Lightning, 0.02 for the
+  span's other frames so their tiles stay warm, 0 while the map moves
+  and for the frames of the span that is not on the timeline (MapKit
+  asks for nothing at zero). On a cold open or a span switch the loop's
+  frames warm at once and the rest (older frames, the forecast) 2.5 s
+  later. Overlays are kept by the frame's `key` (the number its path ends
+  in; a model frame's negated), not its time: the hour span's nowcast and
+  the day span's model frame can share a valid time. Crossfade 0.3 s.
   Only a PNG is a tile: a 429 or 503 (Cloudflare's rate rule on the
   hostname answers a burst that way) is a miss, never cached, fetching
   pauses for its Retry-After and the renderers reload after it. Found
@@ -704,26 +712,55 @@ stored keys, but each has its own model, so they fetch separately.
 - Tests: `RadarPaletteTests`; the UI test keeps Radar on.
 
 ### radar.timeline
-- Seen: a slider over every frame, the Now pill, the loop button, and the
-  frame time ("8:20 PM · 20m ago", "· nowcast" in orange, "· model +2h" in
-  purple). The three nowcast frames are Barry's own since 2026-09-25: the
-  newest MRMS frame carried 10, 20 and 30 minutes forward by the motion
-  between it and the one before (no growth or decay).
-- Lives: `RadarView.swift` › `radarControls`; `RadarModel.swift`.
+- Seen: `[6h] [60] [slider] [Now]`, and the frame's time under them
+  ("8:20 PM · 20m ago", "11:00 AM · 5h ago", "· nowcast +40m" in orange,
+  "· model +3h" in purple). Until 2026-10-02 it was `[Now] [60] [slider]`
+  over one hour of radar and thirty minutes of nowcast.
+- The two replay chips are the two spans (`RadarSpan`). **60**, the hour
+  span: every ten minutes from two hours back, then the nowcast; its loop
+  is the last hour. **6h**, the day span: the frame on each hour from six
+  hours back, the newest frame, then each hour to twelve ahead; its loop
+  is the last six hours. Tapping a chip puts the timeline on its span and
+  plays it; tapping the one that is playing pauses. The 6h mark is the
+  bare `goforward` symbol with "6h" set inside it, there being no
+  `goforward.6h` (`ReplayGlyph`).
+- What a frame is (`kind`): observed (MRMS), nowcast (the newest frame
+  carried 10 to 60 minutes forward by the motion of the last three
+  frames; no growth or decay), or model (HRRR's own composite
+  reflectivity for that hour, `modelradar.py`). On the day span an hour
+  within the nowcast's reach is the nowcast's, the rest the model's.
+- How far the nowcast is shown is its own score's call: 30 minutes always,
+  and each ten minutes more while that lead's CSI over the last three
+  hours is at least 0.40 and beats leaving the rain where it was
+  (`nowcast_leads`; the scores are on `/models/scores`). Measured on five
+  hours of 2026-10-02: 0.70 at 10 minutes, 0.55 at 30, 0.44 at 60;
+  persistence 0.64, 0.47, 0.36. Three frames of motion beat two by half a
+  point.
+- One clock for every layer that has a past and a future
+  (`docs/RADAR_TIMELINE.md`): the isobars and the Pressure shading
+  (`radar.layer.isobars`), the fronts, troughs and H and L
+  (`radar.layer.fronts`). Wind, stations, lightning, advisories and the
+  Change field only know now: they stay drawn, and while the slider is
+  more than fifteen minutes from the newest frame the note line says so
+  ("Wind and stations show now.", `radar.nowOnlyNote`).
+- Lives: `RadarTimeline.swift` (the rules, pure functions);
+  `RadarView.swift` › `radarControls`, `replay`; `RadarModel.swift` ›
+  `setSpan`, `loopStart`, `playheadTime`.
 - Settings: `radarAutoplay` true ("Play the last hour" or "Hold on the
-  latest", in Settings › Radar).
-- Rules: the loop steps every 0.55 s from the oldest frame to now and dwells
-  three ticks on the newest. Nowcast frames are never looped, only scrubbed
-  to. Scrubbing pauses. Nothing refreshes the frame list while the screen
-  stays open; it loads on appear and on Try again. Under the frame time
-  there is at most one note (`radar.note`): the wind altitude first, then a
-  stale lightning feed, then a calm map with Wind on; usually none.
-- Tests: the UI test checks Now, scrub and loop selection states.
-
-### radar.timeline.modelFrames (parked)
-- Hourly HRRR frames from Iowa Mesonet tiles after the nowcast. Off behind
-  `RadarModel.modelFramesEnabled = false`; while false the app makes no IEM
-  or `/radar/hrrr` requests.
+  latest", in Settings › Radar). The radar always opens on the hour span;
+  the span is not remembered.
+- Rules: the loop steps every 0.55 s from the loop's start to now and
+  dwells three ticks on the newest. Forecast frames are never looped, only
+  scrubbed to. Scrubbing pauses. Now parks on the newest observed frame of
+  the span on the timeline. A span's list is fetched the first time its
+  chip is tapped and again once five minutes old; nothing else refreshes
+  it while the screen stays open. When the day span's list cannot be
+  fetched the timeline stays on the hour. Under the frame time there is at
+  most one note (`radar.note`): the now-only layers first, then the wind
+  altitude, then a stale lightning feed, then a calm map with Wind on;
+  usually none.
+- Tests: `RadarTimelineTests` (loop starts, the time line's words, frame
+  keys); the UI test checks Now, scrub and both loops' selection states.
 
 ### radar.field.pressure
 - Seen: sea-level pressure shading, purple low to orange high, stretched over
@@ -748,7 +785,18 @@ stored keys, but each has its own model, so they fetch separately.
 - Seen: indigo lines with unit-labelled knockouts ("1012 hPa", "29.88 inHg")
   every 4 hPa. Chip "Isobars".
 - Lives: `PressureFieldRenderer.drawLine`, `levelText`.
-- Data: `/radar/pressure` › `isobars`.
+- Data: `/radar/pressure` › `isobars` at now. Away from now (the slider
+  more than fifteen minutes from the newest frame), the hour nearest the
+  slider from `/radar/pressure/series`: past hours gridded from the
+  server's station snapshot nearest the hour, hours ahead the field now
+  plus HRRR's own change in sea-level pressure from now, so the lines
+  leave now where the stations put them and move as the model moves them.
+  One spacing for every hour, the field now's. Off the model's grid there
+  are no hours ahead and the lines stay as they are. The Pressure shading
+  follows the same hours (`grid=1`); the Change field does not.
+- Rules: the series is fetched only while Isobars or Pressure is on and
+  the day span is up or the slider has left now, and again when the map
+  moves to another region.
 - Settings: `radarIsobars` false; `radarIsobarsSplit` migration gives
   isobars to anyone who had Pressure on.
 - Tests: `PressureLabelTests`.
@@ -807,12 +855,23 @@ stored keys, but each has its own model, so they fetch separately.
   pressure centres with values. Chip "Fronts".
 - Lives: `FrontsOverlay.swift` › `FrontFieldRenderer`, `FrontGlyphs`,
   `PressureCenterView`.
-- Data: `/fronts`, fetched once per open, not tied to the region.
+- Data: `/fronts`, fetched once per open, not tied to the region: the
+  analysis, the earlier analyses back nine hours (`history`), and the 12
+  and 24 h forecast charts. Each analysis is sent twice, to a tenth of a
+  degree and then in whole degrees; the server takes the fine one (until
+  2026-10-02 it drew whichever came last, the coarse one).
 - Settings: `radarFronts` true; More sheet toggles `radarFrontLines`,
   `radarFrontPips`, `radarFrontWeak`, `radarFrontCenters` (all true).
-- Rules: only the analysis frame is drawn. The 12 to 48 h progs arrive and
-  are unused, because a map with its own clock read tomorrow's front as
-  today's. Pips sit on the left of travel. The key and the map share
+- Rules: at now the analysis is drawn, as it stands, from its own valid
+  time (usually two hours back) through now. Slid back before that, the
+  chart is blended between the analyses either side by their valid times
+  (`FrontMorph.blend`: fronts of a type within 650 km are the same front,
+  the rest fade). Slid ahead, the analysis is carried from now to the next
+  forecast chart, reaching it at that chart's time, and on to the one
+  after (`RadarTimeline.fronts`). Until 2026-10-02 the forecast charts
+  arrived unused, because a map with its own clock read tomorrow's front
+  as today's; the radar's clock is now the only one. Pips sit on the left
+  of travel. The key and the map share
   `FrontGlyphs` so they cannot disagree. Centre values read `pressureUnit`
   once when built.
 - For: W P M.
@@ -1189,20 +1248,22 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 | `GET /pressure/{station}` | `hours` | pressure only | as above | one key per station, whole day | nobody now |
 | `GET /forecast` | `lat`, `lon` | hourly, sun, `source` ("hrrr+nbm", "hrrr" or "open-meteo"), `stale`; on `/combined` also `pressureOffset` | the HRRR forecast feeds (48 h) with NBM over the first 36 h, sun times computed; Open-Meteo, 2 days, off the grid | NOAA: 30 min per 0.1° cell and run; Open-Meteo: 30 min per 0.1° cell, last good re-served 12 h when upstream fails | inside `/combined` |
 | `GET /front` | `station`, `lat`, `lon` | status, headline, bearing, eta, nearestFront | bulk METAR history (7.5 h) or an AWC box, forecast, `/fronts` | 15 min per station and 0.1° | the phone's front banner only |
-| `GET /fronts` | none | WPC analysis plus 12 to 48 h progs | IEM AFOS (CODSUS, CODSRP) | 30 min, one entry | the radar |
-| `GET /radar/hrrr` | none | run time | IEM tile probe | 10 min | nobody (parked) |
+| `GET /fronts` | none | WPC analysis plus the progs, and `history`: the analyses of the nine hours before, oldest first | IEM AFOS (CODSUS, the last twelve products; CODSRP) | 30 min, one entry | the radar |
+| `GET /radar/hrrr` | none | run time | IEM tile probe | 10 min | nobody (the model frames it served are Barry's own since 2026-10-02) |
+| `GET /radar/model/{t}/{size}/{z}/{x}/{y}/{color}/{opts}.png` | the frame's key (valid time plus forecast hour), 256 or 512, zoom to 12 | an RGBA PNG in the radar's colours | the model radar store (`state/radarmodel`, HRRR REFC on a 0.03 degree grid) | a week, immutable; a miss is never cached | the radar's day span |
+| `GET /radar/pressure/series` | `lat`, `lon`, spans, `grid` (0 or 1) | per hour from six back to twelve ahead: unix time, `kind` (observed or model), isobars to three decimals, the grid when asked; `stepHPa`, the model `run` | the station snapshots and the HRRR forecast feed's MSLP, no upstream | 5 min; quantized like `/radar/pressure`; a past hour's grid is kept as long as its snapshot | the radar's isobars away from now |
 | `GET /metars` | `lat`, `lon`, `half`, `buoys` | stations with wind, category, visibility, ceiling, altimeter, lightning, raw; with `buoys=1` also NDBC buoys and coastal stations (`kind` "buoy", waves, water temperature, pressure and its 3 h change) | bulk table (AWC box fallback); NDBC `latest_obs.txt` | 2 min; centre 0.2°, half 0.5°; 350 stations plus up to 120 buoys nearest first; NDBC once per 10 min for everyone, failures remembered 60 s and never block the stations | the radar station layer |
 | `GET /advisories` | `lat`, `lon`, `half` | SIGMET and G-AIRMET areas (kind, hazard, label, base and top, valid times, outline, bulletin) and PIREPs of turbulence and icing (position, time, altitude, aircraft, intensities, raw) that touch the box | AWC `airsigmet`, `gairmet` (current hour), `pirep` (lower 48, 2 h) | each feed 10 min for everyone, failures 60 s; a failed feed is left out | the radar Advisories layer |
 | `GET /radar/pressure` | `lat`, `lon`, spans | isobars, isallobars, grids, extrema | bulk table and history, no upstream | 5 min; centre 0.1°, spans 0.5°; two builds at a time | the radar pressure layers |
 | `GET /lightning` | `lat`, `lon`, `half` | 0.02° cells, clusters, window 1200 s, coverage | GLM store | 60 s; centre 0.2°, half 0.5° | the radar lightning layer |
-| `GET /radar/frames` | `source` (mrms or rainviewer, optional) | host, frames (7 observed and 3 nowcast, the nowcast paths naming the run that made them), `lightningNext` | Barry's MRMS frames (the last hour of the two held), else RainViewer | RainViewer's list 2 min; Barry's read from the store | the radar |
+| `GET /radar/frames` | `source` (mrms or rainviewer, optional), `span` (hour or day, optional) | host, frames each with `time`, `path`, `nowcast` and `kind` (observed, nowcast, model), `lightningNext`. No `span`: 7 observed and 3 nowcast, what builds to 93 expect. `hour`: every ten minutes of the last two hours, then the nowcast to as far as its score allows (30 to 60 minutes). `day`: the frame on each hour from six back, the newest, then each hour to twelve ahead (nowcast where it reaches, else model). Nowcast and model paths name the run that made them | Barry's MRMS frames and the model radar store, else RainViewer (7 and 3 whatever the span) | RainViewer's list 2 min; Barry's read from the store | the radar |
 | `GET /radar/lightning/{t}/{size}/{z}/{x}/{y}.png` | the grid's unix time, 256 or 512, zoom to 12 | an RGBA PNG, violet by the chance of lightning in the next hour | MRMS LightningProbabilityNext60min, the newest three held | as the radar tiles | the Lightning layer |
 | `GET /radar/tiles/{t}/{size}/{z}/{x}/{y}/{color}/{opts}.png` | the frame's unix time, 256 or 512, zoom to 12 | an RGBA PNG in Universal Blue, empty tiles about 1 KB | the MRMS store: uint8 dBZ on the 0.01 degree grid and four max-pooled copies for wide views | `public, max-age=604800, immutable` (Cloudflare keeps them); misses `no-store`; 64 MB in process; own budget, 1,500 a minute per client (`BARRY_TILE_RATE_PER_MIN`) | the radar |
 | `GET /aloft` | `lat`, `lon` | 25 hourly columns, `source`, `stale`, and what is there now: `turbulence` (GTG) and `icing` (CIP) | the HRRR column feeds; Open-Meteo pressure levels off the grid | HRRR: 1 h per 0.1° cell and column run; Open-Meteo: 1 h per 0.1° cell, last good 12 h; the hazards are read fresh each request | Aloft |
 | `GET /radar/field` | `lat`, `lon`, spans | wind, boundary layer and CAPE at 88 points (HRRR) or 35 (Open-Meteo), and `source` | the HRRR store; Open-Meteo multi-point (35 weighted calls) off the HRRR grid or before a cycle is held | HRRR: none needed; Open-Meteo: until five past the next hour, at least 10 min; centre 0.05°, spans 0.5°; last good copy for 6 h | the radar wind layer |
 | `GET /radar/field/levels` | same | the same points at five levels, underground levels left out, and `source` | as `/radar/field` | as `/radar/field` | the altitude rail |
 | `GET /radar/heights` | `lat`, `lon`, spans, `hPa` (925, 850, 700, 600, 500) | height contours in metres, 30 m apart at 700 hPa and below and 60 m above, with the run and valid time | the HRRR store only; 503 off its grid | until five past the next hour, per level, region and run | the altitude rail |
-| `GET /models/scores` | `days` (1 to 60, default 14) | `days`: per UTC day, newest first, hours scored and for HRRR and RRFS (the same cycle, the same lead) the mean sea-level pressure error (raw, bias, and with each hour's bias taken out), 10 m wind speed error in knots, direction error where the wind is 8 kt or more, and the lead; `rainStarts`: the "rain starts at" calls scored, hits, hit rate, calls pending, and the same by day | none: the model store and the bulk METAR table, scored once an hour (`modelscore.py`), kept 60 days in `state/model_scores`; the rain calls in `state/rain_calls` | none | Jordan, for the RRFS switch and the rain line |
+| `GET /models/scores` | `days` (1 to 60, default 14) | `days`: per UTC day, newest first, hours scored and for HRRR and RRFS (the same cycle, the same lead) the mean sea-level pressure error (raw, bias, and with each hour's bias taken out), 10 m wind speed error in knots, direction error where the wind is 8 kt or more, and the lead; `rainStarts`: the "rain starts at" calls scored, hits, hit rate, calls pending, and the same by day; `nowcast`: per lead (10 to 60 minutes) the radar nowcast's CSI at 20 dBZ against the frame that arrived, persistence's beside it, frames checked, the same by day, and `shownMin`, how far the timeline is listing it now | none: the model store and the bulk METAR table, scored once an hour (`modelscore.py`), kept 60 days in `state/model_scores`; the rain calls in `state/rain_calls`; the nowcast's counts by UTC hour in `state/nowcast_scores` | none | Jordan, for the RRFS switch and the rain line |
 | `GET /fallbacks` | `days` (1 to 60, default 14) | per UTC day, newest first: answers served by a fallback instead of the NOAA feeds, by kind (forecast, aloft, field, levels, radar, pressure) and reason (`off-grid`: outside the HRRR domain, expected; `no-data`: nothing held for it; `stale`: radar frames held but old; `off`: switched off in the configuration; `upstream`: AWC failed); then the newest 40 events with where (a station or a point to a tenth of a degree) | none: `fallbacks.py`, one event per kind, reason and place every ten minutes, kept 60 days in `state/fallbacks`, written by the scheduler once a cycle; every occurrence counts on `/metrics` as `barry_fallbacks_total` | none | Jordan, for taking the fallbacks out |
 | `GET /stations/search` | `q`, `limit` | id and name matches, METAR stations only | AWC directory | directory 24 h | Settings, onboarding |
 | `GET /glance` | `stations` (comma list, up to 8), `tz`, `clock` | one line per field: category, wind, altimeter, sea-level pressure, 3 h change and class, the verdict without forecast, observation time | the same cached reports as `/combined` (saved fields are watched stations) | none of its own; a field that cannot be read is left out | the Fields card |
@@ -1238,11 +1299,17 @@ without blocking the response.
   two cycles kept (about 1 GB). A cycle takes 5 s and peaks near 700 MB.
   `BARRY_HRRR=0` disables and every map layer stays on Open-Meteo.
 - Radar loop every 120 s: lists the MRMS composite on the bucket, fetches
-  the file nearest each ten-minute mark of the last two hours that isn't
-  held (1.2 MB, 0.2 s to decode), keeps two hours (about 400 MB with the
-  pooled copies) under `state/radar`. Then the nowcast for a new newest
-  frame (motion by block matching on the 0.04 degree copy, 0.3 s; each
-  frame advected, under a second; the motion is kept for the rain line),
+  the file nearest each mark that isn't held (1.2 MB, 0.2 s to decode;
+  newest first): every ten minutes of the last two hours and, since
+  2026-10-02, every hour of the last six, about 550 MB with the pooled
+  copies under `state/radar`. Then the nowcast for a new newest frame
+  (motion by block matching on the 0.04 degree copy, 0.3 s, averaged with
+  the step before's; six frames advected, under a second each; the motion
+  is kept for the rain line), then every lead scored against the new
+  frame (`_score_nowcast`: the frames 10 to 60 minutes back carried
+  forward on the 0.04 degree copy, hits, misses and false alarms at 20
+  dBZ, persistence beside them, summed by UTC hour and kept 60 days in
+  `state/nowcast_scores`),
   the newest lightning probability grid (30 KB) under `state/ltgnext`,
   and the newest rain-rate grid (PrecipRate, a megabyte, held in memory
   only). Then the "rain starts at" calls old enough to check are scored
@@ -1250,6 +1317,14 @@ without blocking the response.
   is 20 dBZ within two points), kept 60 days in `state/rain_calls`.
   Degraded when the newest frame is 20 minutes old; `BARRY_MRMS=0` stops
   it.
+- The model loop also pulls `hrrr-refc`: composite reflectivity for f01
+  to f16 of every cycle at full resolution (half a megabyte a field on
+  the bucket, one run kept, about 60 MB). Each hour not yet past is read
+  onto a 0.03 degree grid as the radar's own dBZ codes
+  (`modelradar.py`, 0.1 s a field) and kept in `state/radarmodel` under
+  its valid time plus its forecast hour, the newest two runs' worth, an
+  hour past dropped. It is a `FeedSpec` like the rest, so the RRFS switch
+  is the same change as for them.
 - The model loop also pulls the Aloft column feeds: `hrrr-col2` (f00 to
   f03 of every cycle) and `hrrr-colx2` (f00 to f30 of the 00, 06, 12 and
   18 UTC cycles), 17 levels of height, temperature (stored in Celsius),
@@ -1390,11 +1465,8 @@ control. docs/REVIEW.md lists the places that need thinning as of
 
 ## Parked and hidden
 
-- `radar.timeline.modelFrames`: HRRR forecast radar, off behind
-  `modelFramesEnabled = false`.
 - `home.verdict.trackRecord`: built and hidden until the score is defined
   against what Barry claims (see ROADMAP D6).
-- `FrontMorph`: front progs blended onto the radar clock, unused.
 - `ComplicationView.rectangular`: unused since the family was dropped.
 - `docs/ROUTES.md`: a design draft for `/glance` and `/route`; neither
   route exists.

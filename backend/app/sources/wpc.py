@@ -156,21 +156,54 @@ def parse_frames(text: str) -> List[FrontFrame]:
     return frames
 
 
-async def _fetch_text(client: httpx.AsyncClient, pil: str) -> str:
+async def _fetch_text(client: httpx.AsyncClient, pil: str, limit: int = 1) -> str:
+    params = {"pil": pil, "fmt": "text"}
+    if limit > 1:
+        params["limit"] = str(limit)
     resp = await client.get(
-        AFOS_URL, params={"pil": pil, "fmt": "text"},
+        AFOS_URL, params=params,
         headers={"User-Agent": USER_AGENT}, timeout=15.0,
     )
     resp.raise_for_status()
     return resp.text
 
 
+# Each analysis goes out twice: ASUS02 with positions to a tenth of a
+# degree, then ASUS01 about ninety minutes later with the same chart in
+# whole degrees. Until 2026-10-02 Barry drew whichever came last, which was
+# the coarse one. Twelve products reach back four or five analyses.
+ANALYSIS_PRODUCTS = 12
+HISTORY_H = 9
+
+
+def analyses(text: str) -> List[FrontFrame]:
+    """The analyses in a run of CODSUS products, newest first, one per
+    valid time: the fine one where both were sent."""
+    best: Dict[datetime, Tuple[int, FrontFrame]] = {}
+    for product in text.split("\x01"):
+        frames = [f for f in parse_frames(product) if f.hours == 0][:1]
+        if not frames:
+            continue
+        fine = 1 if "ASUS02" in product[:200] else 0
+        f = frames[0]
+        if f.valid not in best or fine > best[f.valid][0]:
+            best[f.valid] = (fine, f)
+    return [best[v][1] for v in sorted(best, reverse=True)]
+
+
 async def fetch_fronts(client: httpx.AsyncClient) -> Dict[str, List[FrontFrame]]:
-    """{'analysis': [frame], 'progs': [12h, 24h, 36h, 48h frames]} — either
-    list may be empty if that bulletin is unavailable."""
-    out: Dict[str, List[FrontFrame]] = {"analysis": [], "progs": []}
+    """{'analysis': [frame], 'history': [earlier analyses, oldest first, to
+    HISTORY_H hours back, their `hours` negative], 'progs': [12h, 24h, ...
+    frames]}: any list may be empty if its bulletin is unavailable."""
+    out: Dict[str, List[FrontFrame]] = {"analysis": [], "history": [], "progs": []}
     try:
-        out["analysis"] = parse_frames(await _fetch_text(client, "CODSUS"))[:1]
+        got = analyses(await _fetch_text(client, "CODSUS", ANALYSIS_PRODUCTS))
+        out["analysis"] = got[:1]
+        for f in got[1:]:
+            back = (got[0].valid - f.valid).total_seconds() / 3600.0
+            if back <= HISTORY_H:
+                f.hours = -int(round(back))
+                out["history"].insert(0, f)
     except Exception:
         pass
     try:

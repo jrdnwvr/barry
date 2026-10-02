@@ -8,7 +8,8 @@ message with PNG packing, gzipped, 1 to 1.4 MB; eccodes decodes it in
 0.2 s. -99 means no echo, -999 no radar coverage.
 
 Barry keeps a frame every ten minutes (the file nearest each ten-minute
-mark) for two hours, as it had from RainViewer. Public domain.
+mark) for two hours, as it had from RainViewer, and the frame on each hour
+for six, for the radar's six-hour replay. Public domain.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ PRODUCT = "MergedReflectivityQCComposite_00.50"
 USER_AGENT = "Barry/1.0 (jrdn@wvr.me)"
 STEP_MIN = 10
 KEEP_H = 2
+HOURLY_KEEP_H = 6             # frames on the hour are kept this long
 MARK_TOLERANCE_S = 150        # the file must be within 2.5 minutes of its mark
 
 _S3_NS = "{http://s3.amazonaws.com/doc/2006-03-01/}"
@@ -83,10 +85,18 @@ async def recent_keys(client: httpx.AsyncClient, now: datetime, product: str = P
 
 
 def marks(now: datetime) -> List[datetime]:
-    """Ten-minute marks over the last KEEP_H hours, oldest first."""
+    """The marks Barry keeps a frame for, oldest first: every hour from
+    HOURLY_KEEP_H back, then every ten minutes over the last KEEP_H."""
     top = now.replace(minute=(now.minute // STEP_MIN) * STEP_MIN, second=0, microsecond=0)
     n = KEEP_H * 60 // STEP_MIN
-    return [top - timedelta(minutes=STEP_MIN * i) for i in range(n, -1, -1)]
+    recent = [top - timedelta(minutes=STEP_MIN * i) for i in range(n, -1, -1)]
+    hour = recent[0].replace(minute=0)
+    hourly = []
+    while hour >= top - timedelta(hours=HOURLY_KEEP_H):
+        if hour < recent[0]:
+            hourly.append(hour)
+        hour -= timedelta(hours=1)
+    return hourly[::-1] + recent
 
 
 def pick(keys: List[str], now: datetime) -> Dict[datetime, str]:

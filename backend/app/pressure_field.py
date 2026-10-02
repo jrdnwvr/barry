@@ -4,8 +4,10 @@ Every station's sea-level pressure (and 3 h tendency) is already in the bulk
 METAR table. This grids those points with a Gaussian-weighted inverse-
 distance fit, drops obvious outliers first (a single bad barometer would
 otherwise draw a bullseye), and runs marching squares to produce contour
-polylines: isobars every 4 hPa, isallobars at ±1/2/3 hPa per 3 h. No numpy:
-the grids are small (≤ ~1,600 cells) and results are cached per region.
+polylines: isobars every 4 hPa, isallobars at ±1/2/3 hPa per 3 h. The
+gridding and the outlier check are numpy (since 2026-10-02: a continental
+view took seconds in plain loops, and the timeline asks for six past hours
+of it); the contouring is plain Python on at most about 1,600 cells.
 """
 
 from __future__ import annotations
@@ -13,6 +15,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple
+
+import numpy as np
 
 from .models import ContourLine, FieldExtremum, GridOut, StationObs
 
@@ -47,16 +51,19 @@ def _reject_outliers(pts: List[Tuple[float, float, float]], tol: float, k: int =
     """Drop points that disagree with the mean of their k nearest neighbors."""
     if len(pts) <= k + 1:
         return pts
-    keep = []
-    for i, (la, lo, v) in enumerate(pts):
-        cos_lat = math.cos(math.radians(la))
-        near = sorted(
-            ((((la - b[0]) ** 2 + ((lo - b[1]) * cos_lat) ** 2), b[2]) for j, b in enumerate(pts) if j != i),
-            key=lambda x: x[0])[:k]
-        mean = sum(v2 for _, v2 in near) / len(near)
-        if abs(v - mean) <= tol:
-            keep.append((la, lo, v))
-    return keep
+    p = np.asarray(pts, dtype=np.float64)
+    la, lo, v = p[:, 0], p[:, 1], p[:, 2]
+    cos_lat = np.cos(np.radians(la))
+    keep = np.zeros(len(p), dtype=bool)
+    # A few hundred rows of the distance table at a time: the whole table
+    # for a continental view is tens of megabytes.
+    for r0 in range(0, len(p), 256):
+        r1 = min(len(p), r0 + 256)
+        d2 = (la[r0:r1, None] - la[None, :]) ** 2 + ((lo[r0:r1, None] - lo[None, :]) * cos_lat[r0:r1, None]) ** 2
+        d2[np.arange(r1 - r0), np.arange(r0, r1)] = np.inf
+        near = np.argpartition(d2, k - 1, axis=1)[:, :k]
+        keep[r0:r1] = np.abs(v[r0:r1] - v[near].mean(axis=1)) <= tol
+    return [pt for pt, ok in zip(pts, keep) if ok]
 
 
 def grid_field(pts: Sequence[Tuple[float, float, float]], lat: float, lon: float,
@@ -72,22 +79,15 @@ def grid_field(pts: Sequence[Tuple[float, float, float]], lat: float, lon: float
     cos_lat = math.cos(math.radians(lat))
     r2 = (radius_km / KM_PER_DEG) ** 2
     cutoff2 = 9 * r2                          # 3 half-widths: contribution ~ e^-9
+    p = np.asarray(pts, dtype=np.float64)
+    dx2 = ((p[:, 1][None, :] - (lon0 + np.arange(nx) * step)[:, None]) * cos_lat) ** 2      # (nx, points)
     values: List[List[Optional[float]]] = []
     for j in range(ny):
-        glat = lat0 + j * step
-        row: List[Optional[float]] = []
-        for i in range(nx):
-            glon = lon0 + i * step
-            wsum = vsum = 0.0
-            for (pla, plo, v) in pts:
-                d2 = (pla - glat) ** 2 + ((plo - glon) * cos_lat) ** 2
-                if d2 > cutoff2:
-                    continue
-                w = math.exp(-d2 / r2)
-                wsum += w
-                vsum += w * v
-            row.append(vsum / wsum if wsum >= MIN_WEIGHT else None)
-        values.append(row)
+        d2 = dx2 + (p[:, 0] - (lat0 + j * step)) ** 2
+        w = np.where(d2 > cutoff2, 0.0, np.exp(-d2 / r2))
+        wsum = w.sum(axis=1)
+        vsum = w @ p[:, 2]
+        values.append([float(vs / ws) if ws >= MIN_WEIGHT else None for vs, ws in zip(vsum, wsum)])
     return Grid(lat0=lat0, lon0=lon0, dlat=step, dlon=step, ny=ny, nx=nx, values=values)
 
 
@@ -218,6 +218,53 @@ def to_grid_out(g: Optional[Grid]) -> Optional[GridOut]:
                    values=[[None if v is None else round(v, 1) for v in row] for row in g.values])
 
 
+def isobar_step(g: Optional[Grid]) -> float:
+    """Standard 4 hPa spacing; on a flat day (range under 8 hPa) the 2 hPa
+    intermediates too, so the map still shows the gradient."""
+    vals = [x for row in g.values for x in row if x is not None] if g is not None else []
+    return ISOBAR_STEP if not vals or (max(vals) - min(vals)) >= 8.0 else ISOBAR_STEP / 2
+
+
+def isobar_lines(g: Optional[Grid], step: Optional[float] = None, digits: Optional[int] = None) -> List[ContourLine]:
+    """The isobars of a gridded pressure field. `step` fixes the spacing
+    (a run of frames shares one, or lines would come and go between them);
+    `digits` rounds the points for a payload that carries many frames."""
+    if g is None:
+        return []
+    vals = [x for row in g.values for x in row if x is not None]
+    if not vals:
+        return []
+    step = step or isobar_step(g)
+    out: List[ContourLine] = []
+    level = math.floor(min(vals) / step) * step
+    hi = math.ceil(max(vals) / step) * step
+    while level <= hi:
+        for line in contour(g, level):
+            pts = [[p[0], p[1]] if digits is None else [round(p[0], digits), round(p[1], digits)] for p in line]
+            out.append(ContourLine(level=level, points=pts))
+        level += step
+    return out
+
+
+def slp_points(points: Sequence[Tuple[float, float, Optional[float]]], lat: float, lon: float,
+               lat_span: float, lon_span: float) -> List[Tuple[float, float, float]]:
+    """The (lat, lon, sea-level hPa) points that shape a region's field:
+    inside the box and its margin, plausible, outliers dropped."""
+    half_lat, half_lon = lat_span / 2 + MARGIN_DEG, lon_span / 2 + MARGIN_DEG
+    return _reject_outliers(
+        [(la, lo, v) for (la, lo, v) in points
+         if v is not None and SLP_MIN <= v <= SLP_MAX
+         and abs(la - lat) <= half_lat and abs(lo - lon) <= half_lon],
+        OUTLIER_HPA)
+
+
+def pressure_grid(points: Sequence[Tuple[float, float, Optional[float]]], lat: float, lon: float,
+                  lat_span: float, lon_span: float) -> Optional[Grid]:
+    """Sea-level pressure gridded over a region, as build() grids it."""
+    return grid_field(slp_points(points, lat, lon, lat_span, lon_span), lat, lon, lat_span, lon_span,
+                      ISOBAR_RADIUS_KM)
+
+
 def build(table: Sequence[StationObs], lat: float, lon: float,
           lat_span: float, lon_span: float,
           tend_pts: Optional[Sequence[Tuple[float, float, float]]] = None,
@@ -230,9 +277,7 @@ def build(table: Sequence[StationObs], lat: float, lon: float,
     cos_lat = max(0.2, math.cos(math.radians(lat)))
     inside = [s for s in table
               if abs(s.lat - lat) <= half_lat and abs(s.lon - lon) * cos_lat <= half_lon * cos_lat]
-    slp_pts = _reject_outliers(
-        [(s.lat, s.lon, s.slp) for s in inside if s.slp is not None and SLP_MIN <= s.slp <= SLP_MAX],
-        OUTLIER_HPA)
+    slp_pts = slp_points([(s.lat, s.lon, s.slp) for s in inside], lat, lon, lat_span, lon_span)
     if tend_pts is None:
         tend_pts = [(s.lat, s.lon, s.presTend) for s in inside
                     if s.presTend is not None and abs(s.presTend) <= 15]
@@ -241,21 +286,8 @@ def build(table: Sequence[StationObs], lat: float, lon: float,
          if abs(la - lat) <= half_lat and abs(lo - lon) <= half_lon and abs(v) <= 15],
         OUTLIER_TEND)
 
-    isobars: List[ContourLine] = []
     g = grid_field(slp_pts, lat, lon, lat_span, lon_span, ISOBAR_RADIUS_KM)
-    if g is not None:
-        vals = [x for row in g.values for x in row if x is not None]
-        if vals:
-            # Standard 4 hPa spacing; on a flat day (range under 8 hPa) add
-            # the 2 hPa intermediates so the map still shows the gradient.
-            step = ISOBAR_STEP if (max(vals) - min(vals)) >= 8.0 else ISOBAR_STEP / 2
-            lo = math.floor(min(vals) / step) * step
-            hi = math.ceil(max(vals) / step) * step
-            level = lo
-            while level <= hi:
-                for line in contour(g, level):
-                    isobars.append(ContourLine(level=level, points=[[p[0], p[1]] for p in line]))
-                level += step
+    isobars = isobar_lines(g)
 
     isallobars: List[ContourLine] = []
     g2 = grid_field(tend_pts, lat, lon, lat_span, lon_span, ISALLOBAR_RADIUS_KM)

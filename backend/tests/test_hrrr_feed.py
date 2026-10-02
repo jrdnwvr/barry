@@ -36,8 +36,8 @@ def test_index_ranges_and_merging():
     assert [e.name for e in entries][:3] == ["ABSV", "UGRD", "VGRD"]
     r = grib.byte_ranges(entries, [("UGRD", "10 m above ground"), ("MSLMA", "mean sea level")])
     assert r[("UGRD", "10 m above ground")] == (entries[1].offset, entries[2].offset - 1)
-    r = grib.byte_ranges(entries, [("PRATE", "surface")])
-    assert r[("PRATE", "surface")][1] is None                  # the last message runs to the end
+    r = grib.byte_ranges(entries, [("REFC", "entire atmosphere")])
+    assert r[("REFC", "entire atmosphere")][1] is None                  # the last message runs to the end
     merged = grib.merge_ranges([(0, 9), (10, 19), (40, 49), (50, None)])
     assert merged == [(0, 19), (40, None)]
     assert grib.merge_ranges([(0, 9), (15, 19)], gap=10) == [(0, 19)]

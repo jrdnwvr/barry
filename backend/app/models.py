@@ -251,7 +251,7 @@ class PressureCenter(BaseModel):
 
 class FrontFrame(BaseModel):
     """The surface chart at one valid time: hours=0 is the analysis, 12/24/36/48
-    are WPC's forecast positions."""
+    are WPC's forecast positions, negative an earlier analysis."""
 
     hours: int
     valid: datetime
@@ -262,6 +262,9 @@ class FrontFrame(BaseModel):
 
 class FrontsResponse(BaseModel):
     frames: List[FrontFrame] = Field(default_factory=list)   # analysis first, then progs
+    # The analyses before it, oldest first, `hours` negative: where the
+    # fronts were, for the radar's timeline.
+    history: List[FrontFrame] = Field(default_factory=list)
     source: str = "NWS Weather Prediction Center via Iowa Environmental Mesonet"
     cachedAt: datetime
 
@@ -532,6 +535,24 @@ class PressureFieldResponse(BaseModel):
     cachedAt: datetime
 
 
+class PressureFrameOut(BaseModel):
+    """The isobars of one hour on the radar's timeline. `kind` is observed
+    (gridded from the stations' reports then) or model (the field now plus
+    the model's change from now)."""
+
+    time: int
+    kind: str
+    isobars: List[ContourLine] = Field(default_factory=list)
+    pressureGrid: Optional[GridOut] = None
+
+
+class PressureSeriesResponse(BaseModel):
+    frames: List[PressureFrameOut] = Field(default_factory=list)    # oldest first
+    stepHPa: float
+    run: Optional[datetime] = None          # the model run behind the hours ahead
+    cachedAt: datetime
+
+
 class Runway(BaseModel):
     """One runway, both ends. Headings are degrees TRUE (OurAirports
     le_heading_degT), the same reference the METAR wind uses, so crosswind
@@ -550,11 +571,15 @@ class StationsResponse(BaseModel):
 
 
 class RadarFrameOut(BaseModel):
-    """One radar frame: unix valid time and the RainViewer tile path."""
+    """One radar frame: unix valid time and the tile path, in RainViewer's
+    shape. `nowcast` is true for anything that is not a measurement (what
+    builds to 93 read); `kind` says which: observed, nowcast (the newest
+    frame carried forward) or model (the model's own reflectivity)."""
 
     time: int
     path: str
     nowcast: bool = False
+    kind: str = "observed"
 
 
 class RadarFramesResponse(BaseModel):

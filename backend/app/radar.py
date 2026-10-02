@@ -141,23 +141,28 @@ class RadarStore:
     def times(self) -> List[int]:
         return sorted(self._frames)
 
-    # Nowcast frames are stored under their base frame's time plus 1, 2 or
-    # 3 (seconds), which no ten-minute mark can be: the tile URL then names
-    # the run that made them, so a newer nowcast for the same valid time
-    # never reuses a URL Cloudflare already holds.
+    # Nowcast frames are stored under their base frame's time plus the
+    # number of steps ahead, 1 to 6 (seconds), which no ten-minute mark can
+    # be: the tile URL then names the run that made them, so a newer
+    # nowcast for the same valid time never reuses a URL Cloudflare
+    # already holds.
     STEP_S = 600
+    CAST_STEPS = 6
 
     def observed(self) -> List[int]:
         return [t for t in self.times() if t % self.STEP_S == 0]
 
-    def casts(self, base: int) -> List[int]:
-        return [base + k for k in (1, 2, 3) if (base + k) in self._frames]
+    def casts(self, base: int, steps: int = CAST_STEPS) -> List[int]:
+        return [base + k for k in range(1, steps + 1) if (base + k) in self._frames]
 
     def drop_casts_before(self, base: int) -> None:
         with self._lock:
             old = [t for t in self._frames if t % self.STEP_S and t - t % self.STEP_S < base]
         if old:
             self._drop(old)
+
+    def drop(self, keys) -> None:
+        self._drop(list(keys))
 
     def _drop(self, keys) -> None:
         with self._lock:
@@ -196,6 +201,11 @@ class RadarStore:
 
     def purge(self, before: int) -> None:
         self._drop([t for t in list(self._frames) if t < before])
+
+    def keep_observed(self, marks) -> None:
+        """Drop every observed frame whose time is not one of `marks`."""
+        marks = set(marks)
+        self._drop([t for t in self.observed() if t not in marks])
 
     def tile(self, t: int, z: int, x: int, y: int, size: int = 512) -> Optional[bytes]:
         """The PNG for one tile of one frame, None when the frame is not held."""
@@ -335,14 +345,17 @@ def motion(prev: np.ndarray, cur: np.ndarray):
     return ny, nx, echo > 0
 
 
-def advect(cur: np.ndarray, vy: np.ndarray, vx: np.ndarray, steps: float, chunk: int = 400) -> np.ndarray:
-    """`cur` (full resolution) carried `steps` motion steps forward: each
-    point takes the value from where the motion says it came from. The
-    block-grid motion is spread bilinearly over the full grid, a band of
-    rows at a time so memory stays small."""
+def advect(cur: np.ndarray, vy: np.ndarray, vx: np.ndarray, steps: float, chunk: int = 400,
+           level: int = 0) -> np.ndarray:
+    """`cur` carried `steps` motion steps forward: each point takes the
+    value from where the motion says it came from. The block-grid motion is
+    spread bilinearly over the grid, a band of rows at a time so memory
+    stays small. `level` says which copy `cur` is: 0 the full resolution
+    (the frames the map draws), MOTION_LEVEL the copy the motion was found
+    on (what the scoring carries, at a sixteenth of the work)."""
     h, w = cur.shape
-    scale = BLOCK * 2 ** MOTION_LEVEL                 # full-resolution points per block
-    per = 2 ** MOTION_LEVEL                           # full-resolution points per pooled point
+    per = 2 ** (MOTION_LEVEL - level)                 # points of `cur` per pooled point
+    scale = BLOCK * per                               # and per block
     nby, nbx = vy.shape
     out = np.zeros_like(cur)
     cols = np.arange(w)
@@ -371,6 +384,37 @@ def advect(cur: np.ndarray, vy: np.ndarray, vx: np.ndarray, steps: float, chunk:
         band[inside] = cur[src_r[inside], src_c[inside]]
         out[r0:r0 + len(rows)] = band
     return out
+
+
+def blend_motion(newer, older):
+    """Two motion fields a step apart as one: the mean where both found
+    echo moving, either where only one did. One pair of frames gives a
+    jumpy answer where cells are growing or dying; the pair before steadies
+    it. Each argument is motion()'s (vy, vx, has_echo)."""
+    (ay, ax, _), (by, bx, _) = newer, older
+    am = (ay != 0) | (ax != 0)
+    bm = (by != 0) | (bx != 0)
+    both = am & bm
+    vy = np.where(both, (ay + by) / 2, np.where(am, ay, by)).astype(np.float32)
+    vx = np.where(both, (ax + bx) / 2, np.where(am, ax, bx)).astype(np.float32)
+    return vy, vx
+
+
+SCORE_CODE = int((20 + 32) * 2)       # 20 dBZ: rain worth calling rain
+
+
+def score_counts(pred: np.ndarray, obs: np.ndarray, code: int = SCORE_CODE) -> Tuple[int, int, int]:
+    """(hits, misses, false alarms) of `pred` against `obs` at a threshold,
+    point for point."""
+    p, o = pred >= code, obs >= code
+    return int((p & o).sum()), int((~p & o).sum()), int((p & ~o).sum())
+
+
+def csi(hits: int, misses: int, false_alarms: int) -> Optional[float]:
+    """Critical success index: hits over everything called or seen. None
+    when there was nothing to call."""
+    n = hits + misses + false_alarms
+    return hits / n if n else None
 
 
 def pooled(codes: np.ndarray, level: int) -> np.ndarray:

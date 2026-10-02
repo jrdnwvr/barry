@@ -207,9 +207,15 @@ echo within about 10 km, or three within 20 km where the radar shows no
 storm; a lone flash in clear air once put "lightning nearby" under a
 clear sky.
 
-Parked, fully built: **forecast radar** (HRRR via Iowa Mesonet, +6 h model
-frames) behind `RadarModel.modelFramesEnabled = false` — flip one Bool to ship;
-while false the app makes zero IEM / `/radar/hrrr` requests.
+The radar's timeline (since 2026-10-02, `docs/RADAR_TIMELINE.md`): two
+spans behind the two replay chips, the hour (ten-minute frames from two
+hours back, nowcast to as far as its score allows) and the day (hourly
+from six back to twelve ahead, HRRR reflectivity as Barry's own tiles past
+the nowcast). Isobars and fronts follow the slider; wind, stations,
+lightning, advisories and Change only know now and a note says so. The
+rules are pure functions in `RadarTimeline.swift`. The forecast radar via
+Iowa Mesonet that sat parked behind a flag is gone from the app;
+`/radar/hrrr` is still served and nothing calls it.
 
 **docs/PRODUCTION.md (2026-09-21)** is the hardening plan: an independent
 review of everything since build 86 plus the backend, what was fixed the same

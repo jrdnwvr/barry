@@ -19,6 +19,12 @@ enum UITestSupport {
         return "KLUK"
     }
 
+    private static var layers: [String] {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-uitest-layers"), args.indices.contains(i + 1) else { return [] }
+        return args[i + 1].lowercased().split(separator: ",").map(String.init)
+    }
+
     static func prepare() {
         let d = AppConfig.sharedDefaults
         d.set(true, forKey: "hasOnboarded")
@@ -39,6 +45,17 @@ enum UITestSupport {
             d.set(false, forKey: key)
         }
         d.set("off", forKey: "radarStations")
+        d.set("flow", forKey: "radarWindStyle")
+        // "-uitest-layers wind,arrows,isobars,fronts,troughs,lightning"
+        // opens the radar with those already on, for a hands-on look
+        // without tapping through the chips. "arrows" is Wind in the
+        // Arrows style.
+        let layerKeys = ["wind": "radarWindArrows", "arrows": "radarWindArrows", "isobars": "radarIsobars",
+                         "fronts": "radarFronts", "troughs": "radarTroughs", "lightning": "radarStorms"]
+        for name in layers {
+            if let key = layerKeys[name] { d.set(true, forKey: key) }
+            if name == "arrows" { d.set("arrows", forKey: "radarWindStyle") }
+        }
         d.set(false, forKey: "phoneBarometerEnabled")
         d.set(false, forKey: StormAlerter.enabledKey)
         d.set(false, forKey: StormAlerter.pressureKey)

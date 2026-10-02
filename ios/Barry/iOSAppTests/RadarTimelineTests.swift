@@ -140,6 +140,22 @@ struct RadarTimelineTests {
         #expect(note(wind: true, lightning: true) == "Wind and lightning show now.")
         #expect(note(wind: true, stations: true, lightning: true) == "Wind, stations and lightning show now.")
         #expect(note(change: true) == "Pressure change shows now.")
+        // More than three would not fit beside the frame's time.
+        #expect(note(wind: true, stations: true, lightning: true, advisories: true) == "Other layers show now.")
+    }
+
+    @Test func theNoteHoldsStillWhileALoopPlays() {
+        // The hour's loop never says it; the six-hour loop says it on every
+        // frame, now included; neither changes as the frames go by.
+        for isNow in [true, false] {
+            #expect(!RadarTimeline.showsNowOnlyNote(span: .hour, playing: true, playheadIsNow: isNow))
+            #expect(RadarTimeline.showsNowOnlyNote(span: .day, playing: true, playheadIsNow: isNow))
+        }
+        // Paused: only when the slider is somewhere other than now.
+        for span in [RadarSpan.hour, .day] {
+            #expect(RadarTimeline.showsNowOnlyNote(span: span, playing: false, playheadIsNow: false))
+            #expect(!RadarTimeline.showsNowOnlyNote(span: span, playing: false, playheadIsNow: true))
+        }
     }
 
     @Test func nowIsAQuarterHourEitherSide() {

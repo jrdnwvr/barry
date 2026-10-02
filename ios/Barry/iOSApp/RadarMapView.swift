@@ -832,8 +832,11 @@ struct RadarMapView: UIViewRepresentable {
         static let arrowRowSpacingPt: CGFloat = 60
 
         /// The arrows to draw at this zoom: the grid's columns and rows kept
-        /// every k-th, k from the grid's spacing on screen. The grid is regular
-        /// (lats by lons), so indices come from the sorted distinct values.
+        /// every k-th, k from the grid's spacing on screen. Which ones are
+        /// kept is counted from the equator and the prime meridian, not from
+        /// the grid's own corner, so a new grid for a panned view keeps the
+        /// same arrows where the two overlap instead of shifting the lattice
+        /// by a column.
         private func thinned(_ arrows: [WindArrow], on map: MKMapView) -> [WindArrow] {
             guard arrows.count > 4 else { return arrows }
             func distinct(_ values: [Double]) -> [Double] {
@@ -843,44 +846,91 @@ struct RadarMapView: UIViewRepresentable {
             }
             let lats = distinct(arrows.map(\.lat)), lons = distinct(arrows.map(\.lon))
             guard lats.count > 1, lons.count > 1 else { return arrows }
-            let midLat = lats[lats.count / 2], midLon = lons[lons.count / 2]
-            let p0 = map.convert(CLLocationCoordinate2D(latitude: midLat, longitude: midLon), toPointTo: map)
-            let px = map.convert(CLLocationCoordinate2D(latitude: midLat, longitude: lons[lons.count / 2 + 1 < lons.count ? lons.count / 2 + 1 : lons.count / 2 - 1]), toPointTo: map)
-            let py = map.convert(CLLocationCoordinate2D(latitude: lats[lats.count / 2 + 1 < lats.count ? lats.count / 2 + 1 : lats.count / 2 - 1], longitude: midLon), toPointTo: map)
+            let stepLat = (lats[lats.count - 1] - lats[0]) / Double(lats.count - 1)
+            let stepLon = (lons[lons.count - 1] - lons[0]) / Double(lons.count - 1)
+            // Measured at the middle of the view, where the grid is drawn.
+            let c = map.centerCoordinate
+            let p0 = map.convert(c, toPointTo: map)
+            let px = map.convert(CLLocationCoordinate2D(latitude: c.latitude, longitude: c.longitude + stepLon), toPointTo: map)
+            let py = map.convert(CLLocationCoordinate2D(latitude: c.latitude + stepLat, longitude: c.longitude), toPointTo: map)
             let dx = abs(px.x - p0.x), dy = abs(py.y - p0.y)
             guard dx.isFinite, dy.isFinite, dx > 0, dy > 0 else { return arrows }
             let sx = max(1, Int(ceil(Self.arrowSpacingPt / dx)))
             let sy = max(1, Int(ceil(Self.arrowRowSpacingPt / dy)))
             if sx == 1 && sy == 1 { return arrows }
-            func index(_ v: Double, in list: [Double]) -> Int {
-                var best = 0
-                for (i, x) in list.enumerated() where abs(x - v) < abs(list[best] - v) { best = i }
-                return best
+            func kept(_ v: Double, step: Double, every n: Int) -> Bool {
+                let i = Int((v / step).rounded())
+                return ((i % n) + n) % n == 0
             }
-            // Offset the kept rows and columns so the lattice stays centred.
-            let ox = (lons.count % sx) / 2, oy = (lats.count % sy) / 2
-            return arrows.filter {
-                (index($0.lon, in: lons) - ox) % sx == 0 && (index($0.lat, in: lats) - oy) % sy == 0
-            }
+            return arrows.filter { kept($0.lon, step: stepLon, every: sx) && kept($0.lat, step: stepLat, every: sy) }
+        }
+
+        private static func arrowKey(_ lat: Double, _ lon: Double) -> Int {
+            Int((lat * 10_000).rounded()) &* 4_000_000 &+ Int((lon * 10_000).rounded())
         }
 
         /// Sync arrow annotations only when the drawn set actually changed:
         /// updateUIView runs every animation tick and must not churn
-        /// annotations, and a zoom re-thins the same grid.
+        /// annotations, and a zoom re-thins the same grid. An arrow that is
+        /// in both the old set and the new stays on the map and takes its
+        /// new speed and direction in place; only the ones that are really
+        /// new are added (they fade in, `didAdd`), and only the ones that are
+        /// gone are removed. Swapping the whole set made every arrow blink
+        /// each time a pan fetched the next grid.
         func syncArrows(_ given: [WindArrow], on map: MKMapView) {
             allArrows = given
             let arrows = thinned(given, on: map)
             guard arrows != shownArrows else { return }
             shownArrows = arrows
-            map.removeAnnotations(arrowAnnotations)
-            arrowAnnotations = arrows.map { a in
-                let ann = WindArrowAnnotation()
-                ann.coordinate = CLLocationCoordinate2D(latitude: a.lat, longitude: a.lon)
-                ann.speedKmh = a.speedKmh
-                ann.fromDeg = a.fromDeg
-                return ann
+            var old: [Int: WindArrowAnnotation] = [:]
+            for a in arrowAnnotations { old[Self.arrowKey(a.coordinate.latitude, a.coordinate.longitude)] = a }
+            let unit = WindUnit(rawValue: AppConfig.sharedDefaults.string(forKey: "windUnit") ?? "") ?? .mph
+            var next: [WindArrowAnnotation] = [], added: [WindArrowAnnotation] = []
+            for a in arrows {
+                let key = Self.arrowKey(a.lat, a.lon)
+                if let ann = old.removeValue(forKey: key) {
+                    if ann.speedKmh != a.speedKmh || ann.fromDeg != a.fromDeg {
+                        ann.speedKmh = a.speedKmh
+                        ann.fromDeg = a.fromDeg
+                        (map.view(for: ann) as? WindArrowView)?.configure(speedKmh: a.speedKmh, fromDeg: a.fromDeg, unit: unit)
+                    }
+                    next.append(ann)
+                } else {
+                    let ann = WindArrowAnnotation()
+                    ann.coordinate = CLLocationCoordinate2D(latitude: a.lat, longitude: a.lon)
+                    ann.speedKmh = a.speedKmh
+                    ann.fromDeg = a.fromDeg
+                    next.append(ann)
+                    added.append(ann)
+                }
             }
-            map.addAnnotations(arrowAnnotations)
+            if !old.isEmpty { map.removeAnnotations(Array(old.values)) }
+            arrowAnnotations = next
+            if !added.isEmpty { map.addAnnotations(added) }
+        }
+
+        /// A wind arrow that joins the map comes up over a quarter second
+        /// instead of appearing.
+        func mapView(_ mapView: MKMapView, didAdd views: [MKAnnotationView]) {
+            for case let v as WindArrowView in views {
+                let target = v.alpha
+                v.alpha = 0
+                UIView.animate(withDuration: 0.25) { v.alpha = target }
+            }
+        }
+
+        /// The map is going away: stop everything that would touch it later.
+        /// The crossfade's display link holds this coordinator, and fired
+        /// into a renderer whose map was already torn down when the radar
+        /// was closed in the middle of a fade (a crash on iOS 17, found
+        /// 2026-10-02).
+        func teardown() {
+            displayLink?.invalidate()
+            displayLink = nil
+            fadeFrom = nil
+            fadeTo = nil
+            warmToken += 1
+            flowView?.stop()
         }
 
         /// The fronts layer: one world-sized overlay whose renderer reads a state
@@ -975,6 +1025,10 @@ struct RadarMapView: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
+
+    static func dismantleUIView(_ map: MKMapView, coordinator: Coordinator) {
+        coordinator.teardown()
+    }
 
     func makeUIView(context: Context) -> MKMapView {
         let map = MKMapView()

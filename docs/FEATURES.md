@@ -650,7 +650,11 @@ stored keys, but each has its own model, so they fetch separately.
 - Seen: muted Apple map, no points of interest, no compass, a red pin on the
   station, opening span 3.2°, minimum camera distance 60 km.
 - Lives: `RadarMapView.swift` › `makeUIView`, `updateUIView`.
-- Rules: when the station coordinate changes the pin moves and the map
+- Rules: when the map is taken down (`dismantleUIView`) the crossfade's
+  display link, the pending tile warm-up and the flow layer are stopped:
+  closing the radar in the middle of a crossfade crashed on iOS 17, the
+  link firing into a renderer whose map was gone (found 2026-10-02). When
+  the station coordinate changes the pin moves and the map
   glides. `radar.button.recenter` glides back to 3.2° on the station.
 
 ### radar.credit
@@ -748,9 +752,15 @@ stored keys, but each has its own model, so they fetch separately.
   (`docs/RADAR_TIMELINE.md`): the isobars and the Pressure shading
   (`radar.layer.isobars`), the fronts, troughs and H and L
   (`radar.layer.fronts`). Wind, stations, lightning, advisories and the
-  Change field only know now: they stay drawn, and while the slider is
-  more than fifteen minutes from the newest frame the note line says so
-  ("Wind and stations show now.", `radar.nowOnlyNote`).
+  Change field only know now: they stay drawn, and the frame-time line
+  says so at its far end ("Wind and stations show now.", "Other layers
+  show now." past three names; `radar.nowOnlyNote`). It is beside the
+  time, not under it, and whether it shows only changes with a tap or a
+  scrub: never while the hour loop plays, throughout while the six-hour
+  loop plays, and on a paused slider more than fifteen minutes from the
+  newest frame (`RadarTimeline.showsNowOnlyNote`). The first version sat
+  on a line of its own and followed the slider, so it came and went with
+  every pass of a loop through now and the card jumped with it.
 - Lives: `RadarTimeline.swift` (the rules, pure functions);
   `RadarView.swift` › `radarControls`, `replay`; `RadarModel.swift` ›
   `setSpan`, `loopStart`, `playheadTime`.
@@ -764,9 +774,8 @@ stored keys, but each has its own model, so they fetch separately.
   chip is tapped and again once five minutes old; nothing else refreshes
   it while the screen stays open. When the day span's list cannot be
   fetched the timeline stays on the hour. Under the frame time there is at
-  most one note (`radar.note`): the now-only layers first, then the wind
-  altitude, then a stale lightning feed, then a calm map with Wind on;
-  usually none.
+  most one note (`radar.note`): the wind altitude first, then a stale
+  lightning feed, then a calm map with Wind on; usually none.
 - Tests: `RadarTimelineTests` (loop starts, the time line's words, frame
   keys); the UI test checks Now, scrub and both loops' selection states.
 
@@ -815,14 +824,29 @@ stored keys, but each has its own model, so they fetch separately.
   2026-09-25). Chip "Wind".
 - Lives: `WindFlowView.swift` (the Metal shaders are a string in it,
   compiled on the device); `RadarMapView.syncArrows`.
-- Data: `/radar/field`: 11 by 8 points per region from the server's HRRR
-  store, or 7 by 5 from Open-Meteo off the HRRR grid (`source` says
-  which); boundary layer and CAPE present but unused on the map.
+- Data: `/radar/field?pad=0.5`: from the server's HRRR store, every point
+  of a lattice the whole map shares (about 11 across the view and 8 down,
+  the step from a fixed ladder) out to half a span past each edge of the
+  view; or 7 by 5 inside the view from Open-Meteo off the HRRR grid
+  (`source` says which); boundary layer and CAPE present but unused on the
+  map. The winds aloft (`/radar/field/levels`) come the same way.
 - Settings: `radarWindArrows` true (the Wind chip; historical name),
   `radarWindStyle` "flow" or "arrows".
-- Rules: particles scale with view area (70 to 240), 30 fps cap, CPU
-  simulation and one Metal draw call, anchored to the ground so pans need
-  nothing, respawn after a big zoom, a new grid bends existing streaks.
+- Rules: particles scale with view area (120 to 400), 30 fps cap, CPU
+  simulation and one Metal draw call, anchored to the ground, a new grid
+  bends existing streaks. Panning (since 2026-10-02): the grid reaches
+  half a span past the view and is kept until the view has moved a fifth
+  of its span, so wind is there wherever a pan stops; streaks live 15% of
+  the view past each edge, and one carried out of reach comes back in on
+  the side the pan uncovers with its trail already flown (`grown`), so
+  that edge is never bare and nothing sprouts in step afterwards; a
+  reading looks only at the lattice's samples within a step and a half.
+  Arrows: the ones kept at a zoom are counted from the equator and the
+  prime meridian, so the next grid keeps the same arrows; arrows in both
+  the old set and the new stay on the map and are updated in place, new
+  ones fade in over a quarter second. Before, the grid stopped 12% short
+  of the view's own edges and was laid out afresh per region: a pan showed
+  bare map, then every arrow moved.
   Arrows under 6 km/h are dropped. The grid is thinned on the phone to a
   lattice at least 76 points apart across and 60 down at the current
   zoom (every second, third... column and row), at the surface and at
@@ -1268,7 +1292,7 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 | `GET /radar/lightning/{t}/{size}/{z}/{x}/{y}.png` | the grid's unix time, 256 or 512, zoom to 12 | an RGBA PNG, violet by the chance of lightning in the next hour | MRMS LightningProbabilityNext60min, the newest three held | as the radar tiles | the Lightning layer |
 | `GET /radar/tiles/{t}/{size}/{z}/{x}/{y}/{color}/{opts}.png` | the frame's unix time, 256 or 512, zoom to 12 | an RGBA PNG in Universal Blue, empty tiles about 1 KB | the MRMS store: uint8 dBZ on the 0.01 degree grid and four max-pooled copies for wide views | `public, max-age=604800, immutable` (Cloudflare keeps them); misses `no-store`; 64 MB in process; own budget, 1,500 a minute per client (`BARRY_TILE_RATE_PER_MIN`) | the radar |
 | `GET /aloft` | `lat`, `lon` | 25 hourly columns, `source`, `stale`, and what is there now: `turbulence` (GTG) and `icing` (CIP) | the HRRR column feeds; Open-Meteo pressure levels off the grid | HRRR: 1 h per 0.1° cell and column run; Open-Meteo: 1 h per 0.1° cell, last good 12 h; the hazards are read fresh each request | Aloft |
-| `GET /radar/field` | `lat`, `lon`, spans | wind, boundary layer and CAPE at 88 points (HRRR) or 35 (Open-Meteo), and `source` | the HRRR store; Open-Meteo multi-point (35 weighted calls) off the HRRR grid or before a cycle is held | HRRR: none needed; Open-Meteo: until five past the next hour, at least 10 min; centre 0.05°, spans 0.5°; last good copy for 6 h | the radar wind layer |
+| `GET /radar/field` | `lat`, `lon`, spans, `pad` (0 to 0.75 of the span, optional) | wind, boundary layer and CAPE, and `source`. From HRRR: 88 points inside the view, or with `pad` every point of the shared lattice out to that far past each edge (about 300 at 0.5, 30 KB). From Open-Meteo: 35 inside the view, `pad` or not | the HRRR store; Open-Meteo multi-point (35 weighted calls) off the HRRR grid or before a cycle is held | HRRR: none needed; Open-Meteo: until five past the next hour, at least 10 min; centre 0.05°, spans 0.5°; last good copy for 6 h | the radar wind layer |
 | `GET /radar/field/levels` | same | the same points at five levels, underground levels left out, and `source` | as `/radar/field` | as `/radar/field` | the altitude rail |
 | `GET /radar/heights` | `lat`, `lon`, spans, `hPa` (925, 850, 700, 600, 500) | height contours in metres, 30 m apart at 700 hPa and below and 60 m above, with the run and valid time | the HRRR store only; 503 off its grid | until five past the next hour, per level, region and run | the altitude rail |
 | `GET /models/scores` | `days` (1 to 60, default 14) | `days`: per UTC day, newest first, hours scored and for HRRR and RRFS (the same cycle, the same lead) the mean sea-level pressure error (raw, bias, and with each hour's bias taken out), 10 m wind speed error in knots, direction error where the wind is 8 kt or more, and the lead; `rainStarts`: the "rain starts at" calls scored, hits, hit rate, calls pending, and the same by day; `nowcast`: per lead (10 to 60 minutes) the radar nowcast's CSI at 20 dBZ against the frame that arrived, persistence's beside it, frames checked, the same by day, and `shownMin`, how far the timeline is listing it now | none: the model store and the bulk METAR table, scored once an hour (`modelscore.py`), kept 60 days in `state/model_scores`; the rain calls in `state/rain_calls`; the nowcast's counts by UTC hour in `state/nowcast_scores` | none | Jordan, for the RRFS switch and the rain line |

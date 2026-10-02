@@ -675,12 +675,6 @@ struct RadarPanel: View {
     /// lightning feed (an empty map would read as "no lightning"), or a calm
     /// map with the wind layer on (it would read as broken). In that order.
     private var noteText: (text: String, id: String)? {
-        // Scrubbed or looped away from now: say which layers did not come along.
-        if !model.playheadIsNow,
-           let note = RadarTimeline.nowOnlyNote(wind: showWind, stations: stationsOn, lightning: showStorms,
-                                                advisories: showAdvisories, change: field == .change) {
-            return (note, "radar.nowOnlyNote")
-        }
         if showWind, model.windLevel != 0 {
             let stop = WindAltitude.stop(model.windLevel)
             let what = model.heights != nil ? "Wind and \(stop.hPa) mb heights" : "Wind"
@@ -754,13 +748,38 @@ struct RadarPanel: View {
                 .accessibilityAddTraits(model.lockedToNow && !model.playing ? .isSelected : [])
                 .accessibilityIdentifier("radar.now")
             }
-            Text(frameTimeText)
-                .font(.caption2.weight(.medium))
-                .monospacedDigit()
-                .foregroundStyle(timeLabelColor)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier("radar.frameTime")
+            // The frame's time, and on the same line the layers that are
+            // not on its clock: beside it, not under it, so nothing on the
+            // card moves when the words come or go.
+            HStack(spacing: 8) {
+                Text(frameTimeText)
+                    .font(.caption2.weight(.medium))
+                    .monospacedDigit()
+                    .foregroundStyle(timeLabelColor)
+                    .fixedSize()
+                    .accessibilityIdentifier("radar.frameTime")
+                Spacer(minLength: 0)
+                if let note = nowOnlyNote {
+                    Text(note)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                        .transition(.opacity)
+                        .accessibilityIdentifier("radar.nowOnlyNote")
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: nowOnlyNote)
         }
+    }
+
+    /// Which layers stayed at now, when the timeline is somewhere else
+    /// (RadarTimeline.showsNowOnlyNote: steady while a loop plays).
+    private var nowOnlyNote: String? {
+        guard RadarTimeline.showsNowOnlyNote(span: model.span, playing: model.playing,
+                                             playheadIsNow: model.playheadIsNow) else { return nil }
+        return RadarTimeline.nowOnlyNote(wind: showWind, stations: stationsOn, lightning: showStorms,
+                                         advisories: showAdvisories, change: field == .change)
     }
 
     private func replayChip(_ span: RadarSpan) -> some View {

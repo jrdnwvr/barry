@@ -538,6 +538,16 @@ final class RadarModel: ObservableObject {
         }
     }
 
+    /// How far past each edge of the view the wind grid is asked for, as a
+    /// fraction of the span. A grid is kept until the view has moved a
+    /// fifth of its span (`nearEnough`), so with half a span to spare the
+    /// wind is already there wherever a pan stops, and the points, on a
+    /// lattice every region shares, are the same ones as before. Until
+    /// 2026-10-02 the grid stopped short of the view's own edges and was
+    /// laid out afresh for each region: a pan showed bare map, then every
+    /// arrow jumped.
+    static let windPad = 0.5
+
     /// The model wind for the region in ONE backend call (the server samples
     /// its 7×5 grid and shares one Open-Meteo request per region cell across
     /// users).
@@ -550,7 +560,8 @@ final class RadarModel: ObservableObject {
         do {
             resp = try await BarryAPI().fieldGrid(
                 lat: region.center.latitude, lon: region.center.longitude,
-                latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta)
+                latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta,
+                pad: Self.windPad)
         } catch {
             // Enrichment: keep whatever we had, and try once more after a block.
             if !retried { retryLater(for: region) { [weak self] in await self?.fetchField(region: region, retried: true) } }
@@ -574,7 +585,8 @@ final class RadarModel: ObservableObject {
         do {
             resp = try await BarryAPI().fieldLevels(
                 lat: region.center.latitude, lon: region.center.longitude,
-                latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta)
+                latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta,
+                pad: Self.windPad)
         } catch {
             if !retried { retryLater(for: region) { [weak self] in await self?.fetchLevels(region: region, retried: true) } }
             return

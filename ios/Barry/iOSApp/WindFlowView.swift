@@ -61,9 +61,15 @@ final class WindFlowView: UIView {
     /// Particles per unit of view area, so the dashboard's card does
     /// proportionally less work than the full screen.
     private var targetParticles: Int {
-        max(70, min(Self.maxParticles, Int(bounds.width * bounds.height / 1150)))
+        let area = bounds.width * bounds.height * (1 + 2 * Self.reach) * (1 + 2 * Self.reach)
+        return max(120, min(Self.maxParticles, Int(area / 1150)))
     }
-    private static let maxParticles = 240
+    private static let maxParticles = 400
+    /// Streaks live this far past each edge of the view, as a fraction of
+    /// its size, so a pan uncovers ones that are already flying. The count
+    /// above grows with the area, which keeps what is on screen as dense as
+    /// it was.
+    private static let reach: CGFloat = 0.15
     private let trailLength = WindFlowView.maxTrailLength   // points kept in the streak
     private let trailStride = 3                // frames between kept points
     /// 20 km/h -> 38 px/s on screen. Trail length is speed times the trail's
@@ -268,9 +274,11 @@ final class WindFlowView: UIView {
         link = nil
     }
 
-    /// The map moved. Streaks ride the ground, so a pan needs nothing at all.
-    /// A zoom leaves fresh territory empty, so top it up: respawn whatever has
-    /// gone off screen, plus a slice of the rest when the scale really changed.
+    /// The map moved. Streaks ride the ground, so a pan needs nothing for the
+    /// ones still in reach; the ones it carried out of reach come back in on
+    /// the far side, where the pan uncovered ground, already grown. A zoom
+    /// leaves fresh territory empty, so a slice of the rest is replaced too
+    /// when the scale really changed.
     func mapDidMove() {
         guard bounds.width > 0, let map = mapView else { return }
         let rect = map.visibleMapRect
@@ -280,9 +288,10 @@ final class WindFlowView: UIView {
         guard !particles.isEmpty else { return }
         for i in particles.indices {
             let s = Self.screen(particles[i].head, rect: rect, scale: scale)
-            let off = s.x < 0 || s.x > bounds.width || s.y < 0 || s.y > bounds.height
-            if off || (zoomed && Bool.random()) {
-                particles[i] = spawn(rect: rect, scale: scale)
+            if !inReach(s) {
+                particles[i] = grown(at: wrapped(s), rect: rect, scale: scale)
+            } else if zoomed && Bool.random() {
+                particles[i] = grown(at: randomPoint(), rect: rect, scale: scale)
             }
         }
     }
@@ -290,7 +299,7 @@ final class WindFlowView: UIView {
     // MARK: Field
 
     private func rebuildField() {
-        guard !samples.isEmpty else { field = []; return }
+        guard !samples.isEmpty else { field = []; cells = []; return }
         let lat0 = samples.reduce(0) { $0 + $1.lat } / Double(samples.count)
         let lon0 = samples.reduce(0) { $0 + $1.lon } / Double(samples.count)
         fieldCenter = CLLocationCoordinate2D(latitude: lat0, longitude: lon0)
@@ -302,7 +311,38 @@ final class WindFlowView: UIView {
                           u: CGFloat(-s.speedKmh * sin(rad)),
                           v: CGFloat(-s.speedKmh * cos(rad)))
         }
+        // The samples sit on a lattice, so they are filed by its rows and
+        // columns: a reading then looks at the few around the point, not at
+        // every one (the padded grid has four times as many as the view).
+        func count(_ values: [Double]) -> Int {
+            var n = 0
+            var last = -Double.infinity
+            for v in values.sorted() where v - last > 1e-6 { n += 1; last = v }
+            return n
+        }
+        nx = max(1, count(samples.map(\.lon)))
+        ny = max(1, count(samples.map(\.lat)))
+        let xs = field.map(\.x), ys = field.map(\.y)
+        minX = xs.min() ?? 0
+        minY = ys.min() ?? 0
+        cellW = nx > 1 ? max(0.001, ((xs.max() ?? 0) - minX) / CGFloat(nx - 1)) : 1
+        cellH = ny > 1 ? max(0.001, ((ys.max() ?? 0) - minY) / CGFloat(ny - 1)) : 1
+        cells = Array(repeating: [], count: nx * ny)
+        for (i, f) in field.enumerated() {
+            let cx = min(nx - 1, max(0, Int(((f.x - minX) / cellW).rounded())))
+            let cy = min(ny - 1, max(0, Int(((f.y - minY) / cellH).rounded())))
+            cells[cy * nx + cx].append(i)
+        }
     }
+
+    private var cells: [[Int]] = []
+    private var nx = 1, ny = 1
+    private var minX: CGFloat = 0, minY: CGFloat = 0
+    private var cellW: CGFloat = 1, cellH: CGFloat = 1
+    /// How far a sample reaches, in lattice steps. Its weight falls to
+    /// nothing there, so the field has no seams where the set of samples
+    /// in reach changes.
+    private static let sampleReach: CGFloat = 1.6
 
     private static func localKm(lat: Double, lon: Double, around c: CLLocationCoordinate2D) -> (CGFloat, CGFloat) {
         let kmPerDeg = 111.32
@@ -311,20 +351,38 @@ final class WindFlowView: UIView {
     }
 
     /// Wind (u east, v north, km/h) on the ground at a map point:
-    /// inverse-distance over the grid, smooth enough for eyes and cheap
-    /// enough for 30 fps.
+    /// inverse-distance over the samples within a step and a half, smooth
+    /// enough for eyes and cheap enough for 30 fps. Past the grid's edge,
+    /// the wind at the edge.
     private func wind(at p: MKMapPoint) -> (u: CGFloat, v: CGFloat) {
-        guard !field.isEmpty else { return (0, 0) }
+        guard !field.isEmpty, !cells.isEmpty else { return (0, 0) }
         let c = p.coordinate
         let (x, y) = Self.localKm(lat: c.latitude, lon: c.longitude, around: fieldCenter)
+        // In lattice steps, held to the grid so a point beyond it reads the edge.
+        let gx = min(CGFloat(nx - 1), max(0, (x - minX) / cellW))
+        let gy = min(CGFloat(ny - 1), max(0, (y - minY) / cellH))
+        let cx = Int(gx.rounded()), cy = Int(gy.rounded())
+        let r2 = Self.sampleReach * Self.sampleReach
         var wu: CGFloat = 0, wv: CGFloat = 0, wsum: CGFloat = 0
-        for s in field {
-            let d2 = (s.x - x) * (s.x - x) + (s.y - y) * (s.y - y)
-            if d2 < 1 { return (s.u, s.v) }
-            let w = 1 / d2
-            wu += s.u * w; wv += s.v * w; wsum += w
+        var nearest = -1
+        var nearestD2 = CGFloat.infinity
+        for j in max(0, cy - 2)...min(ny - 1, cy + 2) {
+            for i in max(0, cx - 2)...min(nx - 1, cx + 2) {
+                for k in cells[j * nx + i] {
+                    let s = field[k]
+                    let dx = (s.x - minX) / cellW - gx, dy = (s.y - minY) / cellH - gy
+                    let d2 = dx * dx + dy * dy
+                    if d2 < nearestD2 { nearestD2 = d2; nearest = k }
+                    guard d2 < r2 else { continue }
+                    let fall = 1 - d2 / r2
+                    let w = fall * fall / (d2 + 0.01)
+                    wu += s.u * w; wv += s.v * w; wsum += w
+                }
+            }
         }
-        return wsum > 0 ? (wu / wsum, wv / wsum) : (0, 0)
+        if wsum > 0 { return (wu / wsum, wv / wsum) }
+        // A hole in the lattice (the model's own edge): the nearest sample.
+        return nearest >= 0 ? (field[nearest].u, field[nearest].v) : (0, 0)
     }
 
     // MARK: Map <-> screen
@@ -346,17 +404,64 @@ final class WindFlowView: UIView {
         let rect = map.visibleMapRect
         let scale = rect.size.width / Double(bounds.width)
         lastScale = scale
-        particles = (0..<targetParticles).map { _ in spawn(rect: rect, scale: scale) }
-        // Stagger ages so the whole field doesn't blink out in sync.
-        for i in particles.indices { particles[i].age = Int.random(in: 0..<particles[i].life) }
+        particles = (0..<targetParticles).map { _ in grown(at: randomPoint(), rect: rect, scale: scale) }
     }
 
+    /// The view and its reach beyond each edge, in the view's own points.
+    private var reachRect: CGRect {
+        bounds.insetBy(dx: -bounds.width * Self.reach, dy: -bounds.height * Self.reach)
+    }
+
+    private func inReach(_ s: CGPoint) -> Bool { reachRect.contains(s) }
+
+    private func randomPoint() -> CGPoint {
+        let r = reachRect
+        return CGPoint(x: CGFloat.random(in: r.minX...r.maxX), y: CGFloat.random(in: r.minY...r.maxY))
+    }
+
+    /// A point that left the reach on one side, brought back in on the
+    /// other: the side a pan is uncovering.
+    private func wrapped(_ s: CGPoint) -> CGPoint {
+        let r = reachRect
+        func wrap(_ v: CGFloat, _ lo: CGFloat, _ size: CGFloat) -> CGFloat {
+            guard size > 0, v.isFinite else { return lo }
+            let m = (v - lo).truncatingRemainder(dividingBy: size)
+            return lo + (m < 0 ? m + size : m)
+        }
+        return CGPoint(x: wrap(s.x, r.minX, r.width), y: wrap(s.y, r.minY, r.height))
+    }
+
+    /// A streak at the start of its life, a single point: how one is born
+    /// in the ordinary way, growing from where it starts.
     private func spawn(rect: MKMapRect, scale: Double) -> Particle {
-        let p = CGPoint(x: CGFloat.random(in: -10...(bounds.width + 10)),
-                        y: CGFloat.random(in: -10...(bounds.height + 10)))
-        let m = Self.ground(p, rect: rect, scale: scale)
+        let m = Self.ground(randomPoint(), rect: rect, scale: scale)
         return Particle(trail: [m], head: m, age: 0,
                         life: Int.random(in: minLife...maxLife), speed: 0, sinceSample: 0)
+    }
+
+    /// A streak already part-way through its life with the trail it would
+    /// have by then, for ground the map has just uncovered: it is there
+    /// when the ground is, instead of sprouting a moment later in step with
+    /// every other new one. The trail is flown forward from `p`, one wind
+    /// reading per kept point.
+    private func grown(at p: CGPoint, rect: MKMapRect, scale: Double) -> Particle {
+        var head = Self.ground(p, rect: rect, scale: scale)
+        var trail = [head]
+        let life = Int.random(in: minLife...maxLife)
+        let points = Int.random(in: 2...trailLength)
+        let dt = CGFloat(trailStride) / CGFloat(fps)
+        var speed: CGFloat = 0
+        for _ in 1..<points {
+            let (u, v) = wind(at: head)
+            head = MKMapPoint(x: head.x + Double(u * pxPerKmh * dt) * scale,
+                              y: head.y - Double(v * pxPerKmh * dt) * scale)
+            trail.append(head)
+            speed = hypot(u, v)
+        }
+        // Old enough to have flown that trail, with life left to keep it.
+        let flown = (points - 1) * trailStride
+        let age = min(life - 1, Int.random(in: flown...max(flown, life * 2 / 3)))
+        return Particle(trail: trail, head: head, age: age, life: life, speed: speed, sinceSample: 0)
     }
 
     @objc private func tick() {
@@ -365,7 +470,6 @@ final class WindFlowView: UIView {
         let rect = map.visibleMapRect
         let scale = rect.size.width / Double(bounds.width)
         let dt: CGFloat = 1 / CGFloat(fps)
-        let margin: CGFloat = 20
         for i in particles.indices {
             var pt = particles[i]
             let (u, v) = wind(at: pt.head)
@@ -386,9 +490,13 @@ final class WindFlowView: UIView {
             pt.speed = hypot(u, v)
             pt.age += 1
             let s = Self.screen(next, rect: rect, scale: scale)
-            let gone = s.x < -margin || s.x > bounds.width + margin
-                || s.y < -margin || s.y > bounds.height + margin
-            particles[i] = (pt.age >= pt.life || gone) ? spawn(rect: rect, scale: scale) : pt
+            if !inReach(s) {
+                // Flown or panned out of reach: back in on the far side,
+                // grown, so the edge a pan uncovers is never bare.
+                particles[i] = grown(at: wrapped(s), rect: rect, scale: scale)
+            } else {
+                particles[i] = pt.age >= pt.life ? spawn(rect: rect, scale: scale) : pt
+            }
         }
         render(mapRect: rect, scale: scale)
     }

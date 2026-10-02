@@ -124,8 +124,19 @@ enum RadarTimeline {
         return .frame(analysis)
     }
 
-    /// The one line that says which layers are not on the slider's clock,
-    /// nil when the slider is on now or none of them is showing.
+    /// Whether to say which layers are not on the slider's clock. The answer
+    /// only changes when a finger does something (a chip, a scrub, Now),
+    /// never as the loop plays: a line that came and went with every pass
+    /// through now was the most distracting thing on the screen. The hour's
+    /// loop says nothing, as it never did (those layers are an hour off at
+    /// most); the six-hour loop says it throughout; a paused slider says it
+    /// when it is somewhere other than now.
+    static func showsNowOnlyNote(span: RadarSpan, playing: Bool, playheadIsNow: Bool) -> Bool {
+        playing ? span == .day : !playheadIsNow
+    }
+
+    /// The words: the layers that stayed at now, by name while they fit
+    /// beside the frame's time, nil when none of them is showing.
     static func nowOnlyNote(wind: Bool, stations: Bool, lightning: Bool, advisories: Bool,
                             change: Bool) -> String? {
         var names: [String] = []
@@ -139,7 +150,8 @@ enum RadarTimeline {
         switch names.count {
         case 1: list = first
         case 2: list = "\(first) and \(names[1])"
-        default: list = names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1]
+        case 3: list = "\(first), \(names[1]) and \(names[2])"
+        default: return "Other layers show now."
         }
         let subject = list.prefix(1).uppercased() + list.dropFirst()
         return "\(subject) \(names.count == 1 && !first.hasSuffix("s") ? "shows" : "show") now."

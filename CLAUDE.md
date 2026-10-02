@@ -313,7 +313,7 @@ says so. The level is not remembered between opens.
 
 ## Tests and checks (added 2026-09-22)
 
-- Backend: `cd backend && .venv/bin/pytest -q` (402 tests; Hypothesis
+- Backend: `cd backend && .venv/bin/pytest -q` (404 tests; Hypothesis
   property tests read the app's own OpenAPI document). CI runs the suite,
   pip-audit, the image build and trivy on every push touching `backend/`.
   `tools/loadtest.py` against a local uvicorn started with
@@ -324,7 +324,11 @@ says so. The level is not remembered between opens.
   project.yml) and BarryUITests (the radar walk; launches with `-uitest`,
   which `UITestSupport.prepare()` turns into a known state; add
   `-uitest-station KSEA` to open on another airport, for a hands-on look
-  at weather that is somewhere else today). Give the UI
+  at weather that is somewhere else today; `-uitest-radar` opens the
+  full-screen radar and `-uitest-layers wind,isobars,fronts` (also arrows,
+  troughs, lightning) opens it with those on, which beats driving the
+  chip bar with simulated touches. The simulator tool's own screenshots
+  can be stale; `xcrun simctl io <udid> screenshot` is not). Give the UI
   test a specific simulator: `-destination 'platform=iOS Simulator,id=<udid>'`.
   The name "iPhone 17 Pro" matches one device per installed runtime, and the
   iOS 27 beta one hung the run for twenty minutes without a line of output.

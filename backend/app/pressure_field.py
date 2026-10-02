@@ -209,13 +209,15 @@ def extrema(g: Optional[Grid], min_abs: float = EXTREMUM_MIN,
     return out
 
 
-def to_grid_out(g: Optional[Grid]) -> Optional[GridOut]:
+def to_grid_out(g: Optional[Grid], digits: int = 1) -> Optional[GridOut]:
     """The gridded field itself, for the app's shaded overlay. None cells
-    become null; values rounded to keep the payload small."""
+    become null; values rounded to keep the payload small (a tenth is
+    plenty for shading; the timeline's grids, which the app contours and
+    slides between, carry a hundredth)."""
     if g is None:
         return None
     return GridOut(lat0=g.lat0, lon0=g.lon0, dlat=g.dlat, dlon=g.dlon, ny=g.ny, nx=g.nx,
-                   values=[[None if v is None else round(v, 1) for v in row] for row in g.values])
+                   values=[[None if v is None else round(v, digits) for v in row] for row in g.values])
 
 
 def isobar_step(g: Optional[Grid]) -> float:

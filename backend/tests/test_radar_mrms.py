@@ -52,15 +52,15 @@ def ub(dbz):
 
 
 @pytest.mark.asyncio
-async def test_frames_every_ten_minutes_for_two_hours_and_every_hour_for_six(client, upstream, mrms_on):
+async def test_frames_every_ten_minutes_for_two_hours_and_every_twenty_for_six(client, upstream, mrms_on):
     s = PressureService(client)
-    assert await s.poll_radar() == 17
+    assert await s.poll_radar() == 25
     times = s.radar.observed()
     recent, older = times[-13:], times[:-13]
     assert all(b - a == 600 for a, b in zip(recent, recent[1:]))
     assert recent[-1] == int(datetime(2026, 9, 25, 3, 0, tzinfo=timezone.utc).timestamp())
-    # 21:00 to 00:00 UTC: the hours before the ten-minute frames begin at 01:00.
-    assert older == [recent[-1] - h * 3600 for h in (6, 5, 4, 3)]
+    # 21:00 to 00:40 UTC: the twenty-minute marks before the ten-minute frames begin at 01:00.
+    assert older == [recent[-1] - 6 * 3600 + 1200 * k for k in range(12)]
     assert await s.poll_radar() == 0                             # held
     f = await s.get_radar_frames()
     assert f.host == "https://barry.wide-stack.com" and len(f.frames) == 10
@@ -147,14 +147,14 @@ async def test_a_newer_frame_replaces_the_nowcast(client, upstream, mrms_on, mon
     await s.poll_radar()
     new = s.radar.observed()[-1]
     assert new == base + 600 and s.radar.casts(new) == [new + k for k in range(1, 7)]
-    # The 01:00 frame left the ten-minute window and stays as an hourly one.
-    assert not s.radar.casts(base) and len(s.radar.observed()) == 17
+    # The 01:00 frame left the ten-minute window and stays as a twenty-minute one.
+    assert not s.radar.casts(base) and len(s.radar.observed()) == 25
     assert base - 7200 in s.radar.observed() and base - 7200 + 600 in s.radar.observed()
     much_later = NOW + timedelta(minutes=20)
     monkeypatch.setattr("app.service._now", lambda: much_later)
     upstream.clock = lambda: much_later
     await s.poll_radar()
-    # 01:10 is neither on the hour nor within two hours of 03:20 any more.
+    # 01:10 is neither on a twenty-minute mark nor within two hours of 03:20 any more.
     assert base - 7200 + 600 not in s.radar.observed() and base - 7200 in s.radar.observed()
 
 

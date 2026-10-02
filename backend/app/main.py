@@ -359,13 +359,12 @@ async def radar_pressure_series(
     lon: float = Query(..., ge=-180, le=180),
     latSpan: float = Query(..., gt=0, le=180),
     lonSpan: float = Query(..., gt=0, le=360),
-    grid: bool = Query(False),
 ):
-    """Isobars for a map region at each hour of the radar's day span: six
-    hours back from the station snapshots, twelve ahead from the field now
-    and the model's change. `grid=1` adds each hour's gridded field, for
-    the shading. No upstream call."""
-    resp = await get_service().get_pressure_series(lat, lon, latSpan, lonSpan, grid)
+    """Sea-level pressure gridded over a map region at each hour of the
+    radar's day span and now: six hours back from the station snapshots,
+    twelve ahead from the field now and the model's change. All on one
+    lattice, for the app to slide between and contour. No upstream call."""
+    resp = await get_service().get_pressure_series(lat, lon, latSpan, lonSpan)
     return resp.model_dump(mode="json", by_alias=True, exclude_none=True)
 
 

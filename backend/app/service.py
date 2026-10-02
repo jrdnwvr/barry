@@ -1153,10 +1153,10 @@ class PressureService:
 
     async def poll_radar(self) -> int:
         """Fetch the MRMS file nearest each mark that isn't held (every ten
-        minutes of the last two hours, every hour of the last six), and
+        minutes of the last two hours, every twenty of the last six), and
         drop the frames that are no longer on a mark."""
         now = _now()
-        keys = await mrms.recent_keys(self._client, now, hours=mrms.HOURLY_KEEP_H)
+        keys = await mrms.recent_keys(self._client, now, hours=mrms.OLDER_KEEP_H)
         wanted = mrms.pick(keys, now)
         got = 0
         # Newest first: after a cold start the map has its last hour before
@@ -1520,6 +1520,7 @@ class PressureService:
     HOUR_SPAN_S = 2 * 3600       # the hour span reaches this far back, every ten minutes
     DAY_BACK_H, DAY_AHEAD_H = 6, 12
     DAY_NEAR_S = 30 * 60
+    DAY_STEP_S = 20 * 60
 
     def _cast_frames(self, base: int, steps: int) -> List[RadarFrameOut]:
         return [RadarFrameOut(time=base + (key - base) * self.radar.STEP_S, path=f"/radar/tiles/{key}",
@@ -1537,10 +1538,10 @@ class PressureService:
         """The timeline from Barry's own frames, None when they are too few
         or stale. No `span`: what builds to 93 expect, the last hour and
         thirty minutes of nowcast. `hour`: every ten minutes of the last
-        two hours, then the nowcast as far as its score allows. `day`: the
-        frame on each hour from six hours back, the newest, then each hour
-        to twelve ahead, from the nowcast while it reaches and the model
-        after."""
+        two hours, then the nowcast as far as its score allows. `day`: a
+        frame every twenty minutes from six hours back, the newest, then
+        each hour to twelve ahead, from the nowcast while it reaches and
+        the model after."""
         obs = self.radar.observed()
         recent = obs[-self.RADAR_FRAMES:]
         if len(recent) < 4 or _now().timestamp() - recent[-1] > self.RADAR_STALE_S:
@@ -1551,11 +1552,13 @@ class PressureService:
             frames = [RadarFrameOut(time=t, path=f"/radar/tiles/{t}") for t in times]
             frames += self._cast_frames(base, self.nowcast_leads())
         elif span == "day":
-            # An hour within half an hour of the newest frame is left out,
-            # either side: a step that short stutters in a loop of hours.
+            # Behind now, every twenty minutes: the app plays them on a
+            # clock, so the last step being ten minutes some of the time
+            # is no stutter. Ahead, an hour within half an hour of the
+            # newest frame is left out.
             near = self.DAY_NEAR_S
-            times = [t for t in obs if t % 3600 == 0
-                     and base - self.DAY_BACK_H * 3600 <= t <= base - near] + [base]
+            times = [t for t in obs if t % self.DAY_STEP_S == 0
+                     and base - self.DAY_BACK_H * 3600 <= t < base] + [base]
             frames = [RadarFrameOut(time=t, path=f"/radar/tiles/{t}") for t in times]
             casts = {f.time: f for f in self._cast_frames(base, self.nowcast_leads())}
             hour = base - base % 3600 + 3600
@@ -1629,10 +1632,12 @@ class PressureService:
     SERIES_OBS_MAX_AGE_S = 2 * 3600.0    # and the reports in it no older than this
 
     def _series_hours(self, now: datetime) -> Tuple[List[datetime], List[datetime]]:
+        # One hour further back than the span goes, so the moment the
+        # six-hour loop starts at has a frame on each side of it.
         top = now.replace(minute=0, second=0, microsecond=0)
-        back = [top - timedelta(hours=h) for h in range(self.DAY_BACK_H, -1, -1)]
+        back = [top - timedelta(hours=h) for h in range(self.DAY_BACK_H + 1, -1, -1)]
         ahead = [top + timedelta(hours=h) for h in range(1, self.DAY_AHEAD_H + 1)]
-        return ([t for t in back if now - timedelta(hours=self.DAY_BACK_H) <= t <= now],
+        return ([t for t in back if now - timedelta(hours=self.DAY_BACK_H + 1) <= t <= now],
                 [t for t in ahead if t <= now + timedelta(hours=self.DAY_AHEAD_H)])
 
     def _snapshot_points(self, when: datetime) -> Optional[Tuple[datetime, List[tuple]]]:
@@ -1649,15 +1654,17 @@ class PressureService:
         return at, [(la, lo, slp) for (t, slp, _alt, la, lo) in snap.values()
                     if slp is not None and t is not None and (at - t).total_seconds() <= self.SERIES_OBS_MAX_AGE_S]
 
-    async def get_pressure_series(self, lat: float, lon: float, lat_span: float, lon_span: float,
-                                  with_grid: bool = False) -> PressureSeriesResponse:
-        """Isobars for a map region at each hour of the radar's day span.
-        Past hours are gridded from the station snapshot nearest the hour,
-        the way the field now is. Hours ahead are the field now plus the
-        model's own change from now (modelfields.mslp_change), so the lines
-        leave now where the stations put them and move as the model moves
-        them; off the model's grid there are none. One spacing for every
-        frame, the field now's, so lines do not come and go."""
+    async def get_pressure_series(self, lat: float, lon: float, lat_span: float,
+                                  lon_span: float) -> PressureSeriesResponse:
+        """Sea-level pressure gridded over a map region at each hour of the
+        radar's day span, and now. Past hours are gridded from the station
+        snapshot nearest the hour, the way the field now is. Hours ahead
+        are the field now plus the model's own change from now
+        (modelfields.mslp_change), so the field leaves now where the
+        stations put it and moves as the model moves it; off the model's
+        grid there are none. Every frame is on the one lattice: the app
+        slides between two of them and contours the result, at the one
+        spacing given, the field now's, so lines do not come and go."""
         lat_span = max(0.5, min(30.0, lat_span))
         lon_span = max(0.5, min(60.0, lon_span))
         q_lat, q_lon = round(lat * 10) / 10, round(lon * 10) / 10
@@ -1665,16 +1672,19 @@ class PressureService:
             return round(v * 2) / 2 if v >= 1 else round(v, 1)
         q_lat_span, q_lon_span = q_span(lat_span), q_span(lon_span)
         region = (q_lat, q_lon, q_lat_span, q_lon_span)
-        cache_key = f"pseries:{q_lat}:{q_lon}:{q_lat_span}:{q_lon_span}:{int(with_grid)}"
+        cache_key = f"pseries:{q_lat}:{q_lon}:{q_lat_span}:{q_lon_span}"
 
-        def frame(t: datetime, kind: str, g, step: float) -> PressureFrameOut:
+        def frame(t: datetime, kind: str, g) -> PressureFrameOut:
             return PressureFrameOut(time=int(t.timestamp()), kind=kind,
-                                    isobars=pressure_field.isobar_lines(g, step, digits=3),
-                                    pressureGrid=pressure_field.to_grid_out(g) if with_grid else None)
+                                    pressureGrid=pressure_field.to_grid_out(g, digits=2))
 
         def _work(table: List[StationObs], now: datetime) -> PressureSeriesResponse:
             g_now = pressure_field.pressure_grid([(s.lat, s.lon, s.slp) for s in table], *region)
             step = pressure_field.isobar_step(g_now)
+            if g_now is None:
+                # Too few stations to grid the field now: nothing to anchor a
+                # lattice or the hours ahead on.
+                return PressureSeriesResponse(frames=[], stepHPa=step, cachedAt=now)
             back, ahead = self._series_hours(now)
             frames: List[PressureFrameOut] = []
             for t in back:
@@ -1690,12 +1700,13 @@ class PressureService:
                     g = pressure_field.pressure_grid(pts, *region)
                     self._series_grids[gkey] = g
                 if g is not None:
-                    frames.append(frame(t, "observed", g, step))
+                    frames.append(frame(t, "observed", g))
             held = {h[0] for h in self._bulk_history}
             for k in [k for k in self._series_grids if k[0] not in held]:
                 self._series_grids.pop(k, None)
+            frames.append(frame(now, "now", g_now))
             run = None
-            if g_now is not None and self.hrrr_enabled:
+            if self.hrrr_enabled:
                 lats = np.repeat(g_now.lat0 + np.arange(g_now.ny) * g_now.dlat, g_now.nx)
                 lons = np.tile(g_now.lon0 + np.arange(g_now.nx) * g_now.dlon, g_now.ny)
                 found = modelfields.mslp_change(self.models, lats, lons, now, ahead)
@@ -1711,7 +1722,7 @@ class PressureService:
                                    for v, dv in zip(row, drow)] for row, drow in zip(g_now.values, d)]
                         g = pressure_field.Grid(lat0=g_now.lat0, lon0=g_now.lon0, dlat=g_now.dlat,
                                                 dlon=g_now.dlon, ny=g_now.ny, nx=g_now.nx, values=values)
-                        frames.append(frame(t, "model", g, step))
+                        frames.append(frame(t, "model", g))
             return PressureSeriesResponse(frames=frames, stepHPa=step, run=run, cachedAt=now)
 
         async def _build() -> PressureSeriesResponse:

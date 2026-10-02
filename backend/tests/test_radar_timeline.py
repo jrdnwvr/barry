@@ -104,8 +104,8 @@ async def test_the_day_span_is_on_the_hour_from_six_back_to_twelve_ahead(client,
         s.radar_model.put(key, codes, grid)
     f = await s.get_radar_frames(span="day")
     past = [x for x in f.frames if x.kind == "observed"]
-    # 03:00 is twenty minutes before the newest frame: too short a step, left out.
-    assert [x.time for x in past] == [T0 - 3600 * h for h in (5, 4, 3, 2, 1)] + [base]
+    # Every twenty minutes from 21:20, six hours before the newest frame at 03:20.
+    assert [x.time for x in past] == [base - 1200 * k for k in range(18, -1, -1)]
     ahead = [x for x in f.frames if x.nowcast]
     # 04:00 is forty minutes out and the nowcast has earned forty: it wins
     # over the model there. 05:00 is the model's, from the newer run.
@@ -216,36 +216,35 @@ async def test_isobars_for_each_hour_past_from_snapshots_ahead_from_the_models_c
         arr[:, :, k] += 2.0 * fhr
         s.models._mem[(feed, _cycle_name(cycle), fhr, "pack")] = arr
 
-    out = await s.get_pressure_series(LAT, LON, 2.0, 4.0, with_grid=True)
+    out = await s.get_pressure_series(LAT, LON, 2.0, 4.0)
     at = lambda h, m=0: int(datetime(2026, 9, 25, h, m, tzinfo=timezone.utc).timestamp())
     # A snapshot five minutes before each hour from midnight; none before.
+    # Then now itself, then the model's hours.
     assert [(f.time, f.kind) for f in out.frames] == [
         (at(0), "observed"), (at(1), "observed"), (at(2), "observed"), (at(3), "observed"),
-        (at(4), "model"), (at(5), "model")]
+        (at(3, 10), "now"), (at(4), "model"), (at(5), "model")]
     assert out.run == cycle and out.stepHPa in (2.0, 4.0)
-    now = out.frames[3].pressureGrid
-    for i, h in enumerate((3, 2, 1)):
+    now = out.frames[4].pressureGrid
+    for i, h in enumerate((3, 2, 1, 0)):
         mean, spread = grid_mean_diff(out.frames[i].pressureGrid, now)
         assert abs(mean - h) < 0.06 and spread < 0.25
     # 03:10 sits a sixth of the way from the run's first hour to its second:
     # the model is 2.33 hPa up by then, 4 by 04:00, 6 by 05:00.
-    for i, rise in ((4, 4 - 7 / 3), (5, 6 - 7 / 3)):
+    for i, rise in ((5, 4 - 7 / 3), (6, 6 - 7 / 3)):
         mean, spread = grid_mean_diff(out.frames[i].pressureGrid, now)
         assert abs(mean - rise) < 0.06 and spread < 0.25
-    assert all(f.isobars for f in out.frames)
-    assert all(len(str(p[0]).split(".")[-1]) <= 3 for f in out.frames for l in f.isobars for p in l.points)
-    # One spacing throughout, and no grids unless asked.
-    steps = {l.level % out.stepHPa for f in out.frames for l in f.isobars}
-    assert steps == {0.0}
-    bare = await s.get_pressure_series(LAT, LON, 2.0, 4.0)
-    assert all(f.pressureGrid is None for f in bare.frames) and len(bare.frames) == 6
+    # One lattice for every frame, values to a hundredth.
+    shape = lambda g: (g.lat0, g.lon0, g.dlat, g.dlon, g.ny, g.nx)
+    assert len({shape(f.pressureGrid) for f in out.frames}) == 1
+    vals = [v for row in now.values for v in row if v is not None]
+    assert vals and all(round(v, 2) == v for v in vals) and any(round(v, 1) != v for v in vals)
 
     from app.main import app
     app.state.service = s
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
         r = await c.get(f"/radar/pressure/series?lat={LAT}&lon={LON}&latSpan=2&lonSpan=4")
         body = r.json()
-        assert r.status_code == 200 and len(body["frames"]) == 6 and "pressureGrid" not in body["frames"][0]
+        assert r.status_code == 200 and len(body["frames"]) == 7 and "pressureGrid" in body["frames"][0]
 
 
 @pytest.mark.asyncio
@@ -260,7 +259,7 @@ async def test_off_the_models_grid_the_series_has_only_the_past(client, upstream
     at = HRRR_NOW - timedelta(minutes=5)
     s._bulk_history = [(at, {o.id: (at, o.slp, None, o.lat, o.lon) for o in table})]
     far = await s.get_pressure_series(47.0, -122.0, 2.0, 4.0)
-    assert [f.kind for f in far.frames] == ["observed"] and far.run is None
+    assert [f.kind for f in far.frames] == ["observed", "now"] and far.run is None
     # Too few stations to grid: no frames at all, and no error.
     s._bulk_history = []
     table.clear()

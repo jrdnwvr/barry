@@ -536,19 +536,21 @@ class PressureFieldResponse(BaseModel):
 
 
 class PressureFrameOut(BaseModel):
-    """The isobars of one hour on the radar's timeline. `kind` is observed
-    (gridded from the stations' reports then) or model (the field now plus
-    the model's change from now)."""
+    """Sea-level pressure over a map region at one moment on the radar's
+    timeline, gridded. `kind` is observed (from the stations' reports
+    then), now (from the reports held now) or model (the field now plus
+    the model's change from now). Every frame of a series is on the same
+    lattice, so the app can slide between two of them and draw the
+    isobars of any moment between."""
 
     time: int
     kind: str
-    isobars: List[ContourLine] = Field(default_factory=list)
-    pressureGrid: Optional[GridOut] = None
+    pressureGrid: GridOut
 
 
 class PressureSeriesResponse(BaseModel):
     frames: List[PressureFrameOut] = Field(default_factory=list)    # oldest first
-    stepHPa: float
+    stepHPa: float                          # the isobar spacing every frame is drawn at
     run: Optional[datetime] = None          # the model run behind the hours ahead
     cachedAt: datetime
 

@@ -1519,6 +1519,7 @@ class PressureService:
 
     HOUR_SPAN_S = 2 * 3600       # the hour span reaches this far back, every ten minutes
     DAY_BACK_H, DAY_AHEAD_H = 6, 12
+    DAY_NEAR_S = 30 * 60
 
     def _cast_frames(self, base: int, steps: int) -> List[RadarFrameOut]:
         return [RadarFrameOut(time=base + (key - base) * self.radar.STEP_S, path=f"/radar/tiles/{key}",
@@ -1550,12 +1551,16 @@ class PressureService:
             frames = [RadarFrameOut(time=t, path=f"/radar/tiles/{t}") for t in times]
             frames += self._cast_frames(base, self.nowcast_leads())
         elif span == "day":
-            times = [t for t in obs if t % 3600 == 0 and base - self.DAY_BACK_H * 3600 <= t < base] + [base]
+            # An hour within half an hour of the newest frame is left out,
+            # either side: a step that short stutters in a loop of hours.
+            near = self.DAY_NEAR_S
+            times = [t for t in obs if t % 3600 == 0
+                     and base - self.DAY_BACK_H * 3600 <= t <= base - near] + [base]
             frames = [RadarFrameOut(time=t, path=f"/radar/tiles/{t}") for t in times]
             casts = {f.time: f for f in self._cast_frames(base, self.nowcast_leads())}
             hour = base - base % 3600 + 3600
             while hour <= base + self.DAY_AHEAD_H * 3600:
-                f = casts.get(hour) or self._model_frame(hour)
+                f = (casts.get(hour) or self._model_frame(hour)) if hour >= base + near else None
                 if f is not None:
                     frames.append(f)
                 hour += 3600

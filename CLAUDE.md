@@ -217,6 +217,13 @@ rules are pure functions in `RadarTimeline.swift`. The forecast radar via
 Iowa Mesonet that sat parked behind a flag is gone from the app;
 `/radar/hrrr` is still served and nothing calls it.
 
+A SwiftUI trap found building it: modifiers on a `Group` go to each of its
+branches, so a `.task` on a `Group` of `if` states restarts whenever the
+state changes. The radar panel's load did that and, with a cancelled load
+reporting failure, looped at thousands of requests a minute when the radar
+opened in the first moments after launch. Hang a view's one task on a real
+container, and let a cancelled load say nothing.
+
 **docs/PRODUCTION.md (2026-09-21)** is the hardening plan: an independent
 review of everything since build 86 plus the backend, what was fixed the same
 day, and the ranked open items (backend fan-out and registry validation are the
@@ -306,7 +313,7 @@ says so. The level is not remembered between opens.
 
 ## Tests and checks (added 2026-09-22)
 
-- Backend: `cd backend && .venv/bin/pytest -q` (304 tests; Hypothesis
+- Backend: `cd backend && .venv/bin/pytest -q` (402 tests; Hypothesis
   property tests read the app's own OpenAPI document). CI runs the suite,
   pip-audit, the image build and trivy on every push touching `backend/`.
   `tools/loadtest.py` against a local uvicorn started with

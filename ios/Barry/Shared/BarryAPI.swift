@@ -260,15 +260,29 @@ struct BarryAPI {
         return try await get(comps?.url)
     }
 
-    /// RainViewer's frame list, trimmed and cached by the backend.
-    func radarFrames() async throws -> RadarFramesResponse {
-        try await get(baseURL.appendingPathComponent("radar/frames"))
+    /// The radar's frame list for a span of its timeline: "hour" (every
+    /// ten minutes from two hours back, then the nowcast) or "day" (on the
+    /// hour from six back to twelve ahead).
+    func radarFrames(span: String) async throws -> RadarFramesResponse {
+        var comps = URLComponents(url: baseURL.appendingPathComponent("radar/frames"),
+                                  resolvingAgainstBaseURL: false)
+        comps?.queryItems = [URLQueryItem(name: "span", value: span)]
+        return try await get(comps?.url)
     }
 
-    /// Latest HRRR run for forecast-radar frames. 503/failure just means the
-    /// radar timeline ends at the RainViewer nowcast.
-    func hrrrRun() async throws -> HrrrMeta {
-        try await get(baseURL.appendingPathComponent("radar/hrrr"))
+    /// Isobars for a map region at each hour of the day span, and each
+    /// hour's gridded field when the shading wants it.
+    func pressureSeries(lat: Double, lon: Double, latSpan: Double, lonSpan: Double,
+                        grid: Bool) async throws -> PressureSeriesResponse {
+        var comps = URLComponents(url: baseURL.appendingPathComponent("radar/pressure/series"),
+                                  resolvingAgainstBaseURL: false)
+        comps?.queryItems = [
+            URLQueryItem(name: "lat", value: String(lat)),
+            URLQueryItem(name: "lon", value: String(lon)),
+            URLQueryItem(name: "latSpan", value: String(latSpan)),
+            URLQueryItem(name: "lonSpan", value: String(lonSpan)),
+        ] + (grid ? [URLQueryItem(name: "grid", value: "1")] : [])
+        return try await get(comps?.url)
     }
 
     /// Station search by ICAO prefix or name (METAR-issuing sites only).

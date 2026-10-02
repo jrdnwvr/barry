@@ -664,7 +664,7 @@ struct PressureCenter: Codable, Hashable {
 }
 
 /// The surface chart at one valid time: hours 0 = analysis, 12/24/36/48 =
-/// WPC's forecast positions.
+/// WPC's forecast positions, negative = an earlier analysis.
 struct FrontFrame: Codable, Hashable, Identifiable {
     let hours: Int
     let valid: Date
@@ -676,15 +676,39 @@ struct FrontFrame: Codable, Hashable, Identifiable {
 
 struct FrontsResponse: Codable, Hashable {
     let frames: [FrontFrame]
+    /// The analyses before the current one, oldest first, their `hours`
+    /// negative: where the fronts were, for the radar's timeline.
+    var history: [FrontFrame]?
     var source: String?
     let cachedAt: Date
 }
 
-/// The radar timeline as the backend trimmed it: observed frames then nowcast.
+/// The radar timeline as the backend trimmed it: observed frames, then the
+/// nowcast, then (on the day span) the model's own reflectivity.
 struct RadarFrameOut: Codable, Hashable {
     let time: Int
     let path: String
     var nowcast: Bool = false
+    /// observed, nowcast or model. Absent from a server that only knows
+    /// observed and nowcast.
+    var kind: String?
+}
+
+/// The isobars of one hour on the radar's timeline: gridded from the
+/// stations' reports then (observed), or the field now plus the model's
+/// change from now (model).
+struct PressureFrame: Codable, Hashable {
+    let time: Int
+    let kind: String
+    var isobars: [ContourLine] = []
+    var pressureGrid: GridOut?
+}
+
+struct PressureSeriesResponse: Codable, Hashable {
+    var frames: [PressureFrame] = []
+    let stepHPa: Double
+    var run: Date?
+    let cachedAt: Date
 }
 
 struct RadarFramesResponse: Codable, Hashable {
@@ -693,14 +717,6 @@ struct RadarFramesResponse: Codable, Hashable {
     /// NOAA's chance of lightning in the next hour, as tiles on the same
     /// host; absent from RainViewer or when not held.
     var lightningNext: RadarFrameOut?
-    let cachedAt: Date
-}
-
-/// Latest HRRR model run IEM serves forecast-reflectivity tiles for. Forecast
-/// minute F on a tile layer is valid at run + F.
-struct HrrrMeta: Codable, Hashable {
-    let run: Date
-    var source: String?
     let cachedAt: Date
 }
 

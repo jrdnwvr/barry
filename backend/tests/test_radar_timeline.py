@@ -104,7 +104,8 @@ async def test_the_day_span_is_on_the_hour_from_six_back_to_twelve_ahead(client,
         s.radar_model.put(key, codes, grid)
     f = await s.get_radar_frames(span="day")
     past = [x for x in f.frames if x.kind == "observed"]
-    assert [x.time for x in past] == [T0 - 3600 * h for h in (5, 4, 3, 2, 1, 0)] + [base]
+    # 03:00 is twenty minutes before the newest frame: too short a step, left out.
+    assert [x.time for x in past] == [T0 - 3600 * h for h in (5, 4, 3, 2, 1)] + [base]
     ahead = [x for x in f.frames if x.nowcast]
     # 04:00 is forty minutes out and the nowcast has earned forty: it wins
     # over the model there. 05:00 is the model's, from the newer run.

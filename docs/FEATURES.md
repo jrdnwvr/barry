@@ -637,6 +637,14 @@ stored keys, but each has its own model, so they fetch separately.
 ### radar.state
 - Seen: "Loading radar…", or "Couldn't load radar. Check your connection."
   with Try again. Depends only on `/radar/frames`.
+- Rules: one load task for the panel's life (the three states sit in a
+  `ZStack` that owns it), and a load whose task was cancelled reports
+  nothing. Until 2026-10-02 the states sat in a `Group`, which hands its
+  `.task` to whichever state is showing: a cancelled load reported
+  failure, the failure view started a load, the load changed the state
+  and cancelled itself, six thousand cancelled requests in thirty
+  seconds. Seen only when the radar opened in the first moments after
+  launch (`-uitest-radar`), not when opened by hand.
 
 ### radar.map.base
 - Seen: muted Apple map, no points of interest, no compass, a red pin on the

@@ -51,7 +51,7 @@ struct RadarKeySheet: View {
                 if fronts {
                     section("Fronts", icon: "line.diagonal") {
                         FrontKeyView(validText: frontValidText, compact: false)
-                        Text("Pips sit on the side the front is moving toward. NWS positions, good to about 50 miles.")
+                        Text("Pips sit on the side the front is moving toward. NWS positions. Moved off now, the lines run between the three-hourly charts and on to the forecast ones.")
                     }
                 }
 

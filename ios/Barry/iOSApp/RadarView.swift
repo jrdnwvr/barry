@@ -169,14 +169,14 @@ struct RadarPanel: View {
         case .change: shade = .change
         }
         // Isallobars belong to the change field; they mean nothing without it.
-        return PressureFieldState(field: model.pressureField,
+        return PressureFieldState(field: model.shownPressureField,
                                   showIsobars: showIsobars,
                                   showIsallobars: field == .change,
                                   shade: shade, shadeOpacity: opacity,
                                   unit: PressureUnit(rawValue: pressureUnitRaw) ?? .inHg,
                                   heights: heights,
                                   aloft: aloft,
-                                  version: model.pressureVersion)
+                                  version: model.shownPressureVersion)
     }
 
     private var initialRegion: MKCoordinateRegion {
@@ -185,7 +185,13 @@ struct RadarPanel: View {
     }
 
     var body: some View {
-        Group {
+        // A ZStack, not a Group: a Group hands its modifiers to each branch,
+        // so the task below belonged to whichever branch was showing and
+        // started again every time the branch changed. A load cancelled
+        // that way reported failure, which changed the branch, which
+        // cancelled the next load: thousands of requests a minute, found
+        // 2026-10-02. One container, one task for the panel's life.
+        ZStack {
             if model.failed {
                 VStack(spacing: 10) {
                     Text("Couldn't load radar. Check your connection.")
@@ -214,6 +220,7 @@ struct RadarPanel: View {
                 AppConfig.sharedDefaults.set(true, forKey: "radarIsobarsSplit")
             }
             model.frontStyle = frontStyle
+            syncPressureWants()
             await model.load()
             model.playing = autoplay
             model.lockedToNow = !autoplay
@@ -248,13 +255,38 @@ struct RadarPanel: View {
                 dwellTicks -= 1
                 return
             }
-            // The loop is the last hour: the observed frames through now.
-            // Nowcast and model frames are there for the scrubber.
+            // The loop is the span's past: the last hour, or the last six,
+            // through now. Nowcast and model frames are there for the
+            // scrubber.
             let last = model.nowIndex
-            model.index = model.index >= last ? 0 : model.index + 1
+            model.index = RadarTimeline.nextLoopIndex(current: model.index, start: model.loopStart, nowIndex: last)
             if model.index == last {
                 dwellTicks = 3
             }
+        }
+        .onChange(of: wantsPressure) { _, _ in syncPressureWants() }
+        .onChange(of: fieldRaw) { _, _ in syncPressureWants() }
+    }
+
+    /// Tell the model whether the isobars for other hours are wanted, and
+    /// whether each hour's grid is too (the Pressure shading).
+    private func syncPressureWants() {
+        model.wantsPressureGrid = field == .pressure
+        model.wantsPressureSeries = showIsobars || field == .pressure
+    }
+
+    /// Tap a replay chip: play its span, or pause if it is the one playing.
+    private func replay(_ span: RadarSpan) {
+        if model.playing, model.span == span {
+            model.playing = false
+            return
+        }
+        Task {
+            guard await model.setSpan(span) else { return }
+            model.lockedToNow = false
+            model.index = model.loopStart
+            dwellTicks = 0
+            model.playing = true
         }
     }
 
@@ -353,6 +385,7 @@ struct RadarPanel: View {
     private var mapView: some View {
         RadarMapView(host: model.host,
                      frames: model.frames,
+                     loopKeys: model.loopKeys,
                      index: model.index,
                      radarVisible: showRadar,
                      center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
@@ -642,6 +675,12 @@ struct RadarPanel: View {
     /// lightning feed (an empty map would read as "no lightning"), or a calm
     /// map with the wind layer on (it would read as broken). In that order.
     private var noteText: (text: String, id: String)? {
+        // Scrubbed or looped away from now: say which layers did not come along.
+        if !model.playheadIsNow,
+           let note = RadarTimeline.nowOnlyNote(wind: showWind, stations: stationsOn, lightning: showStorms,
+                                                advisories: showAdvisories, change: field == .change) {
+            return (note, "radar.nowOnlyNote")
+        }
         if showWind, model.windLevel != 0 {
             let stop = WindAltitude.stop(model.windLevel)
             let what = model.heights != nil ? "Wind and \(stop.hPa) mb heights" : "Wind"
@@ -674,44 +713,20 @@ struct RadarPanel: View {
     }
 
     private var frontValidText: String {
-        "WPC fronts \(frontChipTime), to about 50 mi"
+        "WPC fronts \(frontChipTime)"
     }
 
-    /// Now parks the map on the freshest observation and keeps it there.
-    /// The loop plays the last hour through now and dwells on the freshest
-    /// frame. A scrub pauses where the finger left it until the loop is
-    /// tapped again. The frame's time sits under the slider.
+    /// The two replay chips, the slider, then Now. A replay chip plays its
+    /// span's past through now (the last hour, the last six) and dwells on
+    /// the freshest frame; tapping the one that is playing pauses it. A
+    /// scrub pauses where the finger left it. Now parks the map on the
+    /// freshest observation and keeps it there. The frame's time sits under
+    /// the slider.
     private var radarControls: some View {
         VStack(spacing: 5) {
             HStack(spacing: 8) {
-                Button {
-                    model.playing = false
-                    model.lockedToNow = true
-                    model.index = model.nowIndex
-                } label: {
-                    Text("Now")
-                        .font(.caption.weight(.semibold))
-                        .fixedSize()
-                }
-                .buttonStyle(ChipStyle(on: model.lockedToNow && !model.playing))
-                .accessibilityAddTraits(model.lockedToNow && !model.playing ? .isSelected : [])
-                .accessibilityIdentifier("radar.now")
-
-                Button {
-                    if model.playing {
-                        model.playing = false
-                    } else {
-                        model.lockedToNow = false
-                        model.playing = true
-                    }
-                } label: {
-                    Image(systemName: "goforward.60")
-                        .font(.system(size: 15, weight: .semibold))
-                }
-                .buttonStyle(ChipStyle(on: model.playing))
-                .accessibilityAddTraits(model.playing ? .isSelected : [])
-                .accessibilityLabel(model.playing ? "Pause the loop" : "Loop the last hour")
-                .accessibilityIdentifier("radar.loop")
+                replayChip(.day)
+                replayChip(.hour)
 
                 Slider(
                     value: Binding(
@@ -725,6 +740,19 @@ struct RadarPanel: View {
                     in: 0...Double(max(1, model.frames.count - 1)),
                     step: 1
                 )
+
+                Button {
+                    model.playing = false
+                    model.lockedToNow = true
+                    model.index = model.nowIndex
+                } label: {
+                    Text("Now")
+                        .font(.caption.weight(.semibold))
+                        .fixedSize()
+                }
+                .buttonStyle(ChipStyle(on: model.lockedToNow && !model.playing))
+                .accessibilityAddTraits(model.lockedToNow && !model.playing ? .isSelected : [])
+                .accessibilityIdentifier("radar.now")
             }
             Text(frameTimeText)
                 .font(.caption2.weight(.medium))
@@ -735,6 +763,18 @@ struct RadarPanel: View {
         }
     }
 
+    private func replayChip(_ span: RadarSpan) -> some View {
+        let on = model.playing && model.span == span
+        return Button { replay(span) } label: {
+            ReplayGlyph(span: span)
+        }
+        .buttonStyle(ChipStyle(on: on))
+        .accessibilityAddTraits(on ? .isSelected : [])
+        .accessibilityLabel(on ? "Pause the loop"
+                               : (span == .hour ? "Loop the last hour" : "Loop the last six hours"))
+        .accessibilityIdentifier(span == .hour ? "radar.loop" : "radar.loop6h")
+    }
+
     private var currentFrame: RadarFrame? {
         model.frames.indices.contains(model.index) ? model.frames[model.index] : nil
     }
@@ -742,23 +782,42 @@ struct RadarPanel: View {
     /// Purple = model reflectivity, orange = short nowcast, gray = observed —
     /// three sources, three colors, no ambiguity about what you're looking at.
     private var timeLabelColor: Color {
-        guard let f = currentFrame else { return .secondary }
-        if f.iemLayer != nil { return .purple }
-        return f.nowcast ? .orange : .secondary
+        switch currentFrame?.kind {
+        case .model: return .purple
+        case .nowcast: return .orange
+        default: return .secondary
+        }
     }
 
-    /// "8:20 PM · 20m ago", "8:50 PM · nowcast", "10 PM · model +2h".
     private var frameTimeText: String {
         guard let f = currentFrame else { return " " }
-        let clock = Date(timeIntervalSince1970: Double(f.time)).formatted(date: .omitted, time: .shortened)
-        if f.iemLayer != nil {
-            let hrs = max(1, Int(((Double(f.time) - Date().timeIntervalSince1970) / 3600).rounded()))
-            return "\(clock) · model +\(hrs)h"
+        return RadarTimeline.frameText(f, nowTime: model.nowTime, wallClock: Date(),
+                                       parked: model.lockedToNow && !model.playing) {
+            $0.formatted(date: .omitted, time: .shortened)
         }
-        let mins = Int((Date().timeIntervalSince1970 - Double(f.time)) / 60)
-        if f.nowcast { return "\(clock) · nowcast" }
-        let age = mins <= 1 ? "now" : "\(mins)m ago"
-        return model.lockedToNow && !model.playing ? "\(clock) · latest, \(age)" : "\(clock) · \(age)"
+    }
+}
+
+/// The mark on a replay chip: the circling arrow with its span inside. The
+/// hour is Apple's own "60" symbol; there is none for six hours, so that one
+/// is the bare arrow with "6h" set in its middle to match.
+struct ReplayGlyph: View {
+    let span: RadarSpan
+
+    var body: some View {
+        switch span {
+        case .hour:
+            Image(systemName: "goforward.60")
+                .font(.system(size: 15, weight: .semibold))
+        case .day:
+            Image(systemName: "goforward")
+                .font(.system(size: 15, weight: .semibold))
+                .overlay {
+                    Text("6h")
+                        .font(.system(size: 5.6, weight: .heavy, design: .rounded))
+                        .offset(y: 0.9)
+                }
+        }
     }
 }
 

@@ -128,6 +128,28 @@ final class RadarUITests: XCTestCase {
         loop.tap()
         XCTAssertTrue(loop.isSelected && !now.isSelected)
 
+        // The six-hour replay: its chip takes the loop from the hour's, the
+        // frames go back hours, and a scrub to the far end lands on a
+        // forecast frame. Then back to the hour.
+        let loop6 = onScreen(app.buttons, "radar.loop6h")
+        XCTAssertTrue(loop6.exists, "no six-hour replay chip")
+        loop6.tap()
+        let playing = NSPredicate(format: "isSelected == true")
+        expectation(for: playing, evaluatedWith: loop6)
+        waitForExpectations(timeout: 15)
+        XCTAssertFalse(loop.isSelected, "both replay chips read as playing")
+        let slider = app.sliders.allElementsBoundByIndex.first(where: { $0.isHittable }) ?? app.sliders.firstMatch
+        slider.adjust(toNormalizedSliderPosition: 0.0)
+        XCTAssertTrue(frameTime.label.contains("h ago"), "the day span should reach back hours: \(frameTime.label)")
+        slider.adjust(toNormalizedSliderPosition: 1.0)
+        XCTAssertTrue(frameTime.label.contains("model") || frameTime.label.contains("nowcast"),
+                      "the day span should end in the forecast: \(frameTime.label)")
+        XCTAssertTrue(!loop6.isSelected && !loop.isSelected, "a scrub should pause where it lands")
+        loop.tap()
+        expectation(for: playing, evaluatedWith: loop)
+        waitForExpectations(timeout: 15)
+        XCTAssertFalse(loop6.isSelected)
+
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(expand.waitForExistence(timeout: 10), "did not come back to the dashboard")
         XCTAssertEqual(app.state, .runningForeground)

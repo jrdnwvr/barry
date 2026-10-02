@@ -1,9 +1,9 @@
 //  RadarModel.swift
 //  Barry — iOS
 //
-//  State for the radar screen: RainViewer frames and playback, the model
-//  wind grid, WPC fronts with their morphing timeline, the station layer and
-//  the pressure field. All data comes through the Barry backend.
+//  State for the radar screen: the frames and their two spans, the model
+//  wind grid, WPC fronts and the isobars on the frames' clock, the station
+//  layer and the pressure field. All data comes through the Barry backend.
 
 import Combine
 import SwiftUI
@@ -13,13 +13,35 @@ import MapKit
 
 struct RadarFrame: Equatable, Identifiable {
     let time: Int      // unix epoch (valid time)
-    let path: String   // e.g. /v2/radar/1720100000 (RainViewer frames)
-    let nowcast: Bool
-    /// Set for HRRR model frames: the full IEM tile layer name
-    /// ("hrrr::REFD-F0180-202607161800"). These are MODEL reflectivity — a
-    /// guess about where, not a measurement — and the UI labels them so.
-    var iemLayer: String? = nil
-    var id: Int { time }
+    let path: String   // e.g. /radar/tiles/1790959200, /radar/model/1790964003
+    /// Observed, the nowcast (the newest frame carried forward), or the
+    /// model's own reflectivity: a guess about where, not a measurement,
+    /// and the time line under the slider says which.
+    let kind: RadarFrameKind
+    /// What the map keeps this frame's tiles under. A valid time can have
+    /// two pictures (the hour span's nowcast and the day span's model), and
+    /// a newer run draws a new picture for the same time, so the time alone
+    /// will not do: the number the path ends in names the picture.
+    let key: Int
+    var nowcast: Bool { kind != .observed }
+    var id: Int { key }
+
+    init(time: Int, path: String, kind: RadarFrameKind) {
+        self.time = time
+        self.path = path
+        self.kind = kind
+        let tail = path.split(separator: "/").last.flatMap { Int($0) }
+        switch kind {
+        case .observed: key = time
+        case .nowcast: key = tail ?? time + 7
+        case .model: key = -(tail ?? time)
+        }
+    }
+
+    init(_ f: RadarFrameOut) {
+        self.init(time: f.time, path: f.path,
+                  kind: f.kind.flatMap(RadarFrameKind.init(rawValue:)) ?? (f.nowcast ? .nowcast : .observed))
+    }
 }
 
 /// One wind-field sample: where, how hard, and from which direction.
@@ -61,7 +83,14 @@ final class RadarModel: ObservableObject {
     /// Tile template for the chance of lightning in the next hour, when
     /// Barry serves it.
     @Published private(set) var lightningNextTemplate: String?
-    @Published var index = 0
+    @Published var index = 0 {
+        didSet { if index != oldValue { playheadMoved() } }
+    }
+    /// Which replay chip the timeline is on (RadarTimeline.swift). Not
+    /// remembered between opens: the radar always opens on the hour.
+    @Published private(set) var span: RadarSpan = .hour
+    private var framesBySpan: [RadarSpan: [RadarFrame]] = [:]
+    private var framesLoadedAt: [RadarSpan: Date] = [:]
     @Published var playing = true
     /// The Now pill: the map stays on the freshest observed frame, through
     /// reloads, until the loop or a scrub moves it.
@@ -246,16 +275,21 @@ final class RadarModel: ObservableObject {
     /// True once a wind fetch has answered, so "no arrows" is a real answer.
     @Published var windSampled = false
 
-    // MARK: Fronts (WPC surface chart, analysis)
+    // MARK: Fronts (WPC surface chart, on the radar's clock)
 
     @Published var frontFrames: [FrontFrame] = []
+    /// The analyses before the current one, oldest first.
+    private(set) var frontHistory: [FrontFrame] = []
     @Published var frontState: FrontRenderState = .empty
     private var frontVersion = 0
+    private var frontPick: RadarTimeline.FrontPick = .none
 
-    /// The current analysis, which is the only front frame Barry draws. The
-    /// 12 and 24 hour progs still arrive with it, unused for now: a map that
-    /// carried its own clock separate from the radar's was a good way to read
-    /// tomorrow's front as today's.
+    /// The current analysis: what the map draws at now, and what the key
+    /// names. The timeline moves the chart from it: back through the earlier
+    /// analyses, ahead to WPC's forecast positions (RadarTimeline.fronts).
+    /// Until 2026-10-02 the forecast charts arrived unused, because a map
+    /// that carried its own clock separate from the radar's was a good way
+    /// to read tomorrow's front as today's; now there is one clock.
     var analysisFrame: FrontFrame? {
         frontFrames.first(where: { $0.hours == 0 }) ?? frontFrames.first
     }
@@ -263,18 +297,28 @@ final class RadarModel: ObservableObject {
     /// Which parts of the chart to draw (map options). Changing it
     /// re-renders the field in place.
     var frontStyle = FrontStyle() {
-        didSet { if frontStyle != oldValue { updateFrontState() } }
+        didSet { if frontStyle != oldValue { updateFrontState(force: true) } }
     }
 
     func fetchFronts() async {
         guard let resp = try? await BarryAPI().fronts() else { return }
         frontFrames = resp.frames.sorted { $0.hours < $1.hours }
-        updateFrontState()
+        frontHistory = resp.history ?? []
+        updateFrontState(force: true)
     }
 
-    /// The drawn field: the analysis, and only the analysis.
-    func updateFrontState() {
-        var next = analysisFrame.map { FrontMorph.state(for: $0) } ?? .empty
+    /// The chart for the moment the slider is on.
+    func updateFrontState(force: Bool = false) {
+        let pick = RadarTimeline.fronts(at: playheadTime, nowTime: nowTime, analysis: analysisFrame,
+                                        history: frontHistory, progs: frontFrames.filter { $0.hours > 0 })
+        guard force || pick != frontPick else { return }
+        frontPick = pick
+        var next: FrontRenderState
+        switch pick {
+        case .none: next = .empty
+        case .frame(let f): next = FrontMorph.state(for: f)
+        case .blend(let a, let b, let t): next = FrontMorph.blend(a, b, t: t)
+        }
         next.style = frontStyle
         if !frontStyle.centers { next.centers = [] }
         frontVersion += 1
@@ -282,23 +326,51 @@ final class RadarModel: ObservableObject {
         frontState = next
     }
 
+    // MARK: The timeline
+
     /// Index of the most recent observed (non-forecast) frame.
     var nowIndex: Int {
         frames.lastIndex(where: { !$0.nowcast }) ?? 0
     }
 
+    /// The newest observed frame's time: the timeline's "now".
+    var nowTime: Int {
+        frames.indices.contains(nowIndex) ? frames[nowIndex].time : Int(Date().timeIntervalSince1970)
+    }
+
+    /// The moment the slider is on.
+    var playheadTime: Int {
+        frames.indices.contains(index) ? frames[index].time : nowTime
+    }
+
+    var playheadIsNow: Bool { RadarTimeline.isNow(playheadTime, nowTime: nowTime) }
+
+    /// Where the current span's loop starts.
+    var loopStart: Int { RadarTimeline.loopStart(frames: frames, nowIndex: nowIndex, span: span) }
+
+    /// The frames the loop plays: their tiles are wanted first.
+    var loopKeys: Set<Int> {
+        guard !frames.isEmpty else { return [] }
+        return Set(frames[loopStart...max(loopStart, nowIndex)].map(\.key))
+    }
+
+    private func playheadMoved() {
+        updateFrontState()
+        ensurePressureSeries()
+    }
+
+    /// A span's frame list goes stale as fast as the radar does.
+    private static let framesFreshFor: TimeInterval = 5 * 60
+
     /// The timeline comes from the backend (`/radar/frames`), already trimmed
-    /// to the seven observed frames plus nowcast and shared across users, so a
-    /// radar open costs one small request and RainViewer sees one call every
-    /// two minutes total.
+    /// to the span and shared across users, so a radar open costs one small
+    /// request.
     func load(retries: Int = 2) async {
         failed = false
         do {
-            let resp = try await BarryAPI().radarFrames()
-            host = resp.host
-            lightningNextTemplate = resp.lightningNext.map { resp.host + $0.path + "/512/{z}/{x}/{y}.png" }
+            let resp = try await BarryAPI().radarFrames(span: span.rawValue)
             let hadFrames = !frames.isEmpty
-            frames = resp.frames.map { RadarFrame(time: $0.time, path: $0.path, nowcast: $0.nowcast) }
+            apply(resp, to: span)
             // A reload snaps to now unless the user parked the timeline
             // somewhere or the loop is running; then the index stays.
             if lockedToNow || !hadFrames {
@@ -307,6 +379,9 @@ final class RadarModel: ObservableObject {
                 index = min(index, max(0, frames.count - 1))
             }
         } catch {
+            // A load whose own task was cancelled (its view went away) has
+            // nothing to report and nothing to retry.
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled { return }
             // Opening the radar asks for the frames, the grids and dozens of
             // tiles at once, and the edge's rate rule answers the tail of that
             // burst with 429 for ten seconds. Wait it out and ask again
@@ -319,48 +394,94 @@ final class RadarModel: ObservableObject {
             failed = true
             return
         }
-        if Self.modelFramesEnabled {
-            await appendModelFrames()
+    }
+
+    private func apply(_ resp: RadarFramesResponse, to target: RadarSpan) {
+        host = resp.host
+        lightningNextTemplate = resp.lightningNext.map { resp.host + $0.path + "/512/{z}/{x}/{y}.png" }
+        let list = resp.frames.map(RadarFrame.init)
+        framesBySpan[target] = list
+        framesLoadedAt[target] = Date()
+        if target == span { frames = list }
+    }
+
+    /// Put the timeline on a span, parked on now. The other span's list is
+    /// fetched the first time and again once it is five minutes old; when
+    /// that fails the timeline stays where it was. True when it switched.
+    @discardableResult
+    func setSpan(_ target: RadarSpan) async -> Bool {
+        guard target != span else { return true }
+        let fresh = framesLoadedAt[target].map { Date().timeIntervalSince($0) < Self.framesFreshFor } ?? false
+        if !fresh || framesBySpan[target]?.isEmpty != false {
+            if let resp = try? await BarryAPI().radarFrames(span: target.rawValue) {
+                apply(resp, to: target)
+            }
+        }
+        guard let list = framesBySpan[target], !list.isEmpty else { return false }
+        span = target
+        frames = list
+        index = nowIndex
+        playheadMoved()
+        return true
+    }
+
+    // MARK: Isobars on the radar's clock
+
+    /// Isobars for each hour of the day span over the current region. Only
+    /// asked for once the slider leaves now or the day span is up, and only
+    /// while a pressure layer is on.
+    @Published private(set) var pressureSeries: PressureSeriesResponse?
+    private var seriesFetchedFor: MKCoordinateRegion?
+    private var seriesHasGrid = false
+    private var seriesTask: Task<Void, Never>?
+    /// The view's say: is a pressure layer showing, and does it shade (so
+    /// each hour needs its grid as well as its lines).
+    var wantsPressureSeries = false {
+        didSet { if wantsPressureSeries && !oldValue { ensurePressureSeries() } }
+    }
+    var wantsPressureGrid = false {
+        didSet { if wantsPressureGrid && !oldValue { ensurePressureSeries() } }
+    }
+
+    func ensurePressureSeries() {
+        guard wantsPressureSeries, span == .day || !playheadIsNow, let region = lastRegion else { return }
+        if pressureSeries != nil, Self.nearEnough(region, to: seriesFetchedFor),
+           seriesHasGrid || !wantsPressureGrid { return }
+        let grid = wantsPressureGrid
+        seriesTask?.cancel()
+        seriesTask = Task { [weak self] in
+            guard let resp = try? await BarryAPI().pressureSeries(
+                lat: region.center.latitude, lon: region.center.longitude,
+                latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta, grid: grid)
+            else { return }
+            guard let self, !Task.isCancelled else { return }
+            self.seriesFetchedFor = region
+            self.seriesHasGrid = grid
+            self.pressureSeries = resp
         }
     }
 
-    /// Feature flag: HRRR forecast frames on the radar timeline. OFF for now —
-    /// fully built and working (backend /radar/hrrr + IEM tiles), but parked
-    /// until we're ready to own the third-party tile traffic. While false the
-    /// app makes ZERO requests to IEM or /radar/hrrr; flip to true to ship it.
-    static let modelFramesEnabled = false
+    /// The pressure hour that goes with the slider, nil at now or when the
+    /// series has nothing near it.
+    private var pressureFrame: PressureFrame? {
+        guard let series = pressureSeries else { return nil }
+        return RadarTimeline.pressureFrame(series.frames, time: playheadTime, nowTime: nowTime)
+    }
 
-    /// Hours to extend the timeline past the nowcast with HRRR model frames.
-    static let modelHours = 6
+    /// What the pressure overlay draws: the live field at now, and away from
+    /// now the same field with that hour's isobars and grid in place of its
+    /// own. The change field and its lines only know now and stay as they
+    /// are (the note line says so).
+    var shownPressureField: PressureFieldResponse? {
+        guard let frame = pressureFrame, var field = pressureField else { return pressureField }
+        field.isobars = frame.isobars
+        if let grid = frame.pressureGrid { field.pressureGrid = grid }
+        return field
+    }
 
-    /// Extend the timeline with hourly HRRR forecast-reflectivity frames from
-    /// IEM. The backend supplies the run init time so every frame carries its
-    /// TRUE valid time; if that call fails the timeline just ends at the
-    /// RainViewer nowcast — model frames are enrichment, never load-bearing.
-    private func appendModelFrames() async {
-        guard let meta = try? await BarryAPI().hrrrRun() else { return }
-        let fmt = DateFormatter()
-        fmt.dateFormat = "yyyyMMddHHmm"
-        fmt.timeZone = TimeZone(identifier: "UTC")
-        let runStamp = fmt.string(from: meta.run)
-        let runEpoch = Int(meta.run.timeIntervalSince1970)
-
-        let lastReal = frames.last?.time ?? Int(Date().timeIntervalSince1970)
-        let anchor = max(lastReal, Int(Date().timeIntervalSince1970))
-        // First model frame on the next full hour after the nowcast ends.
-        let firstHour = (anchor / 3600 + 1) * 3600
-        var model: [RadarFrame] = []
-        for h in 0..<Self.modelHours {
-            let valid = firstHour + h * 3600
-            let fmin = (valid - runEpoch) / 60
-            // HRRR hourly products run to F1080 (+18 h); both times are floored
-            // to the hour so fmin is always a whole hour.
-            guard fmin >= 60, fmin <= 1080 else { continue }
-            let layer = String(format: "hrrr::REFD-F%04d-%@", fmin, runStamp)
-            model.append(RadarFrame(time: valid, path: "", nowcast: true,
-                                    iemLayer: layer))
-        }
-        frames += model
+    /// Changes whenever what `shownPressureField` returns does.
+    var shownPressureVersion: Int {
+        pressureVersion &* 100_003 &+ (pressureFrame?.time ?? 0)
     }
 
     // MARK: Field overlays (wind)
@@ -392,6 +513,7 @@ final class RadarModel: ObservableObject {
                 try? await Task.sleep(nanoseconds: 700_000_000)
                 guard !Task.isCancelled else { return }
                 await fetchPressureField(region: region)
+                ensurePressureSeries()
             }
         }
         if stations {

@@ -16,6 +16,8 @@ import MapKit
 struct RadarMapView: UIViewRepresentable {
     let host: String
     let frames: [RadarFrame]
+    /// The frames the loop plays; their tiles are asked for first.
+    var loopKeys: Set<Int> = []
     let index: Int
     /// False when another base layer (pressure, change) replaces the radar:
     /// the tiles stay loaded but draw at zero alpha.
@@ -328,11 +330,53 @@ struct RadarMapView: UIViewRepresentable {
             if !radarHidden, displayLink == nil, let r = renderers[currentTime] { r.alpha = target }
         }
 
+        /// The frames of the span on the timeline. Only these sit a hair
+        /// above zero and keep their tiles warm; the other span's overlays
+        /// stay on the map at true zero, where MapKit asks for nothing.
+        private var active: Set<Int> = []
+        private var wanted: Set<Int> = []
+        private var warmToken = 0
+        /// How long the frames outside the loop wait before they start
+        /// asking for tiles: the loop's own come first on a cold open.
+        private static let warmDelay: TimeInterval = 2.5
+
+        /// The alpha a frame that is not on screen rests at.
+        private func idle(_ key: Int) -> CGFloat {
+            !panning && active.contains(key) ? Self.idleAlpha : 0
+        }
+
+        /// Set the span's frames. `first` (the loop) warm at once; the rest
+        /// (older frames, the forecast) join after a moment.
+        func setActive(_ keys: Set<Int>, first: Set<Int>) {
+            guard keys != wanted else { return }
+            wanted = keys
+            warmToken += 1
+            let token = warmToken
+            let soon = keys.intersection(first)
+            applyActive(soon.isEmpty ? keys : soon)
+            guard !soon.isEmpty, soon != keys else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.warmDelay) { [weak self] in
+                guard let self, self.warmToken == token else { return }
+                self.applyActive(keys)
+            }
+        }
+
+        private func applyActive(_ keys: Set<Int>) {
+            active = keys
+            guard !radarHidden else { return }
+            for (t, r) in renderers where t != currentTime && r !== fadeFrom && r !== fadeTo {
+                r.alpha = idle(t)
+            }
+        }
+
         private(set) var currentTime: Int = -1
         private var displayLink: CADisplayLink?
         private var fadeFrom: MKTileOverlayRenderer?
         private var fadeTo: MKTileOverlayRenderer?
         private var fadeStart: CFTimeInterval = 0
+        /// Where the frame fading out comes to rest: a hair above zero in
+        /// the span, zero once its span has left the timeline.
+        private var fadeRest: CGFloat = Coordinator.idleAlpha
 
         var onRegionChange: ((MKCoordinateRegion) -> Void)?
         var onSelectStation: ((StationObs) -> Void)?
@@ -635,7 +679,7 @@ struct RadarMapView: UIViewRepresentable {
             if let tile = overlay as? RadarTileOverlay {
                 let r = MKTileOverlayRenderer(tileOverlay: tile)
                 r.alpha = radarHidden ? 0
-                    : (tile.frameTime == currentTime ? visibleAlpha : (panning ? 0 : Self.idleAlpha))
+                    : (tile.frameTime == currentTime ? visibleAlpha : idle(tile.frameTime))
                 renderers[tile.frameTime] = r
                 return r
             }
@@ -660,9 +704,9 @@ struct RadarMapView: UIViewRepresentable {
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
             panning = false
             if !radarHidden {
-                // Back to a hair above zero, so the other frames warm up again.
+                // Back to a hair above zero, so the span's other frames warm up again.
                 for (t, r) in renderers where t != currentTime && r !== fadeFrom && r !== fadeTo {
-                    r.alpha = Self.idleAlpha
+                    r.alpha = idle(t)
                 }
             }
             onRegionChange?(mapView.region)
@@ -891,6 +935,7 @@ struct RadarMapView: UIViewRepresentable {
         func setCurrent(_ time: Int) {
             guard time != currentTime else { return }
             let old = renderers[currentTime]
+            let oldKey = currentTime
             currentTime = time
             guard !radarHidden else { return }
             displayLink?.invalidate()
@@ -899,14 +944,14 @@ struct RadarMapView: UIViewRepresentable {
             // Mid-pan the parked frames stay at zero; the loop stepping must
             // not quietly un-park them (review finding: it did, within one
             // tick, which made the parking cosmetic while playing).
-            let parked: CGFloat = panning ? 0 : Self.idleAlpha
             for (t, r) in renderers where t != time && r !== old {
-                r.alpha = parked
+                r.alpha = idle(t)
             }
             guard let new = renderers[time] else {
-                old?.alpha = parked
+                old?.alpha = idle(oldKey)
                 return
             }
+            fadeRest = idle(oldKey)
             fadeFrom = old
             fadeTo = new
             fadeStart = CACurrentMediaTime()
@@ -918,7 +963,7 @@ struct RadarMapView: UIViewRepresentable {
         @objc private func stepFade() {
             let p = CGFloat(min(1, (CACurrentMediaTime() - fadeStart) / Self.fadeDuration))
             fadeTo?.alpha = Self.idleAlpha + (visibleAlpha - Self.idleAlpha) * p
-            fadeFrom?.alpha = visibleAlpha - (visibleAlpha - Self.idleAlpha) * p
+            fadeFrom?.alpha = visibleAlpha - (visibleAlpha - fadeRest) * p
             if p >= 1 {
                 if panning { fadeFrom?.alpha = 0 }
                 displayLink?.invalidate()
@@ -975,26 +1020,18 @@ struct RadarMapView: UIViewRepresentable {
         // RadarPalette repaints it. Past RainViewer's native z7 the overlay
         // crops + upscales ancestor tiles (see loadTile) — do NOT set maximumZ,
         // which would stop rendering entirely past z7.
-        for f in frames where context.coordinator.overlays[f.time] == nil {
-            let tile: RadarTileOverlay
-            if let layer = f.iemLayer {
-                // HRRR model frames: IEM TMS tiles, 256 px, native to ~z10.
-                tile = RadarTileOverlay(urlTemplate:
-                    "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/\(layer)/{z}/{x}/{y}.png")
-                tile.maxNativeZ = 10
-                tile.tileSize = CGSize(width: 256, height: 256)
-            } else {
-                tile = RadarTileOverlay(urlTemplate:
-                    host + f.path + "/512/{z}/{x}/{y}/2/0_1.png")
-                tile.tileSize = CGSize(width: 512, height: 512)
-                tile.recolor = true
-            }
-            tile.frameTime = f.time
+        for f in frames where context.coordinator.overlays[f.key] == nil {
+            // Observed, nowcast and model frames all come in the one shape.
+            let tile = RadarTileOverlay(urlTemplate: host + f.path + "/512/{z}/{x}/{y}/2/0_1.png")
+            tile.tileSize = CGSize(width: 512, height: 512)
+            tile.recolor = true
+            tile.frameTime = f.key
             tile.canReplaceMapContent = false
             tile.minimumZ = 1
-            context.coordinator.overlays[f.time] = tile
+            context.coordinator.overlays[f.key] = tile
             map.addOverlay(tile, level: .aboveRoads)
         }
+        context.coordinator.setActive(Set(frames.map(\.key)), first: loopKeys)
         if recenterToken != context.coordinator.lastRecenterToken {
             context.coordinator.lastRecenterToken = recenterToken
             map.setRegion(MKCoordinateRegion(
@@ -1018,6 +1055,6 @@ struct RadarMapView: UIViewRepresentable {
         context.coordinator.setRadarHidden(!radarVisible)
 
         guard frames.indices.contains(index) else { return }
-        context.coordinator.setCurrent(frames[index].time)
+        context.coordinator.setCurrent(frames[index].key)
     }
 }

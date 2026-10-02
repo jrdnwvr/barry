@@ -6,6 +6,14 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PORT=8080
 
+# Debian's own fixes, taken at build time. The base image is rebuilt on its
+# maintainers' schedule and can sit a week behind a fix Debian has already
+# shipped; the image scan in CI fails on any fixable high, so without this
+# every push went red until the base caught up (libpcre2, 2026-10-02).
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 # Runtime deps from the hash-pinned lock (uv pip compile --generate-hashes,
 # resolved for this image's Python), then the app itself without resolving
 # anything further. A changed or substituted wheel fails the build.

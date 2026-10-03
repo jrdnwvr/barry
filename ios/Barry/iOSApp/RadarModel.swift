@@ -471,6 +471,44 @@ final class RadarModel: ObservableObject {
     /// the slider's frame otherwise.
     var lineTime: Double { playing ? playClock : Double(playheadTime) }
 
+    // MARK: Scrubbing
+
+    /// A finger is on the slider. The GPU then draws the moment under the
+    /// thumb, between frames, as it draws a loop; the frame time and the
+    /// lines follow the nearest frame through `index`. Not a frame at a
+    /// time through the tile layers, which fetched and crossfaded each
+    /// frame the thumb crossed and lagged the finger (Jordan, 2026-10-02).
+    @Published private(set) var scrubbing = false
+    /// Where the thumb is, in frames (fractional), and the moment that is.
+    private(set) var scrubPosition: Double = 0
+    private(set) var scrubClock: Double = 0
+
+    func scrub(to position: Double, editing: Bool) {
+        guard !frames.isEmpty else { return }
+        let p = max(0, min(Double(frames.count - 1), position))
+        scrubPosition = p
+        let i = Int(p.rounded(.down)), j = min(frames.count - 1, i + 1)
+        scrubClock = Double(frames[i].time) + (Double(frames[j].time) - Double(frames[i].time)) * (p - Double(i))
+        let nearest = Int(p.rounded())
+        if nearest != index { index = nearest }
+        if editing != scrubbing {
+            scrubbing = editing
+            if editing { ensureMotion() }
+        }
+        // A thumb that has not moved for a while is as good as lifted: the
+        // frame's tiles take over under the GPU's picture, and a finger
+        // still resting there loses nothing. Also the way out when the
+        // slider never says the touch ended (a synthesized drag).
+        scrubIdle?.cancel()
+        guard scrubbing else { return }
+        scrubIdle = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            guard let self, !Task.isCancelled, self.scrubbing else { return }
+            self.scrubbing = false
+        }
+    }
+    private var scrubIdle: Task<Void, Never>?
+
     /// The frames the loop plays.
     var loopFrames: [RadarFrame] {
         guard !frames.isEmpty else { return [] }
@@ -489,7 +527,7 @@ final class RadarModel: ObservableObject {
     private var motionTask: Task<Void, Never>?
 
     func ensureMotion() {
-        guard playing || buffering, let region = lastRegion, !frames.isEmpty else { return }
+        guard playing || buffering || scrubbing, let region = lastRegion, !frames.isEmpty else { return }
         let now = nowTime
         if let held = motionField, held.nowTime == now, let was = motionFetchedFor, was.span == span,
            Self.nearEnough(region, to: was.region) { return }

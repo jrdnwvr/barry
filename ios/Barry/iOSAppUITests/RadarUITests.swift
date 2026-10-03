@@ -155,9 +155,11 @@ final class RadarUITests: XCTestCase {
         XCTAssertTrue(glide.waitForExistence(timeout: 25), "the loop should be drawn by the GPU")
         let slider = app.sliders.allElementsBoundByIndex.first(where: { $0.isHittable }) ?? app.sliders.firstMatch
         slider.adjust(toNormalizedSliderPosition: 0.0)
+        // The frame's tiles are read in under the GPU's picture first,
+        // over the network on a cold cache.
         let gone = NSPredicate(format: "exists == false")
         expectation(for: gone, evaluatedWith: glide)
-        waitForExpectations(timeout: 5)
+        waitForExpectations(timeout: 10)
         XCTAssertTrue(frameTime.label.contains("h ago"), "the day span should reach back hours: \(frameTime.label)")
         slider.adjust(toNormalizedSliderPosition: 1.0)
         XCTAssertTrue(frameTime.label.contains("model") || frameTime.label.contains("nowcast"),

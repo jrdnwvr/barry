@@ -318,10 +318,12 @@ struct RadarPanel: View {
     /// travels between frames instead of crossfading (RadarGlideView). Nil
     /// when nothing is playing, or the device cannot.
     private var glideSource: RadarGlideSource? {
-        guard showRadar, active, model.playing, RadarGlideView.isAvailable else { return nil }
+        guard showRadar, active, model.playing || model.scrubbing, RadarGlideView.isAvailable else { return nil }
+        // A loop plays its own frames; a scrub can reach every frame of
+        // the span, the forecast included.
         return RadarGlideSource(
-            clock: { [model] in model.playing ? model.playClock : nil },
-            frames: model.loopFrames,
+            clock: { [model] in model.playing ? model.playClock : (model.scrubbing ? model.scrubClock : nil) },
+            frames: model.playing ? model.loopFrames : model.frames,
             motion: { [model] in model.motionField })
     }
 
@@ -779,17 +781,21 @@ struct RadarPanel: View {
                 replayChip(.day)
                 replayChip(.hour)
 
+                // Continuous: the thumb's moment is drawn as it moves
+                // (RadarModel.scrub); the frame time reads the nearest frame.
                 Slider(
                     value: Binding(
-                        get: { Double(model.index) },
-                        set: {
+                        get: { model.scrubbing ? model.scrubPosition : Double(model.index) },
+                        set: { v in
                             model.stopLoop()
-                            model.index = Int($0.rounded())
                             model.lockedToNow = false
+                            model.scrub(to: v, editing: true)
                         }
                     ),
                     in: 0...Double(max(1, model.frames.count - 1)),
-                    step: 1
+                    onEditingChanged: { editing in
+                        model.scrub(to: editing ? model.scrubPosition : Double(model.index), editing: editing)
+                    }
                 )
 
                 Button {

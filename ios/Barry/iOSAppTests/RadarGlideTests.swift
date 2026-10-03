@@ -35,9 +35,10 @@ struct RadarGlideTests {
         #expect(none.a == 0 && none.b == 0)
     }
 
-    @Test func theFramesHeldAreTheTwoOfTheMomentAndTheNextTwoRound() {
-        #expect(RadarGlide.wanted(a: 5, b: 6, count: 7) == [5, 6, 0, 1])
-        #expect(RadarGlide.wanted(a: 2, b: 3, count: 7) == [2, 3, 4, 5])
+    @Test func theFramesHeldAreTheTwoOfTheMomentAndOneEitherSideRound() {
+        #expect(RadarGlide.wanted(a: 5, b: 6, count: 7) == [5, 6, 0, 4])
+        #expect(RadarGlide.wanted(a: 2, b: 3, count: 7) == [2, 3, 4, 1])
+        #expect(RadarGlide.wanted(a: 0, b: 1, count: 7) == [0, 1, 2, 6])
         #expect(RadarGlide.wanted(a: 0, b: 0, count: 1) == [0])
         #expect(RadarGlide.wanted(a: 0, b: 0, count: 0) == [])
     }
@@ -131,6 +132,9 @@ struct RadarGlideTests {
         // The day loop: twenty-minute frames and a newest frame off the step.
         let day = (0..<18).map { frame(1200 * $0) } + [frame(1200 * 17 + 600)]
         #expect(RadarGlide.stackParts(day)?.map(\.count) == [4, 4, 4, 4, 2])
+        // The frames before a loop, every one of them, for a scrub.
+        let before = (0..<6).map { frame(600 * $0) }
+        #expect(RadarGlide.stackParts(before, dropLast: false)?.map(\.keys) == [[0, 600, 1200, 1800], [2400, 3000]])
         // Unevenly spaced, a nowcast among them, or too few: a tile a frame.
         #expect(RadarGlide.stackParts([frame(0), frame(600), frame(1800), frame(2400)]) == nil)
         #expect(RadarGlide.stackParts([frame(0), frame(600), frame(1201, .nowcast), frame(1800)]) == nil)

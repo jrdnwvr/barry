@@ -86,12 +86,12 @@ enum RadarGlide {
         return (a, b, (t - Double(times[a])) / span)
     }
 
-    /// The frames to have ready for a moment: the two it sits between and
-    /// the next two the loop will reach, going round.
+    /// The frames to have ready for a moment: the two it sits between, the
+    /// next the loop will reach (going round) and the one before, so a
+    /// scrub either way finds its next frame there.
     static func wanted(a: Int, b: Int, count: Int) -> [Int] {
         guard count > 0 else { return [] }
-        var out = [a, b]
-        for k in 1...2 { out.append((b + k) % count) }
+        let out = [a, b, (b + 1) % count, (a - 1 + count) % count]
         var seen: Set<Int> = []
         return out.filter { seen.insert($0).inserted }
     }
@@ -162,9 +162,11 @@ enum RadarGlide {
     /// all but the newest (which is on screen already, from its own
     /// tile), in runs of `partFrames`. Nil when the frames are not evenly
     /// spaced or there are too few, and the loop fetches a tile a frame.
-    static func stackParts(_ frames: [RadarFrame]) -> [StackPart]? {
-        let past = frames.dropLast().filter { $0.kind == .observed }
-        guard past.count >= 2, past.count == frames.count - 1 else { return nil }
+    /// With `dropLast` false every frame given is in (the span's frames
+    /// before the loop, for a scrub).
+    static func stackParts(_ frames: [RadarFrame], dropLast: Bool = true) -> [StackPart]? {
+        let past = (dropLast ? Array(frames.dropLast()) : frames).filter { $0.kind == .observed }
+        guard past.count >= 2, past.count == frames.count - (dropLast ? 1 : 0) else { return nil }
         let step = past[1].time - past[0].time
         guard step == 600 || step == 1200 else { return nil }
         for (a, b) in zip(past, past.dropFirst()) where b.time - a.time != step || b.key != b.time { return nil }

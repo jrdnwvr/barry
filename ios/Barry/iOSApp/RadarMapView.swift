@@ -150,13 +150,18 @@ struct RadarMapView: UIViewRepresentable {
             return u
         }
 
-        /// Tile loads MapKit has asked this frame for and not had back yet.
+        /// Tile loads MapKit has asked this frame for and not had back yet,
+        /// and how many it has asked for in all (a layer just put on the
+        /// map has none in flight for a moment before it asks).
         private let loads = Locked(0)
+        private let asked = Locked(0)
         var loadsInFlight: Int { loads.value }
+        var loadsAsked: Int { asked.value }
 
         override func loadTile(at path: MKTileOverlayPath,
                                result finish: @escaping (Data?, Error?) -> Void) {
             loads.withLock { $0 += 1 }
+            asked.withLock { $0 += 1 }
             let result: (Data?, Error?) -> Void = { [loads] data, error in
                 loads.withLock { $0 -= 1 }
                 finish(data, error)
@@ -663,8 +668,15 @@ struct RadarMapView: UIViewRepresentable {
         /// a tile a frame.
         private var stackParts: [RadarGlide.StackPart] = []
 
-        func setLoop(_ frames: [RadarFrame]) {
-            let parts = RadarGlideView.isAvailable ? (RadarGlide.stackParts(frames) ?? []) : []
+        /// The loop's parts first (a buffering loop waits for the first of
+        /// them), then the span's observed frames before the loop in parts
+        /// of their own, for a scrub to reach without a tile a frame.
+        func setLoop(_ loop: [RadarFrame], span: [RadarFrame]) {
+            guard RadarGlideView.isAvailable else { if !stackParts.isEmpty { stackParts = [] }; return }
+            var parts = RadarGlide.stackParts(loop) ?? []
+            if let first = loop.first, let at = span.firstIndex(where: { $0.key == first.key }), at > 0 {
+                parts += RadarGlide.stackParts(Array(span[..<at]), dropLast: false) ?? []
+            }
             if parts != stackParts { stackParts = parts }
         }
 
@@ -910,6 +922,7 @@ struct RadarMapView: UIViewRepresentable {
                     for (t, r) in renderers { r.alpha = t == currentTime ? Self.idleAlpha : idle(t) }
                 }
                 glideStopTries = 0
+                glideStopAsked = overlays[currentTime]?.loadsAsked ?? 0
                 settleGlideStop(view)
                 return
             }
@@ -951,11 +964,21 @@ struct RadarMapView: UIViewRepresentable {
 
         /// The tiles are back in the frame's layer (or a second has passed):
         /// the GPU's picture can go.
+        private var glideStopAsked = 0
+
         private func settleGlideStop(_ view: RadarGlideView) {
             glideStopTries += 1
-            let loaded = overlays[currentTime]?.loadsInFlight == 0
+            // Loaded means asked for since the stop and all handed back:
+            // a layer just put on the map has nothing in flight for a
+            // moment before it asks, and going by that alone the picture
+            // went while the layer was still empty (a blank third of a
+            // second after a scrub, 2026-10-02).
+            let overlay = overlays[currentTime]
+            let loaded = overlay.map { $0.loadsAsked > glideStopAsked && $0.loadsInFlight == 0 } ?? true
             if gliding { return }
-            if (glideStopTries > 2 && loaded) || glideStopTries > 30 {
+            // Both pictures of the frame up (the GPU's may still be on its
+            // way after a fast scrub), or three seconds gone.
+            if (glideStopTries > 2 && loaded && view.hasPicture(for: currentTime)) || glideStopTries > 30 {
                 if !radarHidden, let r = renderers[currentTime] { r.alpha = visibleAlpha }
                 // A frame or two for MapKit to draw what it read, then the
                 // picture goes.
@@ -1836,7 +1859,7 @@ struct RadarMapView: UIViewRepresentable {
             context.coordinator.overlays[f.key] = tile
         }
         context.coordinator.host = host
-        context.coordinator.setLoop(frames.filter { loopKeys.contains($0.key) })
+        context.coordinator.setLoop(frames.filter { loopKeys.contains($0.key) }, span: frames)
         context.coordinator.syncBuffer(buffer, on: map)
         context.coordinator.setFrames(frames.map(\.key), loop: loopKeys)
         if recenterToken != context.coordinator.lastRecenterToken {

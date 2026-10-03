@@ -811,6 +811,21 @@ stored keys, but each has its own model, so they fetch separately.
   ("8:20 PM · 20m ago", "11:00 AM · 5h ago", "· nowcast +40m" in orange,
   "· model +3h" in purple). Until 2026-10-02 it was `[Now] [60] [slider]`
   over one hour of radar and thirty minutes of nowcast.
+- Scrubbing (since 2026-10-02): the slider is continuous, and while a
+  finger is on it the GPU draws the moment under the thumb, between
+  frames and along the rain's motion where it has it, as it draws a loop
+  (`RadarModel.scrub`, `scrubClock`); the frame time and the lines read
+  the nearest frame. A scrub can reach every frame of the span, the
+  forecast included (those frames' tiles are read back on first use).
+  When the finger lifts (or rests for 0.7 s) the frame's tile layer
+  takes over under the GPU's picture, as after a loop, once its tiles
+  have been asked for and read in and the GPU has the frame. The GPU
+  keeps the frame either side of the moment ready as well as the next,
+  so a scrub either way finds its next frame there, and the span's
+  observed frames before the loop come as stacks too
+  (`Coordinator.setLoop`). Until then a scrub went a frame at a
+  time through the tile layers, which fetched and crossfaded each frame
+  the thumb crossed and lagged the finger (Jordan).
 - The two replay chips are the two spans (`RadarSpan`). **60**, the hour
   span: every ten minutes from two hours back, then the nowcast; its loop
   is the last hour. **6h**, the day span: a frame every twenty minutes

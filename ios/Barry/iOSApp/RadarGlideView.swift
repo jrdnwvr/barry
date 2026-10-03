@@ -92,6 +92,13 @@ final class RadarGlideView: UIView {
         set {}
     }
 
+    /// Whether the frame's picture is up for the tiles on screen.
+    func hasPicture(for key: Int) -> Bool {
+        guard let p = textures[key] else { return false }
+        guard let paths = tileSet?(), let set = RadarGlide.TileSet(paths) else { return true }
+        return p.set == set
+    }
+
     /// Hold on one frame, exactly, until the clock runs again: what the
     /// tile layer shows once it is back.
     func freeze(at key: Int) {

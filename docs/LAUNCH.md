@@ -122,24 +122,15 @@ day for MetricKit to report.
   into the body, so a report arrives with what is needed.
 - The outside health checks mail it too.
 
-## 5. The site on turpentine.cc
+## 5. The site at barry.turpentine.cc
 
 Small, static, in the repo under `site/`, published by Cloudflare Pages
-from the repository (the domain is already on Cloudflare; GitHub Pages
-would do as well). Pages:
-
-- `/` Turpentine, one screen: who makes this, with Barry as the one thing
-  on it for now.
-- `/barry` what it is, two or three screenshots, the App Store badge once
-  there is one and the TestFlight link until then, the support address.
-- `/barry/privacy` the policy, moved from the backend's page word for word.
-- `/barry/support` the address, what to put in a report, a short FAQ
-  (what the numbers are, where the data comes from, why a station is
-  missing).
-
-Plain HTML and one stylesheet, the app's own tone, no framework. The API
-host is a separate name (`api.turpentine.cc`) so the site and the server
-move independently.
+from the repository (the domain is already on Cloudflare) at
+`barry.turpentine.cc`. One page with three features, plus `/privacy` and
+`/support`; the content plan is `SITE.md` (2026-10-03). A how-to site
+with every feature and directions comes later. The API host is a
+separate name (`api.turpentine.cc`) so the site and the server move
+independently.
 
 ## 6. Order
 

@@ -22,10 +22,12 @@ import math
 from datetime import datetime
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
-from .models import LightningCell, LightningCluster, LightningNearby, LightningResponse
+from .models import LightningCell, LightningCluster, LightningFrameOut, LightningNearby, LightningResponse
 from .sources.glm import Flash
 
 WINDOW_S = 1200.0           # 20 minutes of flashes
+HISTORY_S = 6.5 * 3600.0    # credible flashes kept this long, for the radar's clock
+HISTORY_STEP_S = 600        # the frames the history is served in
 BIN_DEG = 0.02              # ~2 km cells on the map
 MAX_CELLS = 2500            # densest / newest cells per slice
 RADIUS_KM = 160.9           # 100 statute miles, same as the METAR search
@@ -95,6 +97,10 @@ class FlashStore:
         self.echo_at = echo_at
         self._backed: set = set()
         self._credible: Optional[List[Flash]] = None     # None: to be worked out
+        # Every flash once believed, kept HISTORY_S: what the map's
+        # lightning follows the radar's clock back through (frames).
+        self._history: List[Flash] = []
+        self._in_history: set = set()
 
     def __len__(self) -> int:
         return len(self._flashes)
@@ -110,6 +116,10 @@ class FlashStore:
         self._flashes = [f for f in self._flashes if f.t >= cutoff]
         self._backed = {f for f in self._backed if f.t >= cutoff}
         self._credible = None
+        old = now.timestamp() - HISTORY_S
+        if self._history and self._history[0].t < old:
+            self._history = [f for f in self._history if f.t >= old]
+            self._in_history = set(self._history)
 
     # ---- Which flashes to believe ------------------------------------------
 
@@ -155,6 +165,10 @@ class FlashStore:
             if n >= GROUP_MIN:
                 out.append(f)
         self._credible = out
+        for f in out:
+            if f not in self._in_history:
+                self._in_history.add(f)
+                self._history.append(f)
         return out
 
     @property
@@ -196,6 +210,43 @@ class FlashStore:
         if len(out) > MAX_CELLS:
             out.sort(key=lambda c: (c.ageSec, -c.count))
             out = out[:MAX_CELLS]
+        return out
+
+    def frames(self, lat: float, lon: float, half: float, now: datetime,
+               hours: float = 6.0) -> List[LightningFrameOut]:
+        """The flashes once believed inside ±half degrees, as the cells of
+        a window ending at each ten-minute mark from `hours` back to the
+        last mark before now: what the map's lightning shows for a moment
+        of the radar's clock. Ages are from the mark."""
+        lon_half = half / max(0.2, math.cos(math.radians(lat)))
+        self.credible()
+        near = [f for f in self._history if abs(f.lat - lat) <= half and abs(f.lon - lon) <= lon_half]
+        near.sort(key=lambda f: f.t)
+        last = int(now.timestamp() // HISTORY_STEP_S) * HISTORY_STEP_S
+        first = last - int(hours * 3600)
+        out: List[LightningFrameOut] = []
+        for mark in range(first, last + 1, HISTORY_STEP_S):
+            bins: Dict[Tuple[int, int], List[float]] = {}
+            for f in near:
+                if f.t <= mark - WINDOW_S:
+                    continue
+                if f.t > mark:
+                    break
+                k = (int(math.floor(f.lat / BIN_DEG)), int(math.floor(f.lon / BIN_DEG)))
+                b = bins.get(k)
+                if b is None:
+                    bins[k] = [1.0, f.t]
+                else:
+                    b[0] += 1
+                    if f.t > b[1]:
+                        b[1] = f.t
+            cells = [LightningCell(lat=round((k[0] + 0.5) * BIN_DEG, 4), lon=round((k[1] + 0.5) * BIN_DEG, 4),
+                                   count=int(v[0]), ageSec=max(0, int(mark - v[1])))
+                     for k, v in bins.items()]
+            if len(cells) > MAX_CELLS:
+                cells.sort(key=lambda c: (c.ageSec, -c.count))
+                cells = cells[:MAX_CELLS]
+            out.append(LightningFrameOut(time=mark, cells=cells))
         return out
 
     def clusters(self, cells: Sequence[LightningCell], now: datetime) -> List[LightningCluster]:

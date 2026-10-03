@@ -60,6 +60,12 @@ from .models import (
     RadarFramesResponse,
     RadarMotionPair,
     RadarMotionResponse,
+    FieldFrameOut,
+    FieldSeriesResponse,
+    LightningSeriesResponse,
+    StationReportOut,
+    StationSeriesOut,
+    StationSeriesResponse,
     RadarFrameOut,
     CombinedResponse,
     CurrentObs,
@@ -622,9 +628,12 @@ class PressureService:
         if self._bulk_history and \
            (now - self._bulk_history[-1][0]).total_seconds() < HISTORY_STEP_MIN * 60:
             return
-        snap = {s.id: (s.obsTime, s.slp, s.altim, s.lat, s.lon)
+        # The pressure the ring and the past isobars read, and since
+        # 2026-10-02 the wind and the category too, so the stations on the
+        # map can follow the radar's clock (get_station_series).
+        snap = {s.id: (s.obsTime, s.slp, s.altim, s.lat, s.lon, s.windKt, s.windDir, s.gustKt, s.fltCat)
                 for s in table
-                if s.obsTime is not None and (s.slp is not None or s.altim is not None)}
+                if s.obsTime is not None and (s.slp is not None or s.altim is not None or s.windKt is not None)}
         self._bulk_history.append((now, snap))
         cutoff = now - timedelta(hours=HISTORY_KEEP_H)
         self._bulk_history = [h for h in self._bulk_history if h[0] >= cutoff]
@@ -658,7 +667,8 @@ class PressureService:
             return []
         latest = self._bulk_history[-1][1]
         out = []
-        for sid, (t1, slp1, alt1, la, lo) in latest.items():
+        for sid, rec in latest.items():
+            t1, slp1, alt1, la, lo = rec[:5]
             if t1 is None or (now - t1).total_seconds() > 2 * 3600:
                 continue
             best = None
@@ -671,7 +681,8 @@ class PressureService:
                     best = (span_h, rec)
             if best is None:
                 continue
-            span_h, (t0, slp0, alt0, _, _) = best
+            span_h, rec0 = best
+            t0, slp0, alt0 = rec0[:3]
             if slp1 is not None and slp0 is not None:
                 d = slp1 - slp0
             elif alt1 is not None and alt0 is not None:
@@ -704,7 +715,9 @@ class PressureService:
                 rec = snap.get(sid)
                 if rec is None:
                     continue
-                t, slp, alt, la, lo = rec
+                t, slp, alt, la, lo = rec[:5]
+                if slp is None and alt is None:
+                    continue
                 seen[t] = SeriesPoint(t=t, slp=slp, altim=alt)
             out[sid] = {"lat": la, "lon": lo, "series": [seen[k] for k in sorted(seen)]}
         return out
@@ -789,6 +802,36 @@ class PressureService:
         box = [b for b in all_buoys if abs(b.lat - lat) <= half and abs(b.lon - lon) <= lon_half]
         box.sort(key=lambda b: (b.lat - lat) ** 2 + (b.lon - lon) ** 2)
         return StationsResponse(stations=resp.stations + box[:BUOYS_MAX], cachedAt=resp.cachedAt)
+
+    STATION_SERIES_H = 6.5          # how far back the stations' reports are given
+
+    def get_station_series(self, lat: float, lon: float, half: float = 3.0) -> StationSeriesResponse:
+        """Each station's reports over the last six hours and a half, from
+        the bulk snapshots: wind and category by report time, for the map's
+        stations to show the report of the radar clock's moment. Nearest
+        stations first, the same number the map carries now."""
+        now = _now()
+        half = round(max(0.5, min(30.0, half)) * 2) / 2
+        lon_half = half / max(0.2, math.cos(math.radians(lat)))
+        since = now - timedelta(hours=self.STATION_SERIES_H)
+        latest = self._bulk_history[-1][1] if self._bulk_history else {}
+        ids = sorted((sid for sid, rec in latest.items()
+                      if abs(rec[3] - lat) <= half and abs(rec[4] - lon) <= lon_half),
+                     key=lambda sid: (latest[sid][3] - lat) ** 2 + (latest[sid][4] - lon) ** 2)[:STATIONS_MAX]
+        out: List[StationSeriesOut] = []
+        for sid in ids:
+            reports: Dict[int, StationReportOut] = {}
+            la = lo = None
+            for _, snap in self._bulk_history:
+                rec = snap.get(sid)
+                if rec is None or rec[0] is None or rec[0] < since or len(rec) < 9:
+                    continue
+                t = int(rec[0].timestamp())
+                la, lo = rec[3], rec[4]
+                reports[t] = StationReportOut(t=t, windKt=rec[5], windDir=rec[6], gustKt=rec[7], fltCat=rec[8])
+            if reports and la is not None:
+                out.append(StationSeriesOut(id=sid, lat=la, lon=lo, reports=[reports[k] for k in sorted(reports)]))
+        return StationSeriesResponse(stations=out, cachedAt=now)
 
     async def get_station_obs(self, lat: float, lon: float, half: float = 3.0) -> StationsResponse:
         """Stations within ±half degrees of a point, sliced from the in-memory
@@ -1757,8 +1800,9 @@ class PressureService:
         if best is None:
             return None
         _, at, snap = best
-        return at, [(la, lo, slp) for (t, slp, _alt, la, lo) in snap.values()
-                    if slp is not None and t is not None and (at - t).total_seconds() <= self.SERIES_OBS_MAX_AGE_S]
+        return at, [(rec[3], rec[4], rec[1]) for rec in snap.values()
+                    if rec[1] is not None and rec[0] is not None
+                    and (at - rec[0]).total_seconds() <= self.SERIES_OBS_MAX_AGE_S]
 
     async def get_pressure_series(self, lat: float, lon: float, lat_span: float,
                                   lon_span: float) -> PressureSeriesResponse:
@@ -1994,6 +2038,50 @@ class PressureService:
         lons = [lon0 + w * c / (cols - 1) for _ in range(rows) for c in range(cols)]
         return lats, lons
 
+    async def get_field_series(self, lat: float, lon: float, lat_span: float, lon_span: float,
+                               pad: float = 0.0, levels: bool = False) -> FieldSeriesResponse:
+        """The map's wind grid at each hour from seven back to the top of
+        this one, and at now, from the HRRR analyses the store keeps
+        (sources.hrrr.MAP.history): what the wind on the map follows the
+        radar's clock through. On the shared lattice, out past the view's
+        edges by `pad`. With `levels`, the altitude stops' winds too. An
+        hour with no analysis held (the store fills over its first hours
+        after a start) is left out. Served from the store, no upstream."""
+        lat_span = max(0.05, min(30.0, lat_span))
+        lon_span = max(0.05, min(60.0, lon_span))
+        q_lat, q_lon = round(lat * 20) / 20, round(lon * 20) / 20
+
+        def q_span(v):
+            return round(v * 2) / 2 if v >= 1 else round(v, 1)
+        q_lat_span, q_lon_span = q_span(lat_span), q_span(lon_span)
+        key = f"fseries:{q_lat}:{q_lon}:{q_lat_span}:{q_lon_span}:{pad}:{int(levels)}"
+        cached = await self.cache.get(key)
+        if cached is not None:
+            return cached
+        now = _now()
+        if pad > 0:
+            lats, lons = self._lattice_points(q_lat, q_lon, q_lat_span, q_lon_span, pad)
+        else:
+            lats, lons = self._field_points(q_lat, q_lon, q_lat_span, q_lon_span,
+                                            self.HRRR_COLS, self.HRRR_ROWS)
+        back, _ = self._series_hours(now)
+        times = back + ([now] if not back or now > back[-1] + timedelta(minutes=5) else [])
+
+        def _work() -> List[FieldFrameOut]:
+            frames: List[FieldFrameOut] = []
+            for t in times:
+                pts = modelfields.field_points(self.models, lats, lons, t) if self.hrrr_enabled else None
+                if not pts:
+                    continue
+                lv = modelfields.level_points(self.models, lats, lons, t) if levels else None
+                frames.append(FieldFrameOut(time=int(t.timestamp()), points=pts, levels=lv or []))
+            return frames
+
+        frames = await asyncio.to_thread(_work)
+        resp = FieldSeriesResponse(frames=frames, source="hrrr" if frames else None, cachedAt=now)
+        await self.cache.set(key, resp, ttl=5 * 60.0)
+        return resp
+
     async def get_field_levels(self, lat: float, lon: float,
                                lat_span: float, lon_span: float, pad: float = 0.0) -> FieldLevelsResponse:
         """The radar's wind grid at every altitude stop, for the same
@@ -2119,6 +2207,22 @@ class PressureService:
         if cached is not None:
             return cached
         resp = self.flashes.response(lat, lon, half, _now())
+        await self.cache.set(key, resp, ttl=LIGHTNING_TTL)
+        return resp
+
+    async def get_lightning_series(self, lat: float, lon: float, half: float = 3.0) -> LightningSeriesResponse:
+        """Six hours of flashes around a point, a frame every ten minutes,
+        for the map's lightning to follow the radar's clock. From memory;
+        quantized like the live slice and kept a minute."""
+        half = round(max(0.5, min(6.0, half)) * 2) / 2
+        key = f"lightning-series:{round(lat * 5) / 5}:{round(lon * 5) / 5}:{half}"
+        cached = await self.cache.get(key)
+        if cached is not None:
+            return cached
+        now = _now()
+        frames = await asyncio.to_thread(self.flashes.frames, lat, lon, half, now)
+        resp = LightningSeriesResponse(frames=frames, windowSec=int(flashes_mod.WINDOW_S),
+                                       binDeg=flashes_mod.BIN_DEG, cachedAt=now)
         await self.cache.set(key, resp, ttl=LIGHTNING_TTL)
         return resp
 

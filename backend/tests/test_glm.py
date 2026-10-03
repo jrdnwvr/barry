@@ -66,6 +66,32 @@ def test_store_bins_prunes_and_finds_the_nearest_with_drift():
     assert fl.FlashStore().nearest(39.103, -84.419, NOW) is None
 
 
+def test_believed_flashes_are_kept_for_hours_and_served_by_the_mark():
+    """A cluster two hours ago and one just now: each sits in the frames
+    whose twenty-minute window holds it, with ages from the mark; the
+    live window has only the newer; a lone old flash is never believed and
+    so never kept; and the history is pruned at six and a half hours."""
+    s = fl.FlashStore()
+    t0 = NOW.timestamp()
+    then = t0 - 2 * 3600
+    old = [Flash(then - 100 + i, 39.45 + 0.001 * i, -84.85, 1.0) for i in range(6)]
+    new = [Flash(t0 - 100 + i, 39.30 + 0.001 * i, -84.65, 1.0) for i in range(6)]
+    s.add(old + [Flash(then - 50, 40.5, -84.0, 1.0)], datetime.fromtimestamp(then, tz=timezone.utc))
+    s.credible()                                   # believed then, into the history
+    s.add(new, NOW)                                # the window moves on; the old ones leave it
+    assert len(s) == 6 and sum(c.count for c in s.cells(39.103, -84.419, 3.0, NOW)) == 6
+    frames = s.frames(39.103, -84.419, 3.0, NOW)
+    marks = [f.time for f in frames]
+    assert len(frames) == 37 and marks == sorted(marks) and all(m % 600 == 0 for m in marks)
+    held = {f.time: sum(c.count for c in f.cells) for f in frames}
+    first_old = next(m for m in marks if m >= then)
+    assert held[first_old] == 6 and held[first_old + 600] == 6 and held[first_old + 1200] == 0
+    assert held[marks[-1]] == 6 and all(c.ageSec <= 100 + 600 for f in frames if f.time == marks[-1] for c in f.cells)
+    assert sum(held.values()) == 18                # the old six in two marks, the new six in the last
+    s.prune(NOW + timedelta(hours=5))
+    assert len(s._history) == 6                    # the cluster from then is gone
+
+
 @pytest.mark.asyncio
 async def test_poll_feeds_the_slice_and_combined(client, upstream, monkeypatch):
     # Frozen clocks on both sides: the fake used to mint keys from the real

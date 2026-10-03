@@ -103,6 +103,10 @@ class FeedSpec:
     dtype: str = "float32"
     nomads: bool = False            # whole files from NOMADS when the bucket is late
     keep: int = 2
+    # Older cycles kept as their first hour alone, trimmed to these
+    # fields: past analyses, for the map's wind on the radar's clock.
+    history: int = 0
+    history_fields: Tuple[str, ...] = ()
     # Where the files are and when an hour is normally there; HRRR's unless
     # set (RRFS names its files its own way and lands later).
     url: Optional[Callable[[datetime, int, str], str]] = None
@@ -129,8 +133,11 @@ def _extended(cycle: datetime) -> Tuple[int, ...]:
     return tuple(range(0, EXTENDED_LAST + 1)) if cycle.hour % 6 == 0 else ()
 
 
-# The radar's map layers: full resolution, three hours of every cycle.
-MAP = FeedSpec("hrrr", FIELDS, WIND_PAIRS, lambda c: FHRS, nomads=True)
+# The radar's map layers: full resolution, three hours of every cycle;
+# and the analysis winds of the six hours before, so the wind on the map
+# can follow the radar's clock back (about 90 MB an hour).
+MAP = FeedSpec("hrrr", FIELDS, WIND_PAIRS, lambda c: FHRS, nomads=True, history=7,
+               history_fields=("u10", "v10", "psfc") + tuple(f"{s}{p}" for p in LEVELS for s in ("u", "v")))
 # The Aloft column. The first hours from every cycle, and the day ahead
 # from the four cycles a day that run to 48 hours. A point's column needs
 # no 3 km detail, so these keep every other point in half precision:
@@ -453,5 +460,5 @@ async def pull(client: httpx.AsyncClient, store, spec: FeedSpec, cycle: datetime
         raw = await fetch_raw(client, cycle, fhr, spec.fields, source, spec.url_for)
         written += await asyncio.to_thread(_process_hour, raw, spec, cycle, fhr, store)
     store.mark_complete(spec.name, cycle)
-    store.purge(spec.name, keep=spec.keep)
+    store.purge(spec.name, keep=spec.keep, history=spec.history, history_fields=spec.history_fields)
     return written

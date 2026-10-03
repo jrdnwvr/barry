@@ -368,6 +368,37 @@ async def radar_pressure_series(
     return resp.model_dump(mode="json", by_alias=True, exclude_none=True)
 
 
+@app.get("/radar/field/series")
+async def radar_field_series(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    latSpan: float = Query(..., gt=0, le=180),
+    lonSpan: float = Query(..., gt=0, le=360),
+    pad: float = Query(0.0, ge=0, le=1.0),
+    levels: bool = Query(False),
+):
+    """The map's wind grid at each hour of the radar's day span and at
+    now, oldest first, on the one lattice, from the HRRR analyses Tower
+    keeps: the wind on the map follows the radar's clock through these.
+    `levels` adds the altitude stops. No upstream call."""
+    resp = await get_service().get_field_series(lat, lon, latSpan, lonSpan, pad, levels)
+    return resp.model_dump(mode="json", by_alias=True, exclude_none=True)
+
+
+@app.get("/metars/series")
+async def metars_series(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    half: float = Query(3.0, ge=0.5, le=30.0),
+):
+    """Each station's reports over the last six hours and a half within
+    ±half degrees of a point: time, wind and category, from the server's
+    own snapshots, nearest stations first. For the map's stations to show
+    the report of the radar clock's moment. No upstream call."""
+    resp = get_service().get_station_series(lat, lon, half)
+    return resp.model_dump(mode="json", by_alias=True, exclude_none=True)
+
+
 @app.get("/radar/motion")
 async def radar_motion(
     span: str = Query("hour", pattern="^(hour|day)$"),
@@ -395,6 +426,19 @@ async def get_lightning(
     0.02° cells, from the server's own memory (NOAA is polled once a
     minute regardless of users). coverage=false means the feed is stale."""
     return await get_service().get_lightning(lat, lon, half)
+
+
+@app.get("/lightning/series")
+async def get_lightning_series(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    half: float = Query(3.0, ge=0.5, le=6.0),
+):
+    """Six hours of GOES GLM flashes around a point, a frame every ten
+    minutes (the twenty minutes before each mark, binned to 0.02° cells),
+    from the server's own memory: the map's lightning on the radar's
+    clock. Only since the server last started."""
+    return await get_service().get_lightning_series(lat, lon, half)
 
 
 @app.get("/radar/frames")

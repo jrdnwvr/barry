@@ -132,9 +132,13 @@ class ModelStore:
             self._manifest(feed, cycle)["complete"] = True
             self._write_manifest(feed, cycle)
 
-    def purge(self, feed: str, keep: int = 2) -> None:
-        """Keep the newest `keep` complete cycles, and any incomplete cycle
-        newer than them (it is being written)."""
+    def purge(self, feed: str, keep: int = 2, history: int = 0,
+              history_fields: Tuple[str, ...] = ()) -> None:
+        """Keep the newest `keep` complete cycles whole, and any incomplete
+        cycle newer than them (it is being written). With `history`, the
+        `history` complete cycles after those are kept too, trimmed to
+        their first hour and to `history_fields`: the analyses of past
+        hours, for the map's wind on the radar's clock."""
         with self._lock:
             cycles = sorted((c for f, c in self._manifests if f == feed),
                             key=lambda c: _parse_cycle(c) or datetime.min.replace(tzinfo=timezone.utc),
@@ -143,13 +147,45 @@ class ModelStore:
             if len(complete) <= keep:
                 return
             cutoff = _parse_cycle(complete[keep - 1])
+            kept_old = complete[keep:keep + history]
             for c in cycles:
-                if (_parse_cycle(c) or cutoff) < cutoff:
-                    self._manifests.pop((feed, c), None)
-                    for k in [k for k in self._mem if k[0] == feed and k[1] == c]:
-                        self._mem.pop(k, None)
-                    if self.root is not None:
-                        shutil.rmtree(self.root / feed / c, ignore_errors=True)
+                if (_parse_cycle(c) or cutoff) >= cutoff:
+                    continue
+                if c in kept_old:
+                    self._trim(feed, c, history_fields)
+                    continue
+                self._manifests.pop((feed, c), None)
+                for k in [k for k in self._mem if k[0] == feed and k[1] == c]:
+                    self._mem.pop(k, None)
+                if self.root is not None:
+                    shutil.rmtree(self.root / feed / c, ignore_errors=True)
+
+    def _trim(self, feed: str, c: str, fields: Tuple[str, ...]) -> None:
+        """Cut a cycle down to hour 0 and the fields given."""
+        m = self._manifests[(feed, c)]
+        hours = m.get("hours") or {}
+        if list(hours) == ["0"] and all(n in fields for n in hours.get("0", [])):
+            return
+        for fhr in list(hours):
+            if fhr != "0":
+                hours.pop(fhr)
+                for k in [k for k in self._mem if k[0] == feed and k[1] == c and k[2] == int(fhr)]:
+                    self._mem.pop(k, None)
+                if self.root is not None:
+                    shutil.rmtree(self.root / feed / c / f"f{int(fhr):02d}", ignore_errors=True)
+        names = hours.get("0", [])
+        for n in [n for n in names if n not in fields]:
+            names.remove(n)
+            self._mem.pop((feed, c, 0, n), None)
+            if self.root is not None:
+                try:
+                    (self.root / feed / c / "f00" / f"{n}.npy").unlink()
+                except OSError:
+                    pass
+        m["hours"] = hours
+        cycle = _parse_cycle(c)
+        if cycle is not None:
+            self._write_manifest(feed, cycle)
 
     # ---- reading ----
 

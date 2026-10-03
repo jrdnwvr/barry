@@ -400,6 +400,47 @@ async def test_a_padded_wind_grid_is_on_a_lattice_every_region_shares(client, up
         assert (await c.get("/radar/field?lat=38.6&lon=-85&latSpan=1&lonSpan=2&pad=2")).status_code == 422
 
 
+@pytest.mark.asyncio
+async def test_the_wind_grid_comes_per_hour_from_the_analyses_kept(client, upstream, hrrr_on):
+    """Past cycles trimmed to their first hour serve the wind at each hour
+    the day span reaches back to, on the lattice the live grid uses; an
+    hour with no analysis held is left out, and the frame at now is the
+    live grid's."""
+    s = PressureService(client)
+    await s.poll_hrrr()
+    newest = s.models.cycles("hrrr")[0]
+    g = s.models._manifest("hrrr", newest)["grid"]
+    top = HRRR_NOW.replace(minute=0, second=0, microsecond=0)
+    # The analyses of six and three hours ago, as the store keeps them.
+    for back in (6, 3):
+        c = top - timedelta(hours=back)
+        for name in ("u10", "v10", "psfc") + tuple(f"{x}{p}" for p in (925, 850, 700, 600, 500) for x in ("u", "v")):
+            arr = s.models.load("hrrr", newest, 0, name)
+            if arr is not None:
+                scaled = np.asarray(arr) * (0.5 if back == 6 and name == "u10" else 1.0)
+                s.models.put("hrrr", c, 0, name, scaled, grid=g)
+        s.models.mark_complete("hrrr", c)
+    series = await s.get_field_series(38.6, -85.0, 1.0, 2.0, pad=0.5, levels=True)
+    times = [f.time for f in series.frames]
+    assert series.source == "hrrr" and times == sorted(times)
+    hours = {round((top.timestamp() - t) / 3600) for t in times}
+    assert {6, 3, 0} <= hours and 5 not in hours and 4 not in hours
+    live = await s.get_field_grid(38.6, -85.0, 1.0, 2.0, pad=0.5)
+    now_frame = series.frames[-1]
+    assert {(p.lat, p.lon) for p in now_frame.points} == {(p.lat, p.lon) for p in live.points}
+    assert now_frame.levels and len(now_frame.levels[0].levels) >= 3
+    six = next(f for f in series.frames if round((top.timestamp() - f.time) / 3600) == 6)
+    # Half the u wind six hours ago: the speeds differ from now's.
+    assert six.points and any(abs(a.windKmh - b.windKmh) > 0.5 for a, b in zip(six.points, now_frame.points))
+
+    from app.main import app
+    app.state.service = s
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+        r = await c.get("/radar/field/series?lat=38.6&lon=-85&latSpan=1&lonSpan=2&pad=0.5")
+        assert r.status_code == 200 and len(r.json()["frames"]) == len(series.frames)
+        assert "levels" not in r.json()["frames"][0] or r.json()["frames"][0]["levels"] == []
+
+
 def test_the_lattice_step_is_the_smallest_that_keeps_the_view_to_its_rows():
     step = PressureService.lattice_step
     assert step(1.0, 8) == 0.125 and step(3.2, 8) == 0.4 and step(3.0, 8) == 0.4

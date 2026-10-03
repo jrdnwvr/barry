@@ -67,3 +67,42 @@ def test_snapshots_are_rate_limited_and_pruned(client):
     assert len(service._bulk_history) == 1                                        # old one pruned, quick one skipped
     parsed = service._parsed_from_history(*ORIGIN)
     assert len(parsed) == 8 and all(len(v["series"]) == 1 for v in parsed.values())
+
+
+@pytest.mark.asyncio
+async def test_each_stations_reports_over_the_last_hours_are_served(client):
+    """Four snapshots an hour apart hold two reports a station (METARs are
+    hourly; the snapshots every 25 minutes repeat them): the series gives
+    each report once, oldest first, with its wind and category, nearest
+    station first; a snapshot from before the wind was kept is skipped,
+    and so is a report older than the window."""
+    service = PressureService(client)
+    now = datetime(2026, 10, 2, 22, 0, tzinfo=timezone.utc)
+    old = now - timedelta(hours=8)
+    # An old-format snapshot (five fields), as the files held before.
+    service._bulk_history.append((old, {"KLUK": (old, 1013.0, None, 39.1, -84.42)}))
+    for h in (3, 2, 1, 0):
+        at = now - timedelta(hours=h)
+        obs_t = at.replace(minute=53) - timedelta(hours=1) if h else at.replace(minute=53) - timedelta(hours=1)
+        table = [StationObs(id="KLUK", lat=39.1, lon=-84.42, obsTime=obs_t, windKt=8 + h, windDir=270, fltCat="VFR", slp=1013.0),
+                 StationObs(id="KCVG", lat=39.05, lon=-84.67, obsTime=obs_t, windKt=12, windDir=250, gustKt=20, fltCat="MVFR", altim=1012.0),
+                 StationObs(id="KSEA", lat=47.45, lon=-122.3, obsTime=obs_t, windKt=5, windDir=180, fltCat="IFR", slp=1010.0)]
+        service._record_snapshot(table, at)
+        service._record_snapshot(table, at + timedelta(minutes=30))     # the same reports again
+    series = service.get_station_series(39.1, -84.4, half=1.0)
+    assert [s.id for s in series.stations] == ["KLUK", "KCVG"]
+    luk = series.stations[0]
+    assert len(luk.reports) == 4 and [r.windKt for r in luk.reports] == [11, 10, 9, 8]
+    assert luk.reports[-1].windDir == 270 and luk.reports[-1].fltCat == "VFR" and luk.reports[-1].gustKt is None
+    assert series.stations[1].reports[0].gustKt == 20 and series.stations[1].reports[0].fltCat == "MVFR"
+    assert all(r.t > int(old.timestamp()) for r in luk.reports)
+    # The old-format snapshot still serves the ring and the past isobars.
+    assert service._snapshot_points(old)[1] == [(39.1, -84.42, 1013.0)]
+
+    from app.main import app
+    import httpx
+    app.state.service = service
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+        r = await c.get("/metars/series?lat=39.1&lon=-84.4&half=1")
+        assert r.status_code == 200 and [s["id"] for s in r.json()["stations"]] == ["KLUK", "KCVG"]
+        assert "gustKt" not in r.json()["stations"][0]["reports"][0]

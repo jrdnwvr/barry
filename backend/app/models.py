@@ -331,6 +331,26 @@ class FieldLevelPoint(BaseModel):
     levels: List[LevelWind] = Field(default_factory=list)
 
 
+class FieldFrameOut(BaseModel):
+    """The map's wind grid at one moment: the 10 m wind, and the altitude
+    stops' winds when asked for."""
+
+    time: int
+    points: List[FieldPoint] = Field(default_factory=list)
+    levels: List[FieldLevelPoint] = Field(default_factory=list)
+
+
+class FieldSeriesResponse(BaseModel):
+    """The map's wind grid at each hour of the radar's day span and at now,
+    on the one lattice, oldest first (`/radar/field/series`): the app
+    slides between two of them for the wind of any moment between. An
+    hour the store has no analysis for is left out."""
+
+    frames: List[FieldFrameOut] = Field(default_factory=list)
+    source: Optional[str] = None
+    cachedAt: datetime
+
+
 class FieldLevelsResponse(BaseModel):
     """The map's wind grid at every altitude stop, for the radar's altitude
     slider: the same points as /radar/field, the current hour."""
@@ -593,6 +613,32 @@ class RadarFramesResponse(BaseModel):
     cachedAt: datetime
 
 
+class StationReportOut(BaseModel):
+    """One report of a station over the last hours: when, the wind and the
+    category, for the map's stations on the radar's clock."""
+
+    t: int
+    windKt: Optional[float] = None
+    windDir: Optional[float] = None
+    gustKt: Optional[float] = None
+    fltCat: Optional[str] = None
+
+
+class StationSeriesOut(BaseModel):
+    id: str
+    lat: float
+    lon: float
+    reports: List[StationReportOut] = Field(default_factory=list)
+
+
+class StationSeriesResponse(BaseModel):
+    """Each station's reports over the last six hours and a half, oldest
+    first, from the server's own snapshots (`/metars/series`)."""
+
+    stations: List[StationSeriesOut] = Field(default_factory=list)
+    cachedAt: datetime
+
+
 class RadarMotionPair(BaseModel):
     """How the rain moved between two frames of the loop: east and north
     speeds in degrees per hour, one per block of the lattice, row-major
@@ -740,6 +786,26 @@ class LightningCluster(BaseModel):
     flashes: int
     recent: int
     newestAgeSec: int
+
+
+class LightningFrameOut(BaseModel):
+    """The flashes of the twenty minutes before one ten-minute mark, as
+    cells; ages are from the mark."""
+
+    time: int
+    cells: List[LightningCell] = Field(default_factory=list)
+
+
+class LightningSeriesResponse(BaseModel):
+    """Six hours of flashes once believed around a point, a frame every
+    ten minutes, oldest first (`/lightning/series`): what the map's
+    lightning shows for a moment of the radar's clock. Only since the
+    server last started: the history is not kept across a restart."""
+
+    frames: List[LightningFrameOut] = Field(default_factory=list)
+    windowSec: int = 1200
+    binDeg: float = 0.02
+    cachedAt: datetime
 
 
 class LightningResponse(BaseModel):

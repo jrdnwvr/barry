@@ -194,6 +194,8 @@ async def test_not_late_yet_means_the_older_cycle_from_the_bucket(client, upstre
 
 @pytest.mark.asyncio
 async def test_the_store_survives_a_restart_and_keeps_two_cycles(client, upstream, hrrr_on, tmp_path, monkeypatch):
+    """Two cycles whole; the one before them stays as its analysis winds
+    (the map's history) and comes back after a restart that way."""
     monkeypatch.setenv("BARRY_DATA_DIR", str(tmp_path))
     s = PressureService(client)
     await s.poll_hrrr()
@@ -201,12 +203,15 @@ async def test_the_store_survives_a_restart_and_keeps_two_cycles(client, upstrea
         later = NOW + timedelta(hours=k)
         monkeypatch.setattr("app.service._now", lambda later=later: later)
         await s.poll_hrrr()
-    assert s.models.cycles("hrrr") == [CYCLE + timedelta(hours=2), CYCLE + timedelta(hours=1)]
-    assert sorted(p.name for p in (tmp_path / "model" / "hrrr").iterdir()) == ["2026092503", "2026092504"]
+    assert s.models.cycles("hrrr") == [CYCLE + timedelta(hours=k) for k in (2, 1, 0)]
+    assert sorted(p.name for p in (tmp_path / "model" / "hrrr").iterdir()) == ["2026092502", "2026092503", "2026092504"]
+    assert sorted(s.models.hours("hrrr", CYCLE + timedelta(hours=1))) == [0, 1, 2]
+    assert list(s.models.hours("hrrr", CYCLE)) == [0] and "hpbl" not in s.models.hours("hrrr", CYCLE)[0]
     again = ModelStore(tmp_path / "model")
     assert again.cycles("hrrr") == s.models.cycles("hrrr")
     arr = again.load("hrrr", CYCLE + timedelta(hours=2), 1, "hpbl")
     assert arr is not None and float(arr[5, 5]) == 900.0
+    assert again.load("hrrr", CYCLE, 0, "u10") is not None and again.load("hrrr", CYCLE, 0, "hpbl") is None
 
 
 @pytest.mark.asyncio
@@ -349,3 +354,34 @@ async def test_rrfs_is_pulled_beside_hrrr_and_both_are_scored_from_the_same_cycl
     assert modelscore.daily([dict(rec, hrrr=dict(rec["hrrr"], lead=1))]) == []
     # Too few reports near the hour: nothing to say.
     assert modelscore.score_hour(s.models, table[:20], valid) is None
+
+
+def test_old_cycles_are_kept_as_their_analysis_winds(tmp_path):
+    """Three cycles whole, then with history the next two are cut to hour
+    0 and the wind fields; the one past that goes."""
+    store = ModelStore(tmp_path)
+    a = np.zeros((2, 2), np.float32)
+    cycles = [datetime(2026, 10, 2, h, tzinfo=timezone.utc) for h in range(12, 18)]
+    for c in cycles:
+        for fhr in (0, 1, 2):
+            for name in ("u10", "v10", "mslp"):
+                store.put("hrrr", c, fhr, name, a, grid={"x": 1})
+        store.mark_complete("hrrr", c)
+    store.purge("hrrr", keep=2, history=3, history_fields=("u10", "v10"))
+    held = store.cycles("hrrr")
+    assert held == cycles[::-1][:5], held
+    # The newest two whole.
+    assert sorted(store.hours("hrrr", cycles[-1])) == [0, 1, 2]
+    assert store.load("hrrr", cycles[-2], 2, "mslp") is not None
+    # The three before: hour 0, winds only.
+    for c in cycles[1:4]:
+        assert list(store.hours("hrrr", c)) == [0] and sorted(store.hours("hrrr", c)[0]) == ["u10", "v10"]
+        assert store.load("hrrr", c, 0, "u10") is not None and store.load("hrrr", c, 0, "mslp") is None
+        assert not (tmp_path / "hrrr" / c.strftime("%Y%m%d%H") / "f01").exists()
+    # And the oldest is gone, files and all.
+    assert not (tmp_path / "hrrr" / cycles[0].strftime("%Y%m%d%H")).exists()
+    # The past hour's wind is found by its valid time, from its own cycle.
+    assert store.nearest("hrrr", "u10", cycles[2])[1:] == (cycles[2], 0)
+    # Purging again is a no-op on the trimmed ones.
+    store.purge("hrrr", keep=2, history=3, history_fields=("u10", "v10"))
+    assert store.cycles("hrrr") == held

@@ -192,19 +192,30 @@ struct PressureChartView: View {
             chartView
                 .frame(height: height)
             presetChips
-            readout
                 // The analysis card floats over whatever sits below the chart
                 // instead of pushing it down: the layout never jumps when a
-                // window is selected or cleared.
-                .overlay(alignment: .topLeading) {
-                    if let a = rangeAnalysis {
-                        analysisCard(a)
-                            .padding(12)
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                            .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
-                            .transition(.opacity.combined(with: .move(edge: .top)))
+                // window is selected or cleared. It hangs off the chips, which
+                // are always there: it used to hang off the readout row, and
+                // once the legend line left that row (2026-09-24) the row was
+                // an empty view whenever nothing was tapped, and an overlay on
+                // an empty view is never drawn. The card vanished with it.
+                .overlay(alignment: .bottomLeading) {
+                    // The guide goes on a view that is always there: through
+                    // an `if` it does not reach the overlay, and the card
+                    // sits on the chips instead of under them.
+                    ZStack(alignment: .topLeading) {
+                        if let a = rangeAnalysis {
+                            analysisCard(a)
+                                .padding(12)
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                                .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
                     }
+                    // Its top sits a row's spacing under the chips.
+                    .alignmentGuide(.bottom) { $0[.top] - 6 }
                 }
+            readout
         }
         .zIndex(rangeAnalysis == nil ? 0 : 1)
         .animation(.snappy(duration: 0.2), value: rangeAnalysis == nil)

@@ -52,6 +52,34 @@ struct AloftTests {
 }
 
 struct PressureLabelTests {
+    @Test func labelsSitWhereTheLineCrossesAFixedLatticeAndStayPutAsItMoves() {
+        // A diagonal from (10, 10) to (410, 210): crosses the columns at
+        // x = 100, 200, 300, 400 and the rows at y = 100, 200.
+        let line = [CGPoint(x: 10, y: 10), CGPoint(x: 410, y: 210)]
+        let spots = PressureFieldRenderer.labelSpots(line, every: 100)
+        #expect(!spots.isEmpty && spots.count <= 6)
+        for s in spots {
+            let onLattice = abs(s.x.truncatingRemainder(dividingBy: 100)) < 1e-6 || abs(s.y.truncatingRemainder(dividingBy: 100)) < 1e-6
+            let onLine = abs((s.y - 10) - (s.x - 10) * 0.5) < 1e-6
+            #expect(onLattice && onLine, "\(s)")
+        }
+        // One label at most per cell of the lattice.
+        let cells = Set(spots.map { "\(Int($0.x / 100 - ($0.x.truncatingRemainder(dividingBy: 100) == 0 ? 0 : 0)))-\(Int($0.y / 100))" })
+        #expect(cells.count == spots.count)
+        // Traced from the other end: the same labels.
+        #expect(PressureFieldRenderer.labelSpots(line.reversed(), every: 100) == spots)
+        // The line moved a little: every label moved a little, none leapt.
+        let moved = line.map { CGPoint(x: $0.x + 3, y: $0.y + 4) }
+        let after = PressureFieldRenderer.labelSpots(moved, every: 100)
+        #expect(after.count == spots.count)
+        for s in after {
+            #expect(spots.contains { hypot($0.x - s.x, $0.y - s.y) < 12 }, "\(s) leapt")
+        }
+        // A line that crosses nothing: no spots (the caller labels its middle).
+        #expect(PressureFieldRenderer.labelSpots([CGPoint(x: 110, y: 110), CGPoint(x: 150, y: 120)], every: 100).isEmpty)
+        #expect(PressureFieldRenderer.labelSpots([CGPoint(x: 1, y: 1)], every: 100).isEmpty)
+    }
+
     @Test func isobarAndChangeLabelsFollowTheUnit() {
         #expect(PressureFieldRenderer.levelText(1012, .hPa) == "1012")
         #expect(PressureFieldRenderer.levelText(1012, .inHg) == "29.88")

@@ -977,12 +977,20 @@ stored keys, but each has its own model, so they fetch separately.
   lines from the loop's clock 20 times a second (`RadarLineSource`,
   `Coordinator.stepLines`), outside SwiftUI; the fronts only when the
   chart changes.
+- Labels sit where a line crosses the rows and columns of a lattice
+  fixed in map space, about 170 points apart, one per lattice cell
+  (`PressureFieldRenderer.labelSpots`), so a label slides with its line
+  as the hour loop moves it and reads the same whichever end the contour
+  was traced from. Until 2026-10-02 they sat every 170 points of arc
+  from the line's first point, and on the loop, where the line is traced
+  afresh each tick, they leapt along it (Jordan).
 - Settings: `radarIsobars` false; `radarIsobarsSplit` migration gives
   isobars to anyone who had Pressure on. `radarIsobarLabels` true: the
   pressure written on each line; off (More sheet, "Pressure on each
   line", asked for by Jordan 2026-10-02) the lines alone, in the unit
   the key still names. The six-hour loop never labels.
-- Tests: `PressureLabelTests`.
+- Tests: `PressureLabelTests` (the unit on the labels, the lattice they
+  sit on and that they stay put as the line moves).
 
 ### radar.layer.wind
 - Seen: grey streaks drifting with the wind (Flow) or arrows (Arrows),

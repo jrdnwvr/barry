@@ -181,21 +181,12 @@ final class PressureFieldRenderer: MKOverlayRenderer {
         ctx.restoreGState()
 
         guard let label else { return }
-        // Value labels along the line, every ~170 screen points, on small
-        // knockouts so they stay legible over the radar (the chart style).
+        // Value labels along the line, about every 170 screen points, on
+        // small knockouts so they stay legible over the radar (the chart
+        // style).
         let font = UIFont.systemFont(ofSize: 9 * scale, weight: .bold)
         let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
-        let every: CGFloat = 170 * scale
-        var run: CGFloat = every * 0.5
-        var spots: [CGPoint] = []
-        for k in 1..<pts.count {
-            let seg = hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y)
-            run += seg
-            if run >= every {
-                spots.append(pts[k])
-                run = 0
-            }
-        }
+        var spots = Self.labelSpots(pts, every: 170 * scale)
         if spots.isEmpty { spots = [pts[pts.count / 2]] }
         ctx.saveGState()
         UIGraphicsPushContext(ctx)
@@ -210,6 +201,46 @@ final class PressureFieldRenderer: MKOverlayRenderer {
         }
         UIGraphicsPopContext()
         ctx.restoreGState()
+    }
+
+    /// Where a line's labels go: where it crosses the rows and columns of
+    /// a lattice fixed in map space, `every` apart, one label at most per
+    /// lattice cell (the crossing nearest the cell's centre). Fixed in the
+    /// map, not along the line: a label then slides with the line as it
+    /// moves, and the same place on the line gets the same label whether
+    /// the contour was traced from one end or the other. Until 2026-10-02
+    /// labels sat every 170 points of arc counted from the line's first
+    /// point, and on the loop, where the line is traced afresh each tick
+    /// from a slightly different field, the first point and the direction
+    /// changed from tick to tick and the labels leapt along the line
+    /// (Jordan).
+    static func labelSpots(_ pts: [CGPoint], every: CGFloat) -> [CGPoint] {
+        guard pts.count >= 2, every > 0 else { return [] }
+        var best: [Int: (d: CGFloat, p: CGPoint)] = [:]
+        func offer(_ p: CGPoint) {
+            let cx = (p.x / every).rounded(.down), cy = (p.y / every).rounded(.down)
+            let key = Int(cx) &* 1_000_003 &+ Int(cy)
+            let d = hypot(p.x - (cx + 0.5) * every, p.y - (cy + 0.5) * every)
+            if let had = best[key], had.d <= d { return }
+            best[key] = (d, p)
+        }
+        for k in 1..<pts.count {
+            let a = pts[k - 1], b = pts[k]
+            // Each row and column the segment crosses, by linear interpolation.
+            let ra = (a.y / every).rounded(.down), rb = (b.y / every).rounded(.down)
+            if ra != rb, b.y != a.y {
+                let row = max(ra, rb) * every
+                let t = (row - a.y) / (b.y - a.y)
+                offer(CGPoint(x: a.x + (b.x - a.x) * t, y: row))
+            }
+            let ca = (a.x / every).rounded(.down), cb = (b.x / every).rounded(.down)
+            if ca != cb, b.x != a.x {
+                let col = max(ca, cb) * every
+                let t = (col - a.x) / (b.x - a.x)
+                offer(CGPoint(x: col, y: a.y + (b.y - a.y) * t))
+            }
+        }
+        return best.values.map(\.p).sorted { ($0.y, $0.x) < ($1.y, $1.x) }
     }
 
     /// The gridded field as a smooth translucent gradient. The image is one

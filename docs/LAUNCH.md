@@ -114,8 +114,7 @@ day for MetricKit to report.
 
 ## 4. Support
 
-`barr@turpentine.cc` as given (check the spelling against the mailbox: a
-tester will type `barry@`). Where it goes:
+`barry@turpentine.cc`. Where it goes:
 
 - App Store Connect, the support contact, and the support URL's page.
 - In the app: Settings gets a "Write to Barry" row that opens Mail with

@@ -101,11 +101,16 @@ class FlashStore:
         # lightning follows the radar's clock back through (frames).
         self._history: List[Flash] = []
         self._in_history: set = set()
+        # When the history began: a mark whose window reaches before it
+        # would read as a quiet sky when it is really an unknown one.
+        self._history_since: Optional[float] = None
 
     def __len__(self) -> int:
         return len(self._flashes)
 
     def add(self, flashes: Sequence[Flash], now: datetime) -> None:
+        if self._history_since is None:
+            self._history_since = now.timestamp()
         cutoff = now.timestamp() - WINDOW_S
         self._flashes = [f for f in self._flashes if f.t >= cutoff]
         self._flashes.extend(f for f in flashes if f.t >= cutoff and f.t <= now.timestamp() + 120)
@@ -224,6 +229,10 @@ class FlashStore:
         near.sort(key=lambda f: f.t)
         last = int(now.timestamp() // HISTORY_STEP_S) * HISTORY_STEP_S
         first = last - int(hours * 3600)
+        if self._history_since is None:
+            return []
+        # Only marks whose whole window the history saw.
+        first = max(first, int(math.ceil((self._history_since + WINDOW_S) / HISTORY_STEP_S)) * HISTORY_STEP_S)
         out: List[LightningFrameOut] = []
         for mark in range(first, last + 1, HISTORY_STEP_S):
             bins: Dict[Tuple[int, int], List[float]] = {}

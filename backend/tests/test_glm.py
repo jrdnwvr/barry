@@ -74,6 +74,8 @@ def test_believed_flashes_are_kept_for_hours_and_served_by_the_mark():
     s = fl.FlashStore()
     t0 = NOW.timestamp()
     then = t0 - 2 * 3600
+    assert s.frames(39.103, -84.419, 3.0, NOW) == []     # no history yet: nothing, not "quiet"
+    s.add([], datetime.fromtimestamp(then - 1800, tz=timezone.utc))   # the history begins here
     old = [Flash(then - 100 + i, 39.45 + 0.001 * i, -84.85, 1.0) for i in range(6)]
     new = [Flash(t0 - 100 + i, 39.30 + 0.001 * i, -84.65, 1.0) for i in range(6)]
     s.add(old + [Flash(then - 50, 40.5, -84.0, 1.0)], datetime.fromtimestamp(then, tz=timezone.utc))
@@ -82,7 +84,9 @@ def test_believed_flashes_are_kept_for_hours_and_served_by_the_mark():
     assert len(s) == 6 and sum(c.count for c in s.cells(39.103, -84.419, 3.0, NOW)) == 6
     frames = s.frames(39.103, -84.419, 3.0, NOW)
     marks = [f.time for f in frames]
-    assert len(frames) == 37 and marks == sorted(marks) and all(m % 600 == 0 for m in marks)
+    # From the first mark whose window the history saw whole, not six hours back.
+    assert marks == sorted(marks) and all(m % 600 == 0 for m in marks)
+    assert marks[0] >= then - 1800 + 1200 and marks[0] < then - 1800 + 1800 and len(frames) < 37
     held = {f.time: sum(c.count for c in f.cells) for f in frames}
     first_old = next(m for m in marks if m >= then)
     assert held[first_old] == 6 and held[first_old + 600] == 6 and held[first_old + 1200] == 0

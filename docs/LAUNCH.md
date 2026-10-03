@@ -124,13 +124,14 @@ day for MetricKit to report.
 
 ## 5. The site at barry.turpentine.cc
 
-Small, static, in the repo under `site/`, published by Cloudflare Pages
-from the repository (the domain is already on Cloudflare) at
-`barry.turpentine.cc`. One page with three features, plus `/privacy` and
-`/support`; the content plan is `SITE.md` (2026-10-03). A how-to site
-with every feature and directions comes later. The API host is a
-separate name (`api.turpentine.cc`) so the site and the server move
-independently.
+In the repo under `site/`: Payload on Next, as tando-cms, so the words
+are edited at `/admin` (built 2026-10-03). One page with three
+features, plus `/privacy` and `/support`; the content plan and the
+hosting are in `SITE.md`. On Tower beside Tando for now, the hostname
+Jordan's to add on the Barry tunnel; `barry.turpentine.cc` when the
+domain moves. A how-to site with every feature and directions comes
+later, on the same CMS. The API host is a separate name
+(`api.turpentine.cc`) so the site and the server move independently.
 
 ## 6. Order
 

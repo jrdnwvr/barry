@@ -32,10 +32,13 @@ phone, nothing around it.
 **3. Three features.** Each a short heading, two sentences, one
 screenshot beside it. Proposed copy, Jordan's to rewrite:
 
-- *The verdict.* "The barometer is the oldest forecast there is. Barry
-  reads the last three hours at your station and says what they mean in
-  a sentence, with yesterday and the next two days on one curve, and a
-  glance of it on the watch face."
+- *See it coming.* "See when the weather will reach you and how strong
+  it will be. The barometer is the oldest and most trusted instrument in
+  forecasting because it works: a falling glass means something is
+  coming, and how fast it falls says how much. Barry reads the last
+  three hours at the station nearest you and puts it in a sentence, so
+  you can make the call on what is actually happening where you are."
+  (Jordan's ask: the benefit, not the feature.)
 - *Radar with the weather around it.* "Six hours of radar that slides
   along its own motion instead of flickering frame to frame. Wind,
   stations, pressure lines and lightning move with the clock, so you can
@@ -80,14 +83,29 @@ Store listing at 6.9 inches:
 
 ## Build and hosting
 
-Static HTML and one stylesheet under `site/` in the repo, no framework,
-no build step. Cloudflare Pages from the repository (turpentine.cc is
-already on Cloudflare) with the custom domain `barry.turpentine.cc`,
-which is Jordan's to add in the Cloudflare dashboard. Once it is live,
-the backend's `/privacy` and `/support` redirect there and the App Store
-listing's URLs point at it. The API stays on its own name
-(`api.turpentine.cc` per `LAUNCH.md`), so the site and the server move
-independently.
+Built 2026-10-03, at Jordan's ask, in Payload (as tando-cms: Payload
+3.86 on Next 16 with SQLite, under `site/` in this repo) so the words
+and the screenshots are edited at `/admin` and the how-to site can grow
+on the same CMS. The one page is the `site` global, privacy and support
+are the `pages` collection, screenshots are `media`. An empty site
+seeds itself on start (`src/seed.ts`): the first user from
+`ADMIN_EMAIL` and `ADMIN_PASSWORD`, the words from this file, the
+screenshots from `seed-assets/`. After that the admin owns the words.
+
+Hosted on Tower for now, beside Tando: `site/docker-compose.yml`
+(container `barry-site`, host port 3211; Tando is 3210), state in
+`site/data` and `site/media`, joined to the backend's network so the
+Barry tunnel reaches it as `http://barry-site:3000`. The public
+hostname is Jordan's to add in the Cloudflare dashboard on the Barry
+tunnel; `barry.turpentine.cc` later, or a wide-stack.com name first.
+Deploy: `cd /mnt/user/appdata/barry && git pull && cd site && docker
+compose up -d --build`. Locally `npm run dev` serves on 3001 (Tando
+keeps 3000).
+
+Once it is live, the backend's `/privacy` and `/support` redirect there
+and the App Store listing's URLs point at it. The API stays on its own
+name (`api.turpentine.cc` per `LAUNCH.md`), so the site and the server
+move independently.
 
 ## Later, not now
 

@@ -1,0 +1,294 @@
+:root {
+  --bg: #ffffff;
+  --text: #1d1d1f;
+  --muted: #6e6e73;
+  --faint: #e5e5ea;
+  --accent: #0066cc;
+  --card: #f5f5f7;
+  color-scheme: light;
+}
+
+/* Dark: the system's choice unless the switch at the top right says otherwise. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #000000;
+    --text: #f5f5f7;
+    --muted: #a1a1a6;
+    --faint: #2c2c2e;
+    --accent: #2997ff;
+    --card: #1c1c1e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --bg: #000000;
+  --text: #f5f5f7;
+  --muted: #a1a1a6;
+  --faint: #2c2c2e;
+  --accent: #2997ff;
+  --card: #1c1c1e;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 17px/1.55 -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 48px 20px 80px;
+}
+
+h1,
+h2 {
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+/* The two switches: screenshots at the top, light or dark at the right. */
+.toggles {
+  position: relative;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 16px 20px 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 52px;
+  font-size: 14px;
+}
+.toggles button {
+  font: inherit;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.toggles button:hover {
+  color: var(--text);
+}
+.device {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--card);
+}
+.device button[aria-pressed='true'] {
+  color: var(--text);
+  background: var(--bg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+.theme {
+  position: absolute;
+  right: 20px;
+  top: 16px;
+}
+
+/* The top: icon, name, one line. */
+.top {
+  text-align: center;
+  margin-bottom: 56px;
+}
+.top .icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+.top h1 {
+  font-size: 40px;
+  font-weight: 700;
+  margin: 18px 0 8px;
+}
+.tagline {
+  font-size: 21px;
+  color: var(--muted);
+  margin: 0 auto;
+  max-width: 28em;
+}
+.invite {
+  margin: 20px auto 0;
+  max-width: 32em;
+  color: var(--muted);
+  font-size: 16px;
+}
+.store {
+  display: inline-block;
+  margin-top: 22px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  font-weight: 600;
+}
+.store:hover {
+  text-decoration: none;
+  opacity: 0.85;
+}
+
+/* Screenshots: the device's proportions, no frame. The switch shows the
+   phone's set or the iPad's. */
+.hero,
+.shot {
+  display: block;
+  height: auto;
+  border-radius: 28px;
+  border: 1px solid var(--faint);
+}
+.pad {
+  display: none;
+  border-radius: 18px;
+}
+html[data-device='ipad'] .phone {
+  display: none;
+}
+html[data-device='ipad'] .pad {
+  display: block;
+}
+.hero {
+  width: min(300px, 70vw);
+  margin: 0 auto 88px;
+}
+.hero.pad {
+  width: min(520px, 90vw);
+}
+
+/* A feature: words beside a screenshot, alternating sides. */
+.feature {
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  gap: 40px;
+  align-items: center;
+  margin-bottom: 88px;
+}
+.feature.flip {
+  grid-template-columns: 240px 1fr;
+}
+.feature.flip .words {
+  order: 2;
+}
+.feature h2 {
+  font-size: 26px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.feature p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 18px;
+}
+.shot {
+  width: 240px;
+}
+/* The iPad's shots are wide: under the words, not beside them. */
+html[data-device='ipad'] .feature,
+html[data-device='ipad'] .feature.flip {
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+html[data-device='ipad'] .feature.flip .words {
+  order: 0;
+}
+.shot.pad {
+  width: min(520px, 100%);
+  margin: 0 auto;
+}
+
+/* Where the data comes from. */
+.data {
+  border-top: 1px solid var(--faint);
+  padding-top: 40px;
+  margin-bottom: 72px;
+  color: var(--muted);
+}
+.data p {
+  margin: 0 0 14px;
+}
+.brief {
+  color: var(--text);
+}
+
+footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+/* Privacy and support. */
+.page {
+  max-width: 640px;
+  padding-top: 32px;
+}
+.crumb {
+  margin: 0 0 28px;
+  font-size: 15px;
+}
+.page h1 {
+  font-size: 28px;
+  margin-bottom: 4px;
+}
+.meta {
+  color: var(--muted);
+  margin: 0 0 28px;
+}
+.page h2 {
+  font-size: 19px;
+  margin: 28px 0 8px;
+}
+.page p,
+.page li {
+  margin: 0 0 12px;
+}
+.page ul {
+  padding-left: 22px;
+}
+
+@media (max-width: 640px) {
+  main {
+    padding-top: 32px;
+  }
+  .top h1 {
+    font-size: 34px;
+  }
+  .tagline {
+    font-size: 19px;
+  }
+  .feature,
+  .feature.flip {
+    grid-template-columns: 1fr;
+    gap: 22px;
+    margin-bottom: 64px;
+  }
+  .feature.flip .words {
+    order: 0;
+  }
+  .shot {
+    width: min(240px, 64vw);
+    margin: 0 auto;
+  }
+}

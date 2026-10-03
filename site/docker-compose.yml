@@ -1,0 +1,36 @@
+services:
+  barry-site:
+    build: .
+    container_name: barry-site
+    ports:
+      - '3211:3000'
+    volumes:
+      # Everything stateful lives in these two folders.
+      - ./data:/app/data
+      - ./media:/app/media
+    environment:
+      DATABASE_URL: file:/app/data/payload.db
+      PAYLOAD_SECRET: ${PAYLOAD_SECRET:?set PAYLOAD_SECRET in .env}
+      # The public origin, once the hostname is on the tunnel.
+      SERVER_URL: ${SERVER_URL:-}
+      # The first admin user, made by the seed on an empty site. Both are
+      # Jordan's to set in .env; the site does not start without them.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL in .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+    networks:
+      - default
+      # The Barry tunnel (barry-cloudflared, in the backend's compose) reaches
+      # this container as http://barry-site:3000 on the backend's network; the
+      # public hostname is set in the Cloudflare dashboard.
+      - backend_default
+    restart: unless-stopped
+    mem_limit: 768m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  backend_default:
+    external: true

@@ -102,6 +102,8 @@ async def test_the_aloft_column_comes_from_the_column_feeds(client, upstream, hr
     a = await s.get_aloft(LAT, LON)
     assert a.source == "hrrr" and len(a.hours) == 25
     assert a.hours[0].t == datetime(2026, 9, 25, 3, tzinfo=timezone.utc)
+    again = await s.get_aloft(LAT, LON)                         # the held column, the second ask
+    assert [h.t for h in again.hours] == [h.t for h in a.hours]
     h = a.hours[0]
     lv = {l.hPa: l for l in h.levels}
     assert 1000 not in lv and 975 in lv                        # 1000 hPa is under the 200 m ground

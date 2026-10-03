@@ -1881,7 +1881,7 @@ class PressureService:
         self._fell_back("aloft", f"{lat},{lon}", lat, lon)
         raise LookupError("no aloft data held for this point")
 
-    def _aloft_from_now(resp: AloftResponse) -> AloftResponse:
+    def _aloft_from_now(self, resp: AloftResponse) -> AloftResponse:
         """A held column, trimmed to the hours still ahead."""
         hour = _now().replace(minute=0, second=0, microsecond=0)
         ahead = [h for h in resp.hours if h.t >= hour]
@@ -1895,7 +1895,6 @@ class PressureService:
                      0.64, 0.8, 1.0, 1.25, 1.6, 2.0, 2.5, 3.2, 4.0, 5.0, 6.4, 8.0)
 
     @classmethod
-
     def lattice_step(cls, span: float, n: int) -> float:
         want = span / n
         return next((s for s in cls.LATTICE_STEPS if s >= want - 1e-9), cls.LATTICE_STEPS[-1])

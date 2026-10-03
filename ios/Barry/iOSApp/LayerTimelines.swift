@@ -142,7 +142,16 @@ struct StationTimeline: Equatable {
         return out.isEmpty ? nil : out
     }
 
-    func covers(_ t: Double) -> Bool { observations(at: t) != nil }
+    /// Whether the series reaches a moment for nearly every station: with
+    /// fewer, the layer stays at now, since a map of the few that happen
+    /// to have a report (the history is shallow for the hours after a
+    /// server start) has stations coming and going one by one as the
+    /// clock moves.
+    func covers(_ t: Double) -> Bool {
+        guard !stations.isEmpty, let obs = observations(at: t) else { return false }
+        return Double(obs.count) >= Double(stations.count) * Self.coverage
+    }
+    static let coverage = 0.8
 }
 
 /// Six hours of flashes in ten-minute frames.

@@ -302,9 +302,13 @@ struct RadarPanel: View {
             pressure: { [model] t in
                 pressure ? model.pressureField(at: t, pattern: shape, lines: gpuLines == nil) : nil
             },
-            wind: showWind ? { [model] t in model.windFields(at: t) } : nil,
-            stations: stationsOn ? { [model] t in model.stationTimeline?.observations(at: t) } : nil,
-            lightning: showStorms ? { [model] t in model.lightningTimeline?.state(at: t) } : nil,
+            // Each follows the clock only when its series reaches the whole
+            // loop, the rule the note goes by too: driven from a shallow
+            // series, the layer flipped between the moment's few and now's
+            // many as the clock moved.
+            wind: showWind && model.windFollowsClock() ? { [model] t in model.windFields(at: t) } : nil,
+            stations: stationsOn && model.stationsFollowClock() ? { [model] t in model.stationTimeline?.observations(at: t) } : nil,
+            lightning: showStorms && model.lightningFollowsClock() ? { [model] t in model.lightningTimeline?.state(at: t) } : nil,
             labelIsobars: !shape && isobarLabels,
             shape: gpuLines)
     }

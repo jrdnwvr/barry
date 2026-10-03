@@ -53,6 +53,7 @@ struct LayerTimelineTests {
                 StationReport(t: h + 53 * 60, windKt: 12, windDir: 250, gustKt: 20, fltCat: "MVFR"),
             ]),
             StationSeries(id: "KCVG", lat: 39.05, lon: -84.67, reports: [
+                StationReport(t: h + 53 * 60, windKt: 3, windDir: 90, gustKt: nil, fltCat: "VFR"),
                 StationReport(t: 5 * h, windKt: 5, windDir: 180, gustKt: nil, fltCat: "IFR"),
             ]),
         ], cachedAt: Date())
@@ -62,14 +63,18 @@ struct LayerTimelineTests {
         #expect(early.map(\.id) == ["KLUK"] && early[0].windKt == 8 && early[0].fltCat == "VFR")
         // At 1:50, three minutes before the report's own time: it is taken (the report stands for its hour).
         #expect(line.observations(at: Double(h) + 50 * 60)?.first?.windKt == 12)
-        // At 2:30 the newer one, with its gust.
+        // At 2:30 the newer one, with its gust; both stations have one.
         let later = try #require(line.observations(at: Double(2 * h) + 1800))
         #expect(later[0].windKt == 12 && later[0].gustKt == 20 && later[0].fltCat == "MVFR")
-        // Four hours on: KLUK's last report is too old, KCVG's is current.
+        #expect(later.count == 2 && line.covers(Double(2 * h) + 1800))
+        // Four hours on: KLUK's last report is too old, KCVG's is current:
+        // one of two is not coverage, the layer stays at now.
         let late = try #require(line.observations(at: Double(5 * h) + 600))
-        #expect(late.map(\.id) == ["KCVG"])
-        // Before any report: nothing, so the layer stays at now.
-        #expect(line.observations(at: 600) == nil && !line.covers(600) && line.covers(Double(2 * h)))
+        #expect(late.map(\.id) == ["KCVG"] && !line.covers(Double(5 * h) + 600))
+        // Before any report: nothing.
+        #expect(line.observations(at: 600) == nil && !line.covers(600))
+        // At 1:30 only KLUK has reported: not coverage either.
+        #expect(!line.covers(Double(h) + 1800))
     }
 
     @Test func theLightningOfAMomentIsTheLastTenMinuteFrame() throws {

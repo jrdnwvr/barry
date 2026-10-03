@@ -896,10 +896,15 @@ stored keys, but each has its own model, so they fetch separately.
   the slider parked away from now the model hands the moment's own
   (`shownWindFieldOnClock`, `shownStationObs`, `shownLightning`). Where a
   series does not reach a moment (within 90 minutes for the wind and the
-  stations; the lightning's own frame) the layer stays at now and the
-  note under the frame time names it; the note goes by whether the
-  series reaches the loop's two ends, so it holds steady while a loop
-  plays. The histories fill over the hours after a server start.
+  stations, and for the stations only when four in five of them have a
+  report in reach, `StationTimeline.coverage`; the lightning's own
+  frame) the layer stays at now and the note under the frame time names
+  it. A layer follows the loop's clock only when its series reaches both
+  ends of the loop, the rule the note goes by, so the note holds steady
+  while a loop plays and the layer never flips between the moment's few
+  and now's many as the clock moves (Jordan saw stations come and go,
+  2026-10-02, the evening the histories began). The histories fill over
+  the hours after a server start.
   Advisories and the pressure-change field stay at now (Jordan: not
   wanted on the animation).
 - Tests: `LayerTimelineTests` (the wind slid between hours, a station's

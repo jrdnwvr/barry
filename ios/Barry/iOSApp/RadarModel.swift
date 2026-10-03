@@ -674,7 +674,8 @@ final class RadarModel: ObservableObject {
 
     /// The stations as they reported at the slider's moment, else now.
     var shownStationObs: [StationObs] {
-        guard !playing, !playheadIsNow, let obs = stationTimeline?.observations(at: Double(playheadTime)) else { return stationObs }
+        guard !playing, !playheadIsNow, let line = stationTimeline, line.covers(Double(playheadTime)),
+              let obs = line.observations(at: Double(playheadTime)) else { return stationObs }
         return obs
     }
 

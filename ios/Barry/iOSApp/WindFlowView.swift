@@ -57,6 +57,43 @@ final class WindFlowView: UIView {
         }
     }
 
+    /// On the radar's clock the streaks follow two grids slid together:
+    /// `samples` and this one, `mix` of the way from the first to the
+    /// second, point for point (the server lays every hour on the one
+    /// lattice; where a point has no partner it keeps the first grid's
+    /// wind). Nil, the streaks follow `samples` alone.
+    func setSecond(_ second: [WindArrow]?, mix: Double) {
+        self.mix = CGFloat(max(0, min(1, mix)))
+        guard let second else {
+            if !fieldB.isEmpty { fieldB = [] }
+            return
+        }
+        guard second != secondSamples || fieldB.count != field.count else { return }
+        secondSamples = second
+        rebuildSecond()
+    }
+
+    private var secondSamples: [WindArrow] = []
+    private var fieldB: [Sample] = []
+    private var mix: CGFloat = 0
+
+    private func rebuildSecond() {
+        guard !field.isEmpty, !secondSamples.isEmpty else { fieldB = []; return }
+        var at: [Int: Int] = [:]
+        for (i, s) in secondSamples.enumerated() { at[Self.key(s.lat, s.lon)] = i }
+        fieldB = samples.enumerated().map { i, s in
+            guard let j = at[Self.key(s.lat, s.lon)] else { return field[i] }
+            let q = secondSamples[j]
+            let rad = q.fromDeg * .pi / 180
+            return Sample(x: field[i].x, y: field[i].y,
+                          u: CGFloat(-q.speedKmh * sin(rad)), v: CGFloat(-q.speedKmh * cos(rad)))
+        }
+    }
+
+    private static func key(_ lat: Double, _ lon: Double) -> Int {
+        Int((lat * 1000).rounded()) &* 1_000_003 &+ Int((lon * 1000).rounded())
+    }
+
     // Tunables: "less busy" lives here.
     /// Particles per unit of view area, so the dashboard's card does
     /// proportionally less work than the full screen.
@@ -299,6 +336,7 @@ final class WindFlowView: UIView {
     // MARK: Field
 
     private func rebuildField() {
+        fieldB = []
         guard !samples.isEmpty else { field = []; cells = []; return }
         let lat0 = samples.reduce(0) { $0 + $1.lat } / Double(samples.count)
         let lon0 = samples.reduce(0) { $0 + $1.lon } / Double(samples.count)
@@ -366,6 +404,7 @@ final class WindFlowView: UIView {
         var wu: CGFloat = 0, wv: CGFloat = 0, wsum: CGFloat = 0
         var nearest = -1
         var nearestD2 = CGFloat.infinity
+        let blend = !fieldB.isEmpty && mix > 0 && fieldB.count == field.count
         for j in max(0, cy - 2)...min(ny - 1, cy + 2) {
             for i in max(0, cx - 2)...min(nx - 1, cx + 2) {
                 for k in cells[j * nx + i] {
@@ -376,13 +415,24 @@ final class WindFlowView: UIView {
                     guard d2 < r2 else { continue }
                     let fall = 1 - d2 / r2
                     let w = fall * fall / (d2 + 0.01)
-                    wu += s.u * w; wv += s.v * w; wsum += w
+                    if blend {
+                        let b = fieldB[k]
+                        wu += (s.u + (b.u - s.u) * mix) * w; wv += (s.v + (b.v - s.v) * mix) * w
+                    } else {
+                        wu += s.u * w; wv += s.v * w
+                    }
+                    wsum += w
                 }
             }
         }
         if wsum > 0 { return (wu / wsum, wv / wsum) }
         // A hole in the lattice (the model's own edge): the nearest sample.
-        return nearest >= 0 ? (field[nearest].u, field[nearest].v) : (0, 0)
+        guard nearest >= 0 else { return (0, 0) }
+        if blend {
+            let s = field[nearest], b = fieldB[nearest]
+            return (s.u + (b.u - s.u) * mix, s.v + (b.v - s.v) * mix)
+        }
+        return (field[nearest].u, field[nearest].v)
     }
 
     // MARK: Map <-> screen

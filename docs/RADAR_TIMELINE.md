@@ -42,10 +42,14 @@ crossfading in place. Both sit above Apple's labels, which Jordan accepted
 | Radar | MRMS frames (ten-minute for two hours, twenty-minute to six) | nowcast to 60 min where its score allows, then model reflectivity (HRRR REFC) to +12 h |
 | Isobars, pressure shading | the station snapshots (every 25 min, 9.5 h kept) gridded as now, an hour apart, slid together and contoured on the phone for the moments between | the field now plus the model's change from now (HRRR MSLP), so nothing jumps at now |
 | Fronts, troughs, H and L | the WPC analysis that was current then (three-hourly), crossfading to the next | the forecast chart (12 and 24 h progs) once past half way to it |
-| Wind, stations, lightning, advisories, Change | now only | now only |
+| Wind | the HRRR analysis of each hour, kept on Tower as each run lands, slid between hours as vectors | now only |
+| Stations | each station's report at or before the moment, from the snapshots (wind and category kept since 2026-10-02) | now only |
+| Lightning | the twenty minutes before the last ten-minute mark, from six hours of flashes kept in memory | now only |
+| Advisories, Change | now only | now only |
 
 Layers that only know now stay drawn and the note line says so when the
-clock is somewhere else.
+clock is somewhere else; so does a layer whose series does not reach the
+moment (the histories fill over the hours after a server start).
 
 ## Server
 

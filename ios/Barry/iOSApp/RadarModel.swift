@@ -107,6 +107,7 @@ final class RadarModel: ObservableObject {
         bufferID += 1
         buffering = true
         ensureMotion()
+        ensureClockLayers()
     }
 
     /// The map's word that the frames are loaded (or the wait ran out).
@@ -152,6 +153,7 @@ final class RadarModel: ObservableObject {
         didSet {
             guard windLevel != oldValue else { return }
             applyLevel()
+            ensureClockLayers()
             heights = nil
             if windLevel != 0, let r = lastRegion {
                 Task { await fetchLevels(region: r) }
@@ -433,6 +435,7 @@ final class RadarModel: ObservableObject {
         // While a loop plays the lines follow its clock, not the frames.
         if !playing { updateFrontState() }
         ensurePressureSeries()
+        ensureClockLayers()
     }
 
     // MARK: The loop's clock
@@ -549,6 +552,7 @@ final class RadarModel: ObservableObject {
         if target == span {
             frames = list
             ensureMotion()
+            ensureClockLayers()
         }
     }
 
@@ -570,6 +574,130 @@ final class RadarModel: ObservableObject {
         index = nowIndex
         playheadMoved()
         return true
+    }
+
+    // MARK: The wind, the stations and the lightning on the clock
+
+    /// The past hours of each, for the moments the loop plays and the
+    /// slider parks on (LayerTimelines.swift). Asked for when a loop
+    /// starts or the slider leaves now, with a layer on, and again when
+    /// the newest frame or the region changes; nil until it arrives, and
+    /// the layer stays at now meanwhile.
+    @Published private(set) var windTimeline: WindTimeline?
+    @Published private(set) var stationTimeline: StationTimeline?
+    @Published private(set) var lightningTimeline: LightningTimeline?
+    private var windSeriesFor: (region: MKCoordinateRegion, levels: Bool)?
+    private var stationSeriesFor: MKCoordinateRegion?
+    private var lightningSeriesFor: MKCoordinateRegion?
+    private var windSeriesTask: Task<Void, Never>?
+    private var stationSeriesTask: Task<Void, Never>?
+    private var lightningSeriesTask: Task<Void, Never>?
+    /// The view's say: which of the layers are on.
+    var wantsWindClock = false { didSet { if wantsWindClock && !oldValue { ensureClockLayers() } } }
+    var wantsStationClock = false { didSet { if wantsStationClock && !oldValue { ensureClockLayers() } } }
+    var wantsLightningClock = false { didSet { if wantsLightningClock && !oldValue { ensureClockLayers() } } }
+
+    /// Whether the clock is somewhere the past matters: a loop up, or the
+    /// slider away from now.
+    private var clockAway: Bool { playing || buffering || !playheadIsNow }
+
+    func ensureClockLayers() {
+        guard clockAway, let region = lastRegion, !frames.isEmpty else { return }
+        let now = nowTime
+        if wantsWindClock {
+            let levels = windLevel != 0
+            let fresh = windTimeline?.nowTime == now && windSeriesFor.map { Self.nearEnough(region, to: $0.region) && ($0.levels || !levels) } == true
+            if !fresh {
+                windSeriesTask?.cancel()
+                windSeriesTask = Task { [weak self] in
+                    guard let resp = try? await BarryAPI().fieldSeries(
+                        lat: region.center.latitude, lon: region.center.longitude,
+                        latSpan: region.span.latitudeDelta, lonSpan: region.span.longitudeDelta,
+                        pad: Self.windPad, levels: levels)
+                    else { return }
+                    guard let self, !Task.isCancelled else { return }
+                    self.windSeriesFor = (region, levels)
+                    self.windTimeline = WindTimeline(resp, nowTime: now)
+                }
+            }
+        }
+        if wantsStationClock {
+            let fresh = stationTimeline?.nowTime == now && Self.nearEnough(region, to: stationSeriesFor)
+            if !fresh {
+                stationSeriesTask?.cancel()
+                stationSeriesTask = Task { [weak self] in
+                    guard let resp = try? await BarryAPI().stationSeries(
+                        lat: region.center.latitude, lon: region.center.longitude, half: Self.stationHalf(region))
+                    else { return }
+                    guard let self, !Task.isCancelled else { return }
+                    self.stationSeriesFor = region
+                    self.stationTimeline = StationTimeline(resp, nowTime: now)
+                }
+            }
+        }
+        if wantsLightningClock {
+            let fresh = lightningTimeline?.nowTime == now && Self.nearEnough(region, to: lightningSeriesFor)
+            if !fresh {
+                lightningSeriesTask?.cancel()
+                lightningSeriesTask = Task { [weak self] in
+                    guard let resp = try? await BarryAPI().lightningSeries(
+                        lat: region.center.latitude, lon: region.center.longitude,
+                        half: max(0.5, min(6, region.span.latitudeDelta * 0.7)))
+                    else { return }
+                    guard let self, !Task.isCancelled else { return }
+                    self.lightningSeriesFor = region
+                    self.lightningTimeline = LightningTimeline(resp, nowTime: now)
+                }
+            }
+        }
+    }
+
+    /// The wind of a moment, as the two hourly grids either side.
+    func windFields(at t: Double) -> (a: [WindArrow], b: [WindArrow], f: Double)? {
+        windTimeline?.fields(at: t, level: windLevel)
+    }
+
+    /// What the wind layer draws while nothing plays: the live grid at
+    /// now, the slider's moment's away from it when the series reaches.
+    var shownWindFieldOnClock: [WindArrow] {
+        guard !playing, !playheadIsNow, let f = windTimeline?.field(at: Double(playheadTime), level: windLevel) else {
+            return shownWindField
+        }
+        return f
+    }
+    var shownWindArrowsOnClock: [WindArrow] {
+        guard !playing, !playheadIsNow, let f = windTimeline?.field(at: Double(playheadTime), level: windLevel) else {
+            return shownWindArrows
+        }
+        return f.filter { $0.speedKmh >= Self.minArrowKmh }
+    }
+
+    /// The stations as they reported at the slider's moment, else now.
+    var shownStationObs: [StationObs] {
+        guard !playing, !playheadIsNow, let obs = stationTimeline?.observations(at: Double(playheadTime)) else { return stationObs }
+        return obs
+    }
+
+    /// The lightning of the slider's moment, else now's.
+    var shownLightning: LightningState {
+        guard !playing, !playheadIsNow, let state = lightningTimeline?.state(at: Double(playheadTime)) else { return lightning }
+        return state
+    }
+
+    /// Whether each series reaches the moments the timeline is on (the
+    /// whole loop while one plays, the slider's moment otherwise), for the
+    /// note under the frame time.
+    func windFollowsClock() -> Bool { followsClock { windTimeline?.covers($0, level: windLevel) ?? false } }
+    func stationsFollowClock() -> Bool { followsClock { stationTimeline?.covers($0) ?? false } }
+    func lightningFollowsClock() -> Bool { followsClock { lightningTimeline?.covers($0) ?? false } }
+
+    private func followsClock(_ covers: (Double) -> Bool) -> Bool {
+        guard !frames.isEmpty else { return false }
+        if playing || buffering {
+            let start = frames[loopStart].time
+            return covers(Double(start)) && covers(Double(nowTime))
+        }
+        return covers(Double(playheadTime))
     }
 
     // MARK: Isobars on the radar's clock
@@ -643,6 +771,7 @@ final class RadarModel: ObservableObject {
                              storms: Bool = false, advisories: Bool = false) {
         lastRegion = region
         ensureMotion()
+        ensureClockLayers()
         if advisories {
             advisoriesTask?.cancel()
             advisoriesTask = Task {

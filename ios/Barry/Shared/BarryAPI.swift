@@ -286,6 +286,49 @@ struct BarryAPI {
         return try await get(comps?.url)
     }
 
+    /// The map's wind grid at each hour of the day span and at now
+    /// (`/radar/field/series`), with the altitude stops when `levels`.
+    func fieldSeries(lat: Double, lon: Double, latSpan: Double, lonSpan: Double,
+                     pad: Double = 0, levels: Bool = false) async throws -> FieldSeriesResponse {
+        var comps = URLComponents(url: baseURL.appendingPathComponent("radar/field/series"),
+                                  resolvingAgainstBaseURL: false)
+        comps?.queryItems = [
+            URLQueryItem(name: "lat", value: String(lat)),
+            URLQueryItem(name: "lon", value: String(lon)),
+            URLQueryItem(name: "latSpan", value: String(latSpan)),
+            URLQueryItem(name: "lonSpan", value: String(lonSpan)),
+            URLQueryItem(name: "pad", value: String(pad)),
+            URLQueryItem(name: "levels", value: levels ? "true" : "false"),
+        ]
+        return try await get(comps?.url)
+    }
+
+    /// Each station's reports over the last six hours and a half
+    /// (`/metars/series`).
+    func stationSeries(lat: Double, lon: Double, half: Double) async throws -> StationSeriesResponse {
+        var comps = URLComponents(url: baseURL.appendingPathComponent("metars/series"),
+                                  resolvingAgainstBaseURL: false)
+        comps?.queryItems = [
+            URLQueryItem(name: "lat", value: String(lat)),
+            URLQueryItem(name: "lon", value: String(lon)),
+            URLQueryItem(name: "half", value: String(half)),
+        ]
+        return try await get(comps?.url)
+    }
+
+    /// Six hours of flashes around a point in ten-minute frames
+    /// (`/lightning/series`).
+    func lightningSeries(lat: Double, lon: Double, half: Double = 3.0) async throws -> LightningSeriesResponse {
+        var comps = URLComponents(url: baseURL.appendingPathComponent("lightning/series"),
+                                  resolvingAgainstBaseURL: false)
+        comps?.queryItems = [
+            URLQueryItem(name: "lat", value: String(lat)),
+            URLQueryItem(name: "lon", value: String(lon)),
+            URLQueryItem(name: "half", value: String(half)),
+        ]
+        return try await get(comps?.url)
+    }
+
     /// How the rain moved between the frames a span's loop plays, over a
     /// region (`/radar/motion`).
     func radarMotion(span: String, lat: Double, lon: Double, latSpan: Double, lonSpan: Double) async throws -> RadarMotionResponse {

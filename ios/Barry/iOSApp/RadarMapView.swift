@@ -20,6 +20,14 @@ struct RadarLineSource {
     let clock: () -> Double?
     let fronts: (Double) -> FrontRenderState?
     let pressure: (Double) -> PressureFieldResponse?
+    /// The wind of a moment: the two hourly grids either side and how far
+    /// from the first to the second (WindTimeline.fields), nil when the
+    /// series does not reach the moment or the wind is off.
+    var wind: ((Double) -> (a: [WindArrow], b: [WindArrow], f: Double)?)? = nil
+    /// The stations as they reported at a moment (StationTimeline).
+    var stations: ((Double) -> [StationObs]?)? = nil
+    /// The lightning of the twenty minutes before a moment (LightningTimeline).
+    var lightning: ((Double) -> LightningState?)? = nil
     /// False when `pressure` gives the field's shape, not its values.
     var labelIsobars = true
     /// Set when the isobars are the field's shape and the GPU is drawing
@@ -769,6 +777,9 @@ struct RadarMapView: UIViewRepresentable {
                     shownPressure = nil
                     lastFrontVersion = -1
                     lastLineClock = -.infinity
+                    if clockWind { flowView?.setSecond(nil, mix: 0); clockWind = false; clockArrowStep = -1 }
+                    if clockStations { shownStations = []; clockStations = false }
+                    if clockLightning { shownLightning = nil; clockLightning = false }
                 }
                 return
             }
@@ -786,6 +797,7 @@ struct RadarMapView: UIViewRepresentable {
             if frontOverlay != nil, let state = source.fronts(t) {
                 applyFronts(state, on: map)
             }
+            stepClockLayers(source, at: t, on: map)
             guard var state = shownPressure, let overlay = pressureOverlay else { return }
             let gpuLines = isolineView != nil
             let field = source.pressure(t)
@@ -801,6 +813,46 @@ struct RadarMapView: UIViewRepresentable {
             state.version = lineVersion
             overlay.state = state
             map.renderer(for: overlay)?.setNeedsDisplay()
+        }
+
+        // MARK: The wind, the stations and the lightning on the clock
+
+        /// Whether each of these followed the clock last tick, so the
+        /// hand-back to what SwiftUI shows is clean when a loop stops.
+        private var clockWind = false
+        private var clockStations = false
+        private var clockLightning = false
+        private var clockArrowStep = -1
+
+        private func stepClockLayers(_ source: RadarLineSource, at t: Double, on map: MKMapView) {
+            if let wind = source.wind, let got = wind(t) {
+                clockWind = true
+                if let flow = flowView {
+                    if flow.samples != got.a { flow.samples = got.a }
+                    flow.setSecond(got.f > 0 ? got.b : nil, mix: got.f)
+                }
+                // The arrows turn in steps of a tenth of the hour: a few
+                // degrees each, in place.
+                if !arrowAnnotations.isEmpty || !allArrows.isEmpty {
+                    let step = Int(got.f * 10)
+                    if step != clockArrowStep {
+                        clockArrowStep = step
+                        let field = WindTimeline.blend(got.a, got.b, f: Double(step) / 10)
+                        syncArrows(field.filter { $0.speedKmh >= RadarModel.minArrowKmh }, on: map, fromClock: true)
+                    }
+                }
+            } else if clockWind {
+                clockWind = false
+                flowView?.setSecond(nil, mix: 0)
+            }
+            if let stations = source.stations, let obs = stations(t) {
+                clockStations = true
+                syncStations(obs, style: shownStationStyle, on: map, fromClock: true)
+            }
+            if let lightning = source.lightning, let state = lightning(t) {
+                clockLightning = true
+                syncLightning(state, on: map, pulse: false)
+            }
         }
 
         // MARK: The isobars' shape, on the GPU
@@ -971,8 +1023,10 @@ struct RadarMapView: UIViewRepresentable {
             map.addOverlay(o, level: .aboveRoads)
         }
 
-        func syncLightning(_ state: LightningState?, on map: MKMapView) {
+        func syncLightning(_ state: LightningState?, on map: MKMapView, pulse: Bool = true) {
             guard state != shownLightning else { return }
+            // While the clock has the say, SwiftUI's live slice waits.
+            if pulse, clockLightning { return }
             shownLightning = state
             guard let state, state.response != nil else {
                 if let o = lightningOverlay { map.removeOverlay(o); lightningOverlay = nil }
@@ -985,6 +1039,7 @@ struct RadarMapView: UIViewRepresentable {
             }
             lightningOverlay?.state = state
             if let o = lightningOverlay, let r = map.renderer(for: o) { r.setNeedsDisplay() }
+            guard pulse else { return }
             // Run the arrival pulse for about a second after a new slice.
             pulseMap = map
             pulseUntil = CACurrentMediaTime() + LightningRenderer.pulseDuration + 0.1
@@ -1044,7 +1099,7 @@ struct RadarMapView: UIViewRepresentable {
             }
         }
 
-        func syncStations(_ obs: [StationObs], style: StationLayerStyle, on map: MKMapView) {
+        func syncStations(_ obs: [StationObs], style: StationLayerStyle, on map: MKMapView, fromClock: Bool = false) {
             // The slice's copy of the home station is fuller (raw METAR); use
             // it for the home marker and keep it out of the layer.
             if let b = homeBarb, let full = obs.first(where: { $0.id == b.obs.id }), full != b.obs {
@@ -1053,18 +1108,40 @@ struct RadarMapView: UIViewRepresentable {
                 else if let v = map.view(for: b) as? SpeedLabelView { v.configure(b) }
             }
             let homeID = homeBarb?.obs.id
+            // While the clock has the say, SwiftUI's live slice waits; a
+            // change of style still takes.
+            if clockStations, !fromClock, style == shownStationStyle { return }
             let want = style == .off ? [] : obs.filter { $0.id != homeID }
             guard want != shownStations || style != shownStationStyle else { return }
             shownStations = want
+            let restyle = style != shownStationStyle
             shownStationStyle = style
-            map.removeAnnotations(stationAnnotations)
-            stationAnnotations = want.map { o in
-                let a = StationAnnotation()
-                a.coordinate = CLLocationCoordinate2D(latitude: o.lat, longitude: o.lon)
-                a.obs = o
-                return a
+            // Each station's marker is kept and reconfigured in place; only
+            // stations that come and go are added and removed. Until
+            // 2026-10-02 every marker was replaced, and on the clock that
+            // blinked the whole layer each hour.
+            var old: [String: StationAnnotation] = [:]
+            for a in stationAnnotations { old[a.obs.id] = a }
+            var next: [StationAnnotation] = [], added: [StationAnnotation] = []
+            for o in want {
+                if !restyle, let a = old.removeValue(forKey: o.id) {
+                    if a.obs != o {
+                        a.obs = o
+                        if let v = map.view(for: a) as? WindBarbView { v.configure(a) }
+                        else if let v = map.view(for: a) as? SpeedLabelView { v.configure(a) }
+                    }
+                    next.append(a)
+                } else {
+                    let a = StationAnnotation()
+                    a.coordinate = CLLocationCoordinate2D(latitude: o.lat, longitude: o.lon)
+                    a.obs = o
+                    next.append(a)
+                    added.append(a)
+                }
             }
-            map.addAnnotations(stationAnnotations)
+            if !old.isEmpty { map.removeAnnotations(Array(old.values)) }
+            stationAnnotations = next
+            if !added.isEmpty { map.addAnnotations(added) }
             applyDeclutter(on: map)
         }
 
@@ -1145,6 +1222,8 @@ struct RadarMapView: UIViewRepresentable {
             flowView?.yieldsToScrolling = embedded
             flowView?.isActive = animating
             flowView?.rampKmh = CGFloat(ramp)
+            // While the clock has the say, SwiftUI's live grid waits.
+            if clockWind { return }
             if flowView?.samples != field {
                 flowView?.samples = field
             }
@@ -1517,7 +1596,10 @@ struct RadarMapView: UIViewRepresentable {
         /// new are added (they fade in, `didAdd`), and only the ones that are
         /// gone are removed. Swapping the whole set made every arrow blink
         /// each time a pan fetched the next grid.
-        func syncArrows(_ given: [WindArrow], on map: MKMapView) {
+        func syncArrows(_ given: [WindArrow], on map: MKMapView, fromClock: Bool = false) {
+            // While the clock has the say, SwiftUI's live grid waits; a pan
+            // re-thins whatever is up.
+            if clockWind, !fromClock, given != allArrows { return }
             allArrows = given
             let arrows = thinned(given, on: map)
             guard arrows != shownArrows else { return }

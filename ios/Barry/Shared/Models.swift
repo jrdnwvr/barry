@@ -478,6 +478,44 @@ struct FieldLevelsResponse: Codable, Hashable {
     let cachedAt: Date
 }
 
+/// The map's wind grid at one moment: the 10 m wind, and the altitude
+/// stops' winds when they were asked for.
+struct FieldFrame: Codable, Hashable {
+    let time: Int
+    var points: [FieldPoint] = []
+    var levels: [FieldLevelPoint] = []
+}
+
+/// The map's wind grid at each hour of the radar's day span and at now,
+/// oldest first, on one lattice (`/radar/field/series`).
+struct FieldSeriesResponse: Codable, Hashable {
+    var frames: [FieldFrame] = []
+    var source: String?
+    let cachedAt: Date
+}
+
+/// One report of a station over the last hours: when, the wind and the
+/// category (`/metars/series`).
+struct StationReport: Codable, Hashable {
+    let t: Int
+    var windKt: Double?
+    var windDir: Double?
+    var gustKt: Double?
+    var fltCat: String?
+}
+
+struct StationSeries: Codable, Hashable {
+    let id: String
+    let lat: Double
+    let lon: Double
+    var reports: [StationReport] = []
+}
+
+struct StationSeriesResponse: Codable, Hashable {
+    var stations: [StationSeries] = []
+    let cachedAt: Date
+}
+
 // MARK: - Track record
 
 /// Barry's scorecard at this station: trend calls that matched what the
@@ -626,6 +664,20 @@ struct LightningCluster: Codable, Hashable {
     let flashes: Int
     let recent: Int
     let newestAgeSec: Int
+}
+
+/// The flashes of the twenty minutes before one ten-minute mark, as
+/// cells; ages are from the mark (`/lightning/series`).
+struct LightningFrame: Codable, Hashable {
+    let time: Int
+    var cells: [LightningCell] = []
+}
+
+struct LightningSeriesResponse: Codable, Hashable {
+    var frames: [LightningFrame] = []
+    var windowSec: Int = 1200
+    var binDeg: Double = 0.02
+    let cachedAt: Date
 }
 
 struct LightningResponse: Codable, Hashable {

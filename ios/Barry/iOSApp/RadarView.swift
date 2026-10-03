@@ -277,13 +277,17 @@ struct RadarPanel: View {
     private func syncPressureWants() {
         model.wantsPressureGrid = field == .pressure
         model.wantsPressureSeries = showIsobars || field == .pressure
+        model.wantsWindClock = showWind
+        model.wantsStationClock = stationsOn
+        model.wantsLightningClock = showStorms
     }
 
     /// What the map draws the fronts and the isobars from while a loop
     /// plays: the loop's own clock, thirty times a second, not the frame
     /// the radar is on. Nil when nothing is playing or neither is showing.
     private var lineSource: RadarLineSource? {
-        guard showRadar, active, model.playing, wantsFronts || wantsPressure else { return nil }
+        guard showRadar, active, model.playing,
+              wantsFronts || wantsPressure || showWind || stationsOn || showStorms else { return nil }
         let fronts = wantsFronts, pressure = showIsobars || field == .pressure
         // Over six hours the lines show the field's shape (and no values);
         // over one they are the isobars of the moment.
@@ -298,6 +302,9 @@ struct RadarPanel: View {
             pressure: { [model] t in
                 pressure ? model.pressureField(at: t, pattern: shape, lines: gpuLines == nil) : nil
             },
+            wind: showWind ? { [model] t in model.windFields(at: t) } : nil,
+            stations: stationsOn ? { [model] t in model.stationTimeline?.observations(at: t) } : nil,
+            lightning: showStorms ? { [model] t in model.lightningTimeline?.state(at: t) } : nil,
             labelIsobars: !shape && isobarLabels,
             shape: gpuLines)
     }
@@ -437,17 +444,17 @@ struct RadarPanel: View {
                      index: model.index,
                      radarVisible: showRadar,
                      center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
-                     windArrows: model.shownWindArrows,
+                     windArrows: model.shownWindArrowsOnClock,
                      showWind: showWind && windStyle == "arrows",
-                     windFlow: (showWind && windStyle == "flow") ? model.shownWindField : nil,
+                     windFlow: (showWind && windStyle == "flow") ? model.shownWindFieldOnClock : nil,
                      windRampKmh: WindAltitude.stop(model.windLevel).rampKmh,
                      embedded: embedded,
                      animating: active,
                      frontState: wantsFronts ? model.frontState : nil,
-                     stations: model.stationObs,
+                     stations: model.shownStationObs,
                      stationStyle: stationStyle,
                      showStorms: showStorms,
-                     lightning: model.lightning,
+                     lightning: model.shownLightning,
                      lightningNextTemplate: model.lightningNextTemplate,
                      advisories: showAdvisories ? model.advisories : nil,
                      onSelectAdvisory: { selectedAdvisory = $0 },
@@ -824,7 +831,9 @@ struct RadarPanel: View {
     private var nowOnlyNote: String? {
         guard RadarTimeline.showsNowOnlyNote(span: model.span, playing: model.playing,
                                              playheadIsNow: model.playheadIsNow) else { return nil }
-        return RadarTimeline.nowOnlyNote(wind: showWind, stations: stationsOn, lightning: showStorms,
+        return RadarTimeline.nowOnlyNote(wind: showWind && !model.windFollowsClock(),
+                                         stations: stationsOn && !model.stationsFollowClock(),
+                                         lightning: showStorms && !model.lightningFollowsClock(),
                                          advisories: showAdvisories, change: field == .change)
     }
 

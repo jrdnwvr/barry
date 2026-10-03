@@ -70,7 +70,7 @@ def test_snapshots_are_rate_limited_and_pruned(client):
 
 
 @pytest.mark.asyncio
-async def test_each_stations_reports_over_the_last_hours_are_served(client):
+async def test_each_stations_reports_over_the_last_hours_are_served(client, monkeypatch):
     """Four snapshots an hour apart hold two reports a station (METARs are
     hourly; the snapshots every 25 minutes repeat them): the series gives
     each report once, oldest first, with its wind and category, nearest
@@ -78,6 +78,7 @@ async def test_each_stations_reports_over_the_last_hours_are_served(client):
     and so is a report older than the window."""
     service = PressureService(client)
     now = datetime(2026, 10, 2, 22, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr("app.service._now", lambda: now)       # the window is measured from now
     old = now - timedelta(hours=8)
     # An old-format snapshot (five fields), as the files held before.
     service._bulk_history.append((old, {"KLUK": (old, 1013.0, None, 39.1, -84.42)}))

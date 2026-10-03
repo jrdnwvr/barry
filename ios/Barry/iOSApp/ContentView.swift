@@ -715,16 +715,14 @@ private struct MetarStrip: View {
 
 private struct DataSourceFootnote: View {
     let combined: CombinedResponse
-    /// One line, wrapped as needed. CC BY 4.0 requires visible credit for the
-    /// forecast data and RainViewer asks for its name somewhere visible.
+    /// One line, wrapped as needed. Everything is NOAA's since 2026-10-03
+    /// (the Open-Meteo and RainViewer stand-ins came out).
     private var text: String {
         var parts = ["\(combined.pressure.station) \(combined.pressure.source)"]
-        if let f = combined.sources?.forecast {
-            // NOAA's models run on Barry's own server where they cover the
-            // field; Open-Meteo (CC BY 4.0, credit required) elsewhere.
-            parts.append(f.contains("hrrr") ? "forecast NOAA HRRR and NBM" : "forecast Open-Meteo.com (CC BY 4.0)")
+        if combined.sources?.forecast != nil {
+            parts.append("forecast NOAA HRRR and NBM")
         }
-        parts.append("radar RainViewer, NOAA NEXRAD")
+        parts.append("radar NOAA MRMS")
         parts.append("lightning NOAA GOES")
         parts.append("fronts NWS WPC")
         return parts.joined(separator: " · ")

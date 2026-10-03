@@ -252,7 +252,6 @@ async def test_get_front_caches(client, upstream):
 @pytest.mark.asyncio
 async def test_get_front_survives_bbox_failure(client, upstream):
     upstream.bbox_pattern = None  # AWC returns an empty body for the bbox
-    upstream.om_trough = True
     service = PressureService(client)
     resp = await service.get_front("KLUK", 39.103, -84.419)
     # No regional field: never a directional claim, no crash. Whether the model

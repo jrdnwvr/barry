@@ -476,11 +476,11 @@ hidden). A card shows only when it is not hidden and has something to say.
 ### home.footer (was card.sources)
 - Seen: at the foot of the page, the Barry mark and under it one quiet
   line: "KLUK aviationweather.gov · forecast NOAA HRRR and NBM · radar
-  RainViewer, NOAA NEXRAD · lightning NOAA GOES · fronts NWS WPC", with
-  "forecast Open-Meteo.com (CC BY 4.0)" instead where the forecast came
-  from Open-Meteo (off the HRRR grid).
+  NOAA MRMS · lightning NOAA GOES · fronts NWS WPC". Everything is NOAA's
+  since 2026-10-03 (the Open-Meteo and RainViewer stand-ins came out,
+  Jordan: all data from NOAA).
 - Lives: `ContentView.glanceCards` footer, `DataSourceFootnote`.
-- Rules: it carries the forecast data's required credit and RainViewer's,
+- Rules: it names every source once (nothing left needs a credit line),
   so it is not a card and cannot be hidden or moved. The `.sources` case
   stays in `HomeCard` so stored layouts still decode; it draws nothing and
   the Cards editor leaves it out. The "Updated" time went with the card.
@@ -675,8 +675,8 @@ stored keys, but each has its own model, so they fetch separately.
 ### radar.credit
 - Seen: nothing on the map itself since 2026-09-24. The sources paragraph
   in the key sheet and a line on the Data sources card ("Radar ·
-  RainViewer, NOAA NEXRAD · lightning NOAA GOES · fronts NWS WPC") carry
-  the credit RainViewer asks for; that card cannot be hidden.
+  NOAA MRMS · lightning NOAA GOES · fronts NWS WPC") name the sources;
+  that card cannot be hidden.
 
 ### radar.layers (the model)
 - The chip bar sits behind the Layers button (`radar.layers`, top right
@@ -711,9 +711,10 @@ stored keys, but each has its own model, so they fetch separately.
   tiles at `/radar/tiles/<time>/512/{z}/{x}/{y}/2/0_1.png` drawn on Tower
   in RainViewer's Universal Blue colours, so the app reads them back
   exactly as it read RainViewer's. Model frames come in the same shape
-  from `/radar/model/<key>/...`. RainViewer (same URL shape, 7 past
-  frames and up to 3 nowcast, whatever the span) when Barry's frames are
-  missing or over 20 minutes old, or when `BARRY_RADAR_SOURCE=rainviewer`.
+  from `/radar/model/<key>/...`. Stale frames are served as they are (the
+  time line says how old); with none held the route is a 503 and the app
+  says the radar is unavailable. RainViewer stood in for both until
+  2026-10-03.
   Native zoom 7, ancestors cropped and upscaled beyond it.
 - Seen, differently: MRMS is quality-controlled, so the faint night-time
   returns from birds and insects that RainViewer showed as pale blobs
@@ -1021,7 +1022,7 @@ stored keys, but each has its own model, so they fetch separately.
 - Data: `/radar/field?pad=0.5`: from the server's HRRR store, every point
   of a lattice the whole map shares (about 11 across the view and 8 down,
   the step from a fixed ladder) out to half a span past each edge of the
-  view; or 7 by 5 inside the view from Open-Meteo off the HRRR grid
+  view; off the HRRR grid, no points (nothing stands in since 2026-10-03)
   (`source` says which); boundary layer and CAPE present but unused on the
   map. The winds aloft (`/radar/field/levels`) come the same way.
 - Settings: `radarWindArrows` true (the Wind chip; historical name),
@@ -1160,7 +1161,7 @@ stored keys, but each has its own model, so they fetch separately.
 - Data: `/radar/frames.lightningNext` and its tiles at
   `/radar/lightning/<time>/512/{z}/{x}/{y}.png` (MRMS's next-60-minute
   lightning probability, refreshed every two minutes on Tower; absent from
-  RainViewer). `/lightning` (0.02° cells, 20 min window, clusters, coverage),
+  none held). `/lightning` (0.02° cells, 20 min window, clusters, coverage),
   refetched every 60 s, on a move over 1.5°, and on region change. The
   client sends no `half`, so the server's ±3° box applies: at continental
   zoom only the box around the centre shows flashes.
@@ -1233,7 +1234,7 @@ For: P S D. The column of clouds, temperatures and winds above the field.
   and knots, cloud layers, freezing level, boundary layer. From HRRR on
   Tower (17 levels, underground ones left out, cloud from humidity and
   the model's cloud water and ice) where the point is on its grid, else
-  Open-Meteo (11 levels); `source` says which. Also `turbulence` (GTG,
+  a 503 off the grid (nothing stands in since 2026-10-03). Also `turbulence` (GTG,
   now, every 1,000 ft) and `icing` (CIP, now, every 500 ft: probability,
   severity 1 trace to 4 heavy, large drops), drawn on the first stop
   (`aloft.now.turbulence`, `aloft.now.icing`).
@@ -1317,7 +1318,7 @@ For: P S D. The column of clouds, temperatures and winds above the field.
   it runs before the radar test, so the rail then stops at 10k.
 
 ### aloft.credit
-- Seen: nothing on the screen since 2026-09-24. Open-Meteo's credit is on
+- Seen: nothing on the screen since 2026-09-24. The sources line is on
   the Data sources card, which cannot be hidden. The surface band reads
   "KLUK · 483 ft" and "27011KT · 20°/15°" without a "METAR" prefix.
 
@@ -1473,15 +1474,15 @@ when there is no file). The app nudges WidgetKit after every load.
 
 Every client call goes through `Shared/BarryAPI.swift`. Per-client limit 60
 requests a minute (`BARRY_RATE_PER_MIN`), 429 with Retry-After 30. Upstream
-budgets: 30 AWC calls a minute, Open-Meteo in its own weighted units (a call per location, more for over ten variables): 500 a minute and 9,000 a UTC day (`OMBudget`, `barry_openmeteo_calls_today` on /metrics); spent budgets
+budgets: 30 AWC calls a minute, no other upstream (the Open-Meteo budget went with the fallback, 2026-10-03); spent budgets
 answer 503 with Retry-After 30. A remembered upstream failure answers 503
 with Retry-After 60. Every response carries `X-Request-Id`.
 
 | Route | Parameters | Returns | Upstream | Cache and rounding | Used by |
 |---|---|---|---|---|---|
-| `GET /combined` | `station`, `lat`, `lon`, `tz`, `clock` (12 or 24) | pressure (series, current, tendency), forecast, reading (trend, feature, confidence, explanation), conditions (with the rain line, `conditions.rain`, when the radar has rain here or on the way), runways, taf, lamp (LAMP guidance from this hour, when the site has it), lightningNearby, verdict | AWC METAR (Open-Meteo surface pressure as fallback), Open-Meteo forecast, AWC TAF, LAMP from NOMADS, OurAirports runways, GLM flashes, bulk METAR lightning | pressure 12 min per station; forecast 30 min per 0.1° cell; TAF 30 min | the phone and watch (`PressureStore`), complications, widgets, the airport check in Settings |
+| `GET /combined` | `station`, `lat`, `lon`, `tz`, `clock` (12 or 24) | pressure (series, current, tendency), forecast, reading (trend, feature, confidence, explanation), conditions (with the rain line, `conditions.rain`, when the radar has rain here or on the way), runways, taf, lamp (LAMP guidance from this hour, when the site has it), lightningNearby, verdict | AWC METAR, the HRRR and NBM forecast from the store, AWC TAF, LAMP from NOMADS, OurAirports runways, GLM flashes, bulk METAR lightning | pressure 12 min per station; forecast 30 min per 0.1° cell; TAF 30 min | the phone and watch (`PressureStore`), complications, widgets, the airport check in Settings |
 | `GET /pressure/{station}` | `hours` | pressure only | as above | one key per station, whole day | nobody now |
-| `GET /forecast` | `lat`, `lon` | hourly, sun, `source` ("hrrr+nbm", "hrrr" or "open-meteo"), `stale`; on `/combined` also `pressureOffset` | the HRRR forecast feeds (48 h) with NBM over the first 36 h, sun times computed; Open-Meteo, 2 days, off the grid | NOAA: 30 min per 0.1° cell and run; Open-Meteo: 30 min per 0.1° cell, last good re-served 12 h when upstream fails | inside `/combined` |
+| `GET /forecast` | `lat`, `lon` | hourly, sun, `source` ("hrrr+nbm" or "hrrr"), `stale`; on `/combined` also `pressureOffset` | the HRRR forecast feeds (48 h) with NBM over the first 36 h, sun times computed; off the grid or before a run is held, a 503 (nothing stands in since 2026-10-03) | 30 min per 0.1° cell and run | inside `/combined` |
 | `GET /front` | `station`, `lat`, `lon` | status, headline, bearing, eta, nearestFront | bulk METAR history (7.5 h) or an AWC box, forecast, `/fronts` | 15 min per station and 0.1° | the phone's front banner only |
 | `GET /fronts` | none | WPC analysis plus the progs, and `history`: the analyses of the nine hours before, oldest first | IEM AFOS (CODSUS, the last twelve products; CODSRP) | 30 min, one entry | the radar |
 | `GET /radar/hrrr` | none | run time | IEM tile probe | 10 min | nobody (the model frames it served are Barry's own since 2026-10-02) |
@@ -1496,11 +1497,11 @@ with Retry-After 60. Every response carries `X-Request-Id`.
 | `GET /advisories` | `lat`, `lon`, `half` | SIGMET and G-AIRMET areas (kind, hazard, label, base and top, valid times, outline, bulletin) and PIREPs of turbulence and icing (position, time, altitude, aircraft, intensities, raw) that touch the box | AWC `airsigmet`, `gairmet` (current hour), `pirep` (lower 48, 2 h) | each feed 10 min for everyone, failures 60 s; a failed feed is left out | the radar Advisories layer |
 | `GET /radar/pressure` | `lat`, `lon`, spans | isobars, isallobars, grids, extrema | bulk table and history, no upstream | 5 min; centre 0.1°, spans 0.5°; two builds at a time | the radar pressure layers |
 | `GET /lightning` | `lat`, `lon`, `half` | 0.02° cells, clusters, window 1200 s, coverage | GLM store | 60 s; centre 0.2°, half 0.5° | the radar lightning layer |
-| `GET /radar/frames` | `source` (mrms or rainviewer, optional), `span` (hour or day, optional) | host, frames each with `time`, `path`, `nowcast` and `kind` (observed, nowcast, model), `lightningNext`. No `span`: 7 observed and 3 nowcast, what builds to 93 expect. `hour`: every ten minutes of the last two hours, then the nowcast to as far as its score allows (30 to 60 minutes). `day`: a frame every twenty minutes from six hours back, the newest, then each hour to twelve ahead (nowcast where it reaches, else model). Nowcast and model paths name the run that made them | Barry's MRMS frames and the model radar store, else RainViewer (7 and 3 whatever the span) | RainViewer's list 2 min; Barry's read from the store | the radar |
+| `GET /radar/frames` | `span` (hour or day, optional) | host, frames each with `time`, `path`, `nowcast` and `kind` (observed, nowcast, model), `lightningNext`. No `span`: 7 observed and 3 nowcast, what builds to 93 expect. `hour`: every ten minutes of the last two hours, then the nowcast to as far as its score allows (30 to 60 minutes). `day`: a frame every twenty minutes from six hours back, the newest, then each hour to twelve ahead (nowcast where it reaches, else model). Nowcast and model paths name the run that made them | Barry's MRMS frames and the model radar store, else RainViewer (7 and 3 whatever the span) | RainViewer's list 2 min; Barry's read from the store | the radar |
 | `GET /radar/lightning/{t}/{size}/{z}/{x}/{y}.png` | the grid's unix time, 256 or 512, zoom to 12 | an RGBA PNG, violet by the chance of lightning in the next hour | MRMS LightningProbabilityNext60min, the newest three held | as the radar tiles | the Lightning layer |
 | `GET /radar/tiles/{t}/{size}/{z}/{x}/{y}/{color}/{opts}.png` | the frame's unix time, 256 or 512, zoom to 12 | an RGBA PNG in Universal Blue, empty tiles about 1 KB | the MRMS store: uint8 dBZ on the 0.01 degree grid and four max-pooled copies for wide views | `public, max-age=604800, immutable` (Cloudflare keeps them); misses `no-store`; 64 MB in process; own budget, 1,500 a minute per client (`BARRY_TILE_RATE_PER_MIN`) | the radar |
-| `GET /aloft` | `lat`, `lon` | 25 hourly columns, `source`, `stale`, and what is there now: `turbulence` (GTG) and `icing` (CIP) | the HRRR column feeds; Open-Meteo pressure levels off the grid | HRRR: 1 h per 0.1° cell and column run; Open-Meteo: 1 h per 0.1° cell, last good 12 h; the hazards are read fresh each request | Aloft |
-| `GET /radar/field` | `lat`, `lon`, spans, `pad` (0 to 0.75 of the span, optional) | wind, boundary layer and CAPE, and `source`. From HRRR: 88 points inside the view, or with `pad` every point of the shared lattice out to that far past each edge (about 300 at 0.5, 30 KB). From Open-Meteo: 35 inside the view, `pad` or not | the HRRR store; Open-Meteo multi-point (35 weighted calls) off the HRRR grid or before a cycle is held | HRRR: none needed; Open-Meteo: until five past the next hour, at least 10 min; centre 0.05°, spans 0.5°; last good copy for 6 h | the radar wind layer |
+| `GET /aloft` | `lat`, `lon` | 25 hourly columns, `source`, `stale`, and what is there now: `turbulence` (GTG) and `icing` (CIP) | the HRRR column feeds; a 503 off the grid | 1 h per 0.1° cell and column run; the hazards are read fresh each request | Aloft |
+| `GET /radar/field` | `lat`, `lon`, spans, `pad` (0 to 0.75 of the span, optional) | wind, boundary layer and CAPE, and `source`. From HRRR: 88 points inside the view, or with `pad` every point of the shared lattice out to that far past each edge (about 300 at 0.5, 30 KB). Off the grid or before a cycle is held: no points (nothing stands in since 2026-10-03) | the HRRR store | held until five past the next model hour | the radar wind layer |
 | `GET /radar/field/levels` | same | the same points at five levels, underground levels left out, and `source` | as `/radar/field` | as `/radar/field` | the altitude rail |
 | `GET /radar/heights` | `lat`, `lon`, spans, `hPa` (925, 850, 700, 600, 500) | height contours in metres, 30 m apart at 700 hPa and below and 60 m above, with the run and valid time | the HRRR store only; 503 off its grid | until five past the next hour, per level, region and run | the altitude rail |
 | `GET /models/scores` | `days` (1 to 60, default 14) | `days`: per UTC day, newest first, hours scored and for HRRR and RRFS (the same cycle, the same lead) the mean sea-level pressure error (raw, bias, and with each hour's bias taken out), 10 m wind speed error in knots, direction error where the wind is 8 kt or more, and the lead; `rainStarts`: the "rain starts at" calls scored, hits, hit rate, calls pending, and the same by day; `nowcast`: per lead (10 to 60 minutes) the radar nowcast's CSI at 20 dBZ against the frame that arrived, persistence's beside it, frames checked, the same by day, and `shownMin`, how far the timeline is listing it now | none: the model store and the bulk METAR table, scored once an hour (`modelscore.py`), kept 60 days in `state/model_scores`; the rain calls in `state/rain_calls`; the nowcast's counts by UTC hour in `state/nowcast_scores` | none | Jordan, for the RRFS switch and the rain line |
@@ -1537,7 +1538,7 @@ without blocking the response.
   NOMADS when the bucket is 10 minutes late and NOMADS has it. Winds turned
   earth-relative, fields written to `state/model/hrrr/<cycle>/` as float32,
   two cycles kept (about 1 GB). A cycle takes 5 s and peaks near 700 MB.
-  `BARRY_HRRR=0` disables and every map layer stays on Open-Meteo.
+  `BARRY_HRRR=0` disables and every map layer is empty.
 - Radar loop every 120 s: lists the MRMS composite on the bucket, fetches
   the file nearest each mark that isn't held (1.2 MB, 0.2 s to decode;
   newest first): every ten minutes of the last two hours and, since
@@ -1581,8 +1582,7 @@ without blocking the response.
   every third hour (f01 to f36: temperature, dew point, wind, direction,
   gust, sky, and the hourly chance of rain and of thunder). On `/combined`
   the NOAA pressure curve is shifted to meet the station's latest reading
-  (`pressureOffset`; HRRR reduces to sea level its own way, and Open-Meteo
-  at KLUK serves the same HRRR numbers without the shift).
+  (`pressureOffset`; HRRR reduces to sea level its own way).
 - And RRFS beside HRRR (`sources/rrfs.py`): sea-level pressure and 10 m
   wind for hours 1 to 3 of every cycle (about 80 minutes after each; the
   00 and 12 UTC ones two hours; some hourly cycles are missing before the
@@ -1602,11 +1602,12 @@ without blocking the response.
   1800 s, lightning 600 s, LAMP and model 3600 s). Degraded (200, or 503
   with `strict`): the lightning feed or the bulk table is stale, or no LAMP
   run or HRRR cycle for three hours.
-- Every answer a fallback gives instead of the NOAA feeds (Open-Meteo for
-  the forecast, the Aloft column, the radar's wind grid and winds aloft;
-  RainViewer for the radar timeline; Open-Meteo's surface pressure when
-  AWC fails) is logged with why and where (`fallbacks.py`, `/fallbacks`),
-  so the month before the fallback code comes out is measured.
+- Every answer the NOAA store could not give (a forecast, the Aloft
+  column, the wind grid or the winds aloft off the grid or before a run is
+  held; the radar stale or empty; the pressure curve when AWC fails) is
+  logged with why and where (`fallbacks.py`, `/fallbacks`). Nothing stands
+  in for them: the Open-Meteo and RainViewer fallbacks came out 2026-10-03
+  (Jordan: all data from NOAA), so the log now says where the data ran out.
 - Tests: `backend/tests`, 381 tests; `test_property` reads the app's own
   OpenAPI document.
 

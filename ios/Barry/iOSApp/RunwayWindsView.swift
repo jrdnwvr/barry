@@ -50,7 +50,7 @@ struct RunwayWindsCard: View {
     }
 
     /// The next hours on the best runway end: peak crosswind, and when another
-    /// end takes over. Model wind (Open-Meteo hourly) already in /combined.
+    /// end takes over. Model wind (the hourly forecast) already in /combined.
     private struct Outlook { let peakKt: Int; let peakAt: Date; let switchTo: String?; let switchAt: Date? }
 
     private func outlook(best: RunwayWind, now: Date) -> Outlook? {

@@ -116,10 +116,11 @@ async def test_the_aloft_column_comes_from_the_column_feeds(client, upstream, hr
 
 
 @pytest.mark.asyncio
-async def test_the_column_falls_back_off_the_grid(client, upstream, hrrr_on):
+async def test_the_column_is_not_served_off_the_grid(client, upstream, hrrr_on):
     s = PressureService(client)
     await s.poll_hrrr()
-    assert (await s.get_aloft(45.0, -120.0)).source == "open-meteo"
+    with pytest.raises(LookupError):                 # nothing stands in since 2026-10-03
+        await s.get_aloft(45.0, -120.0)
 
 
 @pytest.mark.asyncio
@@ -156,11 +157,11 @@ async def test_height_contours_run_east_and_west_at_chart_intervals(client, upst
 
 
 @pytest.mark.asyncio
-async def test_off_the_grid_the_map_falls_back_to_open_meteo(client, upstream, hrrr_on):
+async def test_off_the_grid_the_map_has_no_wind(client, upstream, hrrr_on):
     s = PressureService(client)
     await s.poll_hrrr()
     resp = await s.get_field_grid(45.0, -120.0, 3.0, 5.0)       # outside the fixture grid
-    assert resp.source == "open-meteo"
+    assert resp.points == [] and resp.source is None
     with pytest.raises(LookupError):
         await s.get_heights(45.0, -120.0, 2.0, 4.0, 850)
 
@@ -236,16 +237,18 @@ async def test_the_model_loop_runs_and_health_notices_a_quiet_feed(client, upstr
 
 
 @pytest.mark.asyncio
-async def test_turbulence_and_icing_now_come_with_the_column(client, upstream, hrrr_on):
+async def test_turbulence_and_icing_now_come_with_the_column(client, upstream, hrrr_on, monkeypatch):
     from app.sources import hazards
+    monkeypatch.setattr("app.sources.hrrr.EXTENDED_LAST", 30)
     upstream.clock = lambda: NOW
     s = PressureService(client)
     assert await s.poll_hazards() == 11 + 60
     assert s.models.cycles("gtg") == [datetime(2026, 9, 25, 3, 0, tzinfo=timezone.utc)]
     assert s.models.cycles("cip") == [datetime(2026, 9, 25, 2, tzinfo=timezone.utc)]
     assert await s.poll_hazards() == 0                          # held
-    a = await s.get_aloft(LAT, LON)                             # Open-Meteo's column, NOAA's hazards
-    assert a.source == "open-meteo" and a.turbulence and a.icing
+    await s.poll_hrrr()
+    a = await s.get_aloft(LAT, LON)                             # the column and the hazards, NOAA's both
+    assert a.source == "hrrr" and a.turbulence and a.icing
     edr = {l.ft: l.edr for l in a.turbulence.levels}
     assert edr[5100] == 0.3 and edr[6100] == 0.3 and edr[3100] == 0.05
     ice = {l.ft: l for l in a.icing.levels}
@@ -259,7 +262,9 @@ async def test_turbulence_and_icing_now_come_with_the_column(client, upstream, h
 
 @pytest.mark.asyncio
 async def test_old_hazards_are_not_served(client, upstream, hrrr_on, monkeypatch):
+    monkeypatch.setattr("app.sources.hrrr.EXTENDED_LAST", 30)
     s = PressureService(client)
+    await s.poll_hrrr()
     await s.poll_hazards()
     monkeypatch.setattr("app.service._now", lambda: NOW + timedelta(hours=3))
     upstream.clock = lambda: NOW + timedelta(hours=3)
@@ -301,7 +306,8 @@ async def test_the_point_forecast_is_hrrr_with_nbm_over_its_first_hours(client, 
     assert c.forecast.pressureOffset is not None
     near = min(c.forecast.hourly, key=lambda x: abs((x.t - last.t).total_seconds()))
     assert abs(near.pressure_msl - last.slp) < 0.6
-    assert (await s.get_forecast(45.0, -120.0)).source == "open-meteo"
+    with pytest.raises(LookupError):                            # off the grid: no forecast
+        await s.get_forecast(45.0, -120.0)
 
 
 def test_weather_codes_from_probabilities():

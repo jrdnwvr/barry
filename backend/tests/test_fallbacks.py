@@ -25,25 +25,28 @@ def noaa_on(monkeypatch, upstream):
 async def test_every_fallback_is_logged_with_its_reason_and_place(client, upstream, noaa_on, monkeypatch):
     from app.main import app
     s = PressureService(client)
-    # Before any run is held there is nothing to serve.
-    assert (await s.get_forecast(39.1, -84.5)).source == "open-meteo"
+    # Before any run is held there is nothing to serve, and nothing stands in.
+    with pytest.raises(LookupError):
+        await s.get_forecast(39.1, -84.5)
     await s.poll_hrrr()
     assert (await s.get_field_grid(39.1, -84.5, 3.0, 5.0)).source == "hrrr"   # from the store: no event
-    # Off the fixture grid, every point route falls back, and says so.
-    assert (await s.get_forecast(45.0, -120.0)).source == "open-meteo"
-    assert (await s.get_field_grid(45.0, -120.0, 3.0, 5.0)).source == "open-meteo"
-    with pytest.raises(LookupError):                     # logged before Open-Meteo answers with nothing
-        await s.get_field_levels(45.0, -120.0, 3.0, 5.0)
-    assert (await s.get_aloft(45.0, -120.0)).source == "open-meteo"
-    # No MRMS frames yet, then frames that have gone stale.
-    assert (await s.get_radar_frames()).host == "https://tilecache.rainviewer.com"
+    # Off the fixture grid, every point route says so: an error, or no points.
+    with pytest.raises(LookupError):
+        await s.get_forecast(45.0, -120.0)
+    assert (await s.get_field_grid(45.0, -120.0, 3.0, 5.0)).points == []
+    assert (await s.get_field_levels(45.0, -120.0, 3.0, 5.0)).points == []
+    with pytest.raises(LookupError):
+        await s.get_aloft(45.0, -120.0)
+    # No MRMS frames yet, then frames that have gone stale (served as they are).
+    with pytest.raises(LookupError):
+        await s.get_radar_frames()
     await s.poll_radar()
     assert (await s.get_radar_frames()).host == "https://barry.wide-stack.com"
     monkeypatch.setattr("app.service._now", lambda: NOW + timedelta(minutes=45))
-    assert (await s.get_radar_frames()).host == "https://tilecache.rainviewer.com"
-    # AWC down: the observed curve from Open-Meteo's surface pressure.
+    assert (await s.get_radar_frames()).host == "https://barry.wide-stack.com"
+    # AWC down: an empty, honest answer.
     upstream.awc_fail = True
-    assert (await s.get_pressure("KLUK")).source == "open-meteo (fallback)"
+    assert (await s.get_pressure("KLUK")).source == "unavailable"
 
     seen = {(e["kind"], e["reason"], e["where"]) for e in s.fallbacks.events()}
     assert ("forecast", "no-data", "39.1,-84.5") in seen
@@ -107,11 +110,13 @@ async def test_no_date_the_app_reads_carries_fractional_seconds(client, upstream
                      "/radar/frames", "/forecast?lat=39.1&lon=-84.5",
                      "/radar/field?lat=39.1&lon=-84.5&latSpan=3&lonSpan=3"):
             r = await c.get(path)
-            assert r.status_code == 200, path
+            assert r.status_code in (200, 503), path      # 503: nothing held for it in this fixture
+            if r.status_code != 200:
+                continue
             assert not frac.search(r.text), (path, frac.search(r.text).group(0))
             assert whole.search(r.text), path
     # Python code still sees datetimes, microseconds and all.
-    fc = await s.get_forecast(39.1, -84.5)
+    fc = await s.get_field_grid(39.1, -84.5, 3.0, 3.0)
     assert isinstance(fc.cachedAt, datetime) and fc.cachedAt.tzinfo is not None
 
 

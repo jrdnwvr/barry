@@ -139,8 +139,17 @@ def test_station_metadata_survives_a_sparse_newest_report():
 
 
 @pytest.mark.asyncio
-async def test_combined_carries_conditions(client, upstream):
+async def test_combined_carries_conditions(client, upstream, monkeypatch):
+    # The density altitude forecast needs a model run: the HRRR fixture.
+    from test_hrrr_feed import NOW as HRRR_NOW
+    monkeypatch.setenv("BARRY_HRRR", "1")
+    monkeypatch.setattr("app.service._now", lambda: HRRR_NOW)
+    upstream.clock = lambda: HRRR_NOW
+    monkeypatch.setattr("app.sources.hrrr.FC_LAST", 18)          # the fixture's hours
+    monkeypatch.setattr("app.sources.hrrr.EXTENDED_FC_LAST", 48)
+    monkeypatch.setattr("app.sources.nbm.FHRS", tuple(range(1, 37)))
     service = PressureService(client)
+    await service.poll_hrrr()
     resp = await service.get_combined("KLUK")
     c = resp.conditions
     assert c is not None

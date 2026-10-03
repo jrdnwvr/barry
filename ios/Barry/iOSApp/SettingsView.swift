@@ -295,6 +295,18 @@ struct SettingsView: View {
                     Text("Locations")
                 }
 
+                Section {
+                    Button {
+                        openSupportMail()
+                    } label: {
+                        Label("Write to Barry", systemImage: "envelope")
+                    }
+                    .accessibilityIdentifier("settings.support")
+                    Text("barry@turpentine.cc. The version, your station and the phone go in the message, so you need not.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 // Dev-only helpers — compiled out of Release/TestFlight builds so
                 // testers can't seed fake readings into their real data. Collapsed
                 // by default so day-to-day settings visits don't wade through it.
@@ -413,5 +425,22 @@ struct SettingsView: View {
     private func applyAndDismiss() async {
         // Selection changes reload via ContentView's onChange; Done just closes.
         dismiss()
+    }
+}
+
+extension SettingsView {
+    /// The support address, with what a report needs already in the body.
+    static let supportAddress = "barry@turpentine.cc"
+
+    func openSupportMail() {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+        let body = "\n\nBarry \(version) (\(build)), \(store.station), \(UIDevice.current.model) on iOS \(UIDevice.current.systemVersion)"
+        var comps = URLComponents()
+        comps.scheme = "mailto"
+        comps.path = Self.supportAddress
+        comps.queryItems = [URLQueryItem(name: "subject", value: "Barry"), URLQueryItem(name: "body", value: body)]
+        guard let url = comps.url else { return }
+        UIApplication.shared.open(url)
     }
 }

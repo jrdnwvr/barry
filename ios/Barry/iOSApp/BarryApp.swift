@@ -36,9 +36,9 @@ struct BarryApp: App {
         // its own refresh.
         WatchSync.shared.activate()
         SnapshotStore.onSave = { WatchSync.shared.push($0) }
-        // RainViewer serves every radar tile with a two day max-age and an
-        // ETag. The default shared cache is too small to keep more than a
-        // screenful, so a tile evicted from memory went back to the network.
+        // Radar tiles come with a long max-age and an ETag. The default
+        // shared cache is too small to keep more than a screenful, so a tile
+        // evicted from memory went back to the network.
         URLCache.shared = URLCache(memoryCapacity: 16 << 20, diskCapacity: 200 << 20)
     }
 

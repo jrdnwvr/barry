@@ -18,7 +18,7 @@ import httpx
 import numpy as np
 
 from . import conditions as conditions_mod
-from .guards import OMBudget, RateGate, RateLimited, check_station
+from .guards import RateGate, RateLimited, check_station
 from . import explain
 from . import fallbacks as fallbacks_mod
 from . import modelfields
@@ -94,15 +94,12 @@ from .sources import mrms
 from .sources import nbm as nbm_src
 from .sources import lamp as lamp_src
 from .sources import ndbc
-from .sources import openmeteo as om
-from .sources import rainviewer as rv
 from .sources import wpc
 from .tendency import resolve_tendency
 from .verdict import build_verdict
 
 ALOFT_TTL = 60 * 60.0     # the model updates hourly; the column follows it
 FIELD_LEVELS_TTL = 30 * 60.0   # winds aloft over a map region
-ALOFT_STALE_MAX = 12 * 3600.0   # how long a last good column may stand in
 PRESSURE_TTL = 12 * 60.0  # METARs update ~hourly; 12 min keeps it fresh-ish & cheap
 FORECAST_TTL = 30 * 60.0  # forecasts move slowly; 30 min is plenty
 FRONT_TTL = 15 * 60.0     # regional bbox fetch is the priciest call; ring METARs
@@ -120,7 +117,6 @@ BULK_TTL = 12 * 60.0      # AWC's whole-world METAR cache: one 250 KB pull serve
 SLICE_TTL = 2 * 60.0      # a box of stations cut from the bulk table (cheap)
 GRID_TTL = 5 * 60.0       # a contour grid built from it (seconds of CPU)
 FIELD_TTL = 10 * 60.0     # the shortest a model grid is held (see _until_model_hour)
-GRID_STALE_MAX = 6 * 3600.0   # how long a grid's last good copy stands in when the budget is spent
 
 
 def _until_model_hour(_value=None) -> float:
@@ -132,7 +128,6 @@ def _until_model_hour(_value=None) -> float:
     if nxt <= now:
         nxt += timedelta(hours=1)
     return max(FIELD_TTL, (nxt - now).total_seconds())
-FRAMES_TTL = 2 * 60.0     # RainViewer adds a frame every 10 min; 2 min keeps the newest near-live
 STATION_INFO_TTL = 24 * 3600.0  # AWC station directory: names change about never
 TAF_TTL = 30 * 60.0       # TAFs issue every 6 h with amendments; 30 min is plenty
 # Bulk-snapshot history for the front watch ring (A4): one snapshot at most
@@ -145,11 +140,10 @@ BUOYS_TTL = 10 * 60.0     # NDBC's latest_obs: one fetch serves everyone
 ADVISORIES_TTL = 10 * 60.0  # SIGMETs, G-AIRMETs, PIREPs: national feeds, one pull each for everyone
 BUOYS_MAX = 120           # buoys added to a station slice, nearest first
 
-# Stale-if-error: when Open-Meteo is down, re-serve the last good forecast for up
+# Stale-if-error: when a feed is down, re-serve the last good forecast for up
 # to this long (flagged stale=True) — a 6-hour-old forecast beats no forecast.
 STALE_FORECAST_MAX_AGE = 12 * 3600.0
 # How long a stale answer is re-served before retrying the upstream.
-STALE_RETRY_TTL = 5 * 60.0
 # A degraded pressure answer (fallback curve or the empty shell) is held only
 # briefly: the next app refresh should get a real try, not twelve minutes of
 # "unavailable" because one keep-alive connection dropped after a restart.
@@ -233,9 +227,6 @@ class PressureService:
         # Client-driven upstream budgets. AWC allows 100/min per IP and the
         # scheduler shares that IP, so clients get well under half of it.
         self.awc_gate = RateGate(per_minute=30)
-        # Weighted the way Open-Meteo counts (a call per location, more
-        # for many variables), per minute and per UTC day.
-        self.om_gate = OMBudget(per_minute=500, per_day=9000)
         # (fetch time, {station: (obsTime, slp, altim, lat, lon)}), oldest first.
         # Restored from disk when a data dir is configured, so a restart
         # doesn't cost the front watch its 7.5 h warm-up.
@@ -260,8 +251,8 @@ class PressureService:
         self.lamp_run: Optional[datetime] = None
         self.lamp_ok_at: Optional[datetime] = None
         # Decoded model fields on disk (modelstore.py): HRRR today, fed by
-        # the scheduler's model loop. BARRY_HRRR=0 keeps every map layer on
-        # Open-Meteo.
+        # the scheduler's model loop. BARRY_HRRR=0 switches the model
+        # layers off.
         self.models = ModelStore.from_env()
         for feed in hrrr_src.RETIRED:
             self.models.drop(feed)
@@ -269,16 +260,13 @@ class PressureService:
         self.hrrr_ok_at: Optional[datetime] = None
         self._warmed: set = set()
         # Radar frames from MRMS (radar.py), fed by the scheduler's radar
-        # loop; BARRY_MRMS=0 keeps the timeline on RainViewer.
+        # loop; BARRY_MRMS=0 switches the radar off.
         self.radar = RadarStore.from_env()
         self.ltg_next = RadarStore.from_env("ltgnext", radar_mod.LUT_LTG)
         # Model reflectivity past the nowcast (see poll_model_radar), on
         # its own coarser grid, a frame per forecast hour.
         self.radar_model = RadarStore.from_env("radarmodel")
         self.mrms_enabled = os.environ.get("BARRY_MRMS", "1") != "0"
-        # Pulled either way; served by default only when this says "mrms".
-        # /radar/frames?source=mrms asks for Barry's frames regardless.
-        self.radar_default = os.environ.get("BARRY_RADAR_SOURCE", "mrms")
         self.radar_ok_at: Optional[datetime] = None
         # The "rain starts at" line: the newest rain-rate grid (time, codes,
         # grid), the motion between the last two frames (base time, vy,
@@ -358,8 +346,8 @@ class PressureService:
                     cachedAt=_now(),
                 )
             except Exception as exc:
-                # Graceful degradation: rebuild the recent-past line from Open-Meteo
-                # surface_pressure so the app degrades rather than dies (brief §2.3).
+                # Graceful degradation: an empty, honest shell so the app
+                # degrades rather than dies (brief §2.3).
                 log.warning("pressure %s: upstream failed (%s: %s); falling back",
                             station, type(exc).__name__, exc)
                 degraded = True
@@ -409,50 +397,19 @@ class PressureService:
             log.warning("fallback log failed: %s: %s", type(exc).__name__, exc)
 
     async def _pressure_fallback(self, station: str, *, hours: int) -> PressureResponse:
+        """AWC is down and nothing is cached: an empty, honest shell. Until
+        2026-10-03 the curve was rebuilt from Open-Meteo's surface pressure;
+        that and every other non-NOAA source came out (Jordan: all data
+        from NOAA)."""
         self._fell_back("pressure", station, reason="upstream")
         info = stations.get(station)
-        if info is None:
-            # The small table misses most fields; the AWC directory has them all.
+        name = info["name"] if info else None
+        if name is None:
             try:
-                d = (await self.station_info()).get(station) or {}
+                name = ((await self.station_info()).get(station) or {}).get("name")
             except Exception:
-                d = {}
-            if d.get("lat") is not None and d.get("lon") is not None:
-                info = {"name": d.get("name") or station, "lat": d["lat"], "lon": d["lon"]}
-        if info is None:
-            # Nothing we can do without coordinates — return an empty, honest shell.
-            return PressureResponse(
-                station=station,
-                source="unavailable",
-                cachedAt=_now(),
-            )
-        self.om_gate.require(om.FORECAST_WEIGHT)
-        raw = await om.fetch_forecast(
-            info["lat"], info["lon"], self._client, forecast_days=1, past_days=1
-        )
-        times, sp = om.parse_surface_pressure_series(raw)
-        now = _now()
-        series = [
-            SeriesPoint(t=t, slp=v)
-            for t, v in zip(times, sp)
-            if v is not None and t <= now
-        ]
-        values = [p.slp for p in series]
-        tendency = resolve_tendency(None, [p.t for p in series], values)
-        current = CurrentObs(slp=series[-1].slp if series else None, presTend=None)
-        return PressureResponse(
-            station=station,
-            name=info["name"],
-            lat=info["lat"],
-            lon=info["lon"],
-            series=series,
-            current=current,
-            tendency=_tendency_out(tendency),
-            source="open-meteo (fallback)",
-            cachedAt=now,
-        )
-
-    # ---- forecast ------------------------------------------------------------
+                name = None
+        return PressureResponse(station=station, name=name, source="unavailable", cachedAt=_now())
 
     async def get_forecast(
         self, lat: float, lon: float, *, use_cache: bool = True
@@ -462,8 +419,7 @@ class PressureService:
         # The same cell goes upstream: one forecast per cell is what the cache
         # promises, and the precise point never leaves the server.
         lat, lon = round(lat, 1), round(lon, 1)
-        # NOAA's models on Tower first (HRRR, with NBM over the first 36
-        # hours); Open-Meteo off the HRRR grid or before a run is held.
+        # NOAA's models on Tower (HRRR, with NBM over the first 36 hours).
         if self.hrrr_enabled:
             hkey = f"forecast-noaa:{lat}:{lon}:{modelfields.forecast_key(self.models)}"
             cached = await self.cache.get(hkey) if use_cache else None
@@ -476,38 +432,9 @@ class PressureService:
                 await self.cache.set(hkey, resp, ttl=FORECAST_TTL)
                 return resp
         self._fell_back("forecast", f"{lat},{lon}", lat, lon)
-        cache_key = f"forecast:{lat}:{lon}"
-        last_good_key = f"{cache_key}:lastgood"
-        if use_cache:
-            cached = await self.cache.get(cache_key)
-            if cached is not None:
-                return cached
-
-        try:
-            self.om_gate.require(om.FORECAST_WEIGHT)
-            raw = await om.fetch_forecast(lat, lon, self._client, forecast_days=2)
-        except Exception:
-            # Stale-if-error: the upstream is down — re-serve the last good
-            # forecast (flagged) rather than dropping the whole enrichment layer.
-            # Cached briefly so a dead upstream isn't hammered on every request.
-            last_good = await self.cache.get(last_good_key)
-            if last_good is not None:
-                resp = last_good.model_copy(update={"stale": True})
-                await self.cache.set(cache_key, resp, ttl=STALE_RETRY_TTL)
-                return resp
-            raise
-
-        resp = ForecastResponse(
-            hourly=om.parse_forecast(raw),
-            sun=om.parse_daily_sun(raw),
-            source="open-meteo",
-            cachedAt=_now(),
-        )
-        await self.cache.set(cache_key, resp, ttl=FORECAST_TTL)
-        await self.cache.set(last_good_key, resp, ttl=STALE_FORECAST_MAX_AGE)
-        return resp
-
-    # ---- front watch ---------------------------------------------------------
+        # Off the models' grid, or before a run is held: no forecast. The
+        # callers treat it as enrichment and carry on without one.
+        raise LookupError("no forecast held for this point")
 
     async def get_front(
         self,
@@ -1193,7 +1120,7 @@ class PressureService:
         hours = [h for h in st.hours if h.t >= start]
         return LampOut(station=st.station, runTime=st.runTime, hours=hours) if hours else None
 
-    # ---- Radar frames (RainViewer) -------------------------------------------
+    # ---- Radar frames (MRMS) ---------------------------------------------------
 
     RADAR_FRAMES = 7             # what builds to 93 are sent: the last hour at ten minutes, as RainViewer gave
     RADAR_STALE_S = 20 * 60.0
@@ -1683,7 +1610,7 @@ class PressureService:
             return None
         return RadarFrameOut(time=valid, path=f"/radar/model/{min(keys)}", nowcast=True, kind="model")
 
-    def _mrms_frames(self, span: Optional[str] = None) -> Optional[RadarFramesResponse]:
+    def _mrms_frames(self, span: Optional[str] = None, strict: bool = True) -> Optional[RadarFramesResponse]:
         """The timeline from Barry's own frames, None when they are too few
         or stale. No `span`: what builds to 93 expect, the last hour and
         thirty minutes of nowcast. `hour`: every ten minutes of the last
@@ -1693,7 +1620,9 @@ class PressureService:
         the model after."""
         obs = self.radar.observed()
         recent = obs[-self.RADAR_FRAMES:]
-        if len(recent) < 4 or _now().timestamp() - recent[-1] > self.RADAR_STALE_S:
+        if not recent:
+            return None
+        if strict and (len(recent) < 4 or _now().timestamp() - recent[-1] > self.RADAR_STALE_S):
             return None
         base = recent[-1]
         if span == "hour":
@@ -1726,19 +1655,21 @@ class PressureService:
 
     async def get_radar_frames(self, source: Optional[str] = None,
                                span: Optional[str] = None) -> RadarFramesResponse:
-        """The radar timeline: Barry's own MRMS frames when an hour of them
-        is held and fresh (and they are the default, or asked for);
-        otherwise RainViewer's last 7 observed frames and up to 3 nowcast,
-        from one call every two minutes for every user, whatever the span."""
-        if self.mrms_enabled and (source or self.radar_default) == "mrms":
-            own = self._mrms_frames(span)
-            if own is not None:
-                return own
-            self._fell_back("radar", "radar", reason="stale" if self.radar.observed() else "no-data")
-        else:
-            self._fell_back("radar", "radar", reason="off")
-        return await self.cache.fetch("radar_frames", lambda: rv.fetch_frames(self._client, now=_now()),
-                                      ttl=FRAMES_TTL, negative_ttl=30.0)
+        """The radar timeline: Barry's own MRMS frames, the loop's when an
+        hour of them is held and fresh, else what is held, whatever the
+        span."""
+        own = self._mrms_frames(span) if self.mrms_enabled else None
+        if own is not None:
+            return own
+        # Stale frames are served as they are (the time line says how old);
+        # with none held there is no radar to give. RainViewer stood in
+        # until 2026-10-03.
+        self._fell_back("radar", "radar", reason="off" if not self.mrms_enabled else
+                        ("stale" if self.radar.observed() else "no-data"))
+        held = self._mrms_frames(span, strict=False) if self.mrms_enabled else None
+        if held is None:
+            raise LookupError("no radar frames held")
+        return held
 
     # ---- Pressure field: isobars + isallobars from the bulk table -----------
 
@@ -1890,7 +1821,7 @@ class PressureService:
     async def get_field_grid(self, lat: float, lon: float,
                              lat_span: float, lon_span: float, pad: float = 0.0) -> FieldGridResponse:
         """The radar's 7x5 sample grid of model wind + boundary-layer top for
-        a map region, from ONE Open-Meteo multi-point call. The region is
+        a map region, from the HRRR store. The region is
         quantized (center to 0.05°, spans to 0.5°) so users
         looking at the same area share the cache entry; the shift is far below
         the grid spacing."""
@@ -1918,26 +1849,9 @@ class PressureService:
             if points:
                 return FieldGridResponse(points=points, source="hrrr", cachedAt=now)
         self._fell_back("field", f"{q_lat},{q_lon}", q_lat, q_lon)
-
-        async def _pull() -> FieldGridResponse:
-            lats, lons = self._field_points(q_lat, q_lon, q_lat_span, q_lon_span)
-            now = _now()
-            self.om_gate.require(om.field_grid_weight(len(lats)))
-            points = await om.fetch_field_grid(lats, lons, self._client, now=now)
-            resp = FieldGridResponse(points=points, source="open-meteo", cachedAt=now)
-            await self.cache.set(f"{key}:lastgood", resp, ttl=GRID_STALE_MAX)
-            return resp
-
-        # Held until just past the next model hour: the model does not
-        # change in between. A failure (or a spent budget) is remembered for
-        # a minute and the last good grid is served meanwhile.
-        try:
-            return await self.cache.fetch(key, _pull, ttl=_until_model_hour, negative_ttl=60.0)
-        except (RateLimited, CachedFailure, LookupError, httpx.HTTPError):
-            last = await self.cache.get(f"{key}:lastgood")
-            if last is None:
-                raise
-            return last
+        # Off the grid, or before a run is held: no wind, and the map shows
+        # none. Open-Meteo stood in until 2026-10-03.
+        return FieldGridResponse(points=[], source=None, cachedAt=_now())
 
     # ---- Aloft: the column at a point -----------------------------------------
 
@@ -1950,9 +1864,8 @@ class PressureService:
     async def _aloft_column(self, lat: float, lon: float) -> AloftResponse:
         """Clouds, temperatures and wind by pressure level for the next day
         at a point, keyed by the same tenth-degree cell as the forecast.
-        From the HRRR column feeds on Tower where they cover the point;
-        otherwise one Open-Meteo call per watched cell per hour, whatever
-        the number of phones looking."""
+        From the HRRR column feeds on Tower where they cover the point,
+        and nothing off the grid."""
         lat, lon = round(lat, 1), round(lon, 1)
         if self.hrrr_enabled:
             hkey = f"aloft-hrrr:{lat}:{lon}:{modelfields.column_key(self.models)}"
@@ -1966,35 +1879,8 @@ class PressureService:
                 await self.cache.set(hkey, resp, ttl=ALOFT_TTL)
                 return resp
         self._fell_back("aloft", f"{lat},{lon}", lat, lon)
-        key = f"aloft:{lat}:{lon}"
-        last_good_key = f"{key}:lastgood"
+        raise LookupError("no aloft data held for this point")
 
-        async def _pull() -> AloftResponse:
-            self.om_gate.require(om.ALOFT_WEIGHT)
-            raw = await om.fetch_aloft(lat, lon, self._client, forecast_days=2)
-            hours = om.parse_aloft(raw, now=_now())
-            if not hours:
-                raise LookupError("no aloft data")
-            resp = AloftResponse(hours=hours, source="open-meteo", cachedAt=_now())
-            await self.cache.set(last_good_key, resp, ttl=ALOFT_STALE_MAX)
-            return resp
-
-        try:
-            return await self.cache.fetch(key, _pull, ttl=ALOFT_TTL, negative_ttl=60.0)
-        except Exception:
-            # Stale-if-error, like the forecast: Open-Meteo's pressure levels
-            # fail in bursts, and the last good column, trimmed to the hours
-            # still ahead, beats an empty screen.
-            last = await self.cache.get(last_good_key)
-            if last is None:
-                raise
-            hour = _now().replace(minute=0, second=0, microsecond=0)
-            ahead = [h for h in last.hours if h.t >= hour]
-            if len(ahead) < 2:
-                raise
-            return last.model_copy(update={"hours": ahead, "stale": True})
-
-    @staticmethod
     def _aloft_from_now(resp: AloftResponse) -> AloftResponse:
         """A held column, trimmed to the hours still ahead."""
         hour = _now().replace(minute=0, second=0, microsecond=0)
@@ -2009,6 +1895,7 @@ class PressureService:
                      0.64, 0.8, 1.0, 1.25, 1.6, 2.0, 2.5, 3.2, 4.0, 5.0, 6.4, 8.0)
 
     @classmethod
+
     def lattice_step(cls, span: float, n: int) -> float:
         want = span / n
         return next((s for s in cls.LATTICE_STEPS if s >= want - 1e-9), cls.LATTICE_STEPS[-1])
@@ -2028,7 +1915,7 @@ class PressureService:
 
     def _field_points(self, q_lat: float, q_lon: float, q_lat_span: float, q_lon_span: float,
                       cols: Optional[int] = None, rows: Optional[int] = None):
-        """The sample grid for a quantized map region: 7x5 from Open-Meteo,
+        """The sample grid for a quantized map region: 7x5 by default,
         denser from the HRRR store."""
         cols, rows, inset = cols or self.FIELD_COLS, rows or self.FIELD_ROWS, self.FIELD_INSET
         h = q_lat_span * (1 - 2 * inset)
@@ -2109,25 +1996,7 @@ class PressureService:
             if points:
                 return FieldLevelsResponse(points=points, source="hrrr", cachedAt=now)
         self._fell_back("levels", f"{q_lat},{q_lon}", q_lat, q_lon)
-
-        async def _pull() -> FieldLevelsResponse:
-            lats, lons = self._field_points(q_lat, q_lon, q_lat_span, q_lon_span)
-            now = _now()
-            self.om_gate.require(om.field_levels_weight(len(lats)))
-            points = await om.fetch_field_levels(lats, lons, self._client, now=now)
-            if not points:
-                raise LookupError("no winds aloft")
-            resp = FieldLevelsResponse(points=points, source="open-meteo", cachedAt=now)
-            await self.cache.set(f"{key}:lastgood", resp, ttl=GRID_STALE_MAX)
-            return resp
-
-        try:
-            return await self.cache.fetch(key, _pull, ttl=_until_model_hour, negative_ttl=60.0)
-        except (RateLimited, CachedFailure, LookupError, httpx.HTTPError):
-            last = await self.cache.get(f"{key}:lastgood")
-            if last is None:
-                raise
-            return last
+        return FieldLevelsResponse(points=[], source=None, cachedAt=_now())
 
     # ---- GOES GLM lightning ---------------------------------------------------
 

@@ -1,8 +1,8 @@
 //  WindUnit.swift
 //  Barry — Shared
 //
-//  Wind-speed presentation. The base unit is km/h because that's what Open-Meteo
-//  returns by default (windspeed_10m), so all stored values are km/h and this only
+//  Wind-speed presentation. The base unit is km/h, the server's unit for the
+//  forecast wind, so all stored values are km/h and this only
 //  affects display. Knots matters for the aviation audience (1 kn = 1 nmi/h).
 
 import Foundation

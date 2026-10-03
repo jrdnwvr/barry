@@ -49,18 +49,19 @@ but wait; the service probes once a minute, not per request. If it lasts
 days, check that the box's IP is not the problem: `curl -sI
 https://aviationweather.gov/data/cache/metars.cache.csv.gz` from Tower.
 
-**Open-Meteo quota hit.** Forecast, wind grid and the verdict's forecast
-half go missing; observed pressure keeps working. The app's own budget
-is 100 calls a minute and forecast keys are a tenth of a degree, so this
-means either a bug or a scraper. Read `/metrics` for
-`barry_upstream_requests_total{host="api.open-meteo.com"}` and the
-request counts by route; the per-address budget (60 a minute) and the
-Cloudflare rule are the levers.
+**The forecast, the Aloft column or the radar wind go missing.** Since
+2026-10-03 there is no stand-in for the NOAA feeds: when the model store
+holds nothing for a point, `/forecast` answers 503, `/aloft` 503 and the
+wind grid comes back empty, and the app says so. `/fallbacks` lists each
+such answer with why (`no-data`, `stale`, `off-grid`, `off`) and where.
+`no-data` for CONUS points means the model loop has stopped or the store
+was wiped: check `/healthz` for the loop and `state/model` on disk.
+`off-grid` is a point outside the HRRR domain, expected and not a defect.
 
-**RainViewer changed its palette.** The radar shows the wrong colours or
-nothing painted. `RadarPalette.swift` holds the Universal Blue lookup;
-compare a fresh tile against it. This needs an app update; the server is
-not involved.
+**The radar stops.** `/radar/frames` answers 503 when no MRMS frame is
+held, or serves old frames with the time line saying how old. The radar
+loop and the MRMS bucket are the places to look (`/healthz`, then
+`state/radar`).
 
 **The tunnel token expired or the tunnel is down.** The hostname stops
 answering but `curl localhost:8077/healthz` on the box works. Cloudflare

@@ -57,8 +57,10 @@ app can be distributed without tripping per-IP rate limits.
 - **Observed + `presTend`** — aviationweather.gov METAR JSON. Has the trustworthy
   station-reported 3-hour tendency. Limit: 100 req/min per IP, 15-day retention,
   requires a descriptive `User-Agent` (`Barry/1.0 (jrdn@wvr.me)`), airport-based.
-- **Forecast + wind/precip** — Open-Meteo, true point forecasts, generous limits.
-  Also the graceful-degradation source (`surface_pressure`) if AWC fails.
+- **Forecast + wind/precip** — NOAA's HRRR and NBM, pulled from AWS Open Data
+  and decoded on Tower (`docs/NOAA.md`). Off their grid there is no forecast
+  and the app says so: since 2026-10-03 nothing stands in (Open-Meteo and
+  RainViewer were the fallbacks; both are non-commercial, both are gone).
 - **Backend** batches all *actively watched* stations into one comma-separated AWC
   call every ~10 min and serves from a TTL cache, so cost scales with stations
   watched (~M), not users (N). Clients call the backend only — never AWC directly.
@@ -251,11 +253,12 @@ RRFS into `state/model` (`modelstore.py`, `sources/hrrr.py`, `nbm.py`,
 `hazards.py`, `rrfs.py`; decoding and the Lambert grid in `grib.py`), and
 serves the radar wind grid, the rail's winds and height contours, the
 Aloft column with turbulence and icing, and the point forecast from it
-(`modelfields.py`), Open-Meteo only off the HRRR grid. The radar loop pulls
-MRMS into `state/radar` and serves Barry's own tiles in RainViewer's URL
-shape and colours (`radar.py`), with a nowcast and NOAA's chance of
-lightning; RainViewer only when those frames are stale
-(`BARRY_RADAR_SOURCE`). LAMP comes from NOMADS (`sources/lamp.py`,
+(`modelfields.py`); off the HRRR grid, nothing (empty grids, 503 from
+`/forecast` and `/aloft`). The radar loop pulls MRMS into `state/radar`
+and serves Barry's own tiles in RainViewer's old URL shape and colours
+(`radar.py`), with a nowcast and NOAA's chance of lightning; stale frames
+are served as held, and with none `/radar/frames` is 503. LAMP comes from
+NOMADS (`sources/lamp.py`,
 `nomads.py`, 10 s between requests). Forecast pressure is stored less
 1,000 hPa in half precision, and on `/combined` the curve is shifted to
 meet the station's latest report. `/models/scores` scores HRRR and RRFS
@@ -286,14 +289,13 @@ Read both before planning new work. The app must look and read as made by
 a hobbyist: no caption under every control, no pill on every line, white
 space over labels.
 
-Not yet: courtesy emails to RainViewer + IEM before public App Store, App
-Store listing copy, verdict track record (built, hidden until rescored),
+Not yet: App Store listing copy, verdict track record (built, hidden until rescored),
 real strike positions (GOES GLM would be the source), APNs push.
 
 ## Aloft (added 2026-09-22)
 
 The clouds-and-winds-aloft column: `GET /aloft?lat&lon` serves 25 hourly
-columns of Open-Meteo pressure levels (1000 to 400 hPa) in feet and knots
+columns of HRRR pressure levels (1000 to 400 hPa) in feet and knots
 with derived cloud layers (runs of cover from 30 percent, icing between 0
 and -20 C), the freezing level and the boundary layer, cached per
 tenth-degree cell for an hour. On iOS, `AloftScreen` (iOSApp/AloftView.swift)

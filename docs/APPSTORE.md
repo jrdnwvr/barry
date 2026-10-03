@@ -37,6 +37,5 @@ and 1C8F.1 (the app group shared with its extensions).
 - A real phone on the radar for an hour: pan, zoom, every layer, then
   leave it a day so MetricKit sends its first report and a file appears in
   `backend/state/diagnostics/`.
-- Courtesy emails to RainViewer and Iowa Mesonet (drafted).
 - Listing copy and screenshots; read the support page on a phone.
 - Keep the Pilots group as the release gate.

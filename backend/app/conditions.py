@@ -8,7 +8,7 @@ temperature, not the flight-computer approximation (humidity is worth a few
 hundred feet on a muggy day, and we have the dew point anyway):
   - now: METAR temp/dewpoint/altimeter + field elevation (altimeter setting ->
     station pressure by the standard-atmosphere reduction)
-  - forecast: Open-Meteo temperature_2m / dew_point_2m / surface_pressure —
+  - forecast: the HRRR and NBM point forecast's temperature, dewpoint and surface pressure;
     the model reports station-level pressure directly, so no reduction at all
 The point of the FORECAST is the takeoff-performance decision: "3,100 ft if
 you go at 9 AM, 5,200 ft if you wait for 4 PM" turns a surprise into a choice.

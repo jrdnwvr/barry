@@ -164,12 +164,17 @@ async def test_a_one_pixel_storm_survives_a_continental_view(client, upstream, m
 
 
 @pytest.mark.asyncio
-async def test_rainviewer_when_barrys_frames_are_stale(client, upstream, mrms_on, monkeypatch):
+async def test_stale_frames_are_served_as_they_are(client, upstream, mrms_on, monkeypatch):
+    """Forty-five minutes on with no new frame: the held frames come back
+    (the time line says how old they are) and the gap is logged."""
     s = PressureService(client)
     await s.poll_radar()
+    fresh = await s.get_radar_frames()
     monkeypatch.setattr("app.service._now", lambda: NOW + timedelta(minutes=45))
     f = await s.get_radar_frames()
-    assert f.host == "https://tilecache.rainviewer.com"
+    assert f.host == "https://barry.wide-stack.com"
+    assert [x.time for x in f.frames if not x.nowcast] == [x.time for x in fresh.frames if not x.nowcast]
+    assert ("radar", "stale", "radar") in {(e["kind"], e["reason"], e["where"]) for e in s.fallbacks.events()}
 
 
 def test_png_writer_round_trips():
@@ -177,16 +182,6 @@ def test_png_writer_round_trips():
     img[1, 2] = [10, 20, 30, 255]
     assert (read_png(radar.png_rgba(img)) == img).all()
     assert radar.pool(np.array([[0, 5], [7, 1]], dtype=np.uint8)).tolist() == [[7]]
-
-
-@pytest.mark.asyncio
-async def test_rainviewer_by_default_when_configured_and_mrms_on_request(client, upstream, mrms_on, monkeypatch):
-    monkeypatch.setenv("BARRY_RADAR_SOURCE", "rainviewer")
-    s = PressureService(client)
-    await s.poll_radar()
-    assert (await s.get_radar_frames()).host == "https://tilecache.rainviewer.com"
-    assert (await s.get_radar_frames("mrms")).host == "https://barry.wide-stack.com"
-
 
 
 @pytest.mark.asyncio

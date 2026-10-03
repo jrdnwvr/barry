@@ -132,7 +132,7 @@ struct RadarKeySheet: View {
                     }
                 }
 
-                Text("Radar by RainViewer from NOAA NEXRAD. Lightning from NOAA's GOES satellites. Wind and heights from NOAA's HRRR model (Open-Meteo outside it). Pressure lines from station reports. Stations from aviationweather.gov. Advisories from the Aviation Weather Center. Fronts from the NWS Weather Prediction Center.")
+                Text("All of it from NOAA. Radar from MRMS. Lightning from the GOES satellites. Wind and heights from the HRRR model. Pressure lines from station reports. Stations and advisories from the Aviation Weather Center. Fronts from the Weather Prediction Center.")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }

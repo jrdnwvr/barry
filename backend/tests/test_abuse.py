@@ -11,15 +11,6 @@ from app.service import PressureService
 
 
 @pytest.mark.asyncio
-async def test_coordinate_sweep_inside_one_cell_is_one_forecast_call(client, upstream):
-    s = PressureService(client)
-    for i in range(100):
-        await s.get_forecast(39.10 + (i % 10) * 0.004, -84.40 - (i // 10) * 0.004)
-    assert len(upstream.om_calls) == 1
-    assert len([k for k in s.cache._store if k.startswith("forecast:")]) <= 2
-
-
-@pytest.mark.asyncio
 async def test_box_size_sweep_is_bounded_in_cache_entries(client, upstream):
     s = PressureService(client)
     for i in range(300):

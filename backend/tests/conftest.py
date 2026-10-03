@@ -499,7 +499,6 @@ class FakeUpstream:
 
     def __init__(self):
         self.awc_calls = []
-        self.om_calls = []
         self.awc_fail = False
         # GLM keys are minted from this clock; a test that freezes it (and
         # app.service._now) gets the same listing on every poll.
@@ -507,12 +506,10 @@ class FakeUpstream:
         # Drop the next METAR call at the socket, the way AWC drops an idle
         # keep-alive connection; the call after that works.
         self.awc_drop_once = False
-        self.om_fail = False
         # Front-watch knobs: what a bbox query returns ("west_falls" /
         # "east_falls" / "flat" / None = empty body) and whether the forecast
         # curve contains a real trough (drives the interpreter's ETA).
         self.bbox_pattern = None
-        self.om_trough = False
         # IEM HRRR tiles: the run stamp (YYYYMMDDHHMI) tiles exist for, or
         # None. Unknown layers get the same fixed bytes real tile.py returns
         # for anything invalid — the probe logic keys on that.
@@ -523,8 +520,6 @@ class FakeUpstream:
         # Bulk METAR cache: served gzip'd like AWC; extra_rows lets a test
         # pile on stations to exercise thinning.
         self.bulk_fail = False
-        self.rv_fail = False
-        self.rv_calls = 0
         self.bulk_extra_rows = ()
         self.bulk_calls = 0
 
@@ -732,11 +727,9 @@ class FakeUpstream:
             if getattr(self, "ndbc_fail", False):
                 return httpx.Response(503, text="down")
             return httpx.Response(200, text=sample_ndbc_latest(self.clock()))
-        if "rainviewer.com" in url:
-            self.rv_calls += 1
-            if self.rv_fail:
-                return httpx.Response(503, text="down")
-            return httpx.Response(200, json=sample_rainviewer_maps())
+        if "rainviewer.com" in url or "open-meteo.com" in url:
+            # Out since 2026-10-03 (all data from NOAA): any call is a bug.
+            raise AssertionError(f"non-NOAA upstream contacted: {url}")
         if "aviationweather.gov" in url and "/api/data/taf" in url:
             self.taf_calls = getattr(self, "taf_calls", 0) + 1
             sid = request.url.params.get("ids", "")
@@ -769,19 +762,6 @@ class FakeUpstream:
                 # in production while the tests passed.
                 return httpx.Response(200, text="")
             return httpx.Response(200, json=recs)
-        if "open-meteo.com" in url:
-            self.om_calls.append(request)
-            if self.om_fail:
-                return httpx.Response(503, text="down")
-            if "hPa" in request.url.params.get("hourly", "") and "," in request.url.params.get("latitude", ""):
-                self.field_level_calls = getattr(self, "field_level_calls", 0) + 1
-                return httpx.Response(200, json=sample_field_levels(request))
-            if "hPa" in request.url.params.get("hourly", ""):
-                self.aloft_calls = getattr(self, "aloft_calls", 0) + 1
-                return httpx.Response(200, json=sample_aloft(request, self.clock()))
-            if "," in request.url.params.get("latitude", ""):
-                return httpx.Response(200, json=sample_field_grid(request))
-            return httpx.Response(200, json=sample_forecast(trough=self.om_trough))
         return httpx.Response(404)
 
 

@@ -1,17 +1,18 @@
-"""Every answer that came from a fallback instead of the NOAA feeds on
-Tower, kept so the month before the fallbacks are removed (NOAA.md phase
-7) is measured rather than assumed.
+"""Every answer that the NOAA feeds on Tower could not give, kept so the
+gaps are measured rather than assumed. Before 2026-10-03 these were the
+answers Open-Meteo and RainViewer gave instead; now they are the honest
+empties.
 
-What counts: the point forecast, the Aloft column, the radar's wind grid
-and its winds aloft answered by Open-Meteo instead of the HRRR and NBM
-store; the radar timeline answered by RainViewer instead of Barry's own
-MRMS frames; and the observed pressure curve answered by Open-Meteo's
-surface pressure when AWC fails. Each carries why: `off-grid` (the point
-lies outside the HRRR domain, which is expected and not a defect),
-`no-data` (the store holds nothing for it, or nothing at all), `stale`
-(radar frames held but old), `off` (the feed is switched off by
-configuration), `upstream` (AWC failed). And where: a station, or a
-point to a tenth of a degree.
+What counts, since the non-NOAA fallbacks came out on 2026-10-03: every
+answer the NOAA feeds could not give. The point forecast, the Aloft
+column, the radar's wind grid and its winds aloft when the HRRR and NBM
+store has nothing for the point; the radar timeline when the MRMS frames
+are stale or missing; and the observed pressure curve when AWC fails.
+Each carries why: `off-grid` (the point lies outside the HRRR domain,
+which is expected and not a defect), `no-data` (the store holds nothing
+for it, or nothing at all), `stale` (radar frames held but old), `off`
+(the feed is switched off by configuration), `upstream` (AWC failed).
+And where: a station, or a point to a tenth of a degree.
 
 Every occurrence counts on /metrics (`barry_fallbacks_total`); the log
 keeps one event per kind, reason and place every ten minutes, 60 days,

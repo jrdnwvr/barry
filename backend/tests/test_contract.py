@@ -47,8 +47,7 @@ async def test_denormal_and_edge_values_are_accepted(api):
 
 @pytest.mark.asyncio
 async def test_error_bodies_are_a_detail_string_and_nothing_else(api, upstream):
-    upstream.rv_fail = True
-    r = await api.get("/radar/frames")
+    r = await api.get("/radar/frames")                 # nothing held: a 503
     assert r.status_code == 503 and list(r.json()) == ["detail"] and isinstance(r.json()["detail"], str)
     r = await api.get("/pressure/K1")
     assert r.status_code == 422

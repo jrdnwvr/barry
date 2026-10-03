@@ -27,9 +27,10 @@ signing team + App Group setup and on-device testing before distribution. See
 
 ## Backend
 
-FastAPI caching proxy. Two upstreams: **aviationweather.gov** (observed pressure +
-the trustworthy 3-hour `presTend`) and **Open-Meteo** (point forecast + wind/precip
-overlays, and the graceful-degradation source when AWC is unavailable).
+FastAPI server. Every source is NOAA's: **aviationweather.gov** (observed
+pressure + the trustworthy 3-hour `presTend`), **HRRR and NBM** from AWS Open
+Data (point forecast, wind and the Aloft column), **MRMS** (radar) and the
+GOES lightning mapper. No stand-ins: off the models' grid the app says so.
 
 ### Run
 
@@ -53,7 +54,7 @@ cd backend
 |----------|---------|
 | `GET /combined?station=KLUK&lat=39.1&lon=-84.5` | **Primary.** Merged −24/+24 curve + tendency + verdict in one call. |
 | `GET /pressure/{station}?hours=24` | Observed series + current + tendency (AWC, cached). |
-| `GET /forecast?lat=..&lon=..` | Open-Meteo forecast (pressure/wind/precip), cached. |
+| `GET /forecast?lat=..&lon=..` | HRRR + NBM point forecast (pressure/wind/precip), cached; 503 off the grid. |
 | `GET /stations/nearest?lat=..&lon=..` | Location → nearest known station (client convenience). |
 | `GET /healthz` | Liveness + scheduler stats. |
 
@@ -75,8 +76,9 @@ users onto one IP. So the backend never calls AWC per-request at scale:
 - An **active-station registry** tracks stations requested in the last ~24h.
 - A descriptive `User-Agent` (`Barry/1.0 (jrdn@wvr.me)`) is sent on
   every upstream request, as AWC requires.
-- **Graceful degradation:** if AWC fails, the observed line is rebuilt from
-  Open-Meteo `surface_pressure` so the app degrades rather than dies.
+- **Graceful degradation:** if AWC fails, the last good observed series is
+  re-served for a while, then an empty, honest shell, so the app degrades
+  rather than dies.
 
 ### Domain logic (the important part)
 
@@ -105,7 +107,7 @@ barry/
 │   │   ├── verdict.py      # plain-language verdict
 │   │   ├── models.py       # normalized response schemas (the contract)
 │   │   ├── stations.py     # small station table + nearest resolver
-│   │   └── sources/        # aviationweather.py, openmeteo.py
+│   │   └── sources/        # aviationweather.py, hrrr.py, nbm.py, mrms.py, glm.py, ...
 │   └── tests/
 └── ios/                # Xcode project (not started — needs Xcode + Apple Dev acct)
 ```

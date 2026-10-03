@@ -20,7 +20,9 @@ from . import pressure_field
 from .modelstore import ModelStore
 from .models import (AloftHour, AloftIceLevel, AloftIcing, AloftLevel, AloftSurface,
                      AloftTurbLevel, AloftTurbulence, ContourLine, FieldLevelPoint,
-                     FieldPoint, ForecastHour, LevelWind, SunTimes)
+                     FieldPoint, ForecastHour, LevelWind, SunTimes,
+    AloftCloud,
+)
 
 FEED = "hrrr"
 LEVELS = (925, 850, 700, 600, 500)
@@ -123,7 +125,7 @@ def field_points(store: ModelStore, lats: Sequence[float], lons: Sequence[float]
     u, v, g, cycle, fhr = got
     la, lo = np.asarray(lats), np.asarray(lons)
     us, vs = g.sample(u, la, lo), g.sample(v, la, lo)
-    if not _enough(us):
+    if not np.isfinite(us).any():
         return None
     spd, deg = grib.wind_speed_dir(us, vs)
     extras = {}
@@ -165,19 +167,21 @@ def level_points(store: ModelStore, lats: Sequence[float], lons: Sequence[float]
             return None
         u, v, g, cycle, fhr = got
         us, vs = g.sample(u, la, lo), g.sample(v, la, lo)
-        if not _enough(us):
-            return None
+        if not np.isfinite(us).any():
+            continue
         below = _underground(store, g, cycle, fhr, p, la, lo)
         us[below] = np.nan
         vs[below] = np.nan
         per_level[p] = grib.wind_speed_dir(us, vs)
+    if not per_level:
+        return None
     out: List[FieldLevelPoint] = []
     for k in range(len(la)):
         levels = [LevelWind(hPa=p, windKmh=round(float(spd[k]) * KMH_PER_MS, 1), windDeg=round(float(deg[k])))
                   for p, (spd, deg) in per_level.items() if math.isfinite(spd[k])]
         if levels:
             out.append(FieldLevelPoint(lat=float(la[k]), lon=float(lo[k]), levels=levels))
-    return out
+    return out or None
 
 
 def height_interval(hpa: int) -> int:
@@ -323,12 +327,46 @@ def dew_point_c(t_c: float, rh: float) -> Optional[float]:
     return 243.04 * g / (17.625 - g)
 
 
+CLOUD_LAYER_PCT = 30       # a level counts as cloud from scattered; the app shades dense from 70
+ICING_MIN_C, ICING_MAX_C = -20.0, 0.0
+
+
+def cloud_layers(levels: List[AloftLevel]) -> List[AloftCloud]:
+    """Consecutive levels at or above CLOUD_LAYER_PCT become one layer, base
+    at the lowest such level and top at the highest, cover the run's
+    maximum. A single cloudy level still gets a band: half the gap to the
+    next level up, so it is visible without pretending to a depth."""
+    out: List[AloftCloud] = []
+    run: List[int] = []
+
+    def close(run_idx: List[int]) -> None:
+        if not run_idx:
+            return
+        lo, hi = run_idx[0], run_idx[-1]
+        base = levels[lo].ft
+        if hi + 1 < len(levels):
+            top = levels[hi].ft if hi > lo else levels[hi].ft + (levels[hi + 1].ft - levels[hi].ft) // 2
+        else:
+            top = levels[hi].ft + 1000
+        cover = max((levels[i].cloudPct or 0) for i in run_idx)
+        icing = any(ICING_MIN_C <= levels[i].tempC <= ICING_MAX_C for i in run_idx)
+        out.append(AloftCloud(baseFt=base, topFt=max(top, base + 200), coverPct=cover, icing=icing))
+
+    for i, lv in enumerate(levels):
+        if (lv.cloudPct or 0) >= CLOUD_LAYER_PCT:
+            run.append(i)
+        else:
+            close(run)
+            run = []
+    close(run)
+    return out
+
+
 def column(store: ModelStore, lat: float, lon: float, start: datetime, hours: int = 25
            ) -> Optional[List[AloftHour]]:
     """Hourly columns at a point from `start` (the top of an hour), from the
     column feeds. Levels under the ground are left out. None when fewer
     than twelve hours can be built, so the caller falls back."""
-    from .sources.openmeteo import cloud_layers
     out: List[AloftHour] = []
     la, lo = np.array([lat]), np.array([lon])
     for h in range(hours):

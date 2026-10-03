@@ -79,7 +79,9 @@ struct WindAltitude: Identifiable, Equatable {
 @MainActor
 final class RadarModel: ObservableObject {
     @Published var frames: [RadarFrame] = []
-    @Published var host = "https://tilecache.rainviewer.com"
+    /// Where the frames' tiles are: the server names itself in each
+    /// frames answer, so a fallback host's frames bring its own tiles.
+    @Published var host = AppConfig.backendBaseURL.absoluteString
     /// Tile template for the chance of lightning in the next hour, when
     /// Barry serves it.
     @Published private(set) var lightningNextTemplate: String?
@@ -869,7 +871,7 @@ final class RadarModel: ObservableObject {
     static let windPad = 0.5
 
     /// The model wind for the region in ONE backend call (the server samples
-    /// its 7×5 grid and shares one Open-Meteo request per region cell across
+    /// its grid from the HRRR store, one answer per region cell shared across
     /// users).
     func fetchField(region: MKCoordinateRegion, retried: Bool = false) async {
         // The station layer already skips a refetch for a small move; the wind

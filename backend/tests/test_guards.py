@@ -62,18 +62,9 @@ async def test_registry_is_capped():
 async def test_spent_budget_fails_fast_without_calling(client, upstream):
     s = PressureService(client)
     s.awc_gate = RateGate(per_minute=0)
-    s.om_gate = RateGate(per_minute=0)
-    with pytest.raises(RateLimited):
-        await s.get_pressure("KLUK")
-    assert upstream.awc_calls == [] and upstream.om_calls == []
-
-
-@pytest.mark.asyncio
-async def test_forecast_key_is_a_tenth_of_a_degree(client, upstream):
-    s = PressureService(client)
-    await s.get_forecast(39.101, -84.419)
-    await s.get_forecast(39.104, -84.412)      # same 0.1 deg cell
-    assert len(upstream.om_calls) == 1
+    resp = await s.get_pressure("KLUK")
+    assert resp.source == "unavailable" and resp.series == []
+    assert upstream.awc_calls == []
 
 
 @pytest.mark.asyncio
@@ -151,15 +142,6 @@ async def test_upstream_failure_body_carries_no_upstream_detail(client):
 
 
 @pytest.mark.asyncio
-async def test_forecast_upstream_url_carries_the_cell_not_the_point(client, upstream):
-    s = PressureService(client)
-    await s.get_forecast(39.1234, -84.4321)
-    url = str(upstream.om_calls[0].url)
-    assert "latitude=39.1&" in url and "longitude=-84.4&" in url
-    assert "39.1234" not in url and "84.4321" not in url
-
-
-@pytest.mark.asyncio
 async def test_bbox_fallbacks_stay_inside_the_awc_budget(client, upstream):
     from app.guards import RateLimited
     s = PressureService(client)
@@ -170,29 +152,3 @@ async def test_bbox_fallbacks_stay_inside_the_awc_budget(client, upstream):
     assert upstream.awc_calls == []
 
 
-def test_openmeteo_budget_counts_weighted_calls_per_utc_day():
-    from app.guards import OMBudget
-    wall = [86400 * 20000 + 3600.0]
-    b = OMBudget(per_minute=1000, per_day=100, clock=lambda: 0.0, wall=lambda: wall[0])
-    assert b.take(35) and b.take(35)
-    assert not b.take(35), "past the day's budget"
-    assert b.used_today == 70
-    wall[0] += 86400          # the next UTC day starts fresh
-    assert b.take(35) and b.used_today == 35
-
-
-def test_openmeteo_budget_minute_bucket_is_weighted_too():
-    from app.guards import OMBudget
-    b = OMBudget(per_minute=50, per_day=10_000, clock=lambda: 0.0, wall=lambda: 0.0)
-    assert b.take(35)
-    assert not b.take(35), "a second grid in the same minute would pass Open-Meteo's own limit here"
-
-
-def test_call_weights_follow_open_meteo_counting():
-    from app.sources import openmeteo as om
-    assert om.call_weight(10) == 1.0
-    assert om.call_weight(15) == 1.5
-    assert om.call_weight(4, locations=35) == 35.0
-    assert round(om.FORECAST_WEIGHT, 2) == 1.9
-    assert round(om.ALOFT_WEIGHT, 2) == 7.2
-    assert om.field_levels_weight(35) == 35.0

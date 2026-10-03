@@ -33,9 +33,6 @@ services:
       # Small persisted state (bulk-snapshot history for the front watch), so
       # a redeploy doesn't cost a 7.5 h warm-up. Lives next to the compose file.
       - BARRY_DATA_DIR=/var/lib/barry
-      # rainviewer here serves RainViewer's frames instead of Barry's MRMS
-      # ones (still pulled; /radar/frames?source=mrms asks for them).
-      - BARRY_RADAR_SOURCE=mrms
     volumes:
       # BARRY_STATE_DIR in .env points this at the pool itself on Unraid
       # (/mnt/cache/...): through /mnt/user every read of the model store

@@ -20,27 +20,27 @@ async def test_combined_shape(service, upstream):
     # presTend -2.4 -> falling_mod (the raw §4.1 class is unchanged)
     assert resp.pressure.tendency.cls == "falling_mod"
     assert resp.pressure.tendency.delta3h == pytest.approx(-2.4)
-    assert resp.forecast is not None and len(resp.forecast.hourly) == 12
+    # No model run is held in this fixture (BARRY_HRRR=0): no forecast, and
+    # nothing stands in for it since 2026-10-03.
+    assert resp.forecast is None
 
     # Interpreter (§4.3) populated reading + sources.
     assert resp.reading is not None
     assert resp.reading.trend in ("falling", "falling_mod", "falling_fast")
     assert resp.sources is not None
     assert resp.sources.observed == "aviationweather.gov"
-    assert resp.sources.forecast == "open-meteo"
+    assert resp.sources.forecast is None
 
     # Verdict reflects the interpreter (front-aware phrasing) and gets the
     # precip enrichment because we're in a falling situation.
     v = resp.verdict.lower()
     assert any(k in v for k in ("front", "trough", "falling", "drop", "bottom"))
-    assert "Rain likely around" in resp.verdict
 
     # METAR-first wind: current wind comes from the newest METAR (10 kt / 230°,
     # gusting 18 kt), converted to km/h. Forecast hours carry model gusts.
     assert resp.pressure.current.windspeed == pytest.approx(18.5, abs=0.1)
     assert resp.pressure.current.winddir == 230.0
     assert resp.pressure.current.windgust == pytest.approx(33.3, abs=0.1)
-    assert resp.forecast.hourly[0].windgust == pytest.approx(14.0)
 
     # Aviation conditions from the METAR: visibility "10+" -> 10.0 SM, the
     # ceiling is the lowest BKN/OVC layer, and fltCat passes through.
@@ -71,11 +71,10 @@ async def test_registry_tracks_requested_stations(service):
     assert active == ["KCVG", "KLUK"]
 
 
-async def test_graceful_degradation_to_openmeteo(service, upstream):
+async def test_awc_down_gives_an_honest_empty_answer(service, upstream):
     upstream.awc_fail = True
     resp = await service.get_pressure("KLUK")
-    assert resp.source == "open-meteo (fallback)"
-    assert len(resp.series) > 0  # rebuilt from surface_pressure
+    assert resp.source == "unavailable" and resp.series == []
     assert resp.name == "Cincinnati Lunken, OH"
 
 
@@ -108,12 +107,12 @@ async def test_degraded_answer_is_cached_only_briefly(service, upstream):
     assert service.cache._store["pressure:KLUK"].expires_at - time.monotonic() <= PRESSURE_TTL + 1
 
 
-async def test_fallback_uses_the_directory_for_fields_off_the_small_table(service, upstream):
+async def test_the_empty_answer_names_the_field_from_the_directory(service, upstream):
     await service.station_info()                    # warmed at startup in production
     upstream.awc_fail = True
     resp = await service.get_pressure("KI67")       # not in stations.py
-    assert resp.source == "open-meteo (fallback)"
-    assert resp.name == "Harrison/West Arpt, OH, US" and len(resp.series) > 0
+    assert resp.source == "unavailable" and resp.series == []
+    assert resp.name == "Harrison/West Arpt, OH, US"
 
 
 async def test_registry_survives_a_restart(client, upstream, tmp_path, monkeypatch):
@@ -157,34 +156,18 @@ async def test_user_agent_is_set(service, upstream):
     assert ua == "Barry/1.0 (jrdn@wvr.me)"
 
 
-# --- forecast stale-if-error -------------------------------------------------
+# --- forecast ---------------------------------------------------------------
 
 
-async def test_forecast_stale_served_when_upstream_dies(service, upstream):
-    # Prime the last-good store with a successful fetch.
-    fresh = await service.get_forecast(39.1, -84.5)
-    assert fresh.stale is False
-
-    # Upstream dies; bypass the fresh cache to force a refetch attempt.
-    upstream.om_fail = True
-    stale = await service.get_forecast(39.1, -84.5, use_cache=False)
-    assert stale.stale is True
-    assert len(stale.hourly) == len(fresh.hourly)
-    assert stale.source == "open-meteo"
-
-    # Combined keeps the forecast (flagged) instead of dropping it.
-    resp = await service.get_combined("KLUK", 39.1, -84.5)
-    assert resp.forecast is not None and resp.forecast.stale is True
-    assert resp.sources.forecast == "open-meteo"
-
-
-async def test_forecast_none_when_upstream_dies_cold(upstream, client):
-    # No last-good primed → combined degrades to no forecast, as before.
+async def test_forecast_is_none_when_no_run_is_held(upstream, client):
+    """Enrichment: without a model run the combined answer carries no
+    forecast and says so. Nothing stands in since 2026-10-03."""
     from app.cache import StationRegistry, TTLCache
     from app.service import PressureService
 
     cold = PressureService(client, cache=TTLCache(), registry=StationRegistry())
-    upstream.om_fail = True
+    with pytest.raises(LookupError):
+        await cold.get_forecast(39.1, -84.5)
     resp = await cold.get_combined("KLUK", 39.1, -84.5)
     assert resp.forecast is None
     assert resp.sources.forecast is None

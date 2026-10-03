@@ -259,16 +259,15 @@ C3. Deployment
   now. Write down what it means: if the box is off, the app shows its last
   saved reading and says so. Back up `backend/state/` nightly with the rest
   of the box.
-- A runbook, one page: AWC is down, Open-Meteo quota is hit, RainViewer
-  changes its palette again, the tunnel token expires, the box reboots. Each
-  with what the user sees and what to do.
+- A runbook, one page: AWC is down, a NOAA feed stops, the tunnel token
+  expires, the box reboots. Each with what the user sees and what to do.
 
 C4. App Store readiness
 
 - Privacy manifest and the privacy nutrition labels, consistent with the
   privacy page after A3.
-- Courtesy emails to RainViewer and Iowa Mesonet before public release,
-  already drafted.
+- (Was: courtesy emails to RainViewer and Iowa Mesonet. Nothing reaches
+  either since 2026-10-03, so none are owed.)
 - Listing copy, screenshots, the support page checked on a phone.
 - External TestFlight review has already passed once; keep the Pilots group
   as the release gate.

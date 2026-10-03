@@ -605,6 +605,13 @@ Done when: the loop's future frames come from Barry, and a month of
 
 Small for the swap, larger for the products.
 
+Retired 2026-10-03: the Open-Meteo fallbacks (forecast, Aloft column, wind
+grid and levels, the observed curve when AWC fails) and the RainViewer
+radar fallback are out of the code, with `sources/openmeteo.py` and
+`sources/rainviewer.py`. Where the NOAA feeds have nothing the server
+answers empty or 503 and the app says so; `/fallbacks` still counts those
+answers. Every source is NOAA's, which the app's key sheet now says.
+
 Started 2026-09-25: RRFS is pulled beside HRRR (surface pressure and wind,
 hours 1 to 3 of every cycle; its CONUS files carry no pressure levels, the
 hourly cycles land about 80 minutes after their time and the 00 and 12 UTC

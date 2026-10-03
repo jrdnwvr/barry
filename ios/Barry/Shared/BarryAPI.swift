@@ -174,7 +174,7 @@ struct BarryAPI {
     }
 
     /// The radar's wind + boundary-layer sample grid for a map region. The
-    /// server quantizes the region and shares one Open-Meteo call per cell.
+    /// server quantizes the region and shares one answer per cell.
     func fieldGrid(lat: Double, lon: Double, latSpan: Double, lonSpan: Double,
                    pad: Double = 0) async throws -> FieldGridResponse {
         var comps = URLComponents(url: baseURL.appendingPathComponent("radar/field"),

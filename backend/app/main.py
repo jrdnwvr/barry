@@ -261,7 +261,10 @@ async def get_forecast(
     lon: float = Query(..., ge=-180, le=180),
 ):
     service = get_service()
-    resp = await service.get_forecast(lat, lon)
+    try:
+        resp = await service.get_forecast(lat, lon)
+    except LookupError:
+        raise HTTPException(status_code=503, detail="forecast unavailable")
     return resp.model_dump(mode="json", by_alias=True)
 
 
@@ -442,16 +445,15 @@ async def get_lightning_series(
 
 
 @app.get("/radar/frames")
-async def radar_frames(source: Optional[str] = Query(None, pattern="^(mrms|rainviewer)$"),
-                       span: Optional[str] = Query(None, pattern="^(hour|day)$")):
-    """The radar timeline: Barry's MRMS frames or RainViewer's, trimmed to
-    what the timeline shows and shared across users. `source` asks for one.
+async def radar_frames(span: Optional[str] = Query(None, pattern="^(hour|day)$")):
+    """The radar timeline: Barry's MRMS frames, trimmed to what the
+    timeline shows and shared across users; stale ones as they are.
     `span=hour`: two hours back every ten minutes and the nowcast as far as
     its score allows. `span=day`: on the hour from six hours back to twelve
     ahead (nowcast, then model). Without it, the last hour and thirty
     minutes of nowcast, as builds to 93 expect."""
     try:
-        resp = await get_service().get_radar_frames(source, span)
+        resp = await get_service().get_radar_frames(span=span)
     except Exception as exc:
         log.warning("radar frames unavailable: %s: %s", type(exc).__name__, exc)
         raise HTTPException(status_code=503, detail="radar frames unavailable")
@@ -550,11 +552,12 @@ async def model_scores(days: int = Query(14, ge=1, le=60)):
 
 @app.get("/fallbacks")
 async def fallbacks(days: int = Query(14, ge=1, le=60)):
-    """Every answer that came from a fallback instead of the NOAA feeds on
-    Tower (Open-Meteo for the forecast, the Aloft column, the radar's wind
-    grid and winds aloft; RainViewer for the radar timeline; Open-Meteo's
-    surface pressure when AWC fails): by UTC day with the reason (off-grid,
-    no-data, stale, off, upstream), and the newest events with where. The
+    """Every answer the NOAA store could not give (a forecast, the Aloft
+    column, the wind grid or the winds aloft off the grid or before a run
+    is held; the radar timeline stale or empty; the pressure curve when
+    AWC fails): by UTC day with the reason (off-grid, no-data, stale, off,
+    upstream), and the newest events with where. Nothing stands in for
+    them since 2026-10-03; the log says where the data ran out. The
     evidence for taking the fallbacks out (NOAA.md phase 7)."""
     return get_service().fallbacks.summary(days)
 

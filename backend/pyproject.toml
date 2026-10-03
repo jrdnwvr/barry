@@ -1,7 +1,7 @@
 [project]
 name = "barry-backend"
 version = "1.0.0"
-description = "Caching proxy for Barry: observed (aviationweather.gov) + forecast (Open-Meteo) pressure"
+description = "Barry's server: NOAA observations, models and radar, processed and cached for the app"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.110",

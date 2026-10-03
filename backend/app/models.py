@@ -74,7 +74,7 @@ class CurrentObs(BaseModel):
     temp: Optional[float] = None           # °C, from the latest METAR
     dewpoint: Optional[float] = None       # °C
     # Wind from the latest METAR — a real measurement, preferred over the model
-    # forecast for "now" (METAR-first, Open-Meteo supplements). km/h + degrees;
+    # forecast for "now" (METAR-first, the model supplements). km/h + degrees;
     # windgust is only present when the station reported one (inherently notable).
     windspeed: Optional[float] = None
     winddir: Optional[float] = None
@@ -314,7 +314,7 @@ class FieldPoint(BaseModel):
 
 class FieldGridResponse(BaseModel):
     points: List[FieldPoint] = Field(default_factory=list)
-    source: Optional[str] = None        # "hrrr" or "open-meteo"
+    source: Optional[str] = None        # "hrrr", or none when the grid is empty
     cachedAt: datetime
 
 
@@ -425,7 +425,7 @@ class AloftIcing(BaseModel):
 
 class AloftResponse(BaseModel):
     hours: List[AloftHour] = Field(default_factory=list)
-    source: str = "open-meteo"
+    source: str = "hrrr"
     # What is there now, from NOAA's analyses rather than the model's
     # forecast; absent when a product is not held.
     turbulence: Optional[AloftTurbulence] = None
@@ -848,7 +848,7 @@ class LightningNearby(BaseModel):
 
 class Sources(BaseModel):
     """Where each half of the curve actually came from. Surfaces a graceful
-    degradation (e.g. observed via Open-Meteo when AWC is blocked)."""
+    degradation (e.g. the empty shell when AWC is blocked)."""
 
     observed: str
     forecast: Optional[str] = None
